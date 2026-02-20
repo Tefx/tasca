@@ -16,6 +16,7 @@ from typing import NewType
 
 from returns.result import Failure, Result, Success
 
+from tasca.core.domain.patron import PatronId
 from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
 from tasca.core.services.saying_service import compute_next_sequence, get_max_sequence
 
@@ -84,7 +85,7 @@ def append_saying(
                 """
                 INSERT INTO sayings (
                     id, table_id, sequence, speaker_kind, speaker_name,
-                    speaker_id, content, pinned, created_at
+                    patron_id, content, pinned, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -93,7 +94,7 @@ def append_saying(
                     next_sequence,
                     speaker.kind.value,
                     speaker.name,
-                    speaker.id,
+                    speaker.patron_id,
                     content,
                     0,  # pinned defaults to False
                     now.isoformat(),
@@ -148,7 +149,7 @@ def get_saying_by_id(
         cursor = conn.execute(
             """
             SELECT id, table_id, sequence, speaker_kind, speaker_name,
-                   speaker_id, content, pinned, created_at
+                   patron_id, content, pinned, created_at
             FROM sayings WHERE id = ?
             """,
             (saying_id,),
@@ -183,7 +184,7 @@ def get_saying_by_sequence(
         cursor = conn.execute(
             """
             SELECT id, table_id, sequence, speaker_kind, speaker_name,
-                   speaker_id, content, pinned, created_at
+                   patron_id, content, pinned, created_at
             FROM sayings WHERE table_id = ? AND sequence = ?
             """,
             (table_id, sequence),
@@ -222,7 +223,7 @@ def list_sayings_by_table(
         cursor = conn.execute(
             """
             SELECT id, table_id, sequence, speaker_kind, speaker_name,
-                   speaker_id, content, pinned, created_at
+                   patron_id, content, pinned, created_at
             FROM sayings
             WHERE table_id = ? AND sequence > ?
             ORDER BY sequence ASC
@@ -310,7 +311,7 @@ def _row_to_saying(row: tuple) -> Saying:
         sequence,
         speaker_kind,
         speaker_name,
-        speaker_id,
+        patron_id,
         content,
         pinned,
         created_at_str,
@@ -326,7 +327,7 @@ def _row_to_saying(row: tuple) -> Saying:
         speaker=Speaker(
             kind=SpeakerKind(speaker_kind),
             name=speaker_name,
-            id=speaker_id,
+            patron_id=PatronId(patron_id) if patron_id else None,
         ),
         content=content,
         pinned=bool(pinned),

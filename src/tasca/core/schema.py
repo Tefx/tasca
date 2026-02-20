@@ -84,9 +84,17 @@ def create_sayings_table_ddl(table_name: str = "sayings") -> str:
     - Monotonically increasing per table
     - Ordered replay of discussion history
 
+    The patron_id column provides:
+    - NULL = Human speaker (not managed by the system)
+    - NOT NULL = AI Patron (registered agent managed by the system)
+
     >>> "sayings" in create_sayings_table_ddl()
     True
     >>> "speaker_kind TEXT NOT NULL" in create_sayings_table_ddl()
+    True
+    >>> "speaker_name TEXT NOT NULL" in create_sayings_table_ddl()
+    True
+    >>> "patron_id TEXT" in create_sayings_table_ddl()
     True
     >>> "FOREIGN KEY (table_id)" in create_sayings_table_ddl()
     True
@@ -99,11 +107,12 @@ def create_sayings_table_ddl(table_name: str = "sayings") -> str:
     sequence INTEGER NOT NULL,
     speaker_kind TEXT NOT NULL,
     speaker_name TEXT NOT NULL,
-    speaker_id TEXT,
+    patron_id TEXT,
     content TEXT NOT NULL,
     pinned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     FOREIGN KEY (table_id) REFERENCES tables(id),
+    FOREIGN KEY (patron_id) REFERENCES patrons(id),
     UNIQUE(table_id, sequence)
 )"""
 

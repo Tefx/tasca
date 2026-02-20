@@ -16,7 +16,15 @@ from datetime import datetime, timezone
 import pytest
 from returns.result import Failure, Success
 
-from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
+from tasca.core.domain.patron import PatronId
+from tasca.core.domain.saying import (
+    Saying,
+    SayingId,
+    Speaker,
+    SpeakerKind,
+    human_speaker,
+    patron_speaker,
+)
 from tasca.core.services.saying_service import (
     compute_next_sequence,
     generate_sequence_range,
@@ -180,7 +188,7 @@ class TestAppendSaying:
     def test_append_first_saying(self, memory_db: sqlite3.Connection) -> None:
         """First saying has sequence 0."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         result = append_saying(memory_db, table_id, speaker, "Hello, world!")
 
@@ -191,11 +199,28 @@ class TestAppendSaying:
         assert saying.content == "Hello, world!"
         assert saying.speaker.kind == SpeakerKind.AGENT
         assert saying.speaker.name == "TestAgent"
+        assert saying.speaker.patron_id == PatronId("patron-123")
+        assert saying.speaker.is_patron()
+
+    def test_append_human_speaker(self, memory_db: sqlite3.Connection) -> None:
+        """Human speaker has null patron_id."""
+        table_id = str(uuid.uuid4())
+        speaker = human_speaker("Alice")
+
+        result = append_saying(memory_db, table_id, speaker, "Hello from human!")
+
+        assert isinstance(result, Success)
+        saying = result.unwrap()
+        assert saying.speaker.kind == SpeakerKind.HUMAN
+        assert saying.speaker.name == "Alice"
+        assert saying.speaker.patron_id is None
+        assert saying.speaker.is_human()
+        assert not saying.speaker.is_patron()
 
     def test_append_multiple_sayings(self, memory_db: sqlite3.Connection) -> None:
         """Multiple sayings get sequential sequences."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         for i in range(5):
             result = append_saying(memory_db, table_id, speaker, f"Message {i}")
@@ -207,7 +232,7 @@ class TestAppendSaying:
         """Each table has its own sequence."""
         table_id_1 = str(uuid.uuid4())
         table_id_2 = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         # Append to table 1
         result1 = append_saying(memory_db, table_id_1, speaker, "Table 1, Msg 1")
@@ -227,7 +252,7 @@ class TestAppendSaying:
     def test_append_sets_created_at(self, memory_db: sqlite3.Connection) -> None:
         """created_at is set to current time."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
         before = datetime.now(timezone.utc)
 
         result = append_saying(memory_db, table_id, speaker, "Test")
@@ -244,7 +269,7 @@ class TestGetSayingById:
     def test_get_existing_saying(self, memory_db: sqlite3.Connection) -> None:
         """Can retrieve saying by ID."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         append_result = append_saying(memory_db, table_id, speaker, "Test message")
         assert isinstance(append_result, Success)
@@ -271,7 +296,7 @@ class TestGetSayingBySequence:
     def test_get_by_sequence(self, memory_db: sqlite3.Connection) -> None:
         """Can retrieve saying by table_id and sequence."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         for i in range(3):
             append_saying(memory_db, table_id, speaker, f"Message {i}")
@@ -296,7 +321,7 @@ class TestListSayingsByTable:
     def test_list_all_sayings(self, memory_db: sqlite3.Connection) -> None:
         """Can list all sayings for a table."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         for i in range(5):
             append_saying(memory_db, table_id, speaker, f"Message {i}")
@@ -310,7 +335,7 @@ class TestListSayingsByTable:
     def test_list_with_since_sequence(self, memory_db: sqlite3.Connection) -> None:
         """Can list sayings after a sequence."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         for i in range(5):
             append_saying(memory_db, table_id, speaker, f"Message {i}")
@@ -324,7 +349,7 @@ class TestListSayingsByTable:
     def test_list_with_limit(self, memory_db: sqlite3.Connection) -> None:
         """Can limit number of sayings returned."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         for i in range(10):
             append_saying(memory_db, table_id, speaker, f"Message {i}")
@@ -354,7 +379,7 @@ class TestGetTableMaxSequence:
     def test_with_sayings(self, memory_db: sqlite3.Connection) -> None:
         """Returns max sequence."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         for i in range(5):
             append_saying(memory_db, table_id, speaker, f"Message {i}")
@@ -376,7 +401,7 @@ class TestCountSayingsByTable:
     def test_with_sayings(self, memory_db: sqlite3.Connection) -> None:
         """Returns correct count."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         for i in range(5):
             append_saying(memory_db, table_id, speaker, f"Message {i}")
@@ -409,7 +434,7 @@ class TestConcurrencyAtomicSequenceAllocation:
         multi-threaded concurrent access.
         """
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
         num_threads = 10
         sayings_per_thread = 10
         total_expected = num_threads * sayings_per_thread
@@ -517,7 +542,7 @@ class TestConcurrencyAtomicSequenceAllocation:
             init_conn.close()
 
             tables = [(str(uuid.uuid4()), f"Table-{i}") for i in range(num_tables)]
-            speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+            speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
             def append_to_table(table_id: str, table_name: str) -> tuple[str, list[int]]:
                 """Append sayings to a single table and return sequences."""
@@ -559,7 +584,7 @@ class TestConcurrencyAtomicSequenceAllocation:
         Many threads appending to the same table rapidly.
         """
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
         num_threads = 20
         sayings_per_thread = 5
         total_expected = num_threads * sayings_per_thread
@@ -641,7 +666,7 @@ class TestSchemaUniqueness:
     def test_unique_constraint_enforced(self, memory_db: sqlite3.Connection) -> None:
         """Verify UNIQUE constraint prevents duplicate sequences."""
         table_id = str(uuid.uuid4())
-        speaker = Speaker(kind=SpeakerKind.AGENT, name="TestAgent")
+        speaker = patron_speaker("TestAgent", PatronId("patron-123"))
 
         # Append first saying
         result1 = append_saying(memory_db, table_id, speaker, "First")
@@ -654,7 +679,7 @@ class TestSchemaUniqueness:
                 """
                 INSERT INTO sayings (
                     id, table_id, sequence, speaker_kind, speaker_name,
-                    speaker_id, content, pinned, created_at
+                    patron_id, content, pinned, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -669,3 +694,180 @@ class TestSchemaUniqueness:
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )
+
+
+# =============================================================================
+# Human Speaker vs Patron Speaker Tests
+# =============================================================================
+
+
+class TestHumanSpeaker:
+    """Tests for human speaker (null patron_id) creation."""
+
+    def test_human_speaker_creation(self) -> None:
+        """human_speaker creates a speaker with null patron_id."""
+        speaker = human_speaker("Alice")
+        assert speaker.name == "Alice"
+        assert speaker.kind == SpeakerKind.HUMAN
+        assert speaker.patron_id is None
+        assert speaker.is_human() is True
+        assert speaker.is_patron() is False
+
+    def test_human_speaker_in_saying(self, memory_db: sqlite3.Connection) -> None:
+        """Human speaker can be persisted and retrieved with null patron_id."""
+        table_id = str(uuid.uuid4())
+        speaker = human_speaker("Bob")
+
+        result = append_saying(memory_db, table_id, speaker, "Hello from human!")
+        assert isinstance(result, Success)
+        saying = result.unwrap()
+
+        # Verify the speaker is human
+        assert saying.speaker.is_human()
+        assert saying.speaker.patron_id is None
+        assert saying.speaker.name == "Bob"
+        assert saying.speaker.kind == SpeakerKind.HUMAN
+
+        # Retrieve and verify
+        retrieved = get_saying_by_id(memory_db, saying.id)
+        assert isinstance(retrieved, Success)
+        retrieved_saying = retrieved.unwrap()
+        assert retrieved_saying is not None
+        assert retrieved_saying.speaker.is_human()
+        assert retrieved_saying.speaker.patron_id is None
+
+    def test_human_speaker_contract_empty_name(self) -> None:
+        """Empty name should violate contract."""
+        import deal
+
+        with pytest.raises(deal.PreContractError):
+            human_speaker("")
+
+
+class TestPatronSpeaker:
+    """Tests for patron speaker (non-null patron_id) creation."""
+
+    def test_patron_speaker_creation(self) -> None:
+        """patron_speaker creates a speaker with patron_id."""
+        speaker = patron_speaker("HelperBot", PatronId("patron-456"))
+        assert speaker.name == "HelperBot"
+        assert speaker.kind == SpeakerKind.AGENT
+        assert speaker.patron_id == PatronId("patron-456")
+        assert speaker.is_patron() is True
+        assert speaker.is_human() is False
+
+    def test_patron_speaker_in_saying(self, memory_db: sqlite3.Connection) -> None:
+        """Patron speaker can be persisted and retrieved with patron_id."""
+        table_id = str(uuid.uuid4())
+        speaker = patron_speaker("GPT-4", PatronId("patron-gpt4"))
+
+        result = append_saying(memory_db, table_id, speaker, "Hello from AI!")
+        assert isinstance(result, Success)
+        saying = result.unwrap()
+
+        # Verify the speaker is a patron
+        assert saying.speaker.is_patron()
+        assert saying.speaker.patron_id == PatronId("patron-gpt4")
+        assert saying.speaker.name == "GPT-4"
+        assert saying.speaker.kind == SpeakerKind.AGENT
+
+        # Retrieve and verify
+        retrieved = get_saying_by_id(memory_db, saying.id)
+        assert isinstance(retrieved, Success)
+        retrieved_saying = retrieved.unwrap()
+        assert retrieved_saying is not None
+        assert retrieved_saying.speaker.is_patron()
+        assert retrieved_saying.speaker.patron_id == PatronId("patron-gpt4")
+
+    def test_patron_speaker_contract_empty_name(self) -> None:
+        """Empty name should violate contract."""
+        import deal
+
+        with pytest.raises(deal.PreContractError):
+            patron_speaker("", PatronId("patron-123"))
+
+    def test_patron_speaker_contract_empty_patron_id(self) -> None:
+        """Empty patron_id should violate contract."""
+        import deal
+
+        with pytest.raises(deal.PreContractError):
+            patron_speaker("Bot", PatronId(""))
+
+
+class TestMixedSpeakersInDiscussion:
+    """Tests for discussions with both human and patron speakers."""
+
+    def test_mixed_human_and_patron_speakers(self, memory_db: sqlite3.Connection) -> None:
+        """A discussion can have both human and patron speakers."""
+        table_id = str(uuid.uuid4())
+        human = human_speaker("User")
+        patron = patron_speaker("Assistant", PatronId("patron-asst"))
+
+        # Human speaks first
+        result1 = append_saying(memory_db, table_id, human, "Hello!")
+        assert isinstance(result1, Success)
+        saying1 = result1.unwrap()
+        assert saying1.speaker.is_human()
+        assert saying1.sequence == 0
+
+        # Patron responds
+        result2 = append_saying(memory_db, table_id, patron, "Hi there!")
+        assert isinstance(result2, Success)
+        saying2 = result2.unwrap()
+        assert saying2.speaker.is_patron()
+        assert saying2.sequence == 1
+
+        # Human speaks again
+        result3 = append_saying(memory_db, table_id, human, "Thanks!")
+        assert isinstance(result3, Success)
+        saying3 = result3.unwrap()
+        assert saying3.speaker.is_human()
+        assert saying3.sequence == 2
+
+        # List all sayings and verify
+        result = list_sayings_by_table(memory_db, table_id)
+        assert isinstance(result, Success)
+        sayings = result.unwrap()
+        assert len(sayings) == 3
+
+        # Sequence 0: human
+        assert sayings[0].speaker.is_human()
+        assert sayings[0].content == "Hello!"
+
+        # Sequence 1: patron
+        assert sayings[1].speaker.is_patron()
+        assert sayings[1].content == "Hi there!"
+
+        # Sequence 2: human
+        assert sayings[2].speaker.is_human()
+        assert sayings[2].content == "Thanks!"
+
+
+class TestPatronIdColumnInSchema:
+    """Tests verifying the patron_id column in schema."""
+
+    def test_patron_id_column_exists(self, memory_db: sqlite3.Connection) -> None:
+        """Verify patron_id column exists in sayings table."""
+        cursor = memory_db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='sayings'"
+        )
+        row = cursor.fetchone()
+        assert row is not None
+        create_sql = row[0]
+
+        # Verify patron_id column (not speaker_id)
+        assert "patron_id TEXT" in create_sql, f"patron_id column missing in schema: {create_sql}"
+
+    def test_patron_id_foreign_key(self, memory_db: sqlite3.Connection) -> None:
+        """Verify patron_id has foreign key to patrons table."""
+        cursor = memory_db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='sayings'"
+        )
+        row = cursor.fetchone()
+        assert row is not None
+        create_sql = row[0]
+
+        # Verify foreign key constraint
+        assert "FOREIGN KEY (patron_id) REFERENCES patrons(id)" in create_sql, (
+            f"patron_id foreign key missing in schema: {create_sql}"
+        )

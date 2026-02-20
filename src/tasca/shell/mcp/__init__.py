@@ -4,4 +4,6 @@ MCP server package.
 This package contains the FastMCP server implementation.
 """
 
-# MCP server implementation will be here
+from tasca.shell.mcp.server import mcp, run_mcp_server
+
+__all__ = ["mcp", "run_mcp_server"]

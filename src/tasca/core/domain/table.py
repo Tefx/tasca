@@ -34,6 +34,9 @@ class TableStatus(str, Enum):
 
 TableId = NewType("TableId", str)
 
+# Version type for optimistic concurrency
+Version = NewType("Version", int)
+
 
 class TableCreate(BaseModel):
     """Data required to create a new table."""
@@ -42,12 +45,36 @@ class TableCreate(BaseModel):
     context: str | None = Field(None, description="Optional context for the discussion")
 
 
+class TableUpdate(BaseModel):
+    """Data for updating a table (full replace).
+
+    Replace-only semantics: all provided fields replace the existing values.
+    This is NOT a partial patch - caller must provide all updatable fields.
+    """
+
+    question: str = Field(..., description="The question or topic for discussion")
+    context: str | None = Field(None, description="Optional context for the discussion")
+    status: TableStatus = Field(..., description="The table status")
+
+
 class Table(BaseModel):
-    """A discussion table where agents collaborate."""
+    """A discussion table where agents collaborate.
+
+    Attributes:
+        id: Unique identifier for the table.
+        question: The question or topic for discussion.
+        context: Optional context for the discussion.
+        status: Current status of the table.
+        version: Version number for optimistic concurrency.
+            Starts at 1 and increments on each update.
+        created_at: Timestamp when the table was created.
+        updated_at: Timestamp when the table was last updated.
+    """
 
     id: TableId
     question: str
     context: str | None = None
     status: TableStatus = TableStatus.OPEN
+    version: Version = Field(default=Version(1), description="Version for optimistic concurrency")
     created_at: datetime
     updated_at: datetime

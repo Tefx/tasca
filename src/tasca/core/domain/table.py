@@ -12,9 +12,23 @@ from pydantic import BaseModel, Field
 
 
 class TableStatus(str, Enum):
-    """Status of a discussion table."""
+    """Status of a discussion table.
 
-    ACTIVE = "active"
+    State transitions:
+    - OPEN → PAUSED (pause)
+    - OPEN → CLOSED (close)
+    - PAUSED → OPEN (resume)
+    - PAUSED → CLOSED (close)
+    - CLOSED → (terminal, no transitions)
+
+    Operation permissions:
+    - OPEN: can_say=True, can_join=True
+    - PAUSED: can_say=True, can_join=False (soft pause for say)
+    - CLOSED: can_say=False, can_join=False (terminal)
+    """
+
+    OPEN = "open"
+    PAUSED = "paused"
     CLOSED = "closed"
 
 
@@ -34,6 +48,6 @@ class Table(BaseModel):
     id: TableId
     question: str
     context: str | None = None
-    status: TableStatus = TableStatus.ACTIVE
+    status: TableStatus = TableStatus.OPEN
     created_at: datetime
     updated_at: datetime

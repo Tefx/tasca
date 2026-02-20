@@ -29,7 +29,7 @@ async def create_table(data: TableCreate) -> Table:
         id=TableId("placeholder-id"),
         question=data.question,
         context=data.context,
-        status=TableStatus.ACTIVE,
+        status=TableStatus.OPEN,
         created_at=now,
         updated_at=now,
     )
@@ -51,7 +51,7 @@ async def get_table(table_id: str) -> Table:
         id=TableId(table_id),
         question="Placeholder question",
         context=None,
-        status=TableStatus.ACTIVE,
+        status=TableStatus.OPEN,
         created_at=now,
         updated_at=now,
     )

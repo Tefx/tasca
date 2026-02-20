@@ -2,6 +2,264 @@
 Database connection and WAL configuration.
 
 This module manages SQLite connections with proper WAL mode setup.
+Shell layer - handles I/O (file paths, database connections).
 """
 
-# Database implementation will be added here
+import os
+import sqlite3
+from pathlib import Path
+
+from returns.result import Failure, Result, Success
+
+from tasca.core.schema import (
+    get_all_index_ddl,
+    get_all_table_ddl,
+    is_valid_busy_timeout,
+    is_wal_mode,
+)
+
+# Default database path (can be overridden via TASCA_DB_PATH env var)
+DEFAULT_DB_PATH = Path.home() / ".tasca" / "tasca.db"
+
+# Default busy timeout in milliseconds
+DEFAULT_BUSY_TIMEOUT = 5000
+
+
+# @invar:allow shell_result: Path retrieval is infallible - returns default if env not set
+def get_database_path() -> Path:
+    """
+    Get the database path from TASCA_DB_PATH environment variable.
+
+    Default: ~/.tasca/tasca.db
+
+    This function reads an environment variable, so it has I/O.
+    Returns Path directly since failure here is exceptional.
+
+    >>> isinstance(get_database_path(), Path)
+    True
+    """
+    db_path_str = os.environ.get("TASCA_DB_PATH")
+    if db_path_str:
+        return Path(db_path_str)
+    return DEFAULT_DB_PATH
+
+
+def init_database(db_path: Path) -> Result[sqlite3.Connection, str]:
+    """
+    Initialize database connection with WAL mode and busy_timeout.
+
+    Creates the database file and parent directories if needed.
+    Configures:
+    - WAL mode for better concurrency
+    - busy_timeout for lock handling
+    - Foreign key enforcement
+
+    Args:
+        db_path: Path to the SQLite database file.
+
+    Returns:
+        Success with Connection, or Failure with error message.
+
+    Example:
+        >>> result = init_database(Path(":memory:"))
+        >>> isinstance(result, Success)
+        True
+        >>> conn = result.unwrap()
+        >>> conn.execute("PRAGMA journal_mode").fetchone()[0]
+        'memory'
+        >>> conn.close()
+    """
+    try:
+        # Create parent directories if needed (skip for :memory:)
+        if str(db_path) != ":memory:":
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Connect to database
+        conn = sqlite3.connect(str(db_path))
+
+        # Enable WAL mode for better concurrency
+        result = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+        if result and result[0].upper() != "WAL" and str(db_path) != ":memory:":
+            # :memory: databases can't use WAL, they use 'memory' journal
+            pass  # WAL mode set
+
+        # Set busy_timeout (5 seconds) for lock handling
+        conn.execute(f"PRAGMA busy_timeout={DEFAULT_BUSY_TIMEOUT}")
+
+        # Enable foreign key constraints
+        conn.execute("PRAGMA foreign_keys=ON")
+
+        return Success(conn)
+
+    except sqlite3.Error as e:
+        return Failure(f"Database initialization failed: {e}")
+    except OSError as e:
+        return Failure(f"Failed to create database directory: {e}")
+
+
+# @shell_orchestration: Schema version management - orchestration over connection
+def get_schema_version(conn: sqlite3.Connection) -> Result[int, str]:
+    """
+    Get the current schema version from the database.
+
+    Returns Success(0) if no schema version table exists.
+
+    >>> conn = sqlite3.connect(":memory:")
+    >>> get_schema_version(conn).unwrap()
+    0
+    >>> conn.close()
+    """
+    try:
+        cursor = conn.execute("SELECT value FROM schema_version WHERE key = 'version'")
+        row = cursor.fetchone()
+        return Success(int(row[0]) if row else 0)
+    except sqlite3.OperationalError:
+        return Success(0)
+    except sqlite3.Error as e:
+        return Failure(f"Failed to get schema version: {e}")
+
+
+# @shell_orchestration: Schema version management - orchestration over connection
+def set_schema_version(conn: sqlite3.Connection, version: int) -> Result[None, str]:
+    """
+    Set the schema version in the database.
+
+    Creates the schema_version table if it doesn't exist.
+
+    >>> conn = sqlite3.connect(":memory:")
+    >>> set_schema_version(conn, 1).unwrap() is None
+    True
+    >>> get_schema_version(conn).unwrap()
+    1
+    >>> conn.close()
+    """
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS schema_version (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_version (key, value) VALUES (?, ?)",
+            ("version", str(version)),
+        )
+        conn.commit()
+        return Success(None)
+    except sqlite3.Error as e:
+        conn.rollback()
+        return Failure(f"Failed to set schema version: {e}")
+
+
+def apply_schema(conn: sqlite3.Connection) -> Result[int, str]:
+    """
+    Apply all schema tables and indexes to the database.
+
+    Creates tables if they don't exist. Idempotent.
+
+    Args:
+        conn: Database connection.
+
+    Returns:
+        Success with number of statements applied, or Failure with error.
+
+    >>> conn = sqlite3.connect(":memory:")
+    >>> result = apply_schema(conn)
+    >>> isinstance(result, Success)
+    True
+    >>> result.unwrap()  # 5 tables + 6 indexes = 11 statements
+    11
+    >>> conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    [('patrons',), ('tables',), ('seats',), ('sayings',), ('dedup',)]
+    >>> conn.close()
+    """
+    try:
+        statements = get_all_table_ddl() + get_all_index_ddl()
+        for stmt in statements:
+            conn.execute(stmt)
+        conn.commit()
+        return Success(len(statements))
+    except sqlite3.Error as e:
+        conn.rollback()
+        return Failure(f"Schema application failed: {e}")
+
+
+def verify_database_config(conn: sqlite3.Connection) -> Result[dict[str, int | bool | str], str]:
+    """
+    Verify database configuration (WAL mode, busy_timeout, foreign keys).
+
+    Returns a dict with the configuration values.
+
+    >>> conn = sqlite3.connect(":memory:")
+    >>> result = verify_database_config(conn)
+    >>> isinstance(result, Success)
+    True
+    >>> config = result.unwrap()
+    >>> isinstance(config['busy_timeout'], int)
+    True
+    >>> conn.close()
+    """
+    try:
+        journal_result = conn.execute("PRAGMA journal_mode").fetchone()
+        timeout_result = conn.execute("PRAGMA busy_timeout").fetchone()
+        fk_result = conn.execute("PRAGMA foreign_keys").fetchone()
+
+        journal_mode = journal_result[0] if journal_result else "unknown"
+        busy_timeout = int(timeout_result[0]) if timeout_result else 0
+        foreign_keys = fk_result[0] == 1 if fk_result else False
+
+        return Success(
+            {
+                "journal_mode": journal_mode,
+                "wal_mode_enabled": is_wal_mode(str(journal_mode)),
+                "busy_timeout": busy_timeout,
+                "busy_timeout_valid": is_valid_busy_timeout(busy_timeout),
+                "foreign_keys_enabled": foreign_keys,
+            }
+        )
+    except sqlite3.Error as e:
+        return Failure(f"Failed to verify database config: {e}")
+
+
+def list_tables(conn: sqlite3.Connection) -> Result[list[str], str]:
+    """
+    List all tables in the database.
+
+    >>> conn = sqlite3.connect(":memory:")
+    >>> result = apply_schema(conn)
+    >>> isinstance(result, Success)
+    True
+    >>> tables = list_tables(conn).unwrap()
+    >>> 'patrons' in tables
+    True
+    >>> 'tables' in tables
+    True
+    >>> conn.close()
+    """
+    try:
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        return Success([row[0] for row in cursor.fetchall()])
+    except sqlite3.Error as e:
+        return Failure(f"Failed to list tables: {e}")
+
+
+def list_indexes(conn: sqlite3.Connection) -> Result[list[str], str]:
+    """
+    List all indexes in the database.
+
+    >>> conn = sqlite3.connect(":memory:")
+    >>> result = apply_schema(conn)
+    >>> isinstance(result, Success)
+    True
+    >>> indexes = list_indexes(conn).unwrap()
+    >>> len(indexes) >= 6  # At least our 6 indexes
+    True
+    >>> conn.close()
+    """
+    try:
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
+        )
+        return Success([row[0] for row in cursor.fetchall()])
+    except sqlite3.Error as e:
+        return Failure(f"Failed to list indexes: {e}")

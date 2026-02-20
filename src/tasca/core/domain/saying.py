@@ -2,6 +2,7 @@
 Saying domain types.
 
 This module defines the core Saying types for messages in discussions.
+Atomic sequence allocation ensures each saying has a unique (table_id, sequence) tuple.
 """
 
 from datetime import datetime
@@ -31,10 +32,30 @@ SayingId = NewType("SayingId", str)
 
 
 class Saying(BaseModel):
-    """A saying (message) in a discussion table."""
+    """A saying (message) in a discussion table.
+
+    Sequence is atomically allocated per table and guarantees:
+    - Unique (table_id, sequence) tuple
+    - Monotonically increasing per table
+    - Append-only semantics (no modification/deletion)
+
+    Example:
+        >>> from datetime import datetime
+        >>> s = Saying(
+        ...     id=SayingId("say-001"),
+        ...     table_id="table-001",
+        ...     sequence=1,
+        ...     speaker=Speaker(kind=SpeakerKind.AGENT, name="Test"),
+        ...     content="Hello",
+        ...     created_at=datetime.now(),
+        ... )
+        >>> s.sequence
+        1
+    """
 
     id: SayingId
     table_id: str
+    sequence: int = Field(..., ge=0, description="Monotonically increasing sequence per table")
     speaker: Speaker
     content: str = Field(..., description="Markdown content of the saying")
     pinned: bool = False

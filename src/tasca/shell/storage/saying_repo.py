@@ -1,5 +1,334 @@
 """
 Saying repository - SQLite implementation for saying persistence.
+
+This module handles I/O operations for sayings, including:
+- Atomic sequence allocation via SQLite transactions
+- CRUD operations for sayings
+- Querying sayings by table and sequence range
+
+All database operations use Result[T, E] for error handling.
 """
 
-# Repository implementation will be added here
+import sqlite3
+import uuid
+from datetime import datetime, timezone
+from typing import NewType
+
+from returns.result import Failure, Result, Success
+
+from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
+from tasca.core.services.saying_service import compute_next_sequence, get_max_sequence
+
+# Type for repository errors
+SayingError = NewType("SayingError", str)
+
+
+# @shell_orchestration: Multi-step operation with transaction
+# @shell_complexity: Multi-step atomic operation (lock, query, compute, insert)
+# Transaction boundary guarantees atomicity - cannot decompose further
+def append_saying(
+    conn: sqlite3.Connection,
+    table_id: str,
+    speaker: Speaker,
+    content: str,
+) -> Result[Saying, SayingError]:
+    """Atomically allocate sequence and insert a new saying.
+
+    This operation is atomic:
+    1. Get current max sequence for table (locked)
+    2. Compute next sequence
+    3. Insert saying with new sequence
+    4. All in one transaction
+
+    Args:
+        conn: Database connection (must have transaction support).
+        table_id: UUID of the table.
+        speaker: Speaker information.
+        content: Markdown content of the saying.
+
+    Returns:
+        Success with the created Saying, or Failure with error message.
+
+    Note:
+        The UNIQUE(table_id, sequence) constraint in the schema guarantees
+        no duplicate sequences can exist for the same table.
+    """
+    try:
+        # Generate saying ID
+        saying_id = SayingId(str(uuid.uuid4()))
+        now = datetime.now(timezone.utc)
+
+        cursor = conn.cursor()
+
+        # Atomic: Get max sequence and insert in one transaction
+        # SQLite DEFAULT transaction behavior is DEFERRED, which means
+        # the transaction starts on the first write operation.
+        # For atomicity, we use explicit BEGIN IMMEDIATE to acquire write lock.
+
+        cursor.execute("BEGIN IMMEDIATE")
+
+        try:
+            # Get current max sequence for this table
+            cursor.execute(
+                "SELECT COALESCE(MAX(sequence), -1) FROM sayings WHERE table_id = ?",
+                (table_id,),
+            )
+            row = cursor.fetchone()
+            current_max = int(row[0]) if row else -1
+
+            # Compute next sequence (pure function from core)
+            next_sequence = compute_next_sequence(current_max)
+
+            # Insert the saying
+            cursor.execute(
+                """
+                INSERT INTO sayings (
+                    id, table_id, sequence, speaker_kind, speaker_name,
+                    speaker_id, content, pinned, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    saying_id,
+                    table_id,
+                    next_sequence,
+                    speaker.kind.value,
+                    speaker.name,
+                    speaker.id,
+                    content,
+                    0,  # pinned defaults to False
+                    now.isoformat(),
+                ),
+            )
+
+            conn.commit()
+
+            return Success(
+                Saying(
+                    id=saying_id,
+                    table_id=table_id,
+                    sequence=next_sequence,
+                    speaker=speaker,
+                    content=content,
+                    pinned=False,
+                    created_at=now,
+                )
+            )
+
+        except sqlite3.IntegrityError as e:
+            conn.rollback()
+            # This should never happen with proper transaction handling,
+            # but the UNIQUE constraint provides a safety net
+            error_msg = str(e).lower()
+            if "unique" in error_msg:
+                return Failure(
+                    SayingError(
+                        f"Sequence conflict: duplicate (table_id, sequence) for table {table_id}"
+                    )
+                )
+            return Failure(SayingError(f"Integrity error: {e}"))
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
+def get_saying_by_id(
+    conn: sqlite3.Connection, saying_id: str
+) -> Result[Saying | None, SayingError]:
+    """Get a saying by its ID.
+
+    Args:
+        conn: Database connection.
+        saying_id: UUID of the saying.
+
+    Returns:
+        Success with Saying if found, Success(None) if not found,
+        or Failure with error.
+    """
+    try:
+        cursor = conn.execute(
+            """
+            SELECT id, table_id, sequence, speaker_kind, speaker_name,
+                   speaker_id, content, pinned, created_at
+            FROM sayings WHERE id = ?
+            """,
+            (saying_id,),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            return Success(None)
+
+        saying = _row_to_saying(row)
+        return Success(saying)
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
+def get_saying_by_sequence(
+    conn: sqlite3.Connection, table_id: str, sequence: int
+) -> Result[Saying | None, SayingError]:
+    """Get a saying by table_id and sequence.
+
+    Args:
+        conn: Database connection.
+        table_id: UUID of the table.
+        sequence: Sequence number within the table.
+
+    Returns:
+        Success with Saying if found, Success(None) if not found,
+        or Failure with error.
+    """
+    try:
+        cursor = conn.execute(
+            """
+            SELECT id, table_id, sequence, speaker_kind, speaker_name,
+                   speaker_id, content, pinned, created_at
+            FROM sayings WHERE table_id = ? AND sequence = ?
+            """,
+            (table_id, sequence),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            return Success(None)
+
+        saying = _row_to_saying(row)
+        return Success(saying)
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
+def list_sayings_by_table(
+    conn: sqlite3.Connection,
+    table_id: str,
+    since_sequence: int = -1,
+    limit: int = 50,
+) -> Result[list[Saying], SayingError]:
+    """List sayings for a table, optionally after a sequence.
+
+    Args:
+        conn: Database connection.
+        table_id: UUID of the table.
+        since_sequence: Get sayings with sequence > this value (-1 for all).
+        limit: Maximum number of sayings to return.
+
+    Returns:
+        Success with list of Sayings (ordered by sequence),
+        or Failure with error.
+    """
+    try:
+        cursor = conn.execute(
+            """
+            SELECT id, table_id, sequence, speaker_kind, speaker_name,
+                   speaker_id, content, pinned, created_at
+            FROM sayings
+            WHERE table_id = ? AND sequence > ?
+            ORDER BY sequence ASC
+            LIMIT ?
+            """,
+            (table_id, since_sequence, limit),
+        )
+        rows = cursor.fetchall()
+
+        sayings = [_row_to_saying(row) for row in rows]
+        return Success(sayings)
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
+def get_table_max_sequence(conn: sqlite3.Connection, table_id: str) -> Result[int, SayingError]:
+    """Get the maximum sequence for a table.
+
+    Args:
+        conn: Database connection (must have sayings table).
+        table_id: UUID of the table.
+
+    Returns:
+        Success with max sequence (-1 if no sayings exist),
+        or Failure with error.
+
+    Example (requires schema):
+        >>> from tasca.shell.storage.database import apply_schema
+        >>> conn = sqlite3.connect(":memory:")
+        >>> _ = apply_schema(conn)  # Create schema
+        >>> get_table_max_sequence(conn, "table-001").unwrap()
+        -1
+    """
+    try:
+        cursor = conn.execute(
+            "SELECT COALESCE(MAX(sequence), -1) FROM sayings WHERE table_id = ?",
+            (table_id,),
+        )
+        row = cursor.fetchone()
+        max_seq = int(row[0]) if row else -1
+        return Success(max_seq)
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
+def count_sayings_by_table(conn: sqlite3.Connection, table_id: str) -> Result[int, SayingError]:
+    """Count sayings for a table.
+
+    Args:
+        conn: Database connection.
+        table_id: UUID of the table.
+
+    Returns:
+        Success with count, or Failure with error.
+    """
+    try:
+        cursor = conn.execute(
+            "SELECT COUNT(*) FROM sayings WHERE table_id = ?",
+            (table_id,),
+        )
+        row = cursor.fetchone()
+        count = int(row[0]) if row else 0
+        return Success(count)
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
+# @invar:allow shell_result: Private helper converting DB row to domain object
+# @shell_orchestration: Helper for row-to-domain conversion within repository
+def _row_to_saying(row: tuple) -> Saying:
+    """Convert a database row to a Saying domain object.
+
+    Args:
+        row: Database row tuple.
+
+    Returns:
+        Saying domain object.
+    """
+    (
+        saying_id,
+        table_id,
+        sequence,
+        speaker_kind,
+        speaker_name,
+        speaker_id,
+        content,
+        pinned,
+        created_at_str,
+    ) = row
+
+    # Parse the ISO format datetime string
+    created_at = datetime.fromisoformat(created_at_str)
+
+    return Saying(
+        id=SayingId(saying_id),
+        table_id=table_id,
+        sequence=sequence,
+        speaker=Speaker(
+            kind=SpeakerKind(speaker_kind),
+            name=speaker_name,
+            id=speaker_id,
+        ),
+        content=content,
+        pinned=bool(pinned),
+        created_at=created_at,
+    )

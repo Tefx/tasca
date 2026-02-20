@@ -79,23 +79,32 @@ def create_sayings_table_ddl(table_name: str = "sayings") -> str:
     """
     Generate DDL for the sayings table.
 
+    The sequence column provides:
+    - Unique (table_id, sequence) tuple for each saying
+    - Monotonically increasing per table
+    - Ordered replay of discussion history
+
     >>> "sayings" in create_sayings_table_ddl()
     True
     >>> "speaker_kind TEXT NOT NULL" in create_sayings_table_ddl()
     True
     >>> "FOREIGN KEY (table_id)" in create_sayings_table_ddl()
     True
+    >>> "UNIQUE(table_id, sequence)" in create_sayings_table_ddl()
+    True
     """
     return f"""CREATE TABLE IF NOT EXISTS {table_name} (
     id TEXT PRIMARY KEY,
     table_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
     speaker_kind TEXT NOT NULL,
     speaker_name TEXT NOT NULL,
     speaker_id TEXT,
     content TEXT NOT NULL,
     pinned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
-    FOREIGN KEY (table_id) REFERENCES tables(id)
+    FOREIGN KEY (table_id) REFERENCES tables(id),
+    UNIQUE(table_id, sequence)
 )"""
 
 
@@ -153,14 +162,16 @@ def create_index_ddl(index_name: str, table_name: str, columns: list[str]) -> st
     return f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name}({cols})"
 
 
-@deal.post(lambda result: len(result) == 6)
+@deal.post(lambda result: len(result) == 7)
 def get_all_index_ddl() -> list[str]:
     """
     Get all index creation DDL statements.
 
     >>> len(get_all_index_ddl())
-    6
+    7
     >>> any("idx_seats_table_id" in idx for idx in get_all_index_ddl())
+    True
+    >>> any("idx_sayings_table_sequence" in idx for idx in get_all_index_ddl())
     True
     """
     return [
@@ -169,6 +180,7 @@ def get_all_index_ddl() -> list[str]:
         create_index_ddl("idx_seats_patron_id", "seats", ["patron_id"]),
         # Sayings indexes
         create_index_ddl("idx_sayings_table_id", "sayings", ["table_id"]),
+        create_index_ddl("idx_sayings_table_sequence", "sayings", ["table_id", "sequence"]),
         create_index_ddl("idx_sayings_created_at", "sayings", ["created_at"]),
         # Tables indexes
         create_index_ddl("idx_tables_status", "tables", ["status"]),

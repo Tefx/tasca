@@ -167,8 +167,8 @@ def apply_schema(conn: sqlite3.Connection) -> Result[int, str]:
     >>> result = apply_schema(conn)
     >>> isinstance(result, Success)
     True
-    >>> result.unwrap()  # 5 tables + 6 indexes = 11 statements
-    11
+    >>> result.unwrap()  # 5 tables + 7 indexes = 12 statements
+    12
     >>> conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     [('patrons',), ('tables',), ('seats',), ('sayings',), ('dedup',)]
     >>> conn.close()

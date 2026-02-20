@@ -31,5 +31,11 @@ class Settings(BaseSettings):
     # Security
     admin_token: str | None = None
 
+    # Server-side limits (None = no limit)
+    max_sayings_per_table: int | None = None  # Max sayings per table
+    max_content_length: int | None = None  # Max characters per message
+    max_bytes_per_table: int | None = None  # Max total bytes per table
+    max_mentions_per_saying: int | None = None  # Max @mentions per saying
+
 
 settings = Settings()

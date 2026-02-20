@@ -294,6 +294,40 @@ def count_sayings_by_table(conn: sqlite3.Connection, table_id: str) -> Result[in
         return Failure(SayingError(f"Database error: {e}"))
 
 
+def get_table_content_bytes(conn: sqlite3.Connection, table_id: str) -> Result[int, SayingError]:
+    """Get the total byte size of all content in a table.
+
+    This calculates the total bytes of all saying content in the table,
+    useful for bytes limit enforcement.
+
+    Note: SQLite LENGTH() returns characters, not bytes. For ASCII content
+    this is equivalent, but for Unicode content the actual byte count
+    may be higher. For accurate byte counting, content would need to be
+    fetched and encoded. This implementation uses character count as a
+    reasonable approximation that's efficient at the database level.
+
+    Args:
+        conn: Database connection.
+        table_id: UUID of the table.
+
+    Returns:
+        Success with total bytes estimate (0 if no sayings), or Failure with error.
+    """
+    try:
+        # LENGTH() counts characters, which equals bytes for ASCII
+        # For accurate UTF-8 byte count, would need to fetch and encode
+        cursor = conn.execute(
+            "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM sayings WHERE table_id = ?",
+            (table_id,),
+        )
+        row = cursor.fetchone()
+        total = int(row[0]) if row else 0
+        return Success(total)
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
 # @invar:allow shell_result: Private helper converting DB row to domain object
 # @shell_orchestration: Helper for row-to-domain conversion within repository
 def _row_to_saying(row: tuple) -> Saying:

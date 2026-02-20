@@ -10,6 +10,7 @@ This module provides pure functions for validating various caps:
 All functions are pure (no I/O) with @pre/@post contracts and doctests.
 """
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -56,6 +57,7 @@ class LimitsConfig:
     max_bytes_per_table: int | None = None
     max_mentions_per_saying: int | None = None
 
+    # @invar:allow missing_contract: Dataclass __post_init__ validates invariants via ValueError
     def __post_init__(self) -> None:
         """Validate that all limits are positive."""
         if self.max_sayings_per_table is not None and self.max_sayings_per_table <= 0:
@@ -118,6 +120,7 @@ class LimitError:
     actual: int
     message: str = ""
 
+    # @invar:allow missing_contract: Dataclass __post_init__ generates default message
     def __post_init__(self) -> None:
         """Generate message if not provided."""
         if not self.message:
@@ -132,7 +135,11 @@ class LimitError:
 # Core Validation Functions
 # =============================================================================
 
+# Mention pattern compiled at module level for reuse
+_MENTION_PATTERN = re.compile(r"(?<!\w)@[^\s@]+")
 
+
+# @invar:allow partial_contract: content is str - no meaningful constraint beyond type
 @deal.pre(lambda content, max_length: max_length is None or max_length > 0)
 @deal.post(lambda result: isinstance(result, bool))
 def validate_content_length(content: str, max_length: int | None) -> bool:
@@ -165,6 +172,7 @@ def validate_content_length(content: str, max_length: int | None) -> bool:
     return len(content) <= max_length
 
 
+# @invar:allow partial_contract: current_count is int - no meaningful constraint beyond type
 @deal.pre(lambda current_count, max_count: max_count is None or max_count > 0)
 @deal.post(lambda result: isinstance(result, bool))
 def validate_history_count(current_count: int, max_count: int | None) -> bool:
@@ -204,6 +212,7 @@ def validate_history_count(current_count: int, max_count: int | None) -> bool:
     return current_count < max_count
 
 
+# @invar:allow partial_contract: size_bytes is int - no meaningful constraint beyond type
 @deal.pre(lambda size_bytes, max_bytes: max_bytes is None or max_bytes > 0)
 @deal.post(lambda result: isinstance(result, bool))
 def validate_bytes_size(size_bytes: int, max_bytes: int | None) -> bool:
@@ -236,6 +245,7 @@ def validate_bytes_size(size_bytes: int, max_bytes: int | None) -> bool:
     return size_bytes <= max_bytes
 
 
+# @invar:allow partial_contract: content is str - no meaningful constraint beyond type
 @deal.pre(lambda content, max_mentions: max_mentions is None or max_mentions >= 0)
 @deal.post(lambda result: isinstance(result, bool))
 def validate_mentions(content: str, max_mentions: int | None) -> bool:
@@ -272,13 +282,8 @@ def validate_mentions(content: str, max_mentions: int | None) -> bool:
         return True
 
     # Count mentions: @ followed by non-whitespace characters
-    # Simple pattern that matches @word sequences
-    import re
-
-    # Pattern: @ followed by one or more non-whitespace, non-punctuation chars
-    # Excludes emails by requiring @ at start of word boundary
-    mention_pattern = re.compile(r"(?<!\w)@[^\s@]+")
-    mentions = mention_pattern.findall(content)
+    # Pattern excludes emails by requiring @ at start of word boundary
+    mentions = _MENTION_PATTERN.findall(content)
     return len(mentions) <= max_mentions
 
 
@@ -350,10 +355,7 @@ def check_content_limits(
 
     # Check mentions
     if not validate_mentions(content, config.max_mentions_per_saying):
-        import re
-
-        mention_pattern = re.compile(r"(?<!\w)@[^\s@]+")
-        mentions = mention_pattern.findall(content)
+        mentions = _MENTION_PATTERN.findall(content)
         return LimitError(
             kind=LimitKind.MENTIONS,
             limit=config.max_mentions_per_saying,  # type: ignore[arg-type]

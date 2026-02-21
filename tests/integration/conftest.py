@@ -267,7 +267,7 @@ def check_server_available(url: str, timeout: float = 5.0) -> bool:
     import httpx
 
     try:
-        response = httpx.get(f"{url}/health", timeout=timeout)
+        response = httpx.get(f"{url}/api/v1/health", timeout=timeout)
         return response.status_code == 200
     except Exception:
         return False

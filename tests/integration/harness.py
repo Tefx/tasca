@@ -27,14 +27,14 @@ The harness covers the following scenarios:
 ### REST API Scenarios
 
 1. **Health Checks**
-   - GET /health - Returns server health status
-   - GET /ready - Returns readiness status
+   - GET /api/v1/health - Returns server health status
+   - GET /api/v1/ready - Returns readiness status
 
 2. **Table Operations**
-   - POST /tables - Create a new discussion table
-   - GET /tables/{table_id} - Retrieve a table by ID
-   - GET /tables - List all tables
-   - DELETE /tables/{table_id} - Delete a table
+   - POST /api/v1/tables - Create a new discussion table
+   - GET /api/v1/tables/{table_id} - Retrieve a table by ID
+   - GET /api/v1/tables - List all tables
+   - DELETE /api/v1/tables/{table_id} - Delete a table
 
 3. **Error Handling**
    - 404 Not Found for non-existent resources
@@ -208,21 +208,24 @@ class RESTHarness:
     # Health Endpoints
     # =========================================================================
 
+    # API v1 prefix for all REST endpoints
+    API_V1_PREFIX = "/api/v1"
+
     async def health_check(self) -> "httpx.Response":
         """Check server health.
 
         Returns:
-            Response from GET /health
+            Response from GET /api/v1/health
         """
-        return await self.client.get("/health")
+        return await self.client.get(f"{self.API_V1_PREFIX}/health")
 
     async def readiness_check(self) -> "httpx.Response":
         """Check server readiness.
 
         Returns:
-            Response from GET /ready
+            Response from GET /api/v1/ready
         """
-        return await self.client.get("/ready")
+        return await self.client.get(f"{self.API_V1_PREFIX}/ready")
 
     # =========================================================================
     # Table Endpoints
@@ -235,9 +238,9 @@ class RESTHarness:
             data: Table creation data
 
         Returns:
-            Response from POST /tables
+            Response from POST /api/v1/tables
         """
-        return await self.client.post("/tables", json=data)
+        return await self.client.post(f"{self.API_V1_PREFIX}/tables", json=data)
 
     async def get_table(self, table_id: str) -> "httpx.Response":
         """Get a table by ID.
@@ -246,17 +249,17 @@ class RESTHarness:
             table_id: The table identifier
 
         Returns:
-            Response from GET /tables/{table_id}
+            Response from GET /api/v1/tables/{table_id}
         """
-        return await self.client.get(f"/tables/{table_id}")
+        return await self.client.get(f"{self.API_V1_PREFIX}/tables/{table_id}")
 
     async def list_tables(self) -> "httpx.Response":
         """List all tables.
 
         Returns:
-            Response from GET /tables
+            Response from GET /api/v1/tables
         """
-        return await self.client.get("/tables")
+        return await self.client.get(f"{self.API_V1_PREFIX}/tables")
 
     async def delete_table(self, table_id: str) -> "httpx.Response":
         """Delete a table by ID.
@@ -265,9 +268,9 @@ class RESTHarness:
             table_id: The table identifier
 
         Returns:
-            Response from DELETE /tables/{table_id}
+            Response from DELETE /api/v1/tables/{table_id}
         """
-        return await self.client.delete(f"/tables/{table_id}")
+        return await self.client.delete(f"{self.API_V1_PREFIX}/tables/{table_id}")
 
 
 class MCPHTTPHarness:
@@ -840,7 +843,7 @@ async def is_server_running(url: str = API_BASE_URL, timeout: float = 5.0) -> bo
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-            response = await client.get(f"{url}/health")
+            response = await client.get(f"{url}/api/v1/health")
             return response.status_code == 200
     except Exception:
         return False
@@ -854,14 +857,14 @@ def get_scenarios() -> dict[str, list[str]]:
     """
     return {
         "rest_health": [
-            "GET /health - Returns healthy status",
-            "GET /ready - Returns ready status",
+            "GET /api/v1/health - Returns healthy status",
+            "GET /api/v1/ready - Returns ready status",
         ],
         "rest_tables": [
-            "POST /tables - Create a new table",
-            "GET /tables/{id} - Retrieve table by ID",
-            "GET /tables - List all tables",
-            "DELETE /tables/{id} - Delete a table",
+            "POST /api/v1/tables - Create a new table",
+            "GET /api/v1/tables/{id} - Retrieve table by ID",
+            "GET /api/v1/tables - List all tables",
+            "DELETE /api/v1/tables/{id} - Delete a table",
         ],
         "rest_errors": [
             "404 Not Found for non-existent resources",

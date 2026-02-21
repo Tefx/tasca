@@ -6,9 +6,11 @@ The app serves both REST API routes and MCP server endpoints.
 """
 
 import logging
+from typing import Awaitable, Callable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from tasca.config import settings
 from tasca.shell.api.routes import export, health, patrons, sayings, seats, tables
@@ -16,6 +18,30 @@ from tasca.shell.api.routes import search
 from tasca.shell.mcp import mcp
 
 logger = logging.getLogger(__name__)
+
+
+class CSPMiddleware(BaseHTTPMiddleware):
+    """Middleware to add Content-Security-Policy headers to responses.
+
+    In production, this provides XSS protection by restricting resource sources.
+    In development, CSP is more permissive to allow debugging tools.
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+
+        # Only add CSP if enabled and header value is non-empty
+        if settings.csp_enabled and settings.csp_header_value:
+            header_name = (
+                "Content-Security-Policy-Report-Only"
+                if settings.csp_report_only
+                else "Content-Security-Policy"
+            )
+            response.headers[header_name] = settings.csp_header_value
+
+        return response
 
 
 # @invar:allow shell_result: FastAPI app factory - returns FastAPI, not Result
@@ -54,6 +80,10 @@ def create_app() -> FastAPI:
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type"],
         )
+
+    # CSP middleware - adds Content-Security-Policy headers for XSS protection
+    # In production: restrictive CSP; In development: permissive for debugging
+    app.add_middleware(CSPMiddleware)
 
     # Include routers under /api/v1 prefix
     API_V1_PREFIX = "/api/v1"

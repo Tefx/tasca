@@ -565,6 +565,29 @@ export function Table() {
   }, [state])
 
   // ---------------------------------------------------------------------------
+  // Build patrons map from sayings for mention autocomplete
+  // ---------------------------------------------------------------------------
+
+  const patronsMap = useMemo<Map<string, PatronInfo>>(() => {
+    const map = new Map<string, PatronInfo>()
+    // Extract unique patrons from saying speakers
+    for (const saying of sayings) {
+      const { speaker } = saying
+      // Only add if patron_id exists and not already in map
+      if (speaker.patron_id && !map.has(speaker.patron_id)) {
+        // Map 'patron' speaker kind to 'agent' patron kind (they're equivalent)
+        const patronKind = speaker.kind === 'patron' ? 'agent' : speaker.kind
+        map.set(speaker.patron_id, {
+          id: speaker.patron_id,
+          name: speaker.name,
+          kind: patronKind,
+        })
+      }
+    }
+    return map
+  }, [sayings])
+
+  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
@@ -602,6 +625,7 @@ export function Table() {
           <CommandConsole 
             table={table} 
             seats={seats} 
+            patrons={patronsMap}
             onStatusChange={handleStatusChange}
             onError={handleError}
           />

@@ -173,6 +173,7 @@ def get_table(conn: sqlite3.Connection, table_id: TableId) -> Result[Table, Tabl
         return Failure(TableDatabaseError(f"Failed to get table: {e}"))
 
 
+# @shell_complexity: 5 branches for optimistic concurrency check + replace-only patch + state machine transition + error paths
 def update_table(
     conn: sqlite3.Connection,
     table_id: TableId,

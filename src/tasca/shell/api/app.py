@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from tasca.config import settings
-from tasca.shell.api.routes import export, health, sayings, seats, tables
+from tasca.shell.api.routes import export, health, patrons, sayings, seats, tables
 from tasca.shell.api.routes import search
 from tasca.shell.mcp import mcp
 
@@ -58,6 +58,7 @@ def create_app() -> FastAPI:
     # Include routers under /api/v1 prefix
     API_V1_PREFIX = "/api/v1"
     app.include_router(health.router, prefix=API_V1_PREFIX, tags=["health"])
+    app.include_router(patrons.router, prefix=f"{API_V1_PREFIX}/patrons", tags=["patrons"])
     app.include_router(tables.router, prefix=f"{API_V1_PREFIX}/tables", tags=["tables"])
     app.include_router(
         sayings.router, prefix=f"{API_V1_PREFIX}/tables/{{table_id}}/sayings", tags=["sayings"]

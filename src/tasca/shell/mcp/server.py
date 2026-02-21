@@ -131,6 +131,7 @@ def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
 # =============================================================================
 
 
+# @shell_complexity: 8 branches for patron dedup check + create + idempotency store + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def patron_register(
@@ -292,6 +293,7 @@ def patron_get(patron_id: str) -> dict[str, Any]:
 # =============================================================================
 
 
+# @shell_complexity: 5 branches for table creation + dedup store + idempotency + error handling
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def table_create(
@@ -381,6 +383,7 @@ def table_create(
     return success_response(response_data)
 
 
+# @shell_complexity: 6 branches for table lookup + can_join guard + seat creation + dedup + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def table_join(
@@ -545,6 +548,7 @@ def table_get(table_id: str) -> dict[str, Any]:
     )
 
 
+# @shell_complexity: 10 branches for table lookup + can_say guard + limits enforcement + dedup + mention resolution + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def table_say(
@@ -675,6 +679,7 @@ def table_say(
     return success_response(response_data)
 
 
+# @shell_complexity: 5 branches for table lookup + long-poll loop + timeout + backoff + error handling
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def table_listen(
@@ -758,6 +763,7 @@ def table_listen(
 # =============================================================================
 
 
+# @shell_complexity: 6 branches for seat lookup + TTL update + state transition + expiry GC + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def seat_heartbeat(

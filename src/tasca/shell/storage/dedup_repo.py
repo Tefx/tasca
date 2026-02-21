@@ -167,6 +167,7 @@ def store_dedup(
 
 
 # @shell_orchestration: Combined operation with return_existing semantics
+# @shell_complexity: Race condition handling with INSERT ON CONFLICT (5 branches acceptable)
 def store_or_get_existing(
     conn: sqlite3.Connection, content: str
 ) -> Result[tuple[DedupRecord, bool], DedupError]:
@@ -174,9 +175,9 @@ def store_or_get_existing(
 
     This is the main dedup operation with return_existing semantics:
     - Computes content hash and preview
-    - Checks if hash already exists
-    - If exists: returns existing record with is_new=False
-    - If not exists: stores new record and returns with is_new=True
+    - Uses INSERT ON CONFLICT to avoid TOCTOU race condition
+    - Returns existing record with is_new=False on conflict
+    - Returns new record with is_new=True on successful insert
 
     Args:
         conn: Database connection.
@@ -212,24 +213,50 @@ def store_or_get_existing(
     """
     # Compute hash and preview (pure function from core)
     content_hash, content_preview = compute_hash_and_preview(content)
+    now = datetime.now(timezone.utc)
+    now_str = now.isoformat()
 
-    # Check for existing record
-    existing_result = check_duplicate(conn, content_hash)
-    if isinstance(existing_result, Failure):
-        return existing_result
+    try:
+        # Use INSERT ON CONFLICT DO NOTHING to avoid TOCTOU race condition
+        # This is atomic - no gap between check and insert
+        cursor = conn.execute(
+            """
+            INSERT INTO dedup (content_hash, content_preview, first_seen_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT (content_hash) DO NOTHING
+            """,
+            (content_hash, content_preview, now_str),
+        )
+        conn.commit()
 
-    existing = existing_result.unwrap()
-    if existing is not None:
-        # Return existing record with is_new=False
-        return Success((existing, False))
+        if cursor.rowcount > 0:
+            # Insert succeeded - new record created
+            return Success(
+                (
+                    DedupRecord(
+                        content_hash=content_hash,
+                        content_preview=content_preview,
+                        first_seen_at=now,
+                    ),
+                    True,
+                )
+            )
+        else:
+            # ON CONFLICT triggered - record already exists
+            # Fetch the existing record
+            existing_result = check_duplicate(conn, content_hash)
+            if isinstance(existing_result, Failure):
+                return existing_result
+            existing = existing_result.unwrap()
+            if existing is not None:
+                return Success((existing, False))
+            # This should never happen with proper ON CONFLICT behavior
+            return Failure(
+                DedupError(f"ON CONFLICT triggered but no existing record found: {content_hash}")
+            )
 
-    # Store new record
-    store_result = store_dedup(conn, content_hash, content_preview)
-    if isinstance(store_result, Failure):
-        return store_result
-
-    # Return new record with is_new=True
-    return Success((store_result.unwrap(), True))
+    except sqlite3.Error as e:
+        return Failure(DedupError(f"Database error: {e}"))
 
 
 # =============================================================================

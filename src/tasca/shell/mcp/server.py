@@ -70,6 +70,12 @@ from tasca.shell.storage.idempotency_repo import (
     store_idempotency_key,
     DEFAULT_IDEMPOTENCY_TTL_SECONDS,
 )
+from tasca.shell.logging import (
+    get_logger,
+    log_dedup_hit,
+    log_say,
+    log_table_create,
+)
 
 # Transport types for MCP server
 TransportType = Literal["stdio", "http", "sse", "streamable-http"]
@@ -87,6 +93,9 @@ mcp = FastMCP(
         "Start with tasca.patron_register to create your patron identity."
     ),
 )
+
+# Logger for structured logging
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -184,6 +193,8 @@ def patron_register(
 
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
+            # Log dedup hit
+            log_dedup_hit(logger, "patron_register", resource_key, dedup_id)
             # Return cached response (return_existing semantics)
             return success_response(cached_response["data"])
 
@@ -343,6 +354,8 @@ def table_create(
 
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
+            # Log dedup hit
+            log_dedup_hit(logger, "table_create", resource_key, dedup_id)
             # Return cached response (return_existing semantics)
             return success_response(cached_response["data"])
 
@@ -366,6 +379,10 @@ def table_create(
         return error_response("DATABASE_ERROR", f"Failed to create table: {error}")
 
     created = result.unwrap()
+    
+    # Log table creation
+    log_table_create(logger, created.id, "mcp:client")
+    
     response_data = {
         "id": created.id,
         "question": created.question,
@@ -643,6 +660,8 @@ def table_say(
 
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
+            # Log dedup hit
+            log_dedup_hit(logger, "table_say", resource_key, dedup_id)
             # Return cached response (return_existing semantics)
             return success_response(cached_response["data"])
 
@@ -658,6 +677,17 @@ def table_say(
         return error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
 
     saying = result.unwrap()
+    
+    # Log saying append
+    log_say(
+        logger,
+        table_id=saying.table_id,
+        sequence=saying.sequence,
+        speaker_kind=saying.speaker.kind.value,
+        speaker_name=saying.speaker.name,
+        patron_id=saying.speaker.patron_id,
+    )
+    
     response_data = {
         "id": saying.id,
         "table_id": saying.table_id,
@@ -816,6 +846,8 @@ def seat_heartbeat(
 
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
+            # Log dedup hit
+            log_dedup_hit(logger, "seat_heartbeat", resource_key, dedup_id)
             # Return cached response (return_existing semantics)
             return success_response(cached_response["data"])
 

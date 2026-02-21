@@ -26,8 +26,10 @@ from tasca.shell.storage.table_repo import (
     update_table,
     VersionConflictError,
 )
+from tasca.shell.logging import get_logger, log_table_create, log_table_delete, log_table_update
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -91,7 +93,12 @@ async def create_table_endpoint(
             detail=f"Failed to create table: {error}",
         )
 
-    return result.unwrap()
+    table = result.unwrap()
+    
+    # Log table creation
+    log_table_create(logger, table.id, "rest:admin")
+    
+    return table
 
 
 # =============================================================================
@@ -230,7 +237,12 @@ async def update_table_endpoint(
             detail=f"Failed to update table: {error}",
         )
 
-    return result.unwrap()
+    table = result.unwrap()
+    
+    # Log table update
+    log_table_update(logger, table.id, table.version, "rest:admin")
+    
+    return table
 
 
 # =============================================================================
@@ -275,4 +287,7 @@ async def delete_table_endpoint(
             detail=f"Failed to delete table: {error}",
         )
 
+    # Log table deletion
+    log_table_delete(logger, table_id, "rest:admin")
+    
     return DeleteResponse(status="deleted", table_id=table_id)

@@ -39,11 +39,13 @@ from tasca.shell.storage.saying_repo import (
     list_sayings_by_table,
 )
 from tasca.shell.storage.table_repo import TableNotFoundError, get_table
+from tasca.shell.logging import get_logger, log_say, log_wait_timeout, log_wait_returned
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -297,7 +299,19 @@ async def append_saying_endpoint(
             detail=f"Failed to append saying: {error}",
         )
 
-    return result.unwrap()
+    saying = result.unwrap()
+    
+    # Log saying append
+    log_say(
+        logger,
+        table_id=saying.table_id,
+        sequence=saying.sequence,
+        speaker_kind=saying.speaker.kind.value,
+        speaker_name=saying.speaker.name,
+        patron_id=saying.speaker.patron_id,
+    )
+    
+    return saying
 
 
 # =============================================================================
@@ -460,6 +474,9 @@ async def wait_for_sayings_endpoint(
             full_sayings = full_result.unwrap()
             next_sequence = max(s.sequence for s in full_sayings) + 1
 
+            # Log wait returned
+            log_wait_returned(logger, table_id, since_sequence, len(full_sayings))
+
             return WaitResponse(
                 sayings=full_sayings,
                 next_sequence=next_sequence,
@@ -479,6 +496,9 @@ async def wait_for_sayings_endpoint(
             detail=f"Failed to get table max sequence: {max_seq_result.failure()}",
         )
     table_max_sequence = max_seq_result.unwrap()
+
+    # Log wait timeout
+    log_wait_timeout(logger, table_id, since_sequence)
 
     return WaitResponse(
         sayings=[],

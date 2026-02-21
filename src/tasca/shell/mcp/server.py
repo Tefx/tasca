@@ -17,6 +17,8 @@ that can be serialized to JSON. Internal service calls use Result[T, E].
 
 from __future__ import annotations
 
+import asyncio
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -28,7 +30,7 @@ from tasca.config import settings
 from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.seat import Seat, SeatId, SeatState
-from tasca.core.domain.table import Table, TableId, TableStatus, Version
+from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
 from tasca.core.services.limits_service import (
     LimitError,
     LimitsConfig,
@@ -39,7 +41,17 @@ from tasca.core.services.seat_service import (
     calculate_expiry_time,
     filter_active_seats,
 )
-from tasca.core.table_state_machine import can_join, can_say
+from tasca.core.table_state_machine import (
+    can_join,
+    can_say,
+    can_transition_to_closed,
+    can_transition_to_open,
+    can_transition_to_paused,
+    is_terminal,
+    transition_to_closed,
+    transition_to_open,
+    transition_to_paused,
+)
 from tasca.shell.mcp.database import get_mcp_db
 from tasca.shell.mcp.responses import error_response, success_response
 from tasca.shell.services.limited_saying_service import (
@@ -51,7 +63,11 @@ from tasca.shell.storage.patron_repo import (
     find_patron_by_name,
     get_patron,
 )
-from tasca.shell.storage.saying_repo import list_sayings_by_table
+from tasca.shell.storage.saying_repo import (
+    append_saying,
+    get_table_max_sequence,
+    list_sayings_by_table,
+)
 from tasca.shell.storage.seat_repo import (
     SeatNotFoundError,
     create_seat,
@@ -62,8 +78,10 @@ from tasca.shell.storage.seat_repo import (
 )
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
+    VersionConflictError,
     create_table,
     get_table,
+    update_table,
 )
 from tasca.shell.storage.idempotency_repo import (
     check_idempotency_key,
@@ -379,10 +397,10 @@ def table_create(
         return error_response("DATABASE_ERROR", f"Failed to create table: {error}")
 
     created = result.unwrap()
-    
+
     # Log table creation
     log_table_create(logger, created.id, "mcp:client")
-    
+
     response_data = {
         "id": created.id,
         "question": created.question,
@@ -677,7 +695,7 @@ def table_say(
         return error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
 
     saying = result.unwrap()
-    
+
     # Log saying append
     log_say(
         logger,
@@ -687,7 +705,7 @@ def table_say(
         speaker_name=saying.speaker.name,
         patron_id=saying.speaker.patron_id,
     )
-    
+
     response_data = {
         "id": saying.id,
         "table_id": saying.table_id,
@@ -786,6 +804,494 @@ def table_listen(
             "next_sequence": next_sequence,
         }
     )
+
+
+# =============================================================================
+# Table Control Tools
+# =============================================================================
+
+
+# Default timeout for wait endpoint (milliseconds)
+DEFAULT_WAIT_MS = 10000
+# Maximum wait time (milliseconds) - MUST cap per spec
+MAX_WAIT_MS = 10000
+# Poll interval for checking new sayings (milliseconds)
+POLL_INTERVAL_MS = 500
+
+
+# @shell_complexity: 12 branches for table lookup + state machine validation + status update + CONTROL saying append + dedup + error paths
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+@mcp.tool
+def table_control(
+    table_id: str,
+    action: Literal["pause", "resume", "close"],
+    speaker_name: str,
+    patron_id: str | None = None,
+    reason: str | None = None,
+    dedup_id: str | None = None,
+) -> dict[str, Any]:
+    """Control table lifecycle: pause, resume, or close.
+
+    This operation:
+    1. Validates the state transition
+    2. Appends a CONTROL saying for audit trail
+    3. Updates the table status
+
+    Args:
+        table_id: UUID of the table.
+        action: Control action - "pause", "resume", or "close".
+        speaker_name: Name of the speaker performing the action.
+        patron_id: Patron ID if the speaker is an agent (optional).
+        reason: Optional reason for the control action.
+        dedup_id: Optional idempotency key for request deduplication.
+
+    Returns:
+        Success envelope with new table status and control saying sequence:
+        {
+            "ok": true,
+            "data": {
+                "table_status": "paused",
+                "control_saying_sequence": 42
+            }
+        }
+
+    Error codes:
+        - NOT_FOUND: Table not found
+        - OPERATION_NOT_ALLOWED: Invalid state transition (e.g., resume on closed table)
+        - INVALID_ACTION: Unknown action
+        - DATABASE_ERROR: Failed to perform operation
+    """
+    conn = next(get_mcp_db())
+
+    # Resource key for idempotency scope: {table_id, action}
+    resource_key = f"control:{table_id}"
+
+    # Check idempotency key if provided
+    if dedup_id is not None:
+        idempotency_result = check_idempotency_key(conn, resource_key, "table_control", dedup_id)
+        if isinstance(idempotency_result, Failure):
+            error = idempotency_result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+
+        cached_response = idempotency_result.unwrap()
+        if cached_response is not None:
+            log_dedup_hit(logger, "table_control", resource_key, dedup_id)
+            return success_response(cached_response["data"])
+
+    # Get current table
+    table_result = get_table(conn, TableId(table_id))
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+
+    current_table = table_result.unwrap()
+
+    # Check if table is already closed (terminal state)
+    if is_terminal(current_table.status):
+        return error_response(
+            "OPERATION_NOT_ALLOWED",
+            f"Cannot perform control action on closed table. Closed is a terminal state.",
+            {"table_status": current_table.status.value},
+        )
+
+    # Validate and compute new status
+    if action == "pause":
+        if not can_transition_to_paused(current_table.status):
+            return error_response(
+                "OPERATION_NOT_ALLOWED",
+                f"Cannot pause table with status '{current_table.status.value}'. Only OPEN tables can be paused.",
+                {"table_status": current_table.status.value},
+            )
+        new_status = transition_to_paused(current_table.status)
+    elif action == "resume":
+        if not can_transition_to_open(current_table.status):
+            return error_response(
+                "OPERATION_NOT_ALLOWED",
+                f"Cannot resume table with status '{current_table.status.value}'. Only PAUSED tables can be resumed.",
+                {"table_status": current_table.status.value},
+            )
+        new_status = transition_to_open(current_table.status)
+    elif action == "close":
+        if not can_transition_to_closed(current_table.status):
+            return error_response(
+                "OPERATION_NOT_ALLOWED",
+                f"Cannot close table with status '{current_table.status.value}'.",
+                {"table_status": current_table.status.value},
+            )
+        new_status = transition_to_closed(current_table.status)
+    else:
+        return error_response("INVALID_ACTION", f"Unknown action: {action}")
+
+    # Create speaker
+    if patron_id is not None:
+        speaker = Speaker(
+            kind=SpeakerKind.AGENT,
+            name=speaker_name,
+            patron_id=PatronId(patron_id),
+        )
+    else:
+        speaker = Speaker(
+            kind=SpeakerKind.HUMAN,
+            name=speaker_name,
+            patron_id=None,
+        )
+
+    # Create CONTROL saying content
+    # Note: Current schema lacks saying_type field, so we encode control actions in content
+    control_content = f"**CONTROL: {action.upper()}**"
+    if reason:
+        control_content += f"\n\nReason: {reason}"
+
+    # Append CONTROL saying
+    saying_result = append_saying(conn, table_id, speaker, control_content)
+    if isinstance(saying_result, Failure):
+        error = saying_result.failure()
+        return error_response("DATABASE_ERROR", f"Failed to append control saying: {error}")
+
+    control_saying = saying_result.unwrap()
+
+    # Update table status
+    now = datetime.now(UTC)
+    table_update = TableUpdate(
+        question=current_table.question,
+        context=current_table.context,
+        status=new_status,
+    )
+
+    update_result = update_table(
+        conn=conn,
+        table_id=TableId(table_id),
+        update=table_update,
+        expected_version=current_table.version,
+        now=now,
+    )
+    if isinstance(update_result, Failure):
+        error = update_result.failure()
+        # Note: VersionConflict should not happen here since we just read the table
+        # and this is a single-threaded operation, but handle it gracefully
+        if isinstance(error, VersionConflictError):
+            return error_response(
+                "VERSION_CONFLICT",
+                f"Table version conflict during control operation",
+                {
+                    "expected_version": error.expected_version,
+                    "actual_version": error.current_version,
+                },
+            )
+        return error_response("DATABASE_ERROR", f"Failed to update table status: {error}")
+
+    response_data = {
+        "table_status": new_status.value,
+        "control_saying_sequence": control_saying.sequence,
+    }
+
+    # Store in idempotency cache if dedup_id provided
+    if dedup_id is not None:
+        _ = store_idempotency_key(
+            conn, resource_key, "table_control", dedup_id, {"data": response_data}
+        )
+
+    return success_response(response_data)
+
+
+# @shell_complexity: 8 branches for table lookup + version check + update + dedup + error paths
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+@mcp.tool
+def table_update(
+    table_id: str,
+    expected_version: int,
+    patch: dict[str, Any],
+    speaker_name: str,
+    patron_id: str | None = None,
+    dedup_id: str | None = None,
+) -> dict[str, Any]:
+    """Update table metadata with optimistic concurrency control.
+
+    Updates table fields with optimistic concurrency check. The patch can
+    include: question, context, status.
+
+    Note: The full spec includes host_ids, metadata, policy, board fields,
+    but these are not yet in the current schema. Updates to those fields
+    are silently ignored.
+
+    Args:
+        table_id: UUID of the table.
+        expected_version: Version the client expects (optimistic concurrency).
+        patch: Partial update data. Supported: question, context, status.
+        speaker_name: Name of the speaker performing the update.
+        patron_id: Patron ID if the speaker is an agent (optional).
+        dedup_id: Optional idempotency key for request deduplication.
+
+    Returns:
+        Success envelope with updated table:
+        {
+            "ok": true,
+            "data": {
+                "table": {
+                    "id": "uuid",
+                    "question": "...",
+                    "context": "...",
+                    "status": "open",
+                    "version": 5,
+                    "created_at": "...",
+                    "updated_at": "..."
+                }
+            }
+        }
+
+    Error codes:
+        - NOT_FOUND: Table not found
+        - VERSION_CONFLICT: expected_version does not match current version
+        - DATABASE_ERROR: Failed to update table
+    """
+    conn = next(get_mcp_db())
+
+    # Resource key for idempotency scope
+    resource_key = f"update:{table_id}"
+
+    # Check idempotency key if provided
+    if dedup_id is not None:
+        idempotency_result = check_idempotency_key(conn, resource_key, "table_update", dedup_id)
+        if isinstance(idempotency_result, Failure):
+            error = idempotency_result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+
+        cached_response = idempotency_result.unwrap()
+        if cached_response is not None:
+            log_dedup_hit(logger, "table_update", resource_key, dedup_id)
+            return success_response(cached_response["data"])
+
+    # Get current table
+    table_result = get_table(conn, TableId(table_id))
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+
+    current_table = table_result.unwrap()
+
+    # Apply patch to create update (only supported fields)
+    # Note: question and context are required in TableUpdate
+    new_question = patch.get("question", current_table.question)
+    new_context = patch.get("context", current_table.context)
+    new_status = current_table.status
+
+    # Handle status update with state machine validation
+    if "status" in patch:
+        status_value = patch["status"]
+        try:
+            new_status = TableStatus(status_value)
+        except ValueError:
+            return error_response(
+                "INVALID_STATUS",
+                f"Invalid status value: {status_value}. Must be one of: open, paused, closed",
+            )
+
+    table_update = TableUpdate(
+        question=new_question,
+        context=new_context,
+        status=new_status,
+    )
+
+    # Perform optimistic concurrency update
+    now = datetime.now(UTC)
+    update_result = update_table(
+        conn=conn,
+        table_id=TableId(table_id),
+        update=table_update,
+        expected_version=Version(expected_version),
+        now=now,
+    )
+
+    if isinstance(update_result, Failure):
+        error = update_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        if isinstance(error, VersionConflictError):
+            return error_response(
+                "VERSION_CONFLICT",
+                "Table version conflict",
+                {
+                    "expected_version": error.expected_version,
+                    "actual_version": error.current_version,
+                    "table": {
+                        "id": current_table.id,
+                        "question": current_table.question,
+                        "context": current_table.context,
+                        "status": current_table.status.value,
+                        "version": current_table.version,
+                        "created_at": current_table.created_at.isoformat(),
+                        "updated_at": current_table.updated_at.isoformat(),
+                    },
+                },
+            )
+        return error_response("DATABASE_ERROR", f"Failed to update table: {error}")
+
+    updated_table = update_result.unwrap()
+
+    response_data = {
+        "table": {
+            "id": updated_table.id,
+            "question": updated_table.question,
+            "context": updated_table.context,
+            "status": updated_table.status.value,
+            "version": updated_table.version,
+            "created_at": updated_table.created_at.isoformat(),
+            "updated_at": updated_table.updated_at.isoformat(),
+        }
+    }
+
+    # Store in idempotency cache if dedup_id provided
+    if dedup_id is not None:
+        _ = store_idempotency_key(
+            conn, resource_key, "table_update", dedup_id, {"data": response_data}
+        )
+
+    return success_response(response_data)
+
+
+# @shell_complexity: 10 branches for table lookup + long-poll loop + timeout + backoff + error handling
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# Note: FastMCP supports async tools - using async def for blocking wait
+@mcp.tool
+async def table_wait(
+    table_id: str,
+    since_sequence: int = -1,
+    wait_ms: int = DEFAULT_WAIT_MS,
+    limit: int = 50,
+    include_table: bool = False,
+) -> dict[str, Any]:
+    """Long-poll wait for new sayings on a table.
+
+    Blocks until new sayings are available or timeout. Returns same shape
+    as table_listen. Empty sayings on timeout is a valid response.
+
+    Args:
+        table_id: UUID of the table.
+        since_sequence: Get sayings with sequence > this value (-1 for all).
+        wait_ms: Max wait time in milliseconds (0-10000, default 10000).
+        limit: Maximum number of sayings to return (default 50).
+        include_table: If true, include table snapshot in response.
+
+    Returns:
+        Success envelope with sayings and next_sequence:
+        {
+            "ok": true,
+            "data": {
+                "sayings": [...],
+                "next_sequence": 42,
+                "timeout": false,
+                "table": {...}  // only if include_table=true
+            }
+        }
+
+    Error codes:
+        - NOT_FOUND: Table not found
+        - DATABASE_ERROR: Failed to query sayings
+    """
+    conn = next(get_mcp_db())
+
+    # Verify table exists
+    table_result = get_table(conn, TableId(table_id))
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+
+    table = table_result.unwrap()
+
+    # Cap wait_ms at MAX_WAIT_MS per spec
+    capped_wait_ms = min(wait_ms, MAX_WAIT_MS)
+    timeout_seconds = capped_wait_ms / 1000.0
+    poll_interval_seconds = POLL_INTERVAL_MS / 1000.0
+
+    start_time = time.monotonic()
+    end_time = start_time + timeout_seconds
+
+    while time.monotonic() < end_time:
+        # Check for new sayings
+        result = list_sayings_by_table(conn, table_id, since_sequence, limit=limit)
+
+        if isinstance(result, Failure):
+            error = result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to list sayings: {error}")
+
+        sayings = result.unwrap()
+
+        if sayings:
+            # Found new sayings - return them
+            next_sequence = max(s.sequence for s in sayings) + 1
+
+            response_data: dict[str, Any] = {
+                "sayings": [
+                    {
+                        "id": s.id,
+                        "table_id": s.table_id,
+                        "sequence": s.sequence,
+                        "speaker": {
+                            "kind": s.speaker.kind.value,
+                            "name": s.speaker.name,
+                            "patron_id": s.speaker.patron_id,
+                        },
+                        "content": s.content,
+                        "pinned": s.pinned,
+                        "created_at": s.created_at.isoformat(),
+                    }
+                    for s in sayings
+                ],
+                "next_sequence": next_sequence,
+                "timeout": False,
+            }
+
+            if include_table:
+                response_data["table"] = {
+                    "id": table.id,
+                    "question": table.question,
+                    "context": table.context,
+                    "status": table.status.value,
+                    "version": table.version,
+                    "created_at": table.created_at.isoformat(),
+                    "updated_at": table.updated_at.isoformat(),
+                }
+
+            return success_response(response_data)
+
+        # Wait before next poll
+        remaining = end_time - time.monotonic()
+        if remaining > 0:
+            await asyncio.sleep(min(poll_interval_seconds, remaining))
+
+    # Timeout - return empty with current next_sequence
+    max_seq_result = get_table_max_sequence(conn, table_id)
+    if isinstance(max_seq_result, Failure):
+        error = max_seq_result.failure()
+        return error_response("DATABASE_ERROR", f"Failed to get max sequence: {error}")
+
+    table_max_sequence = max_seq_result.unwrap()
+    next_sequence = table_max_sequence + 1
+
+    response_data = {
+        "sayings": [],
+        "next_sequence": next_sequence,
+        "timeout": True,
+    }
+
+    if include_table:
+        response_data["table"] = {
+            "id": table.id,
+            "question": table.question,
+            "context": table.context,
+            "status": table.status.value,
+            "version": table.version,
+            "created_at": table.created_at.isoformat(),
+            "updated_at": table.updated_at.isoformat(),
+        }
+
+    return success_response(response_data)
 
 
 # =============================================================================

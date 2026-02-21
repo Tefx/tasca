@@ -1390,8 +1390,8 @@
   white-space: nowrap;
 }
 
-/* When prefix is shown, indent the textarea */
-.mc-mention-input-wrapper:has(.mc-mention-input-prefix) .mc-mention-input {
+/* When prefix is shown, indent the textarea (uses wrapper class for Safari 15 compatibility) */
+.mc-mention-input-wrapper--active .mc-mention-input {
   padding-left: 4.5rem;
 }
 

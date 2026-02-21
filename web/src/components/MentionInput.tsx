@@ -263,9 +263,12 @@ export function MentionInput({
     }
   }, [value])
 
+  // Add wrapper class when prefix is active (for Safari 15 / older Chrome compatibility)
+  const wrapperClassName = `mc-mention-input-wrapper${!disabled ? ' mc-mention-input-wrapper--active' : ''}`
+
   return (
     <div ref={containerRef} className={`mc-mention-input-container ${className}`}>
-      <div className="mc-mention-input-wrapper">
+      <div className={wrapperClassName}>
         {disabled ? (
           <div className="mc-mention-input-disabled-overlay" aria-label="Input disabled in viewer mode">
             <span className="mc-mention-input-label">HUMAN</span>

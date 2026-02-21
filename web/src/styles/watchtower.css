@@ -1,0 +1,652 @@
+/**
+ * Watchtower page styles.
+ *
+ * Dark theme, functional/observability-optimized.
+ * Uses CSS variables from index.css :root where possible.
+ * Design source: docs/tasca-web-uiux-v0.1.md
+ */
+
+/* =============================================================================
+   Design Tokens (Watchtower-specific)
+   ============================================================================= */
+
+:root {
+  --wt-bg: #1a1a1a;
+  --wt-surface: #2a2a2a;
+  --wt-surface-hover: #333;
+  --wt-border: #3a3a3a;
+  --wt-text: rgba(255, 255, 255, 0.87);
+  --wt-text-muted: rgba(255, 255, 255, 0.45);
+  --wt-text-dim: rgba(255, 255, 255, 0.6);
+  --wt-accent: #60a5fa;
+  --wt-accent-hover: #3b82f6;
+
+  /* Status pill colors */
+  --wt-status-open: #22c55e;
+  --wt-status-open-bg: rgba(34, 197, 94, 0.15);
+  --wt-status-paused: #eab308;
+  --wt-status-paused-bg: rgba(234, 179, 8, 0.15);
+  --wt-status-closed: #6b7280;
+  --wt-status-closed-bg: rgba(107, 114, 128, 0.15);
+
+  --wt-radius: 6px;
+  --wt-radius-sm: 4px;
+}
+
+/* =============================================================================
+   Screen Reader Only
+   ============================================================================= */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* =============================================================================
+   Layout
+   ============================================================================= */
+
+.wt {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.wt-header {
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--wt-border);
+}
+
+.wt-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.wt-header-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.wt-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--wt-text);
+}
+
+.wt-subtitle {
+  font-size: 0.875rem;
+  color: var(--wt-text-muted);
+  margin: 0.25rem 0 0;
+}
+
+/* =============================================================================
+   Toolbar (search + filters + join)
+   ============================================================================= */
+
+.wt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.wt-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Search */
+.wt-search {
+  position: relative;
+  flex: 1;
+  max-width: 360px;
+}
+
+.wt-search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: var(--wt-surface);
+  border: 1px solid var(--wt-border);
+  border-radius: var(--wt-radius);
+  color: var(--wt-text);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.wt-search-input::placeholder {
+  color: var(--wt-text-muted);
+}
+
+.wt-search-input:focus {
+  border-color: var(--wt-accent);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.wt-search-spinner {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--wt-border);
+  border-top-color: var(--wt-accent);
+  border-radius: 50%;
+  animation: wt-spin 0.6s linear infinite;
+}
+
+/* Status filter pills */
+.wt-filters {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.wt-filter-pill {
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--wt-border);
+  border-radius: 999px;
+  color: var(--wt-text-dim);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.wt-filter-pill:hover {
+  border-color: var(--wt-text-dim);
+  color: var(--wt-text);
+}
+
+.wt-filter-pill:focus-visible {
+  outline: 2px solid var(--wt-accent);
+  outline-offset: 2px;
+}
+
+.wt-filter-pill--active {
+  background: var(--wt-accent);
+  border-color: var(--wt-accent);
+  color: #000;
+  font-weight: 500;
+}
+
+.wt-filter-pill--active:hover {
+  background: var(--wt-accent-hover);
+  border-color: var(--wt-accent-hover);
+  color: #000;
+}
+
+/* Join by invite code */
+.wt-join {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.wt-join-input {
+  padding: 0.5rem 0.75rem;
+  background: var(--wt-surface);
+  border: 1px solid var(--wt-border);
+  border-radius: var(--wt-radius);
+  color: var(--wt-text);
+  font-size: 0.875rem;
+  width: 180px;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: monospace;
+}
+
+.wt-join-input::placeholder {
+  color: var(--wt-text-muted);
+  font-family: inherit;
+}
+
+.wt-join-input:focus {
+  border-color: var(--wt-accent);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.wt-join-btn {
+  padding: 0.5rem 1rem;
+  background: var(--wt-accent);
+  border: none;
+  border-radius: var(--wt-radius);
+  color: #000;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.wt-join-btn:hover:not(:disabled) {
+  background: var(--wt-accent-hover);
+}
+
+.wt-join-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wt-join-btn:focus-visible {
+  outline: 2px solid var(--wt-accent);
+  outline-offset: 2px;
+}
+
+/* =============================================================================
+   Content Area
+   ============================================================================= */
+
+.wt-content {
+  flex: 1;
+}
+
+/* =============================================================================
+   State displays (loading, error, empty)
+   ============================================================================= */
+
+.wt-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--wt-text-muted);
+  gap: 0.5rem;
+}
+
+.wt-state p {
+  margin: 0;
+}
+
+.wt-state--error {
+  color: #ef4444;
+}
+
+.wt-state-title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.wt-state-detail {
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.wt-retry-btn {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  background: transparent;
+  border: 1px solid #ef4444;
+  border-radius: var(--wt-radius);
+  color: #ef4444;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.wt-retry-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.wt-retry-btn:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+/* Loading spinner */
+.wt-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--wt-border);
+  border-top-color: var(--wt-accent);
+  border-radius: 50%;
+  animation: wt-spin 0.6s linear infinite;
+}
+
+@keyframes wt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =============================================================================
+   Table
+   ============================================================================= */
+
+.wt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.wt-table thead th {
+  text-align: left;
+  padding: 0.625rem 0.75rem;
+  color: var(--wt-text-muted);
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--wt-border);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.wt-table tbody td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--wt-border);
+  vertical-align: middle;
+}
+
+.wt-table-row {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.wt-table-row:hover {
+  background: var(--wt-surface-hover);
+}
+
+.wt-table-row:focus-visible {
+  outline: 2px solid var(--wt-accent);
+  outline-offset: -2px;
+}
+
+/* Cell: Title */
+.wt-cell-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  max-width: 400px;
+}
+
+.wt-table-question {
+  color: var(--wt-text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wt-table-context {
+  color: var(--wt-text-muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Cell: Muted placeholder */
+.wt-cell-muted {
+  color: var(--wt-text-muted);
+}
+
+/* Cell: Time */
+.wt-cell-time {
+  color: var(--wt-text-dim);
+  white-space: nowrap;
+}
+
+/* Cell: Invite code */
+.wt-cell-code {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wt-invite-code {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: var(--wt-text-dim);
+  background: var(--wt-surface);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--wt-radius-sm);
+}
+
+/* =============================================================================
+   Status Pills
+   ============================================================================= */
+
+.wt-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.wt-status-pill--open {
+  color: var(--wt-status-open);
+  background: var(--wt-status-open-bg);
+}
+
+.wt-status-pill--paused {
+  color: var(--wt-status-paused);
+  background: var(--wt-status-paused-bg);
+}
+
+.wt-status-pill--closed {
+  color: var(--wt-status-closed);
+  background: var(--wt-status-closed-bg);
+}
+
+/* =============================================================================
+   Copy Button
+   ============================================================================= */
+
+.wt-copy-btn {
+  padding: 0.125rem 0.375rem;
+  background: transparent;
+  border: 1px solid var(--wt-border);
+  border-radius: var(--wt-radius-sm);
+  color: var(--wt-text-muted);
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  text-transform: lowercase;
+}
+
+.wt-copy-btn:hover {
+  border-color: var(--wt-text-dim);
+  color: var(--wt-text-dim);
+}
+
+.wt-copy-btn:focus-visible {
+  outline: 2px solid var(--wt-accent);
+  outline-offset: 2px;
+}
+
+/* =============================================================================
+   Responsive
+   ============================================================================= */
+
+@media (max-width: 768px) {
+  .wt-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wt-toolbar-left {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wt-search {
+    max-width: none;
+  }
+
+  .wt-filters {
+    overflow-x: auto;
+  }
+
+  .wt-join {
+    width: 100%;
+  }
+
+  .wt-join-input {
+    flex: 1;
+    width: auto;
+  }
+
+  .wt-table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .wt-cell-title {
+    max-width: 200px;
+  }
+}
+
+/* =============================================================================
+   Reduced Motion
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .wt-spinner,
+  .wt-search-spinner {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .wt-table-row,
+  .wt-filter-pill,
+  .wt-copy-btn,
+  .wt-join-btn,
+  .wt-search-input,
+  .wt-join-input {
+    transition: none;
+  }
+}
+
+/* =============================================================================
+   Mode Indicator (Dark Theme Override)
+   ============================================================================= */
+
+.wt-header .mode-indicator {
+  background-color: var(--wt-surface);
+}
+
+.wt-header .mode-badge--viewer {
+  background-color: rgba(96, 165, 250, 0.15);
+  color: var(--wt-accent);
+}
+
+.wt-header .mode-badge--admin {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.wt-header .mode-btn--enter-admin {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.wt-header .mode-btn--enter-admin:hover {
+  background-color: rgba(251, 191, 36, 0.25);
+}
+
+.wt-header .mode-btn--viewer {
+  background-color: rgba(96, 165, 250, 0.15);
+  color: var(--wt-accent);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.wt-header .mode-btn--viewer:hover {
+  background-color: rgba(96, 165, 250, 0.25);
+}
+
+.wt-header .mode-btn--logout {
+  background-color: transparent;
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.wt-header .mode-btn--logout:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Dark theme for token dialog */
+.token-dialog-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.token-dialog {
+  background-color: var(--wt-surface, #2a2a2a);
+  border: 1px solid var(--wt-border, #3a3a3a);
+}
+
+.token-dialog-title {
+  color: var(--wt-text, rgba(255, 255, 255, 0.87));
+}
+
+.token-dialog-hint {
+  color: var(--wt-text-muted, rgba(255, 255, 255, 0.45));
+}
+
+.token-label {
+  color: var(--wt-text, rgba(255, 255, 255, 0.87));
+}
+
+.token-input {
+  background-color: var(--wt-bg, #1a1a1a);
+  border-color: var(--wt-border, #3a3a3a);
+  color: var(--wt-text, rgba(255, 255, 255, 0.87));
+}
+
+.token-input:focus {
+  border-color: var(--wt-accent, #60a5fa);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+.token-input::placeholder {
+  color: var(--wt-text-muted, rgba(255, 255, 255, 0.45));
+}
+
+.token-btn--cancel {
+  background-color: var(--wt-surface, #2a2a2a);
+  color: var(--wt-text-dim, rgba(255, 255, 255, 0.6));
+  border: 1px solid var(--wt-border, #3a3a3a);
+}
+
+.token-btn--cancel:hover {
+  background-color: var(--wt-surface-hover, #333);
+}
+
+.token-btn--submit {
+  background-color: var(--wt-accent, #3b82f6);
+}
+
+.token-btn--submit:hover {
+  background-color: var(--wt-accent-hover, #2563eb);
+}

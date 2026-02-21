@@ -1,0 +1,200 @@
+/**
+ * ModeIndicator styles.
+ *
+ * Visual indicator for Viewer/Admin mode with token input dialog.
+ */
+
+/* Mode indicator bar */
+.mode-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--color-bg-secondary, #f1f5f9);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+/* Mode badge */
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.mode-badge--viewer {
+  background-color: var(--color-viewer-bg, #e0f2fe);
+  color: var(--color-viewer-text, #0369a1);
+}
+
+.mode-badge--admin {
+  background-color: var(--color-admin-bg, #fef3c7);
+  color: var(--color-admin-text, #92400e);
+}
+
+/* Actions container */
+.mode-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* Buttons */
+.mode-btn {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.mode-btn--enter-admin {
+  background-color: var(--color-btn-admin-bg, #fbbf24);
+  color: var(--color-btn-admin-text, #78350f);
+  border-color: var(--color-btn-admin-border, #f59e0b);
+}
+
+.mode-btn--enter-admin:hover {
+  background-color: var(--color-btn-admin-hover, #f59e0b);
+}
+
+.mode-btn--viewer {
+  background-color: var(--color-btn-viewer-bg, #e0f2fe);
+  color: var(--color-btn-viewer-text, #0369a1);
+  border-color: var(--color-btn-viewer-border, #bae6fd);
+}
+
+.mode-btn--viewer:hover {
+  background-color: var(--color-btn-viewer-hover, #bae6fd);
+}
+
+.mode-btn--logout {
+  background-color: transparent;
+  color: var(--color-btn-logout-text, #dc2626);
+  border-color: var(--color-btn-logout-border, #fca5a5);
+}
+
+.mode-btn--logout:hover {
+  background-color: var(--color-btn-logout-hover, #fee2e2);
+}
+
+/* Dialog overlay */
+.token-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+/* Dialog container */
+.token-dialog {
+  background-color: var(--color-bg-primary, #ffffff);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  max-width: 28rem;
+  width: 100%;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.token-dialog-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #1e293b);
+}
+
+.token-dialog-hint {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #64748b);
+}
+
+/* Form */
+.token-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.token-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-primary, #1e293b);
+}
+
+.token-input {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--color-input-border, #cbd5e1);
+  border-radius: 0.375rem;
+  background-color: var(--color-input-bg, #ffffff);
+  color: var(--color-text-primary, #1e293b);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.token-input:focus {
+  outline: none;
+  border-color: var(--color-input-focus, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.token-input::placeholder {
+  color: var(--color-text-muted, #94a3b8);
+}
+
+.token-error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-error, #dc2626);
+}
+
+/* Dialog actions */
+.token-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.token-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.token-btn--cancel {
+  background-color: var(--color-btn-cancel-bg, #f1f5f9);
+  color: var(--color-btn-cancel-text, #475569);
+}
+
+.token-btn--cancel:hover {
+  background-color: var(--color-btn-cancel-hover, #e2e8f0);
+}
+
+.token-btn--submit {
+  background-color: var(--color-btn-submit-bg, #3b82f6);
+  color: var(--color-btn-submit-text, #ffffff);
+}
+
+.token-btn--submit:hover {
+  background-color: var(--color-btn-submit-hover, #2563eb);
+}
+
+.token-btn--submit:disabled {
+  background-color: var(--color-btn-submit-disabled, #94a3b8);
+  cursor: not-allowed;
+}

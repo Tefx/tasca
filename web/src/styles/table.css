@@ -1,0 +1,900 @@
+/**
+ * Mission Control (Table view) styles.
+ *
+ * Three-column "holy grail" layout: Board | Stream | SeatDeck.
+ * Dark theme, consistent with watchtower.css design tokens.
+ * Design source: docs/tasca-web-uiux-v0.1.md (Table View / Mission Control spec)
+ */
+
+/* =============================================================================
+   Design Tokens (Mission Control-specific)
+   ============================================================================= */
+
+:root {
+  --mc-bg: #1a1a1a;
+  --mc-surface: #2a2a2a;
+  --mc-surface-hover: #333;
+  --mc-border: #3a3a3a;
+  --mc-text: rgba(255, 255, 255, 0.87);
+  --mc-text-muted: rgba(255, 255, 255, 0.45);
+  --mc-text-dim: rgba(255, 255, 255, 0.6);
+  --mc-accent: #60a5fa;
+  --mc-accent-hover: #3b82f6;
+
+  /* Status pill colors — shared with watchtower */
+  --mc-status-open: #22c55e;
+  --mc-status-open-bg: rgba(34, 197, 94, 0.15);
+  --mc-status-paused: #eab308;
+  --mc-status-paused-bg: rgba(234, 179, 8, 0.15);
+  --mc-status-closed: #6b7280;
+  --mc-status-closed-bg: rgba(107, 114, 128, 0.15);
+
+  /* Speaker colors */
+  --mc-speaker-agent-bg: rgba(96, 165, 250, 0.08);
+  --mc-speaker-agent-border: rgba(96, 165, 250, 0.4);
+  --mc-speaker-human-border: rgba(255, 255, 255, 0.7);
+  --mc-speaker-patron-bg: rgba(168, 85, 247, 0.08);
+  --mc-speaker-patron-border: rgba(168, 85, 247, 0.4);
+
+  /* Seat state colors */
+  --mc-seat-joined: #22c55e;
+  --mc-seat-joined-bg: rgba(34, 197, 94, 0.15);
+  --mc-seat-left: #6b7280;
+  --mc-seat-left-bg: rgba(107, 114, 128, 0.15);
+
+  --mc-radius: 6px;
+  --mc-radius-sm: 4px;
+
+  /* Monospace font stack */
+  --mc-font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+}
+
+/* =============================================================================
+   Screen Reader Only (shared utility — redeclared for independence)
+   ============================================================================= */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* =============================================================================
+   Page Layout
+   ============================================================================= */
+
+.mc {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* =============================================================================
+   HUD Header
+   ============================================================================= */
+
+.mc-hud {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--mc-border);
+  flex-wrap: wrap;
+}
+
+.mc-hud-back {
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  color: var(--mc-text-dim);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.mc-hud-back:hover {
+  border-color: var(--mc-text-dim);
+  color: var(--mc-text);
+}
+
+.mc-hud-back:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+.mc-hud-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--mc-text);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.mc-hud-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--mc-text-muted);
+}
+
+.mc-hud-action code {
+  font-family: var(--mc-font-mono);
+  font-size: 0.75rem;
+  color: var(--mc-text-dim);
+  background: var(--mc-surface);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--mc-radius-sm);
+}
+
+/* =============================================================================
+   Status Pill (scoped to Mission Control)
+   ============================================================================= */
+
+.mc-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mc-status-pill--open {
+  color: var(--mc-status-open);
+  background: var(--mc-status-open-bg);
+}
+
+.mc-status-pill--paused {
+  color: var(--mc-status-paused);
+  background: var(--mc-status-paused-bg);
+}
+
+.mc-status-pill--closed {
+  color: var(--mc-status-closed);
+  background: var(--mc-status-closed-bg);
+}
+
+/* =============================================================================
+   Copy Button (scoped to Mission Control)
+   ============================================================================= */
+
+.mc-copy-btn {
+  padding: 0.125rem 0.375rem;
+  background: transparent;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  color: var(--mc-text-muted);
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  font-family: inherit;
+  text-transform: lowercase;
+}
+
+.mc-copy-btn:hover {
+  border-color: var(--mc-text-dim);
+  color: var(--mc-text-dim);
+}
+
+.mc-copy-btn:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+/* =============================================================================
+   Three-Column Layout
+   ============================================================================= */
+
+.mc-columns {
+  display: grid;
+  grid-template-columns: 250px 1fr 220px;
+  gap: 1px;
+  flex: 1;
+  min-height: 0;
+  /* Fixed height: viewport minus HUD header and root padding */
+  height: calc(100vh - 8rem);
+}
+
+/* =============================================================================
+   Left Column — Context Rail (Board)
+   ============================================================================= */
+
+.mc-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--mc-border);
+  padding-right: 0.75rem;
+}
+
+/* Board Component */
+.mc-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.mc-board-section {
+  padding: 0;
+}
+
+.mc-board-section-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mc-text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.mc-board-empty {
+  font-size: 0.8125rem;
+  color: var(--mc-text-muted);
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+/* Metadata list within board */
+.mc-meta-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.mc-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.mc-meta-label {
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.mc-meta-value {
+  font-size: 0.8125rem;
+  color: var(--mc-text-dim);
+  word-break: break-all;
+}
+
+.mc-meta-value--mono {
+  font-family: var(--mc-font-mono);
+  font-size: 0.75rem;
+}
+
+/* =============================================================================
+   Center Column — Stream
+   ============================================================================= */
+
+.mc-col-center {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Header row: label left, connection badge right */
+.mc-stream-header {
+  padding: 0.75rem 0.75rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mc-text-muted);
+  border-bottom: 1px solid var(--mc-border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Connection status badge — design source: task spec web.long_poll_stream */
+.mc-stream-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem 0.125rem 0.375rem;
+  flex-shrink: 0;
+}
+
+.mc-stream-conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mc-stream-conn--live {
+  color: var(--mc-status-open);
+  background: var(--mc-status-open-bg);
+}
+
+.mc-stream-conn--live .mc-stream-conn-dot {
+  background: var(--mc-status-open);
+}
+
+.mc-stream-conn--connecting {
+  color: var(--mc-status-paused);
+  background: var(--mc-status-paused-bg);
+}
+
+.mc-stream-conn--connecting .mc-stream-conn-dot {
+  background: var(--mc-status-paused);
+  opacity: 0.7;
+}
+
+.mc-stream-conn--offline {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.mc-stream-conn--offline .mc-stream-conn-dot {
+  background: #ef4444;
+}
+
+/* Stream body: wraps the scrollable list and the floating jump button */
+.mc-stream-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mc-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  flex: 1;
+  padding: 0 0.75rem;
+  scroll-behavior: smooth;
+}
+
+/* Stream empty/no sayings state */
+.mc-stream-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: var(--mc-text-muted);
+  font-size: 0.875rem;
+  text-align: center;
+  flex: 1;
+}
+
+/* Floating "N new sayings" button — shown when user has scrolled up */
+.mc-stream-jump {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.375rem 0.875rem;
+  background: var(--mc-accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: background 0.15s, transform 0.15s;
+  z-index: 10;
+}
+
+.mc-stream-jump:hover {
+  background: var(--mc-accent-hover);
+}
+
+.mc-stream-jump:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 3px;
+}
+
+/* New-entry highlight animation — briefly fades out a blue tint */
+@keyframes mc-log-new-flash {
+  from {
+    background-color: rgba(96, 165, 250, 0.18);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.mc-log-block--new {
+  animation: mc-log-new-flash 1.4s ease-out forwards;
+}
+
+/* =============================================================================
+   Log Block (single saying)
+   ============================================================================= */
+
+.mc-log-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--mc-border);
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+
+.mc-log-block:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Speaker-kind borders and tints */
+.mc-log-block--agent {
+  background: var(--mc-speaker-agent-bg);
+  border-left-color: var(--mc-speaker-agent-border);
+}
+
+.mc-log-block--agent:hover {
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.mc-log-block--human {
+  border-left-color: var(--mc-speaker-human-border);
+}
+
+.mc-log-block--patron {
+  background: var(--mc-speaker-patron-bg);
+  border-left-color: var(--mc-speaker-patron-border);
+}
+
+.mc-log-block--patron:hover {
+  background: rgba(168, 85, 247, 0.12);
+}
+
+/* Log block header row: seq + speaker + badges + timestamp */
+.mc-log-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mc-log-seq {
+  font-family: var(--mc-font-mono);
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  min-width: 2rem;
+}
+
+.mc-log-speaker {
+  font-weight: 600;
+  color: var(--mc-text);
+}
+
+.mc-log-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mc-log-badge--agent {
+  color: var(--mc-accent);
+  background: rgba(96, 165, 250, 0.15);
+}
+
+.mc-log-badge--human {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.mc-log-badge--patron {
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.15);
+}
+
+.mc-log-pin {
+  font-size: 0.625rem;
+  color: var(--mc-status-paused);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mc-log-time {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  white-space: nowrap;
+}
+
+/* Log block content */
+.mc-log-content {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--mc-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mc-log-content--mono {
+  font-family: var(--mc-font-mono);
+  font-size: 0.8125rem;
+}
+
+/* =============================================================================
+   Right Column — Seat Deck
+   ============================================================================= */
+
+.mc-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--mc-border);
+  padding-left: 0.75rem;
+}
+
+.mc-seat-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-top: 0.75rem;
+}
+
+.mc-seat-deck-header {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mc-text-muted);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--mc-border);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mc-seat-deck-count {
+  font-size: 0.625rem;
+  color: var(--mc-text-muted);
+  background: var(--mc-surface);
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.mc-seat-deck-empty {
+  padding: 1.5rem 0.5rem;
+  text-align: center;
+  color: var(--mc-text-muted);
+  font-size: 0.8125rem;
+  font-style: italic;
+}
+
+/* Seat Card */
+.mc-seat-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--mc-border);
+}
+
+.mc-seat-card:last-child {
+  border-bottom: none;
+}
+
+.mc-seat-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--mc-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--mc-text-dim);
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.mc-seat-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+.mc-seat-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--mc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-seat-heartbeat {
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+}
+
+.mc-seat-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+.mc-seat-state--joined {
+  color: var(--mc-seat-joined);
+  background: var(--mc-seat-joined-bg);
+}
+
+.mc-seat-state--left {
+  color: var(--mc-seat-left);
+  background: var(--mc-seat-left-bg);
+}
+
+/* =============================================================================
+   State Displays (loading, error)
+   ============================================================================= */
+
+.mc-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--mc-text-muted);
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.mc-state p {
+  margin: 0;
+}
+
+.mc-state--error {
+  color: #ef4444;
+}
+
+.mc-state-title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.mc-state-detail {
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.mc-retry-btn {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  background: transparent;
+  border: 1px solid #ef4444;
+  border-radius: var(--mc-radius);
+  color: #ef4444;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.mc-retry-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.mc-retry-btn:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+/* Loading spinner */
+.mc-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--mc-border);
+  border-top-color: var(--mc-accent);
+  border-radius: 50%;
+  animation: mc-spin 0.6s linear infinite;
+}
+
+@keyframes mc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =============================================================================
+   Responsive — Tablet (columns stack)
+   ============================================================================= */
+
+@media (max-width: 1024px) {
+  .mc-columns {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .mc-col-left {
+    border-right: none;
+    border-bottom: 1px solid var(--mc-border);
+    padding-right: 0;
+    padding-bottom: 0.75rem;
+  }
+
+  .mc-col-center {
+    min-height: 50vh;
+  }
+
+  .mc-col-right {
+    border-left: none;
+    border-top: 1px solid var(--mc-border);
+    padding-left: 0;
+    padding-top: 0.75rem;
+  }
+}
+
+/* =============================================================================
+   Responsive — Mobile
+   ============================================================================= */
+
+@media (max-width: 640px) {
+  .mc-hud {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .mc-hud-title {
+    white-space: normal;
+    font-size: 0.9375rem;
+  }
+
+  .mc-hud-actions {
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  .mc-log-header {
+    gap: 0.375rem;
+  }
+
+  .mc-log-time {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
+/* =============================================================================
+   Reduced Motion
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-spinner {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .mc-log-block,
+  .mc-hud-back,
+  .mc-copy-btn,
+  .mc-retry-btn,
+  .mc-stream-jump {
+    transition: none;
+  }
+
+  .mc-stream {
+    scroll-behavior: auto;
+  }
+
+  /* Suppress highlight flash for users who prefer reduced motion */
+  .mc-log-block--new {
+    animation: none;
+  }
+}
+
+/* =============================================================================
+   Mode Indicator (Dark Theme Override)
+   ============================================================================= */
+
+.mc-hud .mode-indicator {
+  background-color: var(--mc-surface);
+  margin-left: auto;
+}
+
+.mc-hud .mode-badge--viewer {
+  background-color: rgba(96, 165, 250, 0.15);
+  color: var(--mc-accent);
+}
+
+.mc-hud .mode-badge--admin {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.mc-hud .mode-btn--enter-admin {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.mc-hud .mode-btn--enter-admin:hover {
+  background-color: rgba(251, 191, 36, 0.25);
+}
+
+.mc-hud .mode-btn--viewer {
+  background-color: rgba(96, 165, 250, 0.15);
+  color: var(--mc-accent);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.mc-hud .mode-btn--viewer:hover {
+  background-color: rgba(96, 165, 250, 0.25);
+}
+
+.mc-hud .mode-btn--logout {
+  background-color: transparent;
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.mc-hud .mode-btn--logout:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}

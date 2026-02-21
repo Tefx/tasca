@@ -28,6 +28,7 @@ from tasca.core.services.limits_service import (
     settings_to_limits_config,
 )
 from tasca.core.table_state_machine import can_say
+from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
 from tasca.shell.storage.saying_repo import (
     SayingError,
@@ -237,9 +238,12 @@ def _check_limits_before_append(
 async def append_saying_endpoint(
     table_id: str,
     data: SayingCreate,
+    _auth: None = Depends(verify_admin_token),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> Saying:
     """Append a new saying to a table.
+
+    Requires admin authentication via Bearer token.
 
     Creates a new saying with automatically allocated sequence number.
     Enforces server-side limits (content length, history count, bytes, mentions).
@@ -248,12 +252,14 @@ async def append_saying_endpoint(
     Args:
         table_id: The table identifier.
         data: Saying creation data (speaker_name, content, optional patron_id).
+        _auth: Admin authentication (injected via dependency).
         conn: Database connection (injected via dependency).
 
     Returns:
         The created saying with assigned id and sequence.
 
     Raises:
+        HTTPException: 401 if missing or invalid admin token.
         HTTPException: 404 if table not found.
         HTTPException: 403 if table state doesn't allow sayings.
         HTTPException: 400 if limits exceeded.

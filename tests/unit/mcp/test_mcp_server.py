@@ -46,17 +46,22 @@ def test_db() -> Generator[sqlite3.Connection, None, None]:
 
 @pytest.fixture(autouse=True)
 def override_db(test_db: sqlite3.Connection) -> Generator[None, None, None]:
-    """Override the get_db dependency to use test database."""
-    from tasca.shell.api import deps
+    """Override the MCP database connection to use test database."""
+    from tasca.shell.mcp import database
+    import importlib
+    import tasca.shell.mcp.server as server
 
-    original_get_db = deps.get_db
+    original_connection = database._mcp_db_connection
 
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
-        yield test_db
+    # Set the connection directly - get_mcp_db will yield it
+    database._mcp_db_connection = test_db
 
-    deps.get_db = get_test_db
+    # Reload server to pick up the patched database module state
+    importlib.reload(server)
+
     yield
-    deps.get_db = original_get_db
+
+    database._mcp_db_connection = original_connection
 
 
 def unique_name(base: str = "Agent") -> str:

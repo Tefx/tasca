@@ -17,19 +17,18 @@ that can be serialized to JSON. Internal service calls use Result[T, E].
 
 from __future__ import annotations
 
-import sqlite3
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastmcp import FastMCP
-from returns.result import Failure, Success
+from returns.result import Failure
 
 from tasca.config import settings
-from tasca.core.domain.patron import Patron, PatronCreate, PatronId
+from tasca.core.domain.patron import Patron, PatronId
+from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.seat import Seat, SeatId, SeatState
-from tasca.core.domain.saying import Saying, Speaker, SpeakerKind
-from tasca.core.domain.table import Table, TableCreate, TableId, TableStatus, Version
+from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.core.services.limits_service import (
     LimitError,
     LimitsConfig,
@@ -41,23 +40,26 @@ from tasca.core.services.seat_service import (
     filter_active_seats,
 )
 from tasca.core.table_state_machine import can_join, can_say
+from tasca.shell.mcp.database import get_mcp_db
+from tasca.shell.mcp.responses import error_response, success_response
 from tasca.shell.services.limited_saying_service import (
     append_saying_with_limits,
 )
-from tasca.shell.api import deps
 from tasca.shell.storage.patron_repo import (
     PatronNotFoundError,
     create_patron,
     find_patron_by_name,
     get_patron,
 )
+from tasca.shell.storage.saying_repo import list_sayings_by_table
 from tasca.shell.storage.seat_repo import (
     SeatNotFoundError,
     create_seat,
     find_seats_by_table,
+)
+from tasca.shell.storage.seat_repo import (
     heartbeat_seat as repo_heartbeat_seat,
 )
-from tasca.shell.storage.saying_repo import list_sayings_by_table
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     create_table,
@@ -83,59 +85,40 @@ mcp = FastMCP(
 
 
 # =============================================================================
-# Error Envelope Helpers
+# Helper Functions
 # =============================================================================
 
 
-# @invar:allow shell_result: MCP protocol returns JSON-serializable dicts, not Result
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
 # @invar:allow shell_pure_logic: Simple dict construction is pure
-def _error_response(
-    code: str, message: str, details: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    """Create a standardized error envelope.
-
-    Args:
-        code: Error code (e.g., "NOT_FOUND", "VALIDATION_ERROR").
-        message: Human-readable error message.
-        details: Optional additional error details.
+def _limits_config_from_settings() -> LimitsConfig:
+    """Get limits configuration from application settings.
 
     Returns:
-        Error envelope dictionary.
+        LimitsConfig with values from settings.
     """
-    result: dict[str, Any] = {
-        "ok": False,
-        "error": {
-            "code": code,
-            "message": message,
+    return settings_to_limits_config(settings)
+
+
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
+    """Convert a LimitError to an MCP error response.
+
+    Args:
+        error: The limit error.
+
+    Returns:
+        Error envelope with limit details.
+    """
+    return error_response(
+        "LIMIT_EXCEEDED",
+        error.message,
+        {
+            "limit_kind": error.kind.value,
+            "limit": error.limit,
+            "actual": error.actual,
         },
-    }
-    if details:
-        result["error"]["details"] = details
-    return result
-
-
-# @invar:allow shell_result: MCP protocol returns JSON-serializable dicts, not Result
-# @invar:allow shell_pure_logic: Simple dict construction is pure
-def _success_response(data: dict[str, Any]) -> dict[str, Any]:
-    """Create a standardized success envelope.
-
-    Args:
-        data: The response data.
-
-    Returns:
-        Success envelope dictionary.
-    """
-    return {"ok": True, "data": data}
-
-
-# @invar:allow shell_result: DB connection acquisition, not business logic
-def _get_db_connection() -> sqlite3.Connection:
-    """Get database connection for MCP tools.
-
-    Uses the same global connection as FastAPI dependency.
-    """
-    gen = deps.get_db()
-    return next(gen)
+    )
 
 
 # =============================================================================
@@ -174,19 +157,19 @@ def patron_register(
     Error codes:
         - DATABASE_ERROR: Failed to access database
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
 
     # Check for existing patron by name (dedup)
     existing_result = find_patron_by_name(conn, name)
 
     if isinstance(existing_result, Failure):
         error = existing_result.failure()
-        return _error_response("DATABASE_ERROR", f"Failed to check for existing patron: {error}")
+        return error_response("DATABASE_ERROR", f"Failed to check for existing patron: {error}")
 
     existing = existing_result.unwrap()
     if existing is not None:
         # Return existing patron (return_existing semantics)
-        return _success_response(
+        return success_response(
             {
                 "id": existing.id,
                 "name": existing.name,
@@ -211,10 +194,10 @@ def patron_register(
 
     if isinstance(result, Failure):
         error = result.failure()
-        return _error_response("DATABASE_ERROR", f"Failed to create patron: {error}")
+        return error_response("DATABASE_ERROR", f"Failed to create patron: {error}")
 
     created = result.unwrap()
-    return _success_response(
+    return success_response(
         {
             "id": created.id,
             "name": created.name,
@@ -249,17 +232,17 @@ def patron_get(patron_id: str) -> dict[str, Any]:
         - NOT_FOUND: Patron not found
         - DATABASE_ERROR: Failed to access database
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
     result = get_patron(conn, PatronId(patron_id))
 
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, PatronNotFoundError):
-            return _error_response("NOT_FOUND", f"Patron not found: {patron_id}")
-        return _error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+            return error_response("NOT_FOUND", f"Patron not found: {patron_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
 
     patron = result.unwrap()
-    return _success_response(
+    return success_response(
         {
             "id": patron.id,
             "name": patron.name,
@@ -304,7 +287,7 @@ def table_create(
     Error codes:
         - DATABASE_ERROR: Failed to create table
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
     now = datetime.now(UTC)
     table_id = TableId(str(uuid.uuid4()))
 
@@ -322,10 +305,10 @@ def table_create(
 
     if isinstance(result, Failure):
         error = result.failure()
-        return _error_response("DATABASE_ERROR", f"Failed to create table: {error}")
+        return error_response("DATABASE_ERROR", f"Failed to create table: {error}")
 
     created = result.unwrap()
-    return _success_response(
+    return success_response(
         {
             "id": created.id,
             "question": created.question,
@@ -380,21 +363,21 @@ def table_join(
         - OPERATION_NOT_ALLOWED: Table is not open for joins (PAUSED or CLOSED)
         - DATABASE_ERROR: Failed to create seat
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
 
     # Verify table exists
     table_result = get_table(conn, TableId(table_id))
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return _error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return _error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
 
     table = table_result.unwrap()
 
     # Check state machine guard: only OPEN tables can be joined
     if not can_join(table.status):
-        return _error_response(
+        return error_response(
             "OPERATION_NOT_ALLOWED",
             f"Cannot join table with status '{table.status.value}'. Only OPEN tables accept new joins.",
             {"table_status": table.status.value},
@@ -405,8 +388,8 @@ def table_join(
     if isinstance(patron_result, Failure):
         error = patron_result.failure()
         if isinstance(error, PatronNotFoundError):
-            return _error_response("NOT_FOUND", f"Patron not found: {patron_id}")
-        return _error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+            return error_response("NOT_FOUND", f"Patron not found: {patron_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
 
     now = datetime.now(UTC)
     seat_id = SeatId(str(uuid.uuid4()))
@@ -423,12 +406,12 @@ def table_join(
     seat_result = create_seat(conn, seat)
     if isinstance(seat_result, Failure):
         error = seat_result.failure()
-        return _error_response("DATABASE_ERROR", f"Failed to create seat: {error}")
+        return error_response("DATABASE_ERROR", f"Failed to create seat: {error}")
 
     created_seat = seat_result.unwrap()
     expires_at = calculate_expiry_time(created_seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
 
-    return _success_response(
+    return success_response(
         {
             "table": {
                 "id": table.id,
@@ -479,17 +462,17 @@ def table_get(table_id: str) -> dict[str, Any]:
         - NOT_FOUND: Table not found
         - DATABASE_ERROR: Failed to access database
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
     result = get_table(conn, TableId(table_id))
 
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableNotFoundError):
-            return _error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return _error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
 
     table = result.unwrap()
-    return _success_response(
+    return success_response(
         {
             "id": table.id,
             "question": table.question,
@@ -499,38 +482,6 @@ def table_get(table_id: str) -> dict[str, Any]:
             "created_at": table.created_at.isoformat(),
             "updated_at": table.updated_at.isoformat(),
         }
-    )
-
-
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Simple dict construction is pure
-def _limits_config_from_settings() -> LimitsConfig:
-    """Get limits configuration from application settings.
-
-    Returns:
-        LimitsConfig with values from settings.
-    """
-    return settings_to_limits_config(settings)
-
-
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
-def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
-    """Convert a LimitError to an MCP error response.
-
-    Args:
-        error: The limit error.
-
-    Returns:
-        Error envelope with limit details.
-    """
-    return _error_response(
-        "LIMIT_EXCEEDED",
-        error.message,
-        {
-            "limit_kind": error.kind.value,
-            "limit": error.limit,
-            "actual": error.actual,
-        },
     )
 
 
@@ -575,21 +526,21 @@ def table_say(
         - LIMIT_EXCEEDED: Content limits exceeded (max_content_length, max_sayings_per_table, max_mentions_per_saying, max_bytes_per_table)
         - DATABASE_ERROR: Failed to append saying
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
 
     # Verify table exists
     table_result = get_table(conn, TableId(table_id))
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return _error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return _error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
 
     table = table_result.unwrap()
 
     # Check state machine guard: CLOSED tables cannot have sayings added
     if not can_say(table.status):
-        return _error_response(
+        return error_response(
             "OPERATION_NOT_ALLOWED",
             f"Cannot add saying to table with status '{table.status.value}'. Table must be OPEN or PAUSED.",
             {"table_status": table.status.value},
@@ -618,10 +569,10 @@ def table_say(
         # Handle LimitError specifically
         if isinstance(error, LimitError):
             return _limit_error_to_response(error)
-        return _error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
+        return error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
 
     saying = result.unwrap()
-    return _success_response(
+    return success_response(
         {
             "id": saying.id,
             "table_id": saying.table_id,
@@ -668,22 +619,22 @@ def table_listen(
         - NOT_FOUND: Table not found
         - DATABASE_ERROR: Failed to list sayings
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
 
     # Verify table exists
     table_result = get_table(conn, TableId(table_id))
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return _error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return _error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
 
     # List sayings
     result = list_sayings_by_table(conn, table_id, since_sequence, limit)
 
     if isinstance(result, Failure):
         error = result.failure()
-        return _error_response("DATABASE_ERROR", f"Failed to list sayings: {error}")
+        return error_response("DATABASE_ERROR", f"Failed to list sayings: {error}")
 
     sayings = result.unwrap()
 
@@ -693,7 +644,7 @@ def table_listen(
     else:
         next_sequence = since_sequence + 1 if since_sequence >= 0 else 0
 
-    return _success_response(
+    return success_response(
         {
             "sayings": [
                 {
@@ -754,7 +705,7 @@ def seat_heartbeat(
         - NOT_FOUND: Seat not found
         - DATABASE_ERROR: Failed to update heartbeat
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
     now = datetime.now(UTC)
 
     result = repo_heartbeat_seat(conn, SeatId(seat_id), now)
@@ -762,13 +713,13 @@ def seat_heartbeat(
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, SeatNotFoundError):
-            return _error_response("NOT_FOUND", f"Seat not found: {seat_id}")
-        return _error_response("DATABASE_ERROR", f"Failed to update heartbeat: {error}")
+            return error_response("NOT_FOUND", f"Seat not found: {seat_id}")
+        return error_response("DATABASE_ERROR", f"Failed to update heartbeat: {error}")
 
     seat = result.unwrap()
     expires_at = calculate_expiry_time(seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
 
-    return _success_response(
+    return success_response(
         {
             "seat": {
                 "id": seat.id,
@@ -808,7 +759,7 @@ def seat_list(
     Error codes:
         - DATABASE_ERROR: Failed to list seats
     """
-    conn = _get_db_connection()
+    conn = next(get_mcp_db())
     now = datetime.now(UTC)
     ttl = DEFAULT_SEAT_TTL_SECONDS
 
@@ -816,7 +767,7 @@ def seat_list(
 
     if isinstance(result, Failure):
         error = result.failure()
-        return _error_response("DATABASE_ERROR", f"Failed to list seats: {error}")
+        return error_response("DATABASE_ERROR", f"Failed to list seats: {error}")
 
     seats = result.unwrap()
     all_seats = seats.copy()
@@ -826,7 +777,7 @@ def seat_list(
 
     active_count = len(filter_active_seats(all_seats, ttl, now))
 
-    return _success_response(
+    return success_response(
         {
             "seats": [
                 {

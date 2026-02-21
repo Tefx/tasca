@@ -25,6 +25,16 @@ from tests.integration.conftest import API_BASE_URL, check_server_available
 from tests.integration.harness import MCPHTTPHarness, MCPSTDIOHarness
 
 
+def _skip_if_http_unavailable() -> None:
+    """Skip test if HTTP server is not available."""
+    if not check_server_available(API_BASE_URL):
+        pytest.skip(
+            f"Server not available at {API_BASE_URL}. "
+            "HTTP transport tests require a running server. "
+            "Start with: uv run tasca"
+        )
+
+
 # =============================================================================
 # MCP Protocol Tests (HTTP Transport)
 # =============================================================================
@@ -38,6 +48,7 @@ async def test_mcp_initialize() -> None:
     Verifies that the MCP server responds to initialize request
     with server capabilities and protocol version.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         response = await harness.initialize()
 
@@ -57,6 +68,7 @@ async def test_mcp_list_tools() -> None:
     Expected tools: patron_register, patron_get, table_create, table_join,
     table_get, table_say, table_listen, seat_heartbeat, seat_list.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         # Initialize first
         await harness.initialize()
@@ -98,6 +110,7 @@ async def test_mcp_patron_register() -> None:
     Verifies that patron registration can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 
@@ -118,6 +131,7 @@ async def test_mcp_patron_get() -> None:
     Verifies that patron retrieval can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 
@@ -140,6 +154,7 @@ async def test_mcp_table_create() -> None:
     Verifies that table creation can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 
@@ -160,6 +175,7 @@ async def test_mcp_table_join() -> None:
     Verifies that table join can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 
@@ -179,6 +195,7 @@ async def test_mcp_table_get() -> None:
     Verifies that table retrieval can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 
@@ -196,6 +213,7 @@ async def test_mcp_table_say() -> None:
     Verifies that adding a saying can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 
@@ -216,6 +234,7 @@ async def test_mcp_table_listen() -> None:
     Verifies that listening for sayings can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 
@@ -240,6 +259,7 @@ async def test_mcp_seat_heartbeat() -> None:
     Verifies that seat heartbeat can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 
@@ -260,6 +280,7 @@ async def test_mcp_seat_list() -> None:
     Verifies that listing seats can be invoked.
     Note: Currently raises NotImplementedError as feature is not implemented.
     """
+    _skip_if_http_unavailable()
     async with MCPHTTPHarness() as harness:
         await harness.initialize()
 

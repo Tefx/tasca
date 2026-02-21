@@ -130,6 +130,20 @@ function presenceLabel(status: SeatPresenceStatus): string {
 }
 
 /**
+ * Uppercase badge text for presence status.
+ */
+function presenceBadgeText(status: SeatPresenceStatus): string {
+  switch (status) {
+    case 'active':
+      return 'ONLINE'
+    case 'idle':
+      return 'IDLE'
+    case 'offline':
+      return 'OFFLINE'
+  }
+}
+
+/**
  * CSS class suffix for presence status.
  */
 function presenceClass(status: SeatPresenceStatus): string {
@@ -205,9 +219,13 @@ function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, positio
       </div>
       <div className="mc-seat-badges">
         <span
-          className={`mc-seat-kind mc-seat-kind--${patronKind}`}
-          aria-label={`Type: ${patronKind}`}
+          className={`mc-seat-presence-badge mc-seat-presence-badge--${presenceClass(presenceStatus)}`}
+          aria-label={`Status: ${presenceLabel(presenceStatus)}`}
         >
+          <span className="mc-seat-presence-badge-dot" />
+          {presenceBadgeText(presenceStatus)}
+        </span>
+        <span className={`mc-seat-kind mc-seat-kind--${patronKind}`}>
           {patronKind.toUpperCase()}
         </span>
         {seat.state === 'left' && (

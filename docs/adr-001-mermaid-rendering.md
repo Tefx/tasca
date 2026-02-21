@@ -5,7 +5,7 @@ Accepted
 
 ## Context
 
-The whiteboard Web UI must render Markdown content that may include:
+The Tasca Web UI must render Markdown content that may include:
 
 - GFM tables
 - KaTeX math

@@ -1,1 +1,9 @@
-{"mcpServers": {}}
+{
+  "mcpServers": {
+    "invar": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "invar", "mcp"]
+    }
+  }
+}

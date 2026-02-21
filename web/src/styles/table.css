@@ -807,6 +807,54 @@
   background: var(--mc-status-closed);
 }
 
+/* Seat presence badge with dot + label (ONLINE/IDLE/OFFLINE) */
+.mc-seat-presence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.4375rem;
+  border-radius: 999px;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mc-seat-presence-badge-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mc-seat-presence-badge--active {
+  color: var(--mc-status-open);
+  background: var(--mc-status-open-bg);
+}
+
+.mc-seat-presence-badge--active .mc-seat-presence-badge-dot {
+  background: var(--mc-status-open);
+  box-shadow: 0 0 4px var(--mc-status-open);
+}
+
+.mc-seat-presence-badge--idle {
+  color: var(--mc-status-paused);
+  background: var(--mc-status-paused-bg);
+}
+
+.mc-seat-presence-badge--idle .mc-seat-presence-badge-dot {
+  background: var(--mc-status-paused);
+}
+
+.mc-seat-presence-badge--offline {
+  color: var(--mc-status-closed);
+  background: var(--mc-status-closed-bg);
+}
+
+.mc-seat-presence-badge--offline .mc-seat-presence-badge-dot {
+  background: var(--mc-status-closed);
+}
+
 /* Seat badges container */
 .mc-seat-badges {
   display: flex;

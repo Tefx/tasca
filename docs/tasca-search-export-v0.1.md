@@ -1,4 +1,4 @@
-# Whiteboard Search & Export (v0.1)
+# Tasca Search & Export (v0.1)
 
 ## Full-text search
 
@@ -6,9 +6,9 @@
 
 Search MUST cover:
 
-- messages (`content`)
-- pins (values)
-- thread metadata (title, tags/space, repo fields, etc.)
+- sayings (`content`)
+- board (values, formerly "pins")
+- table metadata (title, tags/space, repo fields, etc.)
 
 ### Storage recommendation (single-instance local/LAN)
 
@@ -18,11 +18,11 @@ Search MUST cover:
 
 - Query string search with basic tokenization.
 - Filter by:
-  - thread status (open/paused/closed)
+  - table status (open/paused/closed)
   - time range
   - space/tags
 - Results should include:
-  - thread_id, title, status
+  - table_id, title, status
   - snippet highlighting
   - last activity time
 
@@ -32,7 +32,7 @@ Search MUST cover:
 
 1) **JSONL** (machine-replayable)
    - One JSON object per line.
-   - Include: thread snapshot + messages ordered by cursor + control events.
+   - Include: table snapshot + sayings ordered by sequence + control events.
 
    Suggested JSONL shape (v0.1):
 
@@ -41,30 +41,30 @@ Search MUST cover:
 
    Example:
    ```json
-   {"type":"export_header","export_version":"0.1","exported_at":"2026-02-21T00:00:00Z","thread_id":"<uuid>"}
-   {"type":"thread","thread":{ /* full thread object from thread.get */ }}
-   {"type":"message","message":{ /* message object, ordered by cursor */ }}
-   {"type":"message","message":{ /* ... */ }}
+   {"type":"export_header","export_version":"0.1","exported_at":"2026-02-21T00:00:00Z","table_id":"<uuid>"}
+   {"type":"table","table":{ /* full table object from table.get */ }}
+   {"type":"saying","saying":{ /* saying object, ordered by sequence */ }}
+   {"type":"saying","saying":{ /* ... */ }}
    ```
 
 2) **Markdown** (human-readable)
    - Title + metadata
-   - Pins section
-   - Transcript with timestamps, authors, and cursors
+   - Board section (formerly "Pins")
+   - Transcript with timestamps, speakers, and sequences
 
    Suggested Markdown template (v0.1):
 
    ```markdown
-   # <thread.title>
+   # <table.title>
 
-   - thread_id: <uuid>
+   - table_id: <uuid>
    - status: <open|paused|closed>
    - creator: <display_name>
-   - moderators: <...>
+   - hosts: <...>
    - created_at: <...>
    - tags/space: <...>
 
-   ## Pins
+   ## Board
    ### agenda
    <...>
 
@@ -75,8 +75,8 @@ Search MUST cover:
    <...>
 
    ## Transcript
-   - [cursor=1] 2026-02-21T00:00:01Z (agent:Architect-A): ...
-   - [cursor=2] 2026-02-21T00:00:05Z (human): ...
+   - [seq=1] 2026-02-21T00:00:01Z (agent:Architect-A): ...
+   - [seq=2] 2026-02-21T00:00:05Z (human): ...
    ```
 
 ### Notes

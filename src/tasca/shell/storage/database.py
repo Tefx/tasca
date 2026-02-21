@@ -12,6 +12,7 @@ from pathlib import Path
 from returns.result import Failure, Result, Success
 
 from tasca.core.schema import (
+    get_all_fts_ddl,
     get_all_index_ddl,
     get_all_table_ddl,
     is_valid_busy_timeout,
@@ -44,6 +45,7 @@ def get_database_path() -> Path:
     return DEFAULT_DB_PATH
 
 
+# @shell_complexity: 4 branches for directory creation + WAL mode check + :memory: handling
 def init_database(db_path: Path) -> Result[sqlite3.Connection, str]:
     """
     Initialize database connection with WAL mode and busy_timeout.
@@ -153,7 +155,7 @@ def set_schema_version(conn: sqlite3.Connection, version: int) -> Result[None, s
 
 def apply_schema(conn: sqlite3.Connection) -> Result[int, str]:
     """
-    Apply all schema tables and indexes to the database.
+    Apply all schema tables, indexes, and FTS5 to the database.
 
     Creates tables if they don't exist. Idempotent.
 
@@ -167,14 +169,19 @@ def apply_schema(conn: sqlite3.Connection) -> Result[int, str]:
     >>> result = apply_schema(conn)
     >>> isinstance(result, Success)
     True
-    >>> result.unwrap()  # 5 tables + 7 indexes = 12 statements
-    12
-    >>> conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-    [('patrons',), ('tables',), ('seats',), ('sayings',), ('dedup',)]
+    >>> result.unwrap()  # 6 tables + 8 indexes + 4 FTS = 18 statements
+    18
+    >>> tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
+    >>> 'patrons' in [t[0] for t in tables]
+    True
+    >>> 'sayings' in [t[0] for t in tables]
+    True
+    >>> 'sayings_fts' in [t[0] for t in tables]  # FTS5 virtual table
+    True
     >>> conn.close()
     """
     try:
-        statements = get_all_table_ddl() + get_all_index_ddl()
+        statements = get_all_table_ddl() + get_all_index_ddl() + get_all_fts_ddl()
         for stmt in statements:
             conn.execute(stmt)
         conn.commit()
@@ -184,6 +191,7 @@ def apply_schema(conn: sqlite3.Connection) -> Result[int, str]:
         return Failure(f"Schema application failed: {e}")
 
 
+# @shell_complexity: 4 branches for journal/timeout/fk config parsing
 def verify_database_config(conn: sqlite3.Connection) -> Result[dict[str, int | bool | str], str]:
     """
     Verify database configuration (WAL mode, busy_timeout, foreign keys).

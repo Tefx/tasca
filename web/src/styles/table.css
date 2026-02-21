@@ -1358,3 +1358,103 @@
 .mc-hud .mode-btn--logout:hover {
   background-color: rgba(239, 68, 68, 0.1);
 }
+
+/* =============================================================================
+   Table Controls
+   ============================================================================= */
+
+.mc-table-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mc-table-controls-status {
+  display: flex;
+  align-items: center;
+}
+
+.mc-table-controls-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.mc-table-controls-closed {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--mc-text-muted);
+}
+
+.mc-table-closed-label {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mc-table-closed-time {
+  font-family: var(--mc-font-mono);
+  font-size: 0.6875rem;
+}
+
+/* Control button base styles */
+.mc-control-btn {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: var(--mc-radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.mc-control-btn:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+.mc-control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pause button */
+.mc-control-btn--pause {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.3);
+  color: #eab308;
+}
+
+.mc-control-btn--pause:hover:not(:disabled) {
+  background: rgba(234, 179, 8, 0.25);
+  border-color: rgba(234, 179, 8, 0.4);
+}
+
+/* Resume button */
+.mc-control-btn--resume {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.mc-control-btn--resume:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+/* Close button */
+.mc-control-btn--close {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.mc-control-btn--close:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.4);
+}

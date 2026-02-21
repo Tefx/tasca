@@ -1,0 +1,122 @@
+/**
+ * Dialog styles for Mission Control.
+ *
+ * Simple modal dialog for confirmations.
+ */
+
+/* =============================================================================
+   Dialog Overlay
+   ============================================================================= */
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+/* =============================================================================
+   Dialog Content
+   ============================================================================= */
+
+.dialog-content {
+  background: var(--mc-surface, #2a2a2a);
+  border: 1px solid var(--mc-border, #3a3a3a);
+  border-radius: var(--mc-radius, 6px);
+  max-width: 28rem;
+  width: 100%;
+  padding: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.dialog-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--mc-text, rgba(255, 255, 255, 0.87));
+}
+
+.dialog-message {
+  margin: 0 0 1.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--mc-text-dim, rgba(255, 255, 255, 0.6));
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* =============================================================================
+   Dialog Buttons
+   ============================================================================= */
+
+.dialog-btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--mc-radius, 6px);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+
+.dialog-btn:focus-visible {
+  outline: 2px solid var(--mc-accent, #60a5fa);
+  outline-offset: 2px;
+}
+
+.dialog-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dialog-btn--cancel {
+  background: transparent;
+  border-color: var(--mc-border, #3a3a3a);
+  color: var(--mc-text-dim, rgba(255, 255, 255, 0.6));
+}
+
+.dialog-btn--cancel:hover:not(:disabled) {
+  background: var(--mc-surface-hover, #333);
+  color: var(--mc-text, rgba(255, 255, 255, 0.87));
+}
+
+.dialog-btn--confirm {
+  background: var(--mc-accent, #60a5fa);
+  border-color: var(--mc-accent, #60a5fa);
+  color: #fff;
+}
+
+.dialog-btn--confirm:hover:not(:disabled) {
+  background: var(--mc-accent-hover, #3b82f6);
+  border-color: var(--mc-accent-hover, #3b82f6);
+}
+
+.dialog-btn--danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.dialog-btn--Danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+/* =============================================================================
+   Reduced Motion
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-btn {
+    transition: none;
+  }
+}

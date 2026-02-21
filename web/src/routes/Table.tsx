@@ -13,13 +13,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getTable, type Table as TableType, type TableStatus } from '../api/tables'
+import { getTable, type Table as TableType } from '../api/tables'
 import { listSeats, type Seat } from '../api/sayings'
 import { useSayingsStream } from '../hooks/useLongPoll'
 import { Board } from '../components/Board'
 import { Stream } from '../components/Stream'
 import { SeatDeck } from '../components/SeatDeck'
 import { ModeIndicator } from '../components/ModeIndicator'
+import { TableControls } from '../components/TableControls'
 import '../styles/table.css'
 
 // =============================================================================
@@ -88,21 +89,6 @@ function useStaticTableData(tableId: string | undefined) {
 // =============================================================================
 // Sub-Components
 // =============================================================================
-
-interface StatusPillProps {
-  status: TableStatus
-}
-
-function StatusPill({ status }: StatusPillProps) {
-  return (
-    <span
-      className={`mc-status-pill mc-status-pill--${status}`}
-      aria-label={`Status: ${status}`}
-    >
-      {status}
-    </span>
-  )
-}
 
 interface CopyButtonProps {
   text: string
@@ -184,16 +170,17 @@ function ErrorState({ message, onRetry }: ErrorStateProps) {
 
 interface HudProps {
   table: TableType
+  onStatusChange: (table: TableType) => void
 }
 
-function Hud({ table }: HudProps) {
+function Hud({ table, onStatusChange }: HudProps) {
   return (
     <header className="mc-hud">
       <Link to="/" className="mc-hud-back" aria-label="Back to Watchtower">
         &larr; Watchtower
       </Link>
       <h1 className="mc-hud-title">{table.question}</h1>
-      <StatusPill status={table.status} />
+      <TableControls table={table} onStatusChange={onStatusChange} />
       <div className="mc-hud-actions">
         <span className="mc-hud-action">
           <code>{shortCode(table.id)}</code>
@@ -218,12 +205,37 @@ export function Table() {
   // Static data: table metadata + seats (one-time fetch).
   const { state, refetch } = useStaticTableData(tableId)
 
+  // Local table state for status updates (merged with stream updates).
+  const [localTable, setLocalTable] = useState<TableType | null>(null)
+
   // Live data: sayings stream via long-poll.
   const {
     sayings,
     table: streamTable,
     connectionStatus,
   } = useSayingsStream(tableId)
+
+  // ---------------------------------------------------------------------------
+  // Handle status changes from TableControls
+  // ---------------------------------------------------------------------------
+
+  const handleStatusChange = useCallback((updatedTable: TableType) => {
+    setLocalTable(updatedTable)
+  }, [])
+
+  // ---------------------------------------------------------------------------
+  // Reset local table when static data loads
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (state.status === 'loaded') {
+      setLocalTable(state.data.table)
+    }
+  }, [state])
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   if (state.status === 'loading') {
     return (
@@ -242,13 +254,14 @@ export function Table() {
   }
 
   const { seats, activeCount } = state.data
-  // Prefer the live table snapshot from the stream (updated by include_table)
-  // over the static snapshot, so status changes reflect in the HUD.
-  const table = streamTable ?? state.data.table
+
+  // Table priority: local state (from controls) > stream (live updates) > static
+  // This ensures status changes from controls take precedence.
+  const table = localTable ?? streamTable ?? state.data.table
 
   return (
     <div className="mc">
-      <Hud table={table} />
+      <Hud table={table} onStatusChange={handleStatusChange} />
       <div className="mc-columns">
         <div className="mc-col-left">
           <Board table={table} />

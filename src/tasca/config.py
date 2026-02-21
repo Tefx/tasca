@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Security
     admin_token: str | None = None
 
+    # CORS
+    cors_origins: list[str] = []  # Empty = CORS disabled; ["*"] = allow all (no credentials)
+
     # Server-side limits (None = no limit)
     max_sayings_per_table: int | None = None  # Max sayings per table
     max_content_length: int | None = None  # Max characters per message

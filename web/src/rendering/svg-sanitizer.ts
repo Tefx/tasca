@@ -3,6 +3,14 @@
  *
  * SECURITY: This module sanitizes SVG output from Mermaid to prevent XSS attacks.
  *
+ * ## Canonical Policy Source
+ *
+ * This implementation follows the security policy defined in:
+ *   docs/adr-002-mermaid-svg-sanitization.md
+ *
+ * Any changes to allowed elements, attributes, or forbids MUST be reflected
+ * in ADR-002 first. This file is the TypeScript implementation of that policy.
+ *
  * ## Security Measures
  *
  * - **Element allowlist**: Only safe SVG elements are allowed
@@ -12,7 +20,7 @@
  *
  * ## References
  *
- * - ADR-002: SVG Sanitization Strategy
+ * - ADR-002: docs/adr-002-mermaid-svg-sanitization.md (CANONICAL POLICY)
  * - https://github.com/mermaid-js/mermaid/security/advisories/GHSA-7rqq-prvp-x9jh
  */
 

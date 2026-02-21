@@ -64,7 +64,12 @@ class Settings(BaseSettings):
             directives = [
                 "default-src 'self'",
                 "script-src 'self'",
-                "style-src 'self' 'unsafe-inline'",  # unsafe-inline often needed for inline styles
+                # SECURITY NOTE: 'unsafe-inline' in style-src is required for React inline styles.
+                # Affected components: math.tsx (errorColor), MentionInput.tsx (positioning),
+                # Table.tsx (layout). Alternative: nonce-based CSP with build-time transform.
+                # Risk: Accepted residual XSS vector via CSS injection (lower severity than JS).
+                # See: https://web.dev/strict-csp/#why-unsafe-inline-for-style-is-less-risky
+                "style-src 'self' 'unsafe-inline'",
                 "img-src 'self' data:",
                 "connect-src 'self'",
                 "font-src 'self'",

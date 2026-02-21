@@ -4690,7 +4690,7 @@ phases:
       \ tests pass)\n\nSpec link:\n- ADR-002: SVG Sanitization Strategy"
   - id: security_fix.b3-csp-base-uri
     name: b3-csp-base-uri
-    status: claimed
+    status: done
     description: P0 — Fix base-uri 'self' to base-uri 'none' in production CSP. Technical
       design §8.3 requires base-uri 'none'. Current value is 'self' which still allows
       <base> tag injection attacks. One-line change in config.py.
@@ -4705,9 +4705,32 @@ phases:
     agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-21T17:03:26.152306+00:00'
+    evidence: 'Artifact:
+
+      - Commit: 2dd323a
+
+
+      Change:
+
+      - File: src/tasca/config.py
+
+      - Line 72: Changed `"base-uri ''self''"` to `"base-uri ''none''"`
+
+
+      Verification:
+
+      - Run: git diff src/tasca/config.py -> Shows correct one-line change
+
+      - Run: invar guard --contracts-only -> PASSED (0 errors, 0 warnings)
+
+
+      Spec link:
+
+      - OWASP CSP Cheat Sheet recommends base-uri ''none'' to prevent <base> tag injection
+      attacks'
   - id: security_fix.s2-csp-unsafe-inline-doc
     name: s2-csp-unsafe-inline-doc
-    status: pending
+    status: done
     description: P1 — Document or justify style-src 'unsafe-inline' in production
       CSP. No spec justification exists for this directive. Adds an explicit SECURITY
       NOTE comment in config.py explaining this is accepted residual risk for React
@@ -4724,9 +4747,29 @@ phases:
     depends_on:
     - security_fix.b3-csp-base-uri
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-21T17:31:37.662121+00:00'
+    evidence: 'Artifact:
+
+      - commit: 2dd323a (pending commit for this specific change)
+
+
+      Verification:
+
+      - Run: invar guard src/tasca/config.py -> PASSED (0 errors, 0 warnings)
+
+      - Run: grep "SECURITY NOTE" src/tasca/config.py -> Found at line 67-71
+
+      - Comment explains: React inline styles requirement, affected components, alternative
+      (nonce-based CSP), residual risk acknowledgment
+
+
+      Spec link:
+
+      - OWASP CSP best practices'
   - id: security_fix.s3-csp-middleware-test
     name: s3-csp-middleware-test
-    status: pending
+    status: done
     description: 'P1 — Add CSP middleware automated test. CSPMiddleware has no test.
       Add parametrized pytest using TestClient covering: (1) production CSP header
       present with correct directives, (2) dev mode header absent, (3) report-only
@@ -4744,9 +4787,39 @@ phases:
     depends_on:
     - security_fix.b3-csp-base-uri
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-21T17:31:40.361246+00:00'
+    evidence: 'Artifact:
+
+      - Test file: tests/unit/api/test_csp_middleware.py (246 lines)
+
+
+      Verification:
+
+      - Run: uv run pytest tests/unit/api/test_csp_middleware.py -v -> 7 passed in
+      0.65s
+
+      - Run: invar guard tests/unit/api/test_csp_middleware.py -> passed
+
+
+      Tests cover:
+
+      - test_production_csp_header_present
+
+      - test_development_csp_header_present_permissive
+
+      - test_csp_disabled_header_absent
+
+      - test_report_only_mode_uses_report_only_header
+
+      - test_report_only_mode_development
+
+      - test_csp_header_added_to_all_responses
+
+      - test_csp_does_not_override_existing_headers'
   - id: security_fix.s1-sanitizer-xref
     name: s1-sanitizer-xref
-    status: pending
+    status: done
     description: P2 — Cross-reference both SVG sanitizer implementations to ADR-002.
       After B2 fixes the TS allowlist, both sanitizers should reference ADR-002 as
       the canonical policy source. Add a comment header to each file pointing to docs/adr-002-mermaid-svg-sanitization.md
@@ -4765,6 +4838,18 @@ phases:
     depends_on:
     - security_fix.b2-svg-allowlist-fix
     agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-21T17:31:43.872176+00:00'
+    evidence: "Artifact:\n- Files modified:\n  - web/src/rendering/svg-sanitizer.ts\
+      \ (lines 1-24)\n  - src/tasca/core/svg_sanitizer.py (lines 1-31)\n\nVerification:\n\
+      - Run: npx tsc --noEmit (in web/) -> 0 errors ✅\n- Run: invar guard src/tasca/core/svg_sanitizer.py\
+      \ -> FAILED (pre-existing issues: file size 624 lines, missing contracts)\n\
+      \  \nGuard errors are pre-existing (file size > 500, missing @pre/@post on 8\
+      \ functions). Documentation change only added comments referencing ADR-002.\n\
+      \nCross-reference additions:\n- TS file (line 9): \"docs/adr-002-mermaid-svg-sanitization.md\
+      \ (CANONICAL POLICY)\"\n- Python file (line 6): \"docs/adr-002-mermaid-svg-sanitization.md\"\
+      \n- Python file adds cross-reference to TypeScript implementation\n\nSpec link:\n\
+      - docs/adr-002-mermaid-svg-sanitization.md"
   - id: security_fix.r1-security-reverify
     name: r1-security-reverify
     status: pending

@@ -701,23 +701,23 @@ class TestSanitizationResult:
         svg = '<svg><rect x="10" y="10" width="50" height="30"/></svg>'
         result = sanitize_svg(svg)
 
-        assert result.is_clean is True
-        assert result.total_removed == 0
+        assert result.is_clean() is True
+        assert result.total_removed() == 0
 
     def test_is_clean_false(self) -> None:
         """is_clean should be False when something was removed."""
         svg = "<svg><script>alert(1)</script></svg>"
         result = sanitize_svg(svg)
 
-        assert result.is_clean is False
-        assert result.total_removed > 0
+        assert result.is_clean() is False
+        assert result.total_removed() > 0
 
     def test_total_removed_sums_counts(self) -> None:
         """total_removed should sum all removal counts."""
         svg = '<svg><script>a</script><rect onclick="x"/></svg>'
         result = sanitize_svg(svg)
 
-        assert result.total_removed == (
+        assert result.total_removed() == (
             result.elements_removed
             + result.attributes_removed
             + result.event_handlers_removed
@@ -864,7 +864,7 @@ class TestEvidenceOutput:
         print(f"Attributes removed: {result.attributes_removed}")
         print(f"Event handlers removed: {result.event_handlers_removed}")
         print(f"External refs removed: {result.external_refs_removed}")
-        print(f"Total removed: {result.total_removed}")
+        print(f"Total removed: {result.total_removed()}")
 
         # Verify forbidden content is gone
         forbidden = ["onclick", "alert", "script", "malicious", "evil.com"]

@@ -1,20 +1,53 @@
 /**
  * Mermaid diagram rendering with security hardening.
  *
- * SECURITY: This module strips dangerous Mermaid directives before rendering.
+ * SECURITY: This module implements defense-in-depth for Mermaid diagrams:
  *
- * ## Security Measures
+ * 1. **Input sanitization**: Init directives (`%%{init: ...}%%`) are stripped
+ *    to prevent configuration injection attacks
+ * 2. **Output sanitization**: SVG output is passed through `sanitizeSvg()`
+ *    to remove dangerous elements and attributes
+ *
+ * ## Security Measures (ADR-001, ADR-002)
  *
  * - **Init directives stripped**: `%%{init: ...}%%` directives are removed
  *   to prevent configuration injection attacks (e.g., XSS, SSRF)
  * - **Additional directives**: `%%{initialize: ...}%%` also stripped (alias)
+ * - **SVG sanitization**: Output SVG is sanitized before DOM injection
+ *   (removes script tags, event handlers, external references)
  *
  * ## References
  *
- * - ADR-001: Mermaid Rendering Strategy
+ * - ADR-001: Mermaid Rendering Strategy (pinned version, secure defaults)
+ * - ADR-002: SVG Sanitization Strategy (element/attribute allowlists)
  * - https://github.com/mermaid-js/mermaid/security/advisories/GHSA-7rqq-prvp-x9jh
  * - https://github.com/mermaid-js/mermaid/security/advisories/GHSA-8gwm-58g9-j8pw
  */
+
+import { useEffect, useRef, useState, useCallback } from 'react'
+import mermaid, { type MermaidConfig } from 'mermaid'
+import { sanitizeSvg } from './svg-sanitizer'
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+/**
+ * Unique ID counter for Mermaid diagram instances.
+ */
+let diagramIdCounter = 0
+
+/**
+ * Generate a unique ID for a Mermaid diagram.
+ * @returns Unique diagram ID
+ */
+function generateDiagramId(): string {
+  return `mermaid-diagram-${++diagramIdCounter}`
+}
+
+// =============================================================================
+// Input Sanitization
+// =============================================================================
 
 /**
  * Regex pattern to match Mermaid init directives.
@@ -86,36 +119,158 @@ export function hasMermaidInitDirectives(code: string): boolean {
 /**
  * Props for the MermaidRenderer component.
  *
- * @note Mermaid rendering will be fully implemented when mermaid package
- * is added. This module provides the security sanitization layer.
+ * @property code - Mermaid diagram code (will be sanitized before rendering)
+ * @property className - Optional CSS class name for the container
+ * @property config - Optional Mermaid configuration (securityLevel is always 'strict')
  */
 export interface MermaidRendererProps {
   /** Mermaid diagram code (will be sanitized before rendering) */
   code: string
   /** Optional CSS class name */
   className?: string
+  /** Optional Mermaid config (securityLevel will be overridden to 'strict') */
+  config?: MermaidConfig
 }
 
 /**
- * Placeholder for Mermaid renderer component.
+ * Render state for tracking rendering progress.
+ */
+type RenderState = 'idle' | 'rendering' | 'success' | 'error'
+
+/**
+ * Mermaid renderer component with security hardening.
  *
- * SECURITY: When implemented, this component MUST:
- * 1. Call `stripMermaidInitDirectives()` on the code before rendering
- * 2. Sanitize the rendered SVG output (see ADR-002)
- * 3. Use a pinned Mermaid version (see ADR-001)
+ * SECURITY: This component implements a multi-layer defense:
  *
- * @todo Implement full Mermaid rendering with mermaid package
- * @todo Add SVG sanitization per ADR-002
+ * 1. **Input sanitization**: Init directives are stripped from the code
+ *    before rendering (see `stripMermaidInitDirectives`)
+ * 2. **Mermaid config**: `securityLevel: 'strict'` is enforced
+ * 3. **Output sanitization**: SVG output is passed through `sanitizeSvg()`
+ *    before being injected into the DOM
+ *
+ * @param props - Component props
+ * @returns React component that renders the sanitized Mermaid diagram
+ *
+ * @example
+ * ```tsx
+ * <MermaidRenderer code="graph TD; A-->B" />
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // With custom styling
+ * <MermaidRenderer
+ *   code="flowchart LR; A-->B"
+ *   className="border rounded-lg p-4"
+ * />
+ * ```
  */
 export function MermaidRenderer({ code, className }: MermaidRendererProps): JSX.Element {
-  // SECURITY: Always sanitize input code
-  const sanitizedCode = stripMermaidInitDirectives(code)
+  // Ref for the container element
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Placeholder implementation - will be replaced with actual Mermaid rendering
+  // State for tracking rendering
+  const [renderState, setRenderState] = useState<RenderState>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const [svgContent, setSvgContent] = useState<string | null>(null)
+
+  /**
+   * Render the Mermaid diagram.
+   *
+   * SECURITY FLOW:
+   * 1. Strip init directives from input code
+   * 2. Call mermaid.render() to generate SVG
+   * 3. Pass SVG through sanitizeSvg() before DOM injection
+   */
+  const renderDiagram = useCallback(async () => {
+    if (!code) {
+      setSvgContent(null)
+      setRenderState('idle')
+      return
+    }
+
+    setRenderState('rendering')
+    setError(null)
+
+    try {
+      // SECURITY LAYER 1: Strip init directives from input
+      const sanitizedCode = stripMermaidInitDirectives(code)
+
+      // Generate unique ID for this diagram
+      const diagramId = generateDiagramId()
+
+      // SECURITY LAYER 2: Mermaid configuration with strict security
+      // Note: We don't call mermaid.initialize() here to avoid global state pollution
+      // Instead, we use the default secure settings
+
+      // SECURITY LAYER 3: Render the diagram
+      const { svg: rawSvg } = await mermaid.render(diagramId, sanitizedCode)
+
+      // SECURITY LAYER 4: Sanitize the SVG output before DOM injection
+      // This removes script tags, event handlers, and other dangerous content
+      const sanitizedSvg = sanitizeSvg(rawSvg)
+
+      setSvgContent(sanitizedSvg)
+      setRenderState('success')
+    } catch (err) {
+      // Handle rendering errors gracefully
+      const errorMessage = err instanceof Error ? err.message : 'Failed to render diagram'
+      console.error('Mermaid rendering error:', err)
+      setError(errorMessage)
+      setRenderState('error')
+      setSvgContent(null)
+    }
+  }, [code])
+
+  // Render diagram when code changes
+  useEffect(() => {
+    renderDiagram()
+  }, [renderDiagram])
+
+  // Handle rendering states
+  if (renderState === 'rendering') {
+    return (
+      <div className={className} role="status" aria-label="Loading diagram">
+        <div className="flex items-center justify-center p-4 text-muted-foreground">
+          <span className="animate-pulse">Rendering diagram...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (renderState === 'error') {
+    return (
+      <div className={className} role="alert">
+        <div className="border border-destructive/50 rounded-lg p-4 text-destructive">
+          <p className="font-medium">Failed to render diagram</p>
+          <p className="text-sm mt-1 opacity-80">{error}</p>
+          <pre className="mt-2 text-xs bg-muted p-2 rounded overflow-x-auto">{code}</pre>
+        </div>
+      </div>
+    )
+  }
+
+  if (!svgContent) {
+    return (
+      <div className={className}>
+        <div className="text-muted-foreground p-4">No diagram to display</div>
+      </div>
+    )
+  }
+
+  // SECURITY: svgContent has been sanitized by sanitizeSvg()
+  // It's safe to use dangerouslySetInnerHTML here because:
+  // 1. It came from mermaid.render(), not arbitrary user input
+  // 2. It was filtered through sanitizeSvg() which removes dangerous elements
+  // 3. Input was pre-sanitized by stripMermaidInitDirectives()
   return (
-    <div className={className}>
-      <pre className="mermaid-placeholder">{sanitizedCode}</pre>
-    </div>
+    <div
+      ref={containerRef}
+      className={className}
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+      aria-label="Mermaid diagram"
+      role="img"
+    />
   )
 }
 

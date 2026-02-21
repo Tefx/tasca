@@ -138,7 +138,7 @@ if TYPE_CHECKING:
 import os
 
 API_BASE_URL = os.environ.get("TASCA_TEST_API_URL", "http://localhost:8000")
-MCP_BASE_URL = os.environ.get("TASCA_TEST_MCP_URL", f"{API_BASE_URL}/mcp")
+MCP_BASE_URL = os.environ.get("TASCA_TEST_MCP_URL", f"{API_BASE_URL}/mcp/mcp")
 REQUEST_TIMEOUT = int(os.environ.get("TASCA_TEST_TIMEOUT", "30"))
 
 
@@ -231,16 +231,20 @@ class RESTHarness:
     # Table Endpoints
     # =========================================================================
 
-    async def create_table(self, data: dict) -> "httpx.Response":
+    async def create_table(self, data: dict, admin_token: str | None = None) -> "httpx.Response":
         """Create a new table.
 
         Args:
             data: Table creation data
+            admin_token: Optional admin Bearer token for authenticated requests
 
         Returns:
             Response from POST /api/v1/tables
         """
-        return await self.client.post(f"{self.API_V1_PREFIX}/tables", json=data)
+        headers = {}
+        if admin_token:
+            headers["Authorization"] = f"Bearer {admin_token}"
+        return await self.client.post(f"{self.API_V1_PREFIX}/tables", json=data, headers=headers)
 
     async def get_table(self, table_id: str) -> "httpx.Response":
         """Get a table by ID.
@@ -261,16 +265,20 @@ class RESTHarness:
         """
         return await self.client.get(f"{self.API_V1_PREFIX}/tables")
 
-    async def delete_table(self, table_id: str) -> "httpx.Response":
+    async def delete_table(self, table_id: str, admin_token: str | None = None) -> "httpx.Response":
         """Delete a table by ID.
 
         Args:
             table_id: The table identifier
+            admin_token: Optional admin Bearer token for authenticated requests
 
         Returns:
             Response from DELETE /api/v1/tables/{table_id}
         """
-        return await self.client.delete(f"{self.API_V1_PREFIX}/tables/{table_id}")
+        headers = {}
+        if admin_token:
+            headers["Authorization"] = f"Bearer {admin_token}"
+        return await self.client.delete(f"{self.API_V1_PREFIX}/tables/{table_id}", headers=headers)
 
 
 class MCPHTTPHarness:
@@ -308,6 +316,10 @@ class MCPHTTPHarness:
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=httpx.Timeout(self.timeout),
+            headers={
+                "Accept": "application/json, text/event-stream",
+            },
+            follow_redirects=True,
         )
         return self
 
@@ -354,6 +366,16 @@ class MCPHTTPHarness:
         }
         response = await self.client.post("/", json=payload)
         response.raise_for_status()
+
+        # FastMCP returns SSE format: "event: message\ndata: {...}\n\n"
+        text = response.text
+        if text.startswith("event:"):
+            # Parse SSE format
+            for line in text.split("\n"):
+                if line.startswith("data:"):
+                    return json.loads(line[5:].strip())
+
+        # Fallback to regular JSON
         return response.json()
 
     # =========================================================================

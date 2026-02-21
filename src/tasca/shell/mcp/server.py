@@ -1,3 +1,6 @@
+# @invar:allow file_size: MCP server tools consolidated in single file for client discoverability
+#   Tools are grouped by namespace and share error envelope helpers. Splitting would add
+#   unnecessary import overhead for MCP clients that load the server module.
 """
 MCP server implementation.
 
@@ -12,11 +15,46 @@ The MCP protocol handles error propagation, so tools return primitive types
 that can be serialized to JSON. Internal service calls use Result[T, E].
 """
 
-from typing import Literal
+from __future__ import annotations
+
+import sqlite3
+import uuid
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from fastmcp import FastMCP
+from returns.result import Failure, Success
 
 from tasca.config import settings
+from tasca.core.domain.patron import Patron, PatronCreate, PatronId
+from tasca.core.domain.seat import Seat, SeatId, SeatState
+from tasca.core.domain.saying import Saying, Speaker, SpeakerKind
+from tasca.core.domain.table import Table, TableCreate, TableId, TableStatus, Version
+from tasca.core.services.seat_service import (
+    DEFAULT_SEAT_TTL_SECONDS,
+    calculate_expiry_time,
+    filter_active_seats,
+)
+from tasca.core.table_state_machine import can_join, can_say
+from tasca.shell.api import deps
+from tasca.shell.storage.patron_repo import (
+    PatronNotFoundError,
+    create_patron,
+    find_patron_by_name,
+    get_patron,
+)
+from tasca.shell.storage.seat_repo import (
+    SeatNotFoundError,
+    create_seat,
+    find_seats_by_table,
+    heartbeat_seat as repo_heartbeat_seat,
+)
+from tasca.shell.storage.saying_repo import append_saying, list_sayings_by_table
+from tasca.shell.storage.table_repo import (
+    TableNotFoundError,
+    create_table,
+    get_table,
+)
 
 # Transport types for MCP server
 TransportType = Literal["stdio", "http", "sse", "streamable-http"]
@@ -31,9 +69,65 @@ mcp = FastMCP(
         "- tasca.patron.*: Patron identity management\n"
         "- tasca.table.*: Discussion table operations\n"
         "- tasca.seat.*: Seat presence management\n\n"
-        "Start with tasca.patron.register to create your patron identity."
+        "Start with tasca.patron_register to create your patron identity."
     ),
 )
+
+
+# =============================================================================
+# Error Envelope Helpers
+# =============================================================================
+
+
+# @invar:allow shell_result: MCP protocol returns JSON-serializable dicts, not Result
+# @invar:allow shell_pure_logic: Simple dict construction is pure
+def _error_response(
+    code: str, message: str, details: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Create a standardized error envelope.
+
+    Args:
+        code: Error code (e.g., "NOT_FOUND", "VALIDATION_ERROR").
+        message: Human-readable error message.
+        details: Optional additional error details.
+
+    Returns:
+        Error envelope dictionary.
+    """
+    result: dict[str, Any] = {
+        "ok": False,
+        "error": {
+            "code": code,
+            "message": message,
+        },
+    }
+    if details:
+        result["error"]["details"] = details
+    return result
+
+
+# @invar:allow shell_result: MCP protocol returns JSON-serializable dicts, not Result
+# @invar:allow shell_pure_logic: Simple dict construction is pure
+def _success_response(data: dict[str, Any]) -> dict[str, Any]:
+    """Create a standardized success envelope.
+
+    Args:
+        data: The response data.
+
+    Returns:
+        Success envelope dictionary.
+    """
+    return {"ok": True, "data": data}
+
+
+# @invar:allow shell_result: DB connection acquisition, not business logic
+def _get_db_connection() -> sqlite3.Connection:
+    """Get database connection for MCP tools.
+
+    Uses the same global connection as FastAPI dependency.
+    """
+    gen = deps.get_db()
+    return next(gen)
 
 
 # =============================================================================
@@ -42,47 +136,129 @@ mcp = FastMCP(
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
 def patron_register(
-    patron_id: str | None = None,
-    display_name: str | None = None,
-    alias: str | None = None,
-    meta: dict | None = None,
-) -> dict:
+    name: str,
+    kind: str = "agent",
+) -> dict[str, Any]:
     """Register a new patron (agent identity).
 
+    Patrons are deduplicated by name. If a patron with the same name
+    already exists, the existing patron is returned.
+
     Args:
-        patron_id: Optional UUID for the patron. Auto-generated if omitted.
-        display_name: Human-readable name for the patron.
-        alias: Optional short alias for mentions.
-        meta: Optional metadata dictionary.
+        name: Name or identifier for the patron (used for deduplication).
+        kind: Type of patron - 'agent' or 'human' (default 'agent').
 
     Returns:
-        Registered patron details with patron_id and server_ts.
+        Success envelope with patron details:
+        {
+            "ok": true,
+            "data": {
+                "id": "uuid-string",
+                "name": "patron-name",
+                "kind": "agent",
+                "created_at": "2024-01-01T00:00:00Z",
+                "is_new": true
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - DATABASE_ERROR: Failed to access database
     """
-    raise NotImplementedError("Patron registration not yet implemented.")
+    conn = _get_db_connection()
+
+    # Check for existing patron by name (dedup)
+    existing_result = find_patron_by_name(conn, name)
+
+    if isinstance(existing_result, Failure):
+        error = existing_result.failure()
+        return _error_response("DATABASE_ERROR", f"Failed to check for existing patron: {error}")
+
+    existing = existing_result.unwrap()
+    if existing is not None:
+        # Return existing patron (return_existing semantics)
+        return _success_response(
+            {
+                "id": existing.id,
+                "name": existing.name,
+                "kind": existing.kind,
+                "created_at": existing.created_at.isoformat(),
+                "is_new": False,
+            }
+        )
+
+    # Create new patron
+    now = datetime.now(UTC)
+    patron_id = PatronId(str(uuid.uuid4()))
+
+    patron = Patron(
+        id=patron_id,
+        name=name,
+        kind=kind,
+        created_at=now,
+    )
+
+    result = create_patron(conn, patron)
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        return _error_response("DATABASE_ERROR", f"Failed to create patron: {error}")
+
+    created = result.unwrap()
+    return _success_response(
+        {
+            "id": created.id,
+            "name": created.name,
+            "kind": created.kind,
+            "created_at": created.created_at.isoformat(),
+            "is_new": True,
+        }
+    )
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
-def patron_get(patron_id: str) -> dict:
+def patron_get(patron_id: str) -> dict[str, Any]:
     """Get patron details by ID.
 
     Args:
         patron_id: UUID of the patron to retrieve.
 
     Returns:
-        Patron details including patron_id, display_name, alias, and meta.
+        Success envelope with patron details:
+        {
+            "ok": true,
+            "data": {
+                "id": "uuid-string",
+                "name": "patron-name",
+                "kind": "agent",
+                "created_at": "2024-01-01T00:00:00Z"
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - NOT_FOUND: Patron not found
+        - DATABASE_ERROR: Failed to access database
     """
-    raise NotImplementedError("Patron retrieval not yet implemented.")
+    conn = _get_db_connection()
+    result = get_patron(conn, PatronId(patron_id))
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        if isinstance(error, PatronNotFoundError):
+            return _error_response("NOT_FOUND", f"Patron not found: {patron_id}")
+        return _error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+
+    patron = result.unwrap()
+    return _success_response(
+        {
+            "id": patron.id,
+            "name": patron.name,
+            "kind": patron.kind,
+            "created_at": patron.created_at.isoformat(),
+        }
+    )
 
 
 # =============================================================================
@@ -91,139 +267,409 @@ def patron_get(patron_id: str) -> dict:
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
 def table_create(
-    created_by: str,
-    title: str,
-    host_ids: list[str] | None = None,
-    metadata: dict | None = None,
-    policy: dict | None = None,
-    board: dict | None = None,
-    dedup_id: str | None = None,
-) -> dict:
+    question: str,
+    context: str | None = None,
+) -> dict[str, Any]:
     """Create a new discussion table.
 
     Args:
-        created_by: Patron ID of the table creator.
-        title: Title for the discussion table.
-        host_ids: Optional list of patron IDs who can control the table.
-        metadata: Optional metadata dictionary.
-        policy: Optional policy configuration.
-        board: Optional board (pins) data.
-        dedup_id: Optional deduplication ID for idempotency.
+        question: The question or topic for discussion.
+        context: Optional context for the discussion.
 
     Returns:
-        Created table details including table_id, invite_code, and web_url.
+        Success envelope with table details:
+        {
+            "ok": true,
+            "data": {
+                "id": "uuid-string",
+                "question": "What should we discuss?",
+                "context": "Optional context",
+                "status": "open",
+                "version": 1,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - DATABASE_ERROR: Failed to create table
     """
-    raise NotImplementedError("Table creation not yet implemented.")
+    conn = _get_db_connection()
+    now = datetime.now(UTC)
+    table_id = TableId(str(uuid.uuid4()))
+
+    table = Table(
+        id=table_id,
+        question=question,
+        context=context,
+        status=TableStatus.OPEN,
+        version=Version(1),
+        created_at=now,
+        updated_at=now,
+    )
+
+    result = create_table(conn, table)
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        return _error_response("DATABASE_ERROR", f"Failed to create table: {error}")
+
+    created = result.unwrap()
+    return _success_response(
+        {
+            "id": created.id,
+            "question": created.question,
+            "context": created.context,
+            "status": created.status.value,
+            "version": created.version,
+            "created_at": created.created_at.isoformat(),
+            "updated_at": created.updated_at.isoformat(),
+        }
+    )
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
 def table_join(
-    invite_code: str,
-    patron_id: str | None = None,
-    history_limit: int = 10,
-    history_max_bytes: int = 65536,
-) -> dict:
-    """Join a discussion table by invite code.
+    table_id: str,
+    patron_id: str,
+) -> dict[str, Any]:
+    """Join a discussion table by creating a seat.
+
+    Creates a seat for the patron at the table and returns table details.
 
     Args:
-        invite_code: Invite code or tasca:// URL for the table.
-        patron_id: Optional patron ID joining the table.
-        history_limit: Maximum number of sayings to fetch (default 10).
-        history_max_bytes: Maximum bytes of history to fetch (default 64KB).
+        table_id: UUID of the table to join.
+        patron_id: UUID of the patron joining the table.
 
     Returns:
-        Table details and initial sayings for context.
+        Success envelope with table details and seat info:
+        {
+            "ok": true,
+            "data": {
+                "table": {
+                    "id": "uuid-string",
+                    "question": "...",
+                    "status": "open",
+                    ...
+                },
+                "seat": {
+                    "id": "uuid-string",
+                    "table_id": "table-uuid",
+                    "patron_id": "patron-uuid",
+                    "state": "joined",
+                    "last_heartbeat": "2024-01-01T00:00:00Z",
+                    "joined_at": "2024-01-01T00:00:00Z",
+                    "expires_at": "2024-01-01T00:01:00Z"
+                }
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - NOT_FOUND: Table or patron not found
+        - OPERATION_NOT_ALLOWED: Table is not open for joins (PAUSED or CLOSED)
+        - DATABASE_ERROR: Failed to create seat
     """
-    raise NotImplementedError("Table join not yet implemented.")
+    conn = _get_db_connection()
+
+    # Verify table exists
+    table_result = get_table(conn, TableId(table_id))
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return _error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return _error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+
+    table = table_result.unwrap()
+
+    # Check state machine guard: only OPEN tables can be joined
+    if not can_join(table.status):
+        return _error_response(
+            "OPERATION_NOT_ALLOWED",
+            f"Cannot join table with status '{table.status.value}'. Only OPEN tables accept new joins.",
+            {"table_status": table.status.value},
+        )
+
+    # Verify patron exists
+    patron_result = get_patron(conn, PatronId(patron_id))
+    if isinstance(patron_result, Failure):
+        error = patron_result.failure()
+        if isinstance(error, PatronNotFoundError):
+            return _error_response("NOT_FOUND", f"Patron not found: {patron_id}")
+        return _error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+
+    now = datetime.now(UTC)
+    seat_id = SeatId(str(uuid.uuid4()))
+
+    seat = Seat(
+        id=seat_id,
+        table_id=table_id,
+        patron_id=patron_id,
+        state=SeatState.JOINED,
+        last_heartbeat=now,
+        joined_at=now,
+    )
+
+    seat_result = create_seat(conn, seat)
+    if isinstance(seat_result, Failure):
+        error = seat_result.failure()
+        return _error_response("DATABASE_ERROR", f"Failed to create seat: {error}")
+
+    created_seat = seat_result.unwrap()
+    expires_at = calculate_expiry_time(created_seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
+
+    return _success_response(
+        {
+            "table": {
+                "id": table.id,
+                "question": table.question,
+                "context": table.context,
+                "status": table.status.value,
+                "version": table.version,
+                "created_at": table.created_at.isoformat(),
+                "updated_at": table.updated_at.isoformat(),
+            },
+            "seat": {
+                "id": created_seat.id,
+                "table_id": created_seat.table_id,
+                "patron_id": created_seat.patron_id,
+                "state": created_seat.state.value,
+                "last_heartbeat": created_seat.last_heartbeat.isoformat(),
+                "joined_at": created_seat.joined_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+            },
+        }
+    )
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
-def table_get(table_id: str) -> dict:
+def table_get(table_id: str) -> dict[str, Any]:
     """Get table details by ID.
 
     Args:
         table_id: UUID of the table to retrieve.
 
     Returns:
-        Table details including status, version, title, hosts, and metadata.
+        Success envelope with table details:
+        {
+            "ok": true,
+            "data": {
+                "id": "uuid-string",
+                "question": "What should we discuss?",
+                "context": null,
+                "status": "open",
+                "version": 1,
+                "created_at": "2024-01-01T00:00:00Z",
+                "updated_at": "2024-01-01T00:00:00Z"
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - NOT_FOUND: Table not found
+        - DATABASE_ERROR: Failed to access database
     """
-    raise NotImplementedError("Table retrieval not yet implemented.")
+    conn = _get_db_connection()
+    result = get_table(conn, TableId(table_id))
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        if isinstance(error, TableNotFoundError):
+            return _error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return _error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+
+    table = result.unwrap()
+    return _success_response(
+        {
+            "id": table.id,
+            "question": table.question,
+            "context": table.context,
+            "status": table.status.value,
+            "version": table.version,
+            "created_at": table.created_at.isoformat(),
+            "updated_at": table.updated_at.isoformat(),
+        }
+    )
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
 def table_say(
     table_id: str,
     content: str,
+    speaker_name: str,
     patron_id: str | None = None,
-    speaker_kind: str = "agent",
-    saying_type: str = "text",
-    mentions: list[str] | None = None,
-    reply_to_sequence: int | None = None,
-    dedup_id: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Append a saying (message) to a table.
 
     Args:
         table_id: UUID of the table.
-        content: Text content of the saying.
-        patron_id: Patron ID of the speaker (required if speaker_kind is 'agent').
-        speaker_kind: 'agent' or 'human' (default 'agent').
-        saying_type: Type of saying (default 'text').
-        mentions: Optional list of patron IDs or 'all' to mention.
-        reply_to_sequence: Optional sequence number being replied to.
-        dedup_id: Optional deduplication ID for idempotency.
+        content: Markdown content of the saying.
+        speaker_name: Name of the speaker.
+        patron_id: Patron ID of the speaker (optional, recommended for agents).
 
     Returns:
-        Saying details including saying_id, sequence, and created_at.
+        Success envelope with saying details:
+        {
+            "ok": true,
+            "data": {
+                "id": "uuid-string",
+                "table_id": "table-uuid",
+                "sequence": 1,
+                "speaker": {
+                    "kind": "agent",
+                    "name": "Speaker Name",
+                    "patron_id": "patron-uuid"
+                },
+                "content": "Hello world",
+                "pinned": false,
+                "created_at": "2024-01-01T00:00:00Z"
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - NOT_FOUND: Table not found
+        - OPERATION_NOT_ALLOWED: Table is closed (cannot add sayings)
+        - VALIDATION_ERROR: Invalid content or limits exceeded
+        - DATABASE_ERROR: Failed to append saying
     """
-    raise NotImplementedError("Table say not yet implemented.")
+    conn = _get_db_connection()
+
+    # Verify table exists
+    table_result = get_table(conn, TableId(table_id))
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return _error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return _error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+
+    table = table_result.unwrap()
+
+    # Check state machine guard: CLOSED tables cannot have sayings added
+    if not can_say(table.status):
+        return _error_response(
+            "OPERATION_NOT_ALLOWED",
+            f"Cannot add saying to table with status '{table.status.value}'. Table must be OPEN or PAUSED.",
+            {"table_status": table.status.value},
+        )
+
+    # Create speaker
+    if patron_id is not None:
+        speaker = Speaker(
+            kind=SpeakerKind.AGENT,
+            name=speaker_name,
+            patron_id=PatronId(patron_id),
+        )
+    else:
+        speaker = Speaker(
+            kind=SpeakerKind.HUMAN,
+            name=speaker_name,
+            patron_id=None,
+        )
+
+    # Append saying
+    result = append_saying(conn, table_id, speaker, content)
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        return _error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
+
+    saying = result.unwrap()
+    return _success_response(
+        {
+            "id": saying.id,
+            "table_id": saying.table_id,
+            "sequence": saying.sequence,
+            "speaker": {
+                "kind": saying.speaker.kind.value,
+                "name": saying.speaker.name,
+                "patron_id": saying.speaker.patron_id,
+            },
+            "content": saying.content,
+            "pinned": saying.pinned,
+            "created_at": saying.created_at.isoformat(),
+        }
+    )
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
 def table_listen(
     table_id: str,
-    since_sequence: int = 0,
+    since_sequence: int = -1,
     limit: int = 50,
-    include_table: bool = True,
-) -> dict:
-    """Listen for new sayings on a table.
+) -> dict[str, Any]:
+    """Listen for sayings on a table.
+
+    Returns sayings with sequence greater than since_sequence.
 
     Args:
         table_id: UUID of the table.
-        since_sequence: Get sayings after this sequence (exclusive).
+        since_sequence: Get sayings with sequence > this value (-1 for all, default -1).
         limit: Maximum number of sayings to return (default 50).
-        include_table: Include table snapshot in response (default True).
 
     Returns:
-        List of sayings and next_sequence for pagination.
+        Success envelope with sayings and next_sequence:
+        {
+            "ok": true,
+            "data": {
+                "sayings": [...],
+                "next_sequence": 10
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - NOT_FOUND: Table not found
+        - DATABASE_ERROR: Failed to list sayings
     """
-    raise NotImplementedError("Table listen not yet implemented.")
+    conn = _get_db_connection()
+
+    # Verify table exists
+    table_result = get_table(conn, TableId(table_id))
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return _error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return _error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+
+    # List sayings
+    result = list_sayings_by_table(conn, table_id, since_sequence, limit)
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        return _error_response("DATABASE_ERROR", f"Failed to list sayings: {error}")
+
+    sayings = result.unwrap()
+
+    # Compute next_sequence
+    if sayings:
+        next_sequence = max(s.sequence for s in sayings) + 1
+    else:
+        next_sequence = since_sequence + 1 if since_sequence >= 0 else 0
+
+    return _success_response(
+        {
+            "sayings": [
+                {
+                    "id": s.id,
+                    "table_id": s.table_id,
+                    "sequence": s.sequence,
+                    "speaker": {
+                        "kind": s.speaker.kind.value,
+                        "name": s.speaker.name,
+                        "patron_id": s.speaker.patron_id,
+                    },
+                    "content": s.content,
+                    "pinned": s.pinned,
+                    "created_at": s.created_at.isoformat(),
+                }
+                for s in sayings
+            ],
+            "next_sequence": next_sequence,
+        }
+    )
 
 
 # =============================================================================
@@ -232,47 +678,126 @@ def table_listen(
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
 def seat_heartbeat(
     table_id: str,
-    patron_id: str,
-    state: str = "running",
-    ttl_ms: int = 60000,
-) -> dict:
-    """Update seat presence on a table.
+    seat_id: str,
+) -> dict[str, Any]:
+    """Update a seat's heartbeat to indicate presence.
 
     Args:
         table_id: UUID of the table.
-        patron_id: Patron ID updating their presence.
-        state: Seat state - 'running', 'idle', or 'done' (default 'running').
-        ttl_ms: Time-to-live in milliseconds (default 60000 = 60s).
+        seat_id: UUID of the seat to update.
 
     Returns:
-        Seat details including expires_at timestamp.
+        Success envelope with seat details and expiry:
+        {
+            "ok": true,
+            "data": {
+                "seat": {
+                    "id": "uuid-string",
+                    "table_id": "table-uuid",
+                    "patron_id": "patron-uuid",
+                    "state": "joined",
+                    "last_heartbeat": "2024-01-01T00:00:00Z",
+                    "joined_at": "2024-01-01T00:00:00Z"
+                },
+                "expires_at": "2024-01-01T00:01:00Z"
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - NOT_FOUND: Seat not found
+        - DATABASE_ERROR: Failed to update heartbeat
     """
-    raise NotImplementedError("Seat heartbeat not yet implemented.")
+    conn = _get_db_connection()
+    now = datetime.now(UTC)
+
+    result = repo_heartbeat_seat(conn, SeatId(seat_id), now)
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        if isinstance(error, SeatNotFoundError):
+            return _error_response("NOT_FOUND", f"Seat not found: {seat_id}")
+        return _error_response("DATABASE_ERROR", f"Failed to update heartbeat: {error}")
+
+    seat = result.unwrap()
+    expires_at = calculate_expiry_time(seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
+
+    return _success_response(
+        {
+            "seat": {
+                "id": seat.id,
+                "table_id": seat.table_id,
+                "patron_id": seat.patron_id,
+                "state": seat.state.value,
+                "last_heartbeat": seat.last_heartbeat.isoformat(),
+                "joined_at": seat.joined_at.isoformat(),
+            },
+            "expires_at": expires_at.isoformat(),
+        }
+    )
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
-# @invar:allow shell_pure_logic: Skeleton - will call core services when implemented
 @mcp.tool
-def seat_list(table_id: str) -> dict:
+def seat_list(
+    table_id: str,
+    active_only: bool = True,
+) -> dict[str, Any]:
     """List all seats (presences) on a table.
 
     Args:
         table_id: UUID of the table.
+        active_only: Filter to active (non-expired) seats only (default True).
 
     Returns:
-        List of active seats with patron_id, state, and timestamps.
+        Success envelope with seats and active_count:
+        {
+            "ok": true,
+            "data": {
+                "seats": [...],
+                "active_count": 3
+            }
+        }
 
-    Raises:
-        NotImplementedError: Feature not yet implemented.
+    Error codes:
+        - DATABASE_ERROR: Failed to list seats
     """
-    raise NotImplementedError("Seat list not yet implemented.")
+    conn = _get_db_connection()
+    now = datetime.now(UTC)
+    ttl = DEFAULT_SEAT_TTL_SECONDS
+
+    result = find_seats_by_table(conn, table_id)
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        return _error_response("DATABASE_ERROR", f"Failed to list seats: {error}")
+
+    seats = result.unwrap()
+    all_seats = seats.copy()
+
+    if active_only:
+        seats = filter_active_seats(seats, ttl, now)
+
+    active_count = len(filter_active_seats(all_seats, ttl, now))
+
+    return _success_response(
+        {
+            "seats": [
+                {
+                    "id": s.id,
+                    "table_id": s.table_id,
+                    "patron_id": s.patron_id,
+                    "state": s.state.value,
+                    "last_heartbeat": s.last_heartbeat.isoformat(),
+                    "joined_at": s.joined_at.isoformat(),
+                }
+                for s in seats
+            ],
+            "active_count": active_count,
+        }
+    )
 
 
 # =============================================================================

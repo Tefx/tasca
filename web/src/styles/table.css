@@ -1692,6 +1692,18 @@
   border-color: rgba(34, 197, 94, 0.4);
 }
 
+/* Request Summary button */
+.mc-control-btn--summary {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: var(--mc-accent);
+}
+
+.mc-control-btn--summary:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.25);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
 /* Close button */
 .mc-control-btn--close {
   background: rgba(239, 68, 68, 0.15);
@@ -1702,4 +1714,92 @@
 .mc-control-btn--close:hover:not(:disabled) {
   background: rgba(239, 68, 68, 0.25);
   border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* =============================================================================
+   Request Summary Patron Picker
+   ============================================================================= */
+
+.mc-summary-picker-wrapper {
+  position: relative;
+}
+
+.mc-summary-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.375rem;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 200px;
+  max-width: 280px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.mc-summary-picker-header {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mc-text-muted);
+  border-bottom: 1px solid var(--mc-border);
+}
+
+.mc-summary-picker-empty {
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--mc-text-muted);
+  text-align: center;
+}
+
+.mc-summary-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--mc-border);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.mc-summary-picker-item:last-child {
+  border-bottom: none;
+}
+
+.mc-summary-picker-item:hover {
+  background: var(--mc-surface-hover);
+}
+
+.mc-summary-picker-item:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: -2px;
+}
+
+.mc-summary-picker-item--default {
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.mc-summary-picker-item--default:hover {
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.mc-summary-picker-item-badge {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mc-accent);
+  background: rgba(96, 165, 250, 0.15);
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  margin-left: auto;
 }

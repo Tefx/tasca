@@ -11,14 +11,14 @@
  * Design source: docs/tasca-web-uiux-v0.1.md (Table View / Mission Control spec)
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getTable, pauseTable, resumeTable, type Table as TableType } from '../api/tables'
 import { listSeats, postSaying, type Seat } from '../api/sayings'
 import { useSayingsStream } from '../hooks/useLongPoll'
 import { Board } from '../components/Board'
 import { Stream } from '../components/Stream'
-import { SeatDeck, type PatronInfo } from '../components/SeatDeck'
+import { SeatDeck, type PatronInfo, getPresenceStatus } from '../components/SeatDeck'
 import { ModeIndicator } from '../components/ModeIndicator'
 import { TableControls } from '../components/TableControls'
 import { MentionInput } from '../components/MentionInput'
@@ -159,6 +159,164 @@ function canResume(status: string): boolean {
   return status === 'paused'
 }
 
+/** Default summary request template. */
+const SUMMARY_REQUEST_TEMPLATE = '@{target} Please provide a summary of the discussion so far. Key points, decisions made, and any open questions or next steps would be helpful.'
+
+// =============================================================================
+// Request Summary Button
+// =============================================================================
+
+interface RequestSummaryButtonProps {
+  seats: Seat[]
+  patrons?: Map<string, PatronInfo>
+  onInsert: (text: string) => void
+  disabled?: boolean
+  isOperating?: boolean
+}
+
+/**
+ * Request Summary button with patron picker.
+ *
+ * Per spec §E Controls:
+ * - Opens a picker to select target patron
+ * - Defaults to first agent/host
+ * - Inserts standardized summary request saying
+ */
+function RequestSummaryButton({ seats, patrons, onInsert, disabled, isOperating }: RequestSummaryButtonProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Filter to active (non-offline) agent seats, prioritized as "hosts"
+  const selectablePatrons = useMemo(() => {
+    const activeSeats = seats.filter((seat) => {
+      if (seat.state !== 'joined') return false
+      const presenceStatus = getPresenceStatus(seat.last_heartbeat)
+      return presenceStatus !== 'offline'
+    })
+
+    // Get unique patrons (one seat per patron)
+    const patronMap = new Map<string, { seat: Seat; patron?: PatronInfo }>()
+    for (const seat of activeSeats) {
+      if (!patronMap.has(seat.patron_id)) {
+        const patron = patrons?.get(seat.patron_id)
+        // Prefer agents (hosts) over humans
+        if (patron?.kind === 'agent' || !patron) {
+          patronMap.set(seat.patron_id, { seat, patron })
+        }
+      }
+    }
+
+    // If no agents, include humans
+    if (patronMap.size === 0) {
+      for (const seat of activeSeats) {
+        if (!patronMap.has(seat.patron_id)) {
+          const patron = patrons?.get(seat.patron_id)
+          patronMap.set(seat.patron_id, { seat, patron })
+        }
+      }
+    }
+
+    return Array.from(patronMap.values())
+  }, [seats, patrons])
+
+  // Get default patron (first agent/host)
+  const defaultPatron = useMemo(() => {
+    return selectablePatrons.find(({ patron }) => patron?.kind === 'agent') ?? selectablePatrons[0]
+  }, [selectablePatrons])
+
+  // Close picker on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
+  const handleSelect = (target: { patronId: string; displayName: string; isDefault: boolean }) => {
+    const text = SUMMARY_REQUEST_TEMPLATE.replace('{target}', target.displayName)
+    onInsert(text)
+    setIsOpen(false)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setIsOpen(false)
+    }
+  }
+
+  if (selectablePatrons.length === 0) {
+    return null
+  }
+
+  const isDisabled = disabled || isOperating
+
+  return (
+    <div ref={containerRef} className="mc-summary-picker-wrapper">
+      <button
+        type="button"
+        className="mc-control-btn mc-control-btn--summary"
+        onClick={() => setIsOpen(!isOpen)}
+        disabled={isDisabled}
+        title="Request a summary from a participant"
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+      >
+        {isOperating ? '...' : 'Request Summary'}
+      </button>
+
+      {isOpen && !isDisabled && (
+        <div
+          className="mc-summary-picker"
+          role="listbox"
+          aria-label="Select participant to request summary from"
+          onKeyDown={handleKeyDown}
+        >
+          <div className="mc-summary-picker-header">Select target</div>
+          {selectablePatrons.map(({ seat, patron }) => {
+            const displayName = patron?.name ?? seat.patron_id
+            const patronKind = patron?.kind ?? 'agent'
+            const isDefault = defaultPatron?.seat.patron_id === seat.patron_id
+            const presenceStatus = getPresenceStatus(seat.last_heartbeat)
+
+            return (
+              <button
+                key={seat.patron_id}
+                type="button"
+                className={`mc-summary-picker-item ${isDefault ? 'mc-summary-picker-item--default' : ''}`}
+                role="option"
+                onClick={() => handleSelect({
+                  patronId: seat.patron_id,
+                  displayName,
+                  isDefault,
+                })}
+                aria-selected={isDefault}
+              >
+                <div className={`mc-mention-avatar mc-mention-avatar--${patronKind}`}>
+                  {displayName.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="mc-mention-info">
+                  <span className="mc-mention-name">{displayName}</span>
+                  <span className="mc-mention-meta">
+                    <span className={`mc-mention-presence mc-mention-presence--${presenceStatus}`} />
+                    {patronKind}
+                  </span>
+                </div>
+                {isDefault && <span className="mc-summary-picker-item-badge">Default</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CommandConsole({ table, seats, patrons, onPosted, onStatusChange, onError }: CommandConsoleProps) {
   const { mode, hasToken } = useAuth()
   const [value, setValue] = useState('')
@@ -214,6 +372,18 @@ function CommandConsole({ table, seats, patrons, onPosted, onStatusChange, onErr
     }
   }, [table, isOperating, onStatusChange, onError])
 
+  const handleInsertSummaryRequest = useCallback((text: string) => {
+    setValue(text)
+    // Focus the input after inserting
+    // The MentionInput has the prefix label, so focus the textarea inside
+    const textarea = document.querySelector('.mc-console-input textarea') as HTMLTextAreaElement
+    if (textarea) {
+      textarea.focus()
+      // Move cursor to end
+      textarea.setSelectionRange(text.length, text.length)
+    }
+  }, [])
+
   return (
     <div className="mc-console">
       {error && (
@@ -245,9 +415,16 @@ function CommandConsole({ table, seats, patrons, onPosted, onStatusChange, onErr
         )}
       </div>
       
-      {/* Pause/Resume controls in footer — only for admin */}
+      {/* Footer controls — only for admin */}
       {isAdmin && (
         <div className="mc-console-controls">
+          <RequestSummaryButton
+            seats={seats}
+            patrons={patrons}
+            onInsert={handleInsertSummaryRequest}
+            disabled={table.status === 'closed'}
+            isOperating={isSubmitting}
+          />
           {canPause(table.status) && (
             <button
               type="button"

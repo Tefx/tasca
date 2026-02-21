@@ -39,12 +39,15 @@ def create_tables_table_ddl(table_name: str = "tables") -> str:
     True
     >>> "status TEXT NOT NULL DEFAULT" in create_tables_table_ddl()
     True
+    >>> "version INTEGER NOT NULL" in create_tables_table_ddl()
+    True
     """
     return f"""CREATE TABLE IF NOT EXISTS {table_name} (
     id TEXT PRIMARY KEY,
     question TEXT NOT NULL,
     context TEXT,
     status TEXT NOT NULL DEFAULT 'active',
+    version INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 )"""
@@ -134,13 +137,39 @@ def create_dedup_table_ddl(table_name: str = "dedup") -> str:
 )"""
 
 
-@deal.post(lambda result: len(result) == 5)
+@deal.post(lambda result: len(result) > 0)  # DDL string is non-empty
+def create_idempotency_keys_table_ddl(table_name: str = "idempotency_keys") -> str:
+    """
+    Generate DDL for the idempotency_keys table.
+
+    This table stores idempotency keys for MCP write operations.
+    Dedup scope is: {resource_key, tool_name, dedup_id}
+
+    >>> "idempotency_keys" in create_idempotency_keys_table_ddl()
+    True
+    >>> "dedup_id TEXT NOT NULL" in create_idempotency_keys_table_ddl()
+    True
+    >>> "PRIMARY KEY (resource_key, tool_name, dedup_id)" in create_idempotency_keys_table_ddl()
+    True
+    """
+    return f"""CREATE TABLE IF NOT EXISTS {table_name} (
+    resource_key TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    dedup_id TEXT NOT NULL,
+    response_data TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    PRIMARY KEY (resource_key, tool_name, dedup_id)
+)"""
+
+
+@deal.post(lambda result: len(result) == 6)
 def get_all_table_ddl() -> list[str]:
     """
     Get all table creation DDL statements in dependency order.
 
     >>> len(get_all_table_ddl())
-    5
+    6
     >>> get_all_table_ddl()[0].startswith("CREATE TABLE IF NOT EXISTS patrons")
     True
     """
@@ -150,6 +179,7 @@ def get_all_table_ddl() -> list[str]:
         create_seats_table_ddl(),
         create_sayings_table_ddl(),
         create_dedup_table_ddl(),
+        create_idempotency_keys_table_ddl(),
     ]
 
 
@@ -171,13 +201,13 @@ def create_index_ddl(index_name: str, table_name: str, columns: list[str]) -> st
     return f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name}({cols})"
 
 
-@deal.post(lambda result: len(result) == 7)
+@deal.post(lambda result: len(result) == 8)
 def get_all_index_ddl() -> list[str]:
     """
     Get all index creation DDL statements.
 
     >>> len(get_all_index_ddl())
-    7
+    8
     >>> any("idx_seats_table_id" in idx for idx in get_all_index_ddl())
     True
     >>> any("idx_sayings_table_sequence" in idx for idx in get_all_index_ddl())
@@ -195,6 +225,8 @@ def get_all_index_ddl() -> list[str]:
         create_index_ddl("idx_tables_status", "tables", ["status"]),
         # Dedup index
         create_index_ddl("idx_dedup_first_seen", "dedup", ["first_seen_at"]),
+        # Idempotency keys index for expiry cleanup
+        create_index_ddl("idx_idempotency_expires_at", "idempotency_keys", ["expires_at"]),
     ]
 
 
@@ -234,3 +266,121 @@ def is_valid_busy_timeout(value: int) -> bool:
     False
     """
     return value >= 1000
+
+
+# =============================================================================
+# FTS5 Full-Text Search Virtual Table
+# =============================================================================
+
+
+@deal.post(lambda result: len(result) > 0)
+def create_sayings_fts_ddl() -> str:
+    """
+    Generate DDL for FTS5 virtual table for sayings full-text search.
+
+    The FTS5 table uses the 'content' option to reference the external
+    'sayings' table, enabling automatic indexing of content and speaker_name.
+    The rowid maps to the sayings table's internal rowid.
+
+    >>> "sayings_fts" in create_sayings_fts_ddl()
+    True
+    >>> "USING fts5" in create_sayings_fts_ddl()
+    True
+    >>> "content" in create_sayings_fts_ddl()
+    True
+    >>> "speaker_name" in create_sayings_fts_ddl()
+    True
+    """
+    return """CREATE VIRTUAL TABLE IF NOT EXISTS sayings_fts USING fts5(
+    content,
+    speaker_name,
+    content='sayings',
+    content_rowid='rowid'
+)"""
+
+
+@deal.post(lambda result: len(result) > 0)
+def create_sayings_fts_insert_trigger_ddl() -> str:
+    """
+    Generate DDL for FTS5 insert trigger.
+
+    Automatically indexes new sayings when inserted into the sayings table.
+
+    >>> "sayings_ai" in create_sayings_fts_insert_trigger_ddl()
+    True
+    >>> "AFTER INSERT" in create_sayings_fts_insert_trigger_ddl()
+    True
+    >>> "sayings_fts" in create_sayings_fts_insert_trigger_ddl()
+    True
+    """
+    return """CREATE TRIGGER IF NOT EXISTS sayings_ai AFTER INSERT ON sayings
+BEGIN
+    INSERT INTO sayings_fts(rowid, content, speaker_name)
+    VALUES (new.rowid, new.content, new.speaker_name);
+END"""
+
+
+@deal.post(lambda result: len(result) > 0)
+def create_sayings_fts_update_trigger_ddl() -> str:
+    """
+    Generate DDL for FTS5 update trigger.
+
+    Updates the FTS index when a saying is updated (delete old + insert new).
+
+    >>> "sayings_au" in create_sayings_fts_update_trigger_ddl()
+    True
+    >>> "AFTER UPDATE" in create_sayings_fts_update_trigger_ddl()
+    True
+    >>> "sayings_fts" in create_sayings_fts_update_trigger_ddl()
+    True
+    """
+    return """CREATE TRIGGER IF NOT EXISTS sayings_au AFTER UPDATE ON sayings
+BEGIN
+    INSERT INTO sayings_fts(sayings_fts, rowid, content, speaker_name)
+    VALUES('delete', old.rowid, old.content, old.speaker_name);
+    INSERT INTO sayings_fts(rowid, content, speaker_name)
+    VALUES (new.rowid, new.content, new.speaker_name);
+END"""
+
+
+@deal.post(lambda result: len(result) > 0)
+def create_sayings_fts_delete_trigger_ddl() -> str:
+    """
+    Generate DDL for FTS5 delete trigger.
+
+    Removes entries from the FTS index when a saying is deleted.
+
+    >>> "sayings_ad" in create_sayings_fts_delete_trigger_ddl()
+    True
+    >>> "AFTER DELETE" in create_sayings_fts_delete_trigger_ddl()
+    True
+    >>> "sayings_fts" in create_sayings_fts_delete_trigger_ddl()
+    True
+    """
+    return """CREATE TRIGGER IF NOT EXISTS sayings_ad AFTER DELETE ON sayings
+BEGIN
+    INSERT INTO sayings_fts(sayings_fts, rowid, content, speaker_name)
+    VALUES('delete', old.rowid, old.content, old.speaker_name);
+END"""
+
+
+@deal.post(lambda result: len(result) == 4)
+def get_all_fts_ddl() -> list[str]:
+    """
+    Get all FTS5-related DDL statements.
+
+    Returns DDL for: FTS virtual table + insert/update/delete triggers.
+
+    >>> len(get_all_fts_ddl())
+    4
+    >>> any("sayings_fts" in ddl for ddl in get_all_fts_ddl())
+    True
+    >>> any("sayings_ai" in ddl for ddl in get_all_fts_ddl())
+    True
+    """
+    return [
+        create_sayings_fts_ddl(),
+        create_sayings_fts_insert_trigger_ddl(),
+        create_sayings_fts_update_trigger_ddl(),
+        create_sayings_fts_delete_trigger_ddl(),
+    ]

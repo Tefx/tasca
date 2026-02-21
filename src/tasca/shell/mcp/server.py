@@ -65,6 +65,11 @@ from tasca.shell.storage.table_repo import (
     create_table,
     get_table,
 )
+from tasca.shell.storage.idempotency_repo import (
+    check_idempotency_key,
+    store_idempotency_key,
+    DEFAULT_IDEMPOTENCY_TTL_SECONDS,
+)
 
 # Transport types for MCP server
 TransportType = Literal["stdio", "http", "sse", "streamable-http"]
@@ -131,15 +136,22 @@ def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
 def patron_register(
     name: str,
     kind: str = "agent",
+    dedup_id: str | None = None,
 ) -> dict[str, Any]:
     """Register a new patron (agent identity).
 
     Patrons are deduplicated by name. If a patron with the same name
     already exists, the existing patron is returned.
 
+    Alternatively, provide dedup_id for explicit idempotency. When dedup_id
+    is provided with the same name, the cached response is returned (return_existing).
+
     Args:
         name: Name or identifier for the patron (used for deduplication).
         kind: Type of patron - 'agent' or 'human' (default 'agent').
+        dedup_id: Optional explicit idempotency key for request deduplication.
+            When provided, duplicate requests with the same dedup_id return
+            the cached response (default TTL: 24 hours).
 
     Returns:
         Success envelope with patron details:
@@ -159,6 +171,21 @@ def patron_register(
     """
     conn = next(get_mcp_db())
 
+    # Resource key for idempotency scope (patron registration uses name as scope)
+    resource_key = f"patron:{name}"
+
+    # Check idempotency key if provided
+    if dedup_id is not None:
+        idempotency_result = check_idempotency_key(conn, resource_key, "patron_register", dedup_id)
+        if isinstance(idempotency_result, Failure):
+            error = idempotency_result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+
+        cached_response = idempotency_result.unwrap()
+        if cached_response is not None:
+            # Return cached response (return_existing semantics)
+            return success_response(cached_response["data"])
+
     # Check for existing patron by name (dedup)
     existing_result = find_patron_by_name(conn, name)
 
@@ -169,15 +196,19 @@ def patron_register(
     existing = existing_result.unwrap()
     if existing is not None:
         # Return existing patron (return_existing semantics)
-        return success_response(
-            {
-                "id": existing.id,
-                "name": existing.name,
-                "kind": existing.kind,
-                "created_at": existing.created_at.isoformat(),
-                "is_new": False,
-            }
-        )
+        response_data = {
+            "id": existing.id,
+            "name": existing.name,
+            "kind": existing.kind,
+            "created_at": existing.created_at.isoformat(),
+            "is_new": False,
+        }
+        # Store in idempotency cache if dedup_id provided
+        if dedup_id is not None:
+            _ = store_idempotency_key(
+                conn, resource_key, "patron_register", dedup_id, {"data": response_data}
+            )
+        return success_response(response_data)
 
     # Create new patron
     now = datetime.now(UTC)
@@ -197,15 +228,19 @@ def patron_register(
         return error_response("DATABASE_ERROR", f"Failed to create patron: {error}")
 
     created = result.unwrap()
-    return success_response(
-        {
-            "id": created.id,
-            "name": created.name,
-            "kind": created.kind,
-            "created_at": created.created_at.isoformat(),
-            "is_new": True,
-        }
-    )
+    response_data = {
+        "id": created.id,
+        "name": created.name,
+        "kind": created.kind,
+        "created_at": created.created_at.isoformat(),
+        "is_new": True,
+    }
+    # Store in idempotency cache if dedup_id provided
+    if dedup_id is not None:
+        _ = store_idempotency_key(
+            conn, resource_key, "patron_register", dedup_id, {"data": response_data}
+        )
+    return success_response(response_data)
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
@@ -262,12 +297,17 @@ def patron_get(patron_id: str) -> dict[str, Any]:
 def table_create(
     question: str,
     context: str | None = None,
+    dedup_id: str | None = None,
 ) -> dict[str, Any]:
     """Create a new discussion table.
 
     Args:
         question: The question or topic for discussion.
         context: Optional context for the discussion.
+        dedup_id: Optional explicit idempotency key for request deduplication.
+            When provided, duplicate requests with the same dedup_id return
+            the cached response (default TTL: 24 hours).
+            Dedup scope is per dedup_id globally.
 
     Returns:
         Success envelope with table details:
@@ -288,6 +328,22 @@ def table_create(
         - DATABASE_ERROR: Failed to create table
     """
     conn = next(get_mcp_db())
+
+    # Resource key for idempotency scope (table_create uses global scope via dedup_id)
+    resource_key = "table_create"
+
+    # Check idempotency key if provided
+    if dedup_id is not None:
+        idempotency_result = check_idempotency_key(conn, resource_key, "table_create", dedup_id)
+        if isinstance(idempotency_result, Failure):
+            error = idempotency_result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+
+        cached_response = idempotency_result.unwrap()
+        if cached_response is not None:
+            # Return cached response (return_existing semantics)
+            return success_response(cached_response["data"])
+
     now = datetime.now(UTC)
     table_id = TableId(str(uuid.uuid4()))
 
@@ -308,17 +364,21 @@ def table_create(
         return error_response("DATABASE_ERROR", f"Failed to create table: {error}")
 
     created = result.unwrap()
-    return success_response(
-        {
-            "id": created.id,
-            "question": created.question,
-            "context": created.context,
-            "status": created.status.value,
-            "version": created.version,
-            "created_at": created.created_at.isoformat(),
-            "updated_at": created.updated_at.isoformat(),
-        }
-    )
+    response_data = {
+        "id": created.id,
+        "question": created.question,
+        "context": created.context,
+        "status": created.status.value,
+        "version": created.version,
+        "created_at": created.created_at.isoformat(),
+        "updated_at": created.updated_at.isoformat(),
+    }
+    # Store in idempotency cache if dedup_id provided
+    if dedup_id is not None:
+        _ = store_idempotency_key(
+            conn, resource_key, "table_create", dedup_id, {"data": response_data}
+        )
+    return success_response(response_data)
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
@@ -492,6 +552,7 @@ def table_say(
     content: str,
     speaker_name: str,
     patron_id: str | None = None,
+    dedup_id: str | None = None,
 ) -> dict[str, Any]:
     """Append a saying (message) to a table.
 
@@ -500,6 +561,10 @@ def table_say(
         content: Markdown content of the saying.
         speaker_name: Name of the speaker.
         patron_id: Patron ID of the speaker (optional, recommended for agents).
+        dedup_id: Optional explicit idempotency key for request deduplication.
+            When provided, duplicate requests with the same dedup_id within
+            the same scope (table_id + speaker) return the cached response
+            (default TTL: 24 hours). Dedup scope is: {table_id, speaker_key, dedup_id}.
 
     Returns:
         Success envelope with saying details:
@@ -553,12 +618,29 @@ def table_say(
             name=speaker_name,
             patron_id=PatronId(patron_id),
         )
+        speaker_key = patron_id
     else:
         speaker = Speaker(
             kind=SpeakerKind.HUMAN,
             name=speaker_name,
             patron_id=None,
         )
+        speaker_key = "human"
+
+    # Resource key for idempotency scope: {table_id, speaker_key}
+    resource_key = f"saying:{table_id}:{speaker_key}"
+
+    # Check idempotency key if provided
+    if dedup_id is not None:
+        idempotency_result = check_idempotency_key(conn, resource_key, "table_say", dedup_id)
+        if isinstance(idempotency_result, Failure):
+            error = idempotency_result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+
+        cached_response = idempotency_result.unwrap()
+        if cached_response is not None:
+            # Return cached response (return_existing semantics)
+            return success_response(cached_response["data"])
 
     # Get limits configuration and append with limits check
     limits = _limits_config_from_settings()
@@ -572,21 +654,25 @@ def table_say(
         return error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
 
     saying = result.unwrap()
-    return success_response(
-        {
-            "id": saying.id,
-            "table_id": saying.table_id,
-            "sequence": saying.sequence,
-            "speaker": {
-                "kind": saying.speaker.kind.value,
-                "name": saying.speaker.name,
-                "patron_id": saying.speaker.patron_id,
-            },
-            "content": saying.content,
-            "pinned": saying.pinned,
-            "created_at": saying.created_at.isoformat(),
-        }
-    )
+    response_data = {
+        "id": saying.id,
+        "table_id": saying.table_id,
+        "sequence": saying.sequence,
+        "speaker": {
+            "kind": saying.speaker.kind.value,
+            "name": saying.speaker.name,
+            "patron_id": saying.speaker.patron_id,
+        },
+        "content": saying.content,
+        "pinned": saying.pinned,
+        "created_at": saying.created_at.isoformat(),
+    }
+    # Store in idempotency cache if dedup_id provided
+    if dedup_id is not None:
+        _ = store_idempotency_key(
+            conn, resource_key, "table_say", dedup_id, {"data": response_data}
+        )
+    return success_response(response_data)
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
@@ -677,12 +763,17 @@ def table_listen(
 def seat_heartbeat(
     table_id: str,
     seat_id: str,
+    dedup_id: str | None = None,
 ) -> dict[str, Any]:
     """Update a seat's heartbeat to indicate presence.
 
     Args:
         table_id: UUID of the table.
         seat_id: UUID of the seat to update.
+        dedup_id: Optional explicit idempotency key for request deduplication.
+            When provided, duplicate requests with the same dedup_id return
+            the cached response (default TTL: 24 hours).
+            Dedup scope is: {seat_id, dedup_id}.
 
     Returns:
         Success envelope with seat details and expiry:
@@ -706,6 +797,22 @@ def seat_heartbeat(
         - DATABASE_ERROR: Failed to update heartbeat
     """
     conn = next(get_mcp_db())
+
+    # Resource key for idempotency scope: {seat_id}
+    resource_key = f"seat:{seat_id}"
+
+    # Check idempotency key if provided
+    if dedup_id is not None:
+        idempotency_result = check_idempotency_key(conn, resource_key, "seat_heartbeat", dedup_id)
+        if isinstance(idempotency_result, Failure):
+            error = idempotency_result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+
+        cached_response = idempotency_result.unwrap()
+        if cached_response is not None:
+            # Return cached response (return_existing semantics)
+            return success_response(cached_response["data"])
+
     now = datetime.now(UTC)
 
     result = repo_heartbeat_seat(conn, SeatId(seat_id), now)
@@ -719,19 +826,23 @@ def seat_heartbeat(
     seat = result.unwrap()
     expires_at = calculate_expiry_time(seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
 
-    return success_response(
-        {
-            "seat": {
-                "id": seat.id,
-                "table_id": seat.table_id,
-                "patron_id": seat.patron_id,
-                "state": seat.state.value,
-                "last_heartbeat": seat.last_heartbeat.isoformat(),
-                "joined_at": seat.joined_at.isoformat(),
-            },
-            "expires_at": expires_at.isoformat(),
-        }
-    )
+    response_data = {
+        "seat": {
+            "id": seat.id,
+            "table_id": seat.table_id,
+            "patron_id": seat.patron_id,
+            "state": seat.state.value,
+            "last_heartbeat": seat.last_heartbeat.isoformat(),
+            "joined_at": seat.joined_at.isoformat(),
+        },
+        "expires_at": expires_at.isoformat(),
+    }
+    # Store in idempotency cache if dedup_id provided
+    if dedup_id is not None:
+        _ = store_idempotency_key(
+            conn, resource_key, "seat_heartbeat", dedup_id, {"data": response_data}
+        )
+    return success_response(response_data)
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result

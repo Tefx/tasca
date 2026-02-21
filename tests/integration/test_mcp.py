@@ -2,12 +2,12 @@
 Integration tests for MCP server tools.
 
 These tests verify the MCP protocol works correctly via both HTTP and STDIO transports.
-HTTP tests require the server running at TASCA_TEST_MCP_URL (default: localhost:8000/mcp).
+
+HTTP tests use Starlette TestClient for in-process testing (no external server needed).
 STDIO tests spawn the tasca-mcp process directly.
 
 Usage:
-    # HTTP tests (requires running server)
-    uv run tasca &
+    # HTTP tests (no external server needed - uses TestClient)
     pytest tests/integration/test_mcp.py -v -k "not stdio"
 
     # STDIO tests (standalone)
@@ -19,48 +19,66 @@ Usage:
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from tests.integration.conftest import API_BASE_URL, check_server_available
-from tests.integration.harness import MCPHTTPHarness, MCPSTDIOHarness
+from tests.integration.harness import MCPSTDIOHarness
 
 
-def _skip_if_http_unavailable() -> None:
-    """Skip test if HTTP server is not available."""
-    if not check_server_available(API_BASE_URL):
-        pytest.skip(
-            f"Server not available at {API_BASE_URL}. "
-            "HTTP transport tests require a running server. "
-            "Start with: uv run tasca"
-        )
+def _parse_sse_response(text: str) -> dict:
+    """Parse Server-Sent Events response from FastMCP.
+
+    FastMCP returns responses in SSE format: "event: message\\ndata: {...}\\n\\n"
+    """
+    if text.startswith("event:"):
+        for line in text.split("\n"):
+            if line.startswith("data:"):
+                return json.loads(line[5:].strip())
+    return json.loads(text)
 
 
 # =============================================================================
-# MCP Protocol Tests (HTTP Transport)
+# MCP Protocol Tests (HTTP Transport via TestClient)
 # =============================================================================
 
 
-@pytest.mark.asyncio
-async def test_mcp_initialize() -> None:
+def test_mcp_initialize(mcp_test_client) -> None:
     """Test MCP initialize request.
 
     Scenario: MCP Protocol Initialization
     Verifies that the MCP server responds to initialize request
     with server capabilities and protocol version.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        response = await harness.initialize()
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "tasca-test-client",
+                    "version": "0.1.0",
+                },
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
 
-        assert "result" in response or "error" in response
-        if "result" in response:
-            result = response["result"]
-            assert "protocolVersion" in result
-            assert "serverInfo" in result
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+
+    assert "result" in data or "error" in data
+    if "result" in data:
+        result = data["result"]
+        assert "protocolVersion" in result
+        assert "serverInfo" in result
 
 
-@pytest.mark.asyncio
-async def test_mcp_list_tools() -> None:
+def test_mcp_list_tools(mcp_test_client) -> None:
     """Test MCP tools/list request.
 
     Scenario: MCP Tool Discovery
@@ -68,226 +86,510 @@ async def test_mcp_list_tools() -> None:
     Expected tools: patron_register, patron_get, table_create, table_join,
     table_get, table_say, table_listen, seat_heartbeat, seat_list.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        # Initialize first
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "tasca-test-client",
+                    "version": "0.1.0",
+                },
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
 
-        # List tools
-        response = await harness.list_tools()
+    # Get session ID from response headers
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        assert "result" in response or "error" in response
-        if "result" in response:
-            tools = response["result"].get("tools", [])
-            tool_names = {t["name"] for t in tools}
+    # List tools
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list",
+            "params": {},
+        },
+        headers=headers,
+    )
 
-            # Expected tools
-            expected_tools = {
-                "patron_register",
-                "patron_get",
-                "table_create",
-                "table_join",
-                "table_get",
-                "table_say",
-                "table_listen",
-                "seat_heartbeat",
-                "seat_list",
-            }
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
 
-            assert expected_tools <= tool_names, f"Missing tools: {expected_tools - tool_names}"
+    assert "result" in data or "error" in data
+    if "result" in data:
+        tools = data["result"].get("tools", [])
+        tool_names = {t["name"] for t in tools}
+
+        # Expected tools
+        expected_tools = {
+            "patron_register",
+            "patron_get",
+            "table_create",
+            "table_join",
+            "table_get",
+            "table_say",
+            "table_listen",
+            "seat_heartbeat",
+            "seat_list",
+        }
+
+        assert expected_tools <= tool_names, f"Missing tools: {expected_tools - tool_names}"
 
 
 # =============================================================================
-# Patron Tool Tests (HTTP Transport)
+# Patron Tool Tests (HTTP Transport via TestClient)
 # =============================================================================
 
 
-@pytest.mark.asyncio
-async def test_mcp_patron_register() -> None:
+def test_mcp_patron_register(mcp_test_client) -> None:
     """Test patron_register tool.
 
     Scenario: MCP Patron Registration
     Verifies that patron registration can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.patron_register(
-            display_name="Test Agent",
-            alias="testagent",
-        )
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "patron_register",
+                "arguments": {
+                    "name": "Test Agent",
+                    "kind": "agent",
+                },
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
-@pytest.mark.asyncio
-async def test_mcp_patron_get() -> None:
+def test_mcp_patron_get(mcp_test_client) -> None:
     """Test patron_get tool.
 
     Scenario: MCP Patron Retrieval
     Verifies that patron retrieval can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.patron_get("test-patron-001")
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "patron_get",
+                "arguments": {"patron_id": "test-patron-001"},
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
 # =============================================================================
-# Table Tool Tests (HTTP Transport)
+# Table Tool Tests (HTTP Transport via TestClient)
 # =============================================================================
 
 
-@pytest.mark.asyncio
-async def test_mcp_table_create() -> None:
+def test_mcp_table_create(mcp_test_client) -> None:
     """Test table_create tool.
 
     Scenario: MCP Table Creation
     Verifies that table creation can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.table_create(
-            created_by="test-patron-001",
-            title="Test Discussion",
-        )
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "table_create",
+                "arguments": {
+                    "question": "Test Discussion",
+                },
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
-@pytest.mark.asyncio
-async def test_mcp_table_join() -> None:
+def test_mcp_table_join(mcp_test_client) -> None:
     """Test table_join tool.
 
     Scenario: MCP Table Join
     Verifies that table join can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.table_join(
-            invite_code="test-invite-code",
-        )
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "table_join",
+                "arguments": {
+                    "table_id": "test-table-001",
+                    "patron_id": "test-patron-001",
+                },
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
-@pytest.mark.asyncio
-async def test_mcp_table_get() -> None:
+def test_mcp_table_get(mcp_test_client) -> None:
     """Test table_get tool.
 
     Scenario: MCP Table Retrieval
     Verifies that table retrieval can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.table_get("test-table-001")
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "table_get",
+                "arguments": {"table_id": "test-table-001"},
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
-@pytest.mark.asyncio
-async def test_mcp_table_say() -> None:
+def test_mcp_table_say(mcp_test_client) -> None:
     """Test table_say tool.
 
     Scenario: MCP Table Saying
     Verifies that adding a saying can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.table_say(
-            table_id="test-table-001",
-            content="Hello from integration test!",
-        )
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "table_say",
+                "arguments": {
+                    "table_id": "test-table-001",
+                    "content": "Hello from integration test!",
+                    "speaker_name": "Test Speaker",
+                },
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
-@pytest.mark.asyncio
-async def test_mcp_table_listen() -> None:
+def test_mcp_table_listen(mcp_test_client) -> None:
     """Test table_listen tool.
 
     Scenario: MCP Table Listening
     Verifies that listening for sayings can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.table_listen(
-            table_id="test-table-001",
-        )
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "table_listen",
+                "arguments": {"table_id": "test-table-001"},
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
 # =============================================================================
-# Seat Tool Tests (HTTP Transport)
+# Seat Tool Tests (HTTP Transport via TestClient)
 # =============================================================================
 
 
-@pytest.mark.asyncio
-async def test_mcp_seat_heartbeat() -> None:
+def test_mcp_seat_heartbeat(mcp_test_client) -> None:
     """Test seat_heartbeat tool.
 
     Scenario: MCP Seat Presence Update
     Verifies that seat heartbeat can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.seat_heartbeat(
-            table_id="test-table-001",
-            patron_id="test-patron-001",
-        )
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "seat_heartbeat",
+                "arguments": {
+                    "table_id": "test-table-001",
+                    "seat_id": "test-seat-001",
+                },
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
-@pytest.mark.asyncio
-async def test_mcp_seat_list() -> None:
+def test_mcp_seat_list(mcp_test_client) -> None:
     """Test seat_list tool.
 
     Scenario: MCP Seat Listing
     Verifies that listing seats can be invoked.
-    Note: Currently raises NotImplementedError as feature is not implemented.
     """
-    _skip_if_http_unavailable()
-    async with MCPHTTPHarness() as harness:
-        await harness.initialize()
+    # Initialize first and get session ID
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-        response = await harness.seat_list(table_id="test-table-001")
+    response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "seat_list",
+                "arguments": {"table_id": "test-table-001"},
+            },
+        },
+        headers=headers,
+    )
 
-        # Tool exists and responds (may be NotImplementedError)
-        assert "result" in response or "error" in response
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data or "error" in data
 
 
 # =============================================================================
@@ -357,26 +659,6 @@ async def test_mcp_stdio_tool_call() -> None:
 
         # Either result or error is acceptable
         assert "result" in response or "error" in response
-
-
-# =============================================================================
-# Integration Check
-# =============================================================================
-
-
-def test_server_available_for_http_tests() -> None:
-    """Test that server is available for HTTP transport tests.
-
-    This test documents the requirement for a running server
-    for HTTP transport tests. It will be skipped if the server
-    is not available.
-    """
-    if not check_server_available(API_BASE_URL):
-        pytest.skip(
-            f"Server not available at {API_BASE_URL}. "
-            "HTTP transport tests require a running server. "
-            "Start with: uv run tasca"
-        )
 
 
 # =============================================================================

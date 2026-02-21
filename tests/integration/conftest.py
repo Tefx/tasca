@@ -10,14 +10,14 @@ Environment Variables:
     TASCA_TEST_TIMEOUT: Request timeout in seconds (default: 30)
 
 Usage:
-    # Run with defaults (assumes server running on localhost:8000)
-    pytest tests/integration/
-
-    # Run with custom base URL
-    TASCA_TEST_API_URL=http://api.example.com pytest tests/integration/
+    # Run HTTP integration tests with in-process ASGI (no external server needed)
+    pytest tests/integration/test_mcp.py -v -k "not stdio"
 
     # Run MCP STDIO tests (uses tasca-mcp command directly)
-    pytest tests/integration/test_mcp.py -k stdio
+    pytest tests/integration/test_mcp.py -v -k stdio
+
+    # Run with custom external URL (requires running server)
+    TASCA_TEST_API_URL=http://api.example.com pytest tests/integration/
 """
 
 from __future__ import annotations
@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     import httpx
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
 
 # =============================================================================
 # Configuration
@@ -43,6 +45,13 @@ API_BASE_URL = os.environ.get("TASCA_TEST_API_URL", "http://localhost:8000")
 # MCP endpoint is at /mcp/mcp (FastMCP mounts at /mcp with internal route /mcp)
 MCP_BASE_URL = os.environ.get("TASCA_TEST_MCP_URL", f"{API_BASE_URL}/mcp/mcp")
 REQUEST_TIMEOUT = int(os.environ.get("TASCA_TEST_TIMEOUT", "30"))
+
+# Environment variable to force external server (skip ASGI fixture)
+USE_EXTERNAL_SERVER = os.environ.get("TASCA_USE_EXTERNAL_SERVER", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 
 # =============================================================================
@@ -88,17 +97,71 @@ def request_timeout() -> int:
 
 
 # =============================================================================
+# ASGI Application Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def asgi_app() -> "FastAPI":
+    """Create a FastAPI app instance for ASGI testing.
+
+    This fixture creates the application without starting a server,
+    allowing httpx to test it directly via ASGI transport.
+
+    Note: For MCP tests that require lifespan (Streamable HTTP transport),
+    use the mcp_test_client fixture instead, which uses Starlette TestClient
+    to properly handle FastMCP's task group initialization.
+
+    Returns:
+        FastAPI app instance
+    """
+    from tasca.shell.api.app import create_app
+
+    return create_app()
+
+
+@pytest.fixture
+def mcp_test_client() -> Generator["TestClient", None, None]:
+    """Create a test client for MCP HTTP testing with proper lifespan handling.
+
+    Uses Starlette TestClient which properly handles FastMCP's Streamable HTTP
+    transport requirements (task group initialization via lifespan events).
+
+    This fixture MUST be used instead of httpx AsyncClient for MCP HTTP tests,
+    as httpx ASGI transport does not trigger ASGI lifespan events.
+
+    Yields:
+        TestClient configured for MCP endpoint testing
+    """
+    from starlette.testclient import TestClient
+
+    from tasca.shell.api.app import create_app
+
+    app = create_app()
+
+    with TestClient(
+        app,
+        base_url="http://test",
+        raise_server_exceptions=True,
+    ) as client:
+        yield client
+
+
+# =============================================================================
 # HTTP Client Fixtures (REST API)
 # =============================================================================
 
 
 @pytest_asyncio.fixture
-async def http_client() -> AsyncGenerator:
+async def http_client(asgi_app: "FastAPI") -> AsyncGenerator:
     """Async HTTP client for REST API testing.
 
-    Provides an httpx AsyncClient configured with:
-    - Base URL from api_base_url fixture
-    - Timeout from request_timeout fixture
+    Uses httpx ASGI transport for in-process testing without requiring
+    an external server. Set TASCA_USE_EXTERNAL_SERVER=1 to use external URL.
+
+    Provides an httpx.AsyncClient configured with:
+    - ASGI transport for in-process testing (default)
+    - OR external URL if TASCA_USE_EXTERNAL_SERVER is set
     - Automatic resource cleanup
 
     Yields:
@@ -106,11 +169,22 @@ async def http_client() -> AsyncGenerator:
     """
     import httpx
 
-    async with httpx.AsyncClient(
-        base_url=API_BASE_URL,
-        timeout=httpx.Timeout(REQUEST_TIMEOUT),
-    ) as client:
-        yield client
+    if USE_EXTERNAL_SERVER:
+        # Use external server (requires running server)
+        async with httpx.AsyncClient(
+            base_url=API_BASE_URL,
+            timeout=httpx.Timeout(REQUEST_TIMEOUT),
+        ) as client:
+            yield client
+    else:
+        # Use ASGI transport for in-process testing
+        transport = httpx.ASGITransport(app=asgi_app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            timeout=httpx.Timeout(REQUEST_TIMEOUT),
+        ) as client:
+            yield client
 
 
 # =============================================================================
@@ -119,22 +193,33 @@ async def http_client() -> AsyncGenerator:
 
 
 @pytest_asyncio.fixture
-async def mcp_http_client() -> AsyncGenerator:
-    """MCP client using HTTP transport.
+async def mcp_http_client(asgi_app: "FastAPI") -> AsyncGenerator:
+    """MCP client fixture - DEPRECATED: Use mcp_test_client instead.
 
-    Provides an httpx AsyncClient configured for MCP JSON-RPC calls.
-    The client targets the MCP endpoint at MCP_BASE_URL.
+    This fixture is kept for backward compatibility but does not work
+    for FastMCP's Streamable HTTP transport. Use mcp_test_client instead.
 
     Yields:
-        httpx.AsyncClient configured for MCP HTTP requests
+        httpx.AsyncClient (note: will not work for MCP tests)
     """
     import httpx
 
-    async with httpx.AsyncClient(
-        base_url=MCP_BASE_URL,
-        timeout=httpx.Timeout(REQUEST_TIMEOUT),
-    ) as client:
-        yield client
+    if USE_EXTERNAL_SERVER:
+        # Use external server (requires running server)
+        async with httpx.AsyncClient(
+            base_url=MCP_BASE_URL,
+            timeout=httpx.Timeout(REQUEST_TIMEOUT),
+        ) as client:
+            yield client
+    else:
+        # Use ASGI transport for in-process testing
+        transport = httpx.ASGITransport(app=asgi_app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test/mcp/mcp",
+            timeout=httpx.Timeout(REQUEST_TIMEOUT),
+        ) as client:
+            yield client
 
 
 # =============================================================================

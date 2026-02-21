@@ -12,6 +12,21 @@ The harness supports two transport modes:
 2. **MCP HTTP**: MCP protocol over HTTP at `/mcp` endpoint
 3. **MCP STDIO**: MCP protocol over stdin/stdout via `tasca-mcp` command
 
+## ASGI Testing (In-Process)
+
+For HTTP transport tests, the harness supports in-process ASGI testing
+without requiring an external server:
+
+```python
+from tasca.shell.api.app import create_app
+from tests.integration.harness import MCPASGIHarness
+
+app = create_app()
+async with MCPASGIHarness(app) as harness:
+    response = await harness.initialize()
+    assert "result" in response
+```
+
 ## Base URL Configuration
 
 All base URLs are configurable via environment variables:
@@ -80,10 +95,14 @@ The harness covers the following scenarios:
 ### Running Tests
 
 ```bash
-# Start the server (in one terminal)
-uv run tasca
+# Run HTTP integration tests with in-process ASGI (no external server needed)
+pytest tests/integration/test_mcp.py -v -k "not stdio"
 
-# Run integration tests (in another terminal)
+# Run STDIO tests (standalone, uses tasca-mcp command)
+pytest tests/integration/test_mcp.py -v -k stdio
+
+# Run with external server (for debugging or CI)
+TASCA_USE_EXTERNAL_SERVER=1 uv run tasca &
 pytest tests/integration/
 
 # Run with custom base URL
@@ -94,9 +113,6 @@ pytest tests/integration/test_api.py
 
 # Run only MCP tests
 pytest tests/integration/test_mcp.py
-
-# Run STDIO tests (doesn't require server)
-pytest tests/integration/test_mcp.py -k stdio
 ```
 
 ### Using the Harness Programmatically
@@ -127,6 +143,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     import httpx
+    from fastapi import FastAPI
 
 # =============================================================================
 # Base URL Configuration
@@ -140,6 +157,13 @@ import os
 API_BASE_URL = os.environ.get("TASCA_TEST_API_URL", "http://localhost:8000")
 MCP_BASE_URL = os.environ.get("TASCA_TEST_MCP_URL", f"{API_BASE_URL}/mcp/mcp")
 REQUEST_TIMEOUT = int(os.environ.get("TASCA_TEST_TIMEOUT", "30"))
+
+# Environment variable to force external server (skip ASGI fixture)
+USE_EXTERNAL_SERVER = os.environ.get("TASCA_USE_EXTERNAL_SERVER", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 
 # =============================================================================
@@ -380,6 +404,397 @@ class MCPHTTPHarness:
 
     # =========================================================================
     # MCP Protocol Operations
+    # =========================================================================
+
+    async def initialize(
+        self,
+        client_name: str = "tasca-test-client",
+        client_version: str = "0.1.0",
+        protocol_version: str = "2024-11-05",
+    ) -> dict:
+        """Initialize MCP session.
+
+        Args:
+            client_name: Client name to send
+            client_version: Client version to send
+            protocol_version: MCP protocol version
+
+        Returns:
+            Server capabilities and info
+        """
+        return await self._send_request(
+            "initialize",
+            {
+                "protocolVersion": protocol_version,
+                "capabilities": {},
+                "clientInfo": {
+                    "name": client_name,
+                    "version": client_version,
+                },
+            },
+        )
+
+    async def list_tools(self) -> dict:
+        """List available MCP tools.
+
+        Returns:
+            List of available tools
+        """
+        return await self._send_request("tools/list")
+
+    async def call_tool(self, name: str, arguments: dict | None = None) -> dict:
+        """Call an MCP tool.
+
+        Args:
+            name: Tool name (e.g., "patron_register")
+            arguments: Tool arguments
+
+        Returns:
+            Tool execution result
+        """
+        return await self._send_request(
+            "tools/call",
+            {"name": name, "arguments": arguments or {}},
+        )
+
+    # =========================================================================
+    # Patron Tools
+    # =========================================================================
+
+    async def patron_register(
+        self,
+        patron_id: str | None = None,
+        display_name: str | None = None,
+        alias: str | None = None,
+        meta: dict | None = None,
+    ) -> dict:
+        """Register a new patron.
+
+        Args:
+            patron_id: Optional patron ID (auto-generated if omitted)
+            display_name: Human-readable name
+            alias: Short alias for mentions
+            meta: Optional metadata
+
+        Returns:
+            Registered patron details
+        """
+        args: dict = {}
+        if patron_id is not None:
+            args["patron_id"] = patron_id
+        if display_name is not None:
+            args["display_name"] = display_name
+        if alias is not None:
+            args["alias"] = alias
+        if meta is not None:
+            args["meta"] = meta
+        return await self.call_tool("patron_register", args)
+
+    async def patron_get(self, patron_id: str) -> dict:
+        """Get patron details.
+
+        Args:
+            patron_id: Patron UUID
+
+        Returns:
+            Patron details
+        """
+        return await self.call_tool("patron_get", {"patron_id": patron_id})
+
+    # =========================================================================
+    # Table Tools
+    # =========================================================================
+
+    async def table_create(
+        self,
+        created_by: str,
+        title: str,
+        host_ids: list[str] | None = None,
+        metadata: dict | None = None,
+        policy: dict | None = None,
+        board: dict | None = None,
+        dedup_id: str | None = None,
+    ) -> dict:
+        """Create a new discussion table.
+
+        Args:
+            created_by: Patron ID of creator
+            title: Table title
+            host_ids: Optional list of host patron IDs
+            metadata: Optional metadata
+            policy: Optional policy config
+            board: Optional board data
+            dedup_id: Optional deduplication ID
+
+        Returns:
+            Created table details
+        """
+        args: dict = {"created_by": created_by, "title": title}
+        if host_ids is not None:
+            args["host_ids"] = host_ids
+        if metadata is not None:
+            args["metadata"] = metadata
+        if policy is not None:
+            args["policy"] = policy
+        if board is not None:
+            args["board"] = board
+        if dedup_id is not None:
+            args["dedup_id"] = dedup_id
+        return await self.call_tool("table_create", args)
+
+    async def table_join(
+        self,
+        invite_code: str,
+        patron_id: str | None = None,
+        history_limit: int = 10,
+        history_max_bytes: int = 65536,
+    ) -> dict:
+        """Join a table by invite code.
+
+        Args:
+            invite_code: Invite code or tasca:// URL
+            patron_id: Optional patron ID joining
+            history_limit: Max sayings to fetch
+            history_max_bytes: Max bytes of history
+
+        Returns:
+            Table details and initial sayings
+        """
+        args: dict = {
+            "invite_code": invite_code,
+            "history_limit": history_limit,
+            "history_max_bytes": history_max_bytes,
+        }
+        if patron_id is not None:
+            args["patron_id"] = patron_id
+        return await self.call_tool("table_join", args)
+
+    async def table_get(self, table_id: str) -> dict:
+        """Get table details.
+
+        Args:
+            table_id: Table UUID
+
+        Returns:
+            Table details
+        """
+        return await self.call_tool("table_get", {"table_id": table_id})
+
+    async def table_say(
+        self,
+        table_id: str,
+        content: str,
+        patron_id: str | None = None,
+        speaker_kind: str = "agent",
+        saying_type: str = "text",
+        mentions: list[str] | None = None,
+        reply_to_sequence: int | None = None,
+        dedup_id: str | None = None,
+    ) -> dict:
+        """Add a saying to a table.
+
+        Args:
+            table_id: Table UUID
+            content: Saying content
+            patron_id: Speaker patron ID
+            speaker_kind: "agent" or "human"
+            saying_type: Type of saying
+            mentions: List of patron IDs to mention
+            reply_to_sequence: Sequence number being replied to
+            dedup_id: Deduplication ID
+
+        Returns:
+            Created saying details
+        """
+        args: dict = {
+            "table_id": table_id,
+            "content": content,
+            "speaker_kind": speaker_kind,
+            "saying_type": saying_type,
+        }
+        if patron_id is not None:
+            args["patron_id"] = patron_id
+        if mentions is not None:
+            args["mentions"] = mentions
+        if reply_to_sequence is not None:
+            args["reply_to_sequence"] = reply_to_sequence
+        if dedup_id is not None:
+            args["dedup_id"] = dedup_id
+        return await self.call_tool("table_say", args)
+
+    async def table_listen(
+        self,
+        table_id: str,
+        since_sequence: int = 0,
+        limit: int = 50,
+        include_table: bool = True,
+    ) -> dict:
+        """Listen for new sayings.
+
+        Args:
+            table_id: Table UUID
+            since_sequence: Get sayings after this sequence
+            limit: Max sayings to return
+            include_table: Include table snapshot
+
+        Returns:
+            List of sayings and next_sequence
+        """
+        return await self.call_tool(
+            "table_listen",
+            {
+                "table_id": table_id,
+                "since_sequence": since_sequence,
+                "limit": limit,
+                "include_table": include_table,
+            },
+        )
+
+    # =========================================================================
+    # Seat Tools
+    # =========================================================================
+
+    async def seat_heartbeat(
+        self,
+        table_id: str,
+        patron_id: str,
+        state: str = "running",
+        ttl_ms: int = 60000,
+    ) -> dict:
+        """Update seat presence.
+
+        Args:
+            table_id: Table UUID
+            patron_id: Patron ID
+            state: "running", "idle", or "done"
+            ttl_ms: Time-to-live in milliseconds
+
+        Returns:
+            Seat details with expires_at
+        """
+        return await self.call_tool(
+            "seat_heartbeat",
+            {"table_id": table_id, "patron_id": patron_id, "state": state, "ttl_ms": ttl_ms},
+        )
+
+    async def seat_list(self, table_id: str) -> dict:
+        """List seats on a table.
+
+        Args:
+            table_id: Table UUID
+
+        Returns:
+            List of active seats
+        """
+        return await self.call_tool("seat_list", {"table_id": table_id})
+
+
+class MCPASGIHarness:
+    """Test harness for MCP using ASGI transport (in-process testing).
+
+    This harness tests MCP endpoints without requiring an external server
+    by using httpx ASGI transport. Perfect for unit/integration tests.
+
+    Example:
+        from tasca.shell.api.app import create_app
+
+        app = create_app()
+        async with MCPASGIHarness(app) as harness:
+            result = await harness.initialize()
+            assert "result" in result
+    """
+
+    def __init__(
+        self,
+        app: "FastAPI",
+        timeout: float = REQUEST_TIMEOUT,
+    ) -> None:
+        """Initialize MCP ASGI harness.
+
+        Args:
+            app: FastAPI application instance (from create_app())
+            timeout: Request timeout in seconds
+        """
+        self.app = app
+        self.timeout = timeout
+        self._client: "httpx.AsyncClient | None" = None
+        self._request_id = 0
+
+    async def __aenter__(self) -> "MCPASGIHarness":
+        """Enter async context and create HTTP client with ASGI transport."""
+        import httpx
+
+        # ASGI transport for in-process testing
+        # MCP endpoint is at /mcp/mcp
+        transport = httpx.ASGITransport(app=self.app)
+        self._client = httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test/mcp/mcp",
+            timeout=httpx.Timeout(self.timeout),
+            headers={
+                "Accept": "application/json, text/event-stream",
+            },
+            follow_redirects=True,
+        )
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        """Exit async context and close HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    @property
+    def client(self) -> "httpx.AsyncClient":
+        """Get the HTTP client.
+
+        Raises:
+            RuntimeError: If harness is not used as async context manager
+
+        Returns:
+            Configured httpx AsyncClient
+        """
+        if self._client is None:
+            raise RuntimeError("MCPASGIHarness must be used as async context manager")
+        return self._client
+
+    def _next_id(self) -> int:
+        """Get next JSON-RPC request ID."""
+        self._request_id += 1
+        return self._request_id
+
+    async def _send_request(self, method: str, params: dict | None = None) -> dict:
+        """Send a JSON-RPC request.
+
+        Args:
+            method: JSON-RPC method name
+            params: Optional method parameters
+
+        Returns:
+            JSON response as dictionary
+        """
+        payload = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": method,
+            "params": params or {},
+        }
+        response = await self.client.post("/", json=payload)
+        response.raise_for_status()
+
+        # FastMCP returns SSE format: "event: message\ndata: {...}\n\n"
+        text = response.text
+        if text.startswith("event:"):
+            # Parse SSE format
+            for line in text.split("\n"):
+                if line.startswith("data:"):
+                    return json.loads(line[5:].strip())
+
+        # Fallback to regular JSON
+        return response.json()
+
+    # =========================================================================
+    # MCP Protocol Operations (delegated to same implementation)
     # =========================================================================
 
     async def initialize(

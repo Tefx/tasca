@@ -759,21 +759,21 @@ class TestEdgeInputs:
         result = sanitize_svg("")
 
         assert result.sanitized_svg == ""
-        assert result.is_clean is True
+        assert result.is_clean() is True
 
     def test_whitespace_only(self) -> None:
         """Whitespace-only input should return whitespace."""
         result = sanitize_svg("   \n\t  ")
 
         assert result.sanitized_svg == "   \n\t  "
-        assert result.is_clean is True
+        assert result.is_clean() is True
 
     def test_no_svg_element(self) -> None:
         """Input without SVG element should pass through."""
         result = sanitize_svg("Hello, world!")
 
         assert result.sanitized_svg == "Hello, world!"
-        assert result.is_clean is True
+        assert result.is_clean() is True
 
     def test_malformed_tags(self) -> None:
         """Malformed tags should be handled gracefully."""

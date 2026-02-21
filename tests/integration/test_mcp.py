@@ -964,6 +964,602 @@ def test_mcp_full_cycle_multiple_patrons(mcp_test_client) -> None:
 
 
 # =============================================================================
+# Error Path Tests (Per MCP Spec v0.1 Section 1.3)
+# =============================================================================
+
+
+def test_mcp_error_table_closed(mcp_test_client) -> None:
+    """Test TableClosed error - post to closed table is rejected.
+
+    Per spec v0.1 Section 1.1:
+    - closed is terminal state
+    - Server MUST reject: table.say, table.update, table.control
+    - Read operations MUST remain allowed: table.get, table.listen, table.wait
+
+    Scenario: TableClosed Error Path
+    Verify that posting to a closed table returns OPERATION_NOT_ALLOWED.
+    """
+
+    def _parse_mcp_response(response_text: str) -> dict:
+        if response_text.startswith("event:"):
+            for line in response_text.split("\n"):
+                if line.startswith("data:"):
+                    return json.loads(line[5:].strip())
+        return json.loads(response_text)
+
+    def _extract_tool_result(response: dict) -> dict:
+        if "error" in response:
+            return {"ok": False, "error": response["error"]}
+        content = response.get("result", {}).get("content", [])
+        if not content:
+            return {"ok": False, "error": "Empty content"}
+        return json.loads(content[0].get("text", "{}"))
+
+    # Initialize session
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "error-path-test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
+
+    request_id = 1
+
+    def call_tool(name: str, arguments: dict) -> dict:
+        nonlocal request_id
+        request_id += 1
+        response = mcp_test_client.post(
+            "/mcp/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        return _extract_tool_result(_parse_mcp_response(response.text))
+
+    # Setup: register patron and create table
+    patron_result = call_tool("patron_register", {"name": "TableClosedTestAgent", "kind": "agent"})
+    assert patron_result.get("ok"), f"patron_register failed: {patron_result}"
+    patron_id = patron_result["data"]["id"]
+
+    table_result = call_tool(
+        "table_create",
+        {"question": "Table closed test", "context": "Testing table_control close"},
+    )
+    assert table_result.get("ok"), f"table_create failed: {table_result}"
+    table_id = table_result["data"]["id"]
+
+    # Step 1: Close the table
+    close_result = call_tool(
+        "table_control",
+        {
+            "table_id": table_id,
+            "action": "close",
+            "speaker_name": "TableClosedTestAgent",
+            "patron_id": patron_id,
+        },
+    )
+    assert close_result.get("ok"), f"table_control close failed: {close_result}"
+    assert close_result["data"]["table_status"] == "closed"
+
+    # Step 2: Attempt to post - MUST be rejected
+    say_result = call_tool(
+        "table_say",
+        {
+            "table_id": table_id,
+            "content": "This should fail",
+            "speaker_kind": "agent",
+            "patron_id": patron_id,
+        },
+    )
+    assert not say_result.get("ok"), "table_say should fail on closed table"
+
+    error = say_result.get("error", {})
+    error_code = error.get("code") if isinstance(error, dict) else str(error)
+    assert error_code in ("OPERATION_NOT_ALLOWED", "TableClosed", "INVALID_STATE"), (
+        f"Expected OPERATION_NOT_ALLOWED/TableClosed, got {error_code}"
+    )
+
+    # Step 3: Read operations MUST work
+    get_result = call_tool("table_get", {"table_id": table_id})
+    assert get_result.get("ok"), f"table_get should work on closed table: {get_result}"
+
+    listen_result = call_tool(
+        "table_listen",
+        {"table_id": table_id, "since_sequence": -1, "limit": 10},
+    )
+    assert listen_result.get("ok"), f"table_listen should work on closed table: {listen_result}"
+
+
+def test_mcp_error_dedup_collision(mcp_test_client) -> None:
+    """Test dedup_id collision returns same response (idempotency).
+
+    Per spec v0.1 Section 3:
+    - Dedup scope: per {table_id, speaker_key, tool_name, dedup_id}
+    - Behavior: return_existing - return original successful response
+
+    Scenario: dedup_id Idempotency
+    Verify that duplicate dedup_id returns same saying_id and sequence.
+    """
+    import uuid
+
+    def _parse_mcp_response(response_text: str) -> dict:
+        if response_text.startswith("event:"):
+            for line in response_text.split("\n"):
+                if line.startswith("data:"):
+                    return json.loads(line[5:].strip())
+        return json.loads(response_text)
+
+    def _extract_tool_result(response: dict) -> dict:
+        if "error" in response:
+            return {"ok": False, "error": response["error"]}
+        content = response.get("result", {}).get("content", [])
+        if not content:
+            return {"ok": False, "error": "Empty content"}
+        return json.loads(content[0].get("text", "{}"))
+
+    # Initialize session
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "dedup-test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
+
+    request_id = 1
+
+    def call_tool(name: str, arguments: dict) -> dict:
+        nonlocal request_id
+        request_id += 1
+        response = mcp_test_client.post(
+            "/mcp/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        return _extract_tool_result(_parse_mcp_response(response.text))
+
+    # Setup
+    patron_result = call_tool("patron_register", {"name": "DedupTestAgent", "kind": "agent"})
+    assert patron_result.get("ok")
+    patron_id = patron_result["data"]["id"]
+
+    table_result = call_tool(
+        "table_create",
+        {"question": "Dedup test table", "context": "Testing idempotency"},
+    )
+    assert table_result.get("ok")
+    table_id = table_result["data"]["id"]
+
+    dedup_id = f"test-dedup-{uuid.uuid4()}"
+
+    # First write with dedup_id
+    first_result = call_tool(
+        "table_say",
+        {
+            "table_id": table_id,
+            "content": "First message",
+            "speaker_kind": "agent",
+            "patron_id": patron_id,
+            "dedup_id": dedup_id,
+        },
+    )
+    assert first_result.get("ok"), f"First write failed: {first_result}"
+    first_saying_id = first_result["data"]["saying_id"]
+    first_sequence = first_result["data"]["sequence"]
+
+    # Second write with SAME dedup_id - should be idempotent
+    second_result = call_tool(
+        "table_say",
+        {
+            "table_id": table_id,
+            "content": "Different content - should be ignored",
+            "speaker_kind": "agent",
+            "patron_id": patron_id,
+            "dedup_id": dedup_id,  # Same dedup_id
+        },
+    )
+    assert second_result.get("ok"), f"Second write failed: {second_result}"
+    second_saying_id = second_result["data"]["saying_id"]
+    second_sequence = second_result["data"]["sequence"]
+
+    # Verify idempotency
+    assert first_saying_id == second_saying_id, (
+        f"Dedup should return same saying_id: {first_saying_id} != {second_saying_id}"
+    )
+    assert first_sequence == second_sequence, (
+        f"Dedup should return same sequence: {first_sequence} != {second_sequence}"
+    )
+
+
+def test_mcp_error_paused_table(mcp_test_client) -> None:
+    """Test PAUSED table behavior per spec v0.1 Section 1.1.
+
+    Per spec:
+    - paused -> open via table.control(action="resume")
+    - For paused state: Server MAY accept table.say (soft enforcement in v0.1)
+    - Read operations MUST work
+
+    Scenario: PAUSED Table Behavior
+    Verify that read operations work while paused, and resume restores open state.
+    """
+
+    def _parse_mcp_response(response_text: str) -> dict:
+        if response_text.startswith("event:"):
+            for line in response_text.split("\n"):
+                if line.startswith("data:"):
+                    return json.loads(line[5:].strip())
+        return json.loads(response_text)
+
+    def _extract_tool_result(response: dict) -> dict:
+        if "error" in response:
+            return {"ok": False, "error": response["error"]}
+        content = response.get("result", {}).get("content", [])
+        if not content:
+            return {"ok": False, "error": "Empty content"}
+        return json.loads(content[0].get("text", "{}"))
+
+    # Initialize session
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "paused-test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
+
+    request_id = 1
+
+    def call_tool(name: str, arguments: dict) -> dict:
+        nonlocal request_id
+        request_id += 1
+        response = mcp_test_client.post(
+            "/mcp/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        return _extract_tool_result(_parse_mcp_response(response.text))
+
+    # Setup
+    patron_result = call_tool("patron_register", {"name": "PausedTestAgent", "kind": "agent"})
+    assert patron_result.get("ok")
+    patron_id = patron_result["data"]["id"]
+
+    table_result = call_tool(
+        "table_create",
+        {"question": "Paused test table", "context": "Testing pause/resume"},
+    )
+    assert table_result.get("ok")
+    table_id = table_result["data"]["id"]
+
+    # Step 1: Pause the table
+    pause_result = call_tool(
+        "table_control",
+        {
+            "table_id": table_id,
+            "action": "pause",
+            "speaker_name": "PausedTestAgent",
+            "patron_id": patron_id,
+        },
+    )
+    assert pause_result.get("ok"), f"table_control pause failed: {pause_result}"
+    assert pause_result["data"]["table_status"] == "paused"
+
+    # Step 2: Verify table status
+    get_result = call_tool("table_get", {"table_id": table_id})
+    assert get_result.get("ok")
+    assert get_result["data"]["status"] == "paused"
+
+    # Step 3: Read operations MUST work while paused
+    listen_result = call_tool(
+        "table_listen",
+        {"table_id": table_id, "since_sequence": -1, "limit": 10},
+    )
+    assert listen_result.get("ok"), f"table_listen should work while paused: {listen_result}"
+
+    # Step 4: Resume the table
+    resume_result = call_tool(
+        "table_control",
+        {
+            "table_id": table_id,
+            "action": "resume",
+            "speaker_name": "PausedTestAgent",
+            "patron_id": patron_id,
+        },
+    )
+    assert resume_result.get("ok"), f"table_control resume failed: {resume_result}"
+    assert resume_result["data"]["table_status"] == "open"
+
+    # Step 5: Verify posting works after resume
+    say_result = call_tool(
+        "table_say",
+        {
+            "table_id": table_id,
+            "content": "Message after resume",
+            "speaker_kind": "agent",
+            "patron_id": patron_id,
+        },
+    )
+    assert say_result.get("ok"), f"table_say should work after resume: {say_result}"
+
+
+def test_mcp_error_version_conflict(mcp_test_client) -> None:
+    """Test VersionConflict error for optimistic concurrency.
+
+    Per spec v0.1 Section 5.2:
+    - table_update requires expected_version
+    - Returns VersionConflict if version mismatch
+
+    Scenario: VersionConflict Error Path
+    Verify that stale version number triggers VersionConflict error.
+    """
+
+    def _parse_mcp_response(response_text: str) -> dict:
+        if response_text.startswith("event:"):
+            for line in response_text.split("\n"):
+                if line.startswith("data:"):
+                    return json.loads(line[5:].strip())
+        return json.loads(response_text)
+
+    def _extract_tool_result(response: dict) -> dict:
+        if "error" in response:
+            return {"ok": False, "error": response["error"]}
+        content = response.get("result", {}).get("content", [])
+        if not content:
+            return {"ok": False, "error": "Empty content"}
+        return json.loads(content[0].get("text", "{}"))
+
+    # Initialize session
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "version-test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
+
+    request_id = 1
+
+    def call_tool(name: str, arguments: dict) -> dict:
+        nonlocal request_id
+        request_id += 1
+        response = mcp_test_client.post(
+            "/mcp/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        return _extract_tool_result(_parse_mcp_response(response.text))
+
+    # Setup
+    patron_result = call_tool("patron_register", {"name": "VersionTestAgent", "kind": "agent"})
+    assert patron_result.get("ok")
+    patron_id = patron_result["data"]["id"]
+
+    table_result = call_tool(
+        "table_create",
+        {"question": "Version conflict test", "context": "Testing optimistic concurrency"},
+    )
+    assert table_result.get("ok")
+    table_id = table_result["data"]["id"]
+
+    # Get current version
+    get_result = call_tool("table_get", {"table_id": table_id})
+    assert get_result.get("ok")
+    current_version = get_result["data"]["version"]
+
+    # First update succeeds
+    first_update = call_tool(
+        "table_update",
+        {
+            "table_id": table_id,
+            "expected_version": current_version,
+            "patch": {"question": "Updated question"},
+            "speaker_name": "VersionTestAgent",
+            "patron_id": patron_id,
+        },
+    )
+    assert first_update.get("ok"), f"First update failed: {first_update}"
+
+    # Second update with stale version - should fail
+    stale_update = call_tool(
+        "table_update",
+        {
+            "table_id": table_id,
+            "expected_version": current_version,  # Stale!
+            "patch": {"question": "Should fail"},
+            "speaker_name": "VersionTestAgent",
+            "patron_id": patron_id,
+        },
+    )
+    assert not stale_update.get("ok"), "Update with stale version should fail"
+
+    error = stale_update.get("error", {})
+    error_code = error.get("code") if isinstance(error, dict) else str(error)
+    assert error_code in ("VersionConflict", "VERSION_CONFLICT"), (
+        f"Expected VersionConflict, got {error_code}"
+    )
+
+
+def test_mcp_error_invalid_request(mcp_test_client) -> None:
+    """Test invalid requests return appropriate error codes.
+
+    Per spec Section 1.3:
+    - INVALID_REQUEST for malformed input (400)
+
+    Scenario: Invalid Request Error Paths
+    Verify that missing required fields trigger appropriate errors.
+    """
+
+    def _parse_mcp_response(response_text: str) -> dict:
+        if response_text.startswith("event:"):
+            for line in response_text.split("\n"):
+                if line.startswith("data:"):
+                    return json.loads(line[5:].strip())
+        return json.loads(response_text)
+
+    def _extract_tool_result(response: dict) -> dict:
+        if "error" in response:
+            return {"ok": False, "error": response["error"]}
+        content = response.get("result", {}).get("content", [])
+        if not content:
+            return {"ok": False, "error": "Empty content"}
+        return json.loads(content[0].get("text", "{}"))
+
+    # Initialize session
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "invalid-req-test", "version": "0.1.0"},
+            },
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
+
+    session_id = init_response.headers.get("mcp-session-id")
+    headers = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
+
+    request_id = 1
+
+    def call_tool(name: str, arguments: dict) -> dict:
+        nonlocal request_id
+        request_id += 1
+        response = mcp_test_client.post(
+            "/mcp/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        return _extract_tool_result(_parse_mcp_response(response.text))
+
+    # Setup
+    patron_result = call_tool("patron_register", {"name": "InvalidReqAgent", "kind": "agent"})
+    assert patron_result.get("ok")
+    patron_id = patron_result["data"]["id"]
+
+    table_result = call_tool(
+        "table_create",
+        {"question": "Invalid request test", "context": "Testing validation"},
+    )
+    assert table_result.get("ok")
+    table_id = table_result["data"]["id"]
+
+    # Test: table_join with neither table_id nor invite_code
+    join_result = call_tool(
+        "table_join",
+        {"patron_id": patron_id},  # Neither table_id nor invite_code
+    )
+    assert not join_result.get("ok"), "table_join should fail without table identifier"
+
+    error = join_result.get("error", {})
+    error_code = error.get("code") if isinstance(error, dict) else str(error)
+    assert error_code in ("INVALID_REQUEST", "NOT_FOUND"), (
+        f"Expected INVALID_REQUEST or NOT_FOUND, got {error_code}"
+    )
+
+    # Test: table_say with human speaker but patron_id provided
+    human_result = call_tool(
+        "table_say",
+        {
+            "table_id": table_id,
+            "content": "Human with patron_id",
+            "speaker_kind": "human",
+            "patron_id": patron_id,  # Should NOT have patron_id for human
+        },
+    )
+    # This should fail per spec
+    assert not human_result.get("ok"), "table_say should reject patron_id for human speaker"
+
+
+# =============================================================================
 # Scenario Documentation
 # =============================================================================
 

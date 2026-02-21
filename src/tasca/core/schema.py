@@ -19,11 +19,17 @@ def create_patrons_table_ddl(table_name: str = "patrons") -> str:
     True
     >>> 'kind TEXT NOT NULL DEFAULT' in create_patrons_table_ddl()
     True
+    >>> 'alias TEXT' in create_patrons_table_ddl()
+    True
+    >>> 'meta TEXT' in create_patrons_table_ddl()
+    True
     """
     return f"""CREATE TABLE IF NOT EXISTS {table_name} (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     kind TEXT NOT NULL DEFAULT 'agent',
+    alias TEXT,
+    meta TEXT,
     created_at TEXT NOT NULL
 )"""
 

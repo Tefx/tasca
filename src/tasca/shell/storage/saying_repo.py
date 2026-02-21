@@ -240,6 +240,102 @@ def list_sayings_by_table(
         return Failure(SayingError(f"Database error: {e}"))
 
 
+def get_recent_sayings(
+    conn: sqlite3.Connection,
+    table_id: str,
+    limit: int = 10,
+    max_bytes: int = 65536,
+) -> Result[tuple[list[Saying], int, bool], SayingError]:
+    """Get the most recent sayings for a table with byte limit.
+
+    Returns sayings in reverse order (newest first), applying both
+    count and byte limits. Used for initial history window in table.join.
+
+    Args:
+        conn: Database connection.
+        table_id: UUID of the table.
+        limit: Maximum number of sayings to return (default 10).
+        max_bytes: Maximum total bytes of content (default 65536).
+
+    Returns:
+        Success with tuple of (sayings, history_sequence, has_more):
+        - sayings: List of recent sayings (oldest first, ready for display)
+        - history_sequence: The sequence before the oldest returned saying
+          (for paging older history)
+        - has_more: True if there are older sayings beyond the returned window
+        Or Failure with error.
+    """
+    try:
+        # Get total count to determine if there are older sayings
+        cursor = conn.execute(
+            "SELECT COUNT(*) FROM sayings WHERE table_id = ?",
+            (table_id,),
+        )
+        total_row = cursor.fetchone()
+        total_count = int(total_row[0]) if total_row else 0
+
+        # Get recent sayings in descending order (newest first)
+        # Fetch more than limit to check for has_more
+        cursor = conn.execute(
+            """
+            SELECT id, table_id, sequence, speaker_kind, speaker_name,
+                   patron_id, content, pinned, created_at
+            FROM sayings
+            WHERE table_id = ?
+            ORDER BY sequence DESC
+            LIMIT ?
+            """,
+            (table_id, limit + 1),  # Fetch one extra to check for has_more
+        )
+        rows = cursor.fetchall()
+
+        # Apply byte limit while collecting sayings
+        sayings: list[Saying] = []
+        total_bytes = 0
+        has_more_by_count = len(rows) > limit
+
+        for row in rows[:limit]:  # Only consider up to limit
+            saying = _row_to_saying(row)
+            content_bytes = len(saying.content.encode("utf-8"))
+
+            if total_bytes + content_bytes > max_bytes and sayings:
+                # Would exceed byte limit and we have at least one saying
+                # Stop here - we have history (may have more)
+                break
+
+            sayings.append(saying)
+            total_bytes += content_bytes
+
+        # Check if there are more sayings beyond what we returned
+        # Either by count limit or by what's actually in DB
+        if not sayings:
+            # No sayings at all
+            return Success(([], -1, False))
+
+        # Reverse to get oldest-first order
+        sayings.reverse()
+
+        # history_sequence is the sequence before the oldest returned saying
+        # This is what clients use to page older history
+        oldest_sequence = sayings[0].sequence
+        history_sequence = oldest_sequence - 1
+
+        # has_more: are there sayings older than the oldest we returned?
+        has_more = oldest_sequence > 0 or (total_count > len(sayings))
+
+        # More precise check: is there a saying with sequence < oldest_sequence?
+        cursor = conn.execute(
+            "SELECT 1 FROM sayings WHERE table_id = ? AND sequence < ? LIMIT 1",
+            (table_id, oldest_sequence),
+        )
+        older_exists = cursor.fetchone() is not None
+
+        return Success((sayings, history_sequence, older_exists))
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
 def get_table_max_sequence(conn: sqlite3.Connection, table_id: str) -> Result[int, SayingError]:
     """Get the maximum sequence for a table.
 

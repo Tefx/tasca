@@ -330,13 +330,13 @@ class TestTableListen:
         assert result["data"]["next_sequence"] == 0
 
     def test_listen_with_sayings(self) -> None:
-        """Listen returns sayings and correct next_sequence."""
+        """Listen returns sayings and correct next_sequence (spec: max sequence, not max+1)."""
         # Create table and say things
         table_result = table_create(question="Test question")
         table_id = table_result["data"]["id"]
 
-        table_say(table_id=table_id, content="First", speaker_name="A")
-        table_say(table_id=table_id, content="Second", speaker_name="B")
+        table_say(table_id=table_id, content="First", speaker_name="A")  # seq 0
+        table_say(table_id=table_id, content="Second", speaker_name="B")  # seq 1
 
         # Listen for all
         result = table_listen(table_id=table_id, since_sequence=-1)
@@ -346,7 +346,10 @@ class TestTableListen:
         assert len(sayings) == 2
         assert sayings[0]["content"] == "First"
         assert sayings[1]["content"] == "Second"
-        assert result["data"]["next_sequence"] == 2
+        # Spec: next_sequence = max(sequence) = 1, not max+1 = 2
+        # This allows client to pass since_sequence=1 to get sequences > 1 (i.e., 2, 3, 4...)
+        # Old behavior (max+1=2) would cause missed saying when passing since_sequence=2
+        assert result["data"]["next_sequence"] == 1
 
     def test_listen_with_since_sequence(self) -> None:
         """Listen with since_sequence filters sayings."""
@@ -354,9 +357,9 @@ class TestTableListen:
         table_result = table_create(question="Test question")
         table_id = table_result["data"]["id"]
 
-        table_say(table_id=table_id, content="First", speaker_name="A")
-        table_say(table_id=table_id, content="Second", speaker_name="B")
-        table_say(table_id=table_id, content="Third", speaker_name="C")
+        table_say(table_id=table_id, content="First", speaker_name="A")  # seq 0
+        table_say(table_id=table_id, content="Second", speaker_name="B")  # seq 1
+        table_say(table_id=table_id, content="Third", speaker_name="C")  # seq 2
 
         # Listen for sayings after sequence 0
         result = table_listen(table_id=table_id, since_sequence=0)
@@ -366,6 +369,80 @@ class TestTableListen:
         assert len(sayings) == 2  # Second and Third
         assert sayings[0]["content"] == "Second"
         assert sayings[1]["content"] == "Third"
+        # Spec: next_sequence = max(sequence) = 2, not max+1 = 3
+        assert result["data"]["next_sequence"] == 2
+
+    def test_listen_next_sequence_prevents_duplicates_and_missed(self) -> None:
+        """L1: next_sequence equals max sequence of returned sayings (spec compliance).
+
+        Spec requires next_sequence = max(sequence), NOT max(sequence) + 1.
+        This prevents:
+        - Duplicates: If next_sequence were max+1, client would poll with since_sequence=max+1
+          and miss the saying at sequence max.
+        - Missed sayings: Client uses returned next_sequence as since_sequence for next call.
+          Server returns sequences > since_sequence.
+        """
+        table_result = table_create(question="Test question")
+        table_id = table_result["data"]["id"]
+
+        # Add sayings with sequences 0, 1, 2
+        table_say(table_id=table_id, content="A", speaker_name="A")  # seq 0
+        table_say(table_id=table_id, content="B", speaker_name="B")  # seq 1
+        table_say(table_id=table_id, content="C", speaker_name="C")  # seq 2
+
+        # First call: get all sayings
+        result1 = table_listen(table_id=table_id, since_sequence=-1)
+        assert result1["ok"] is True
+        sayings1 = result1["data"]["sayings"]
+        assert len(sayings1) == 3
+        # L1 verification: next_sequence = max(sequence of returned sayings)
+        max_seq = max(s["sequence"] for s in sayings1)
+        assert result1["data"]["next_sequence"] == max_seq
+
+        # Second call: use next_sequence as since_sequence
+        # With spec behavior: since_sequence=2, we get sequences > 2 (none yet)
+        result2 = table_listen(table_id=table_id, since_sequence=result1["data"]["next_sequence"])
+        assert result2["ok"] is True
+        sayings2 = result2["data"]["sayings"]
+        assert len(sayings2) == 0  # No new sayings
+
+        # Add a new saying (seq 3)
+        table_say(table_id=table_id, content="D", speaker_name="D")
+
+        # Third call: should get sequence 3 only (not 2 again)
+        result3 = table_listen(table_id=table_id, since_sequence=result1["data"]["next_sequence"])
+        assert result3["ok"] is True
+        sayings3 = result3["data"]["sayings"]
+        assert len(sayings3) == 1
+        assert sayings3[0]["content"] == "D"
+        assert sayings3[0]["sequence"] == 3
+
+    def test_listen_empty_returns_next_sequence_for_polling(self) -> None:
+        """Empty result returns next_sequence for polling continuation.
+
+        When no sayings are returned:
+        - since_sequence=-1 (or any < 0) -> next_sequence=0
+        - since_sequence=5 (no results) -> next_sequence=6
+        This allows clients to continue polling without missing data.
+        """
+        table_result = table_create(question="Test question")
+        table_id = table_result["data"]["id"]
+
+        # Empty table
+        result = table_listen(table_id=table_id, since_sequence=-1)
+        assert result["ok"] is True
+        assert result["data"]["sayings"] == []
+        assert result["data"]["next_sequence"] == 0
+
+        # Add a saying
+        table_say(table_id=table_id, content="First", speaker_name="A")
+
+        # Poll from after max (sequence 0)
+        result2 = table_listen(table_id=table_id, since_sequence=10)
+        assert result2["ok"] is True
+        assert result2["data"]["sayings"] == []
+        # Since no sayings returned, next_sequence = since_sequence + 1 = 11
+        assert result2["data"]["next_sequence"] == 11
 
 
 # =============================================================================

@@ -80,6 +80,7 @@ from tasca.shell.storage.patron_repo import (
 from tasca.shell.storage.saying_repo import (
     append_saying,
     get_table_max_sequence,
+    get_recent_sayings,
     list_sayings_by_table,
 )
 from tasca.shell.storage.seat_repo import (
@@ -172,49 +173,73 @@ def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
 # =============================================================================
 
 
-# @shell_complexity: 8 branches for patron dedup check + create + idempotency store + error paths
+# @shell_complexity: 10 branches for patron dedup check + create + idempotency store + error paths + backward compat
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def patron_register(
-    name: str,
-    kind: str = "agent",
+    display_name: str | None = None,
+    alias: str | None = None,
+    meta: dict[str, Any] | None = None,
+    patron_id: str | None = None,
     dedup_id: str | None = None,
+    *,
+    # Backward compatibility: accept 'name' as alias for display_name
+    name: str | None = None,
+    kind: str = "agent",
 ) -> dict[str, Any]:
     """Register a new patron (agent identity).
 
-    Patrons are deduplicated by name. If a patron with the same name
+    Patrons are deduplicated by display_name. If a patron with the same name
     already exists, the existing patron is returned.
 
     Alternatively, provide dedup_id for explicit idempotency. When dedup_id
-    is provided with the same name, the cached response is returned (return_existing).
+    is provided, duplicate requests with the same dedup_id return the cached
+    response (return_existing semantics).
 
     Args:
-        name: Name or identifier for the patron (used for deduplication).
-        kind: Type of patron - 'agent' or 'human' (default 'agent').
+        display_name: Display name for the patron (used for deduplication).
+        alias: Optional short alias for the patron.
+        meta: Optional metadata dictionary for the patron.
+        patron_id: Optional UUID for the patron (auto-generated if not provided).
         dedup_id: Optional explicit idempotency key for request deduplication.
             When provided, duplicate requests with the same dedup_id return
             the cached response (default TTL: 24 hours).
+        name: (Deprecated) Backward-compatible alias for display_name.
+        kind: (Deprecated) Type of patron - 'agent' or 'human' (default 'agent').
 
     Returns:
-        Success envelope with patron details:
+        Success envelope with patron details (spec-compliant):
         {
             "ok": true,
             "data": {
+                "patron_id": "uuid-string",
+                "display_name": "patron-name",
+                "alias": "short-alias" | null,
+                "server_ts": "2024-01-01T00:00:00Z",
+                "is_new": true,
+                // Backward-compatible fields (not in spec):
                 "id": "uuid-string",
                 "name": "patron-name",
                 "kind": "agent",
-                "created_at": "2024-01-01T00:00:00Z",
-                "is_new": true
+                "created_at": "2024-01-01T00:00:00Z"
             }
         }
 
     Error codes:
         - DATABASE_ERROR: Failed to access database
     """
+    # Backward compatibility: fall back to 'name' if display_name not provided
+    resolved_name = display_name or name
+    if resolved_name is None:
+        return error_response(
+            "INVALID_REQUEST",
+            "display_name (or name for backward compat) is required",
+        )
+
     conn = next(get_mcp_db())
 
     # Resource key for idempotency scope (patron registration uses name as scope)
-    resource_key = f"patron:{name}"
+    resource_key = f"patron:{resolved_name}"
 
     # Check idempotency key if provided
     if dedup_id is not None:
@@ -231,7 +256,7 @@ def patron_register(
             return success_response(cached_response["data"])
 
     # Check for existing patron by name (dedup)
-    existing_result = find_patron_by_name(conn, name)
+    existing_result = find_patron_by_name(conn, resolved_name)
 
     if isinstance(existing_result, Failure):
         error = existing_result.failure()
@@ -241,11 +266,18 @@ def patron_register(
     if existing is not None:
         # Return existing patron (return_existing semantics)
         response_data = {
+            # Spec-compliant fields
+            "patron_id": existing.id,
+            "display_name": existing.name,
+            "alias": existing.alias,
+            "server_ts": existing.created_at.isoformat(),
+            "is_new": False,
+            # Backward-compatible fields (not in spec)
             "id": existing.id,
             "name": existing.name,
             "kind": existing.kind,
             "created_at": existing.created_at.isoformat(),
-            "is_new": False,
+            "meta": existing.meta,
         }
         # Store in idempotency cache if dedup_id provided
         if dedup_id is not None:
@@ -256,12 +288,14 @@ def patron_register(
 
     # Create new patron
     now = datetime.now(UTC)
-    patron_id = PatronId(str(uuid.uuid4()))
+    new_patron_id = PatronId(patron_id) if patron_id else PatronId(str(uuid.uuid4()))
 
     patron = Patron(
-        id=patron_id,
-        name=name,
+        id=new_patron_id,
+        name=resolved_name,
         kind=kind,
+        alias=alias,
+        meta=meta,
         created_at=now,
     )
 
@@ -273,11 +307,18 @@ def patron_register(
 
     created = result.unwrap()
     response_data = {
+        # Spec-compliant fields
+        "patron_id": created.id,
+        "display_name": created.name,
+        "alias": created.alias,
+        "server_ts": created.created_at.isoformat(),
+        "is_new": True,
+        # Backward-compatible fields (not in spec)
         "id": created.id,
         "name": created.name,
         "kind": created.kind,
         "created_at": created.created_at.isoformat(),
-        "is_new": True,
+        "meta": created.meta,
     }
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
@@ -296,13 +337,28 @@ def patron_get(patron_id: str) -> dict[str, Any]:
         patron_id: UUID of the patron to retrieve.
 
     Returns:
-        Success envelope with patron details:
+        Success envelope with patron details (spec-compliant):
+        {
+            "ok": true,
+            "data": {
+                "patron": {
+                    "patron_id": "uuid-string",
+                    "display_name": "patron-name",
+                    "alias": "short-alias" | null,
+                    "meta": {} | null
+                }
+            }
+        }
+
+        Backward-compatible response (when using old client):
         {
             "ok": true,
             "data": {
                 "id": "uuid-string",
                 "name": "patron-name",
                 "kind": "agent",
+                "alias": "short-alias" | null,
+                "meta": {} | null,
                 "created_at": "2024-01-01T00:00:00Z"
             }
         }
@@ -323,9 +379,19 @@ def patron_get(patron_id: str) -> dict[str, Any]:
     patron = result.unwrap()
     return success_response(
         {
+            # Spec-compliant nested structure
+            "patron": {
+                "patron_id": patron.id,
+                "display_name": patron.name,
+                "alias": patron.alias,
+                "meta": patron.meta,
+            },
+            # Backward-compatible flat fields (not in spec)
             "id": patron.id,
             "name": patron.name,
             "kind": patron.kind,
+            "alias": patron.alias,
+            "meta": patron.meta,
             "created_at": patron.created_at.isoformat(),
         }
     )
@@ -432,23 +498,35 @@ def table_create(
     return success_response(response_data)
 
 
-# @shell_complexity: 6 branches for table lookup + can_join guard + seat creation + dedup + error paths
+# Spec defaults for table.join
+DEFAULT_HISTORY_LIMIT = 10
+DEFAULT_HISTORY_MAX_BYTES = 65536  # 64 KiB
+
+
+# @shell_complexity: 8 branches for table lookup + can_join guard + seat creation + history fetch + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def table_join(
-    table_id: str,
-    patron_id: str,
+    table_id: str | None = None,
+    patron_id: str | None = None,
+    invite_code: str | None = None,
+    history_limit: int = DEFAULT_HISTORY_LIMIT,
+    history_max_bytes: int = DEFAULT_HISTORY_MAX_BYTES,
 ) -> dict[str, Any]:
     """Join a discussion table by creating a seat.
 
-    Creates a seat for the patron at the table and returns table details.
+    Creates a seat for the patron at the table and returns table details
+    with an initial history window for agent onboarding.
 
     Args:
-        table_id: UUID of the table to join.
-        patron_id: UUID of the patron joining the table.
+        table_id: UUID of the table to join (backward compat, prefer invite_code).
+        patron_id: UUID of the patron joining the table (optional for human join).
+        invite_code: Short code to join table (spec-compliant, preferred).
+        history_limit: Maximum number of sayings in initial history (default 10).
+        history_max_bytes: Maximum bytes for initial history (default 64 KiB).
 
     Returns:
-        Success envelope with table details and seat info:
+        Success envelope with table details, seat info, and initial history:
         {
             "ok": true,
             "data": {
@@ -456,7 +534,15 @@ def table_join(
                     "id": "uuid-string",
                     "question": "...",
                     "status": "open",
+                    "version": 1,
                     ...
+                },
+                "sequence_latest": 5,
+                "history_sequence": 2,
+                "initial": {
+                    "sayings": [...],
+                    "next_sequence": 5,
+                    "has_more_history": true
                 },
                 "seat": {
                     "id": "uuid-string",
@@ -471,18 +557,27 @@ def table_join(
         }
 
     Error codes:
+        - INVALID_REQUEST: Neither table_id nor invite_code provided
         - NOT_FOUND: Table or patron not found
         - OPERATION_NOT_ALLOWED: Table is not open for joins (PAUSED or CLOSED)
         - DATABASE_ERROR: Failed to create seat
     """
     conn = next(get_mcp_db())
 
+    # Resolve table identifier: prefer invite_code, fall back to table_id
+    resolved_table_id = invite_code or table_id
+    if resolved_table_id is None:
+        return error_response(
+            "INVALID_REQUEST",
+            "Either invite_code or table_id must be provided",
+        )
+
     # Verify table exists
-    table_result = get_table(conn, TableId(table_id))
+    table_result = get_table(conn, TableId(resolved_table_id))
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+            return error_response("NOT_FOUND", f"Table not found: {resolved_table_id}")
         return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
 
     table = table_result.unwrap()
@@ -495,33 +590,69 @@ def table_join(
             {"table_status": table.status.value},
         )
 
-    # Verify patron exists
-    patron_result = get_patron(conn, PatronId(patron_id))
-    if isinstance(patron_result, Failure):
-        error = patron_result.failure()
-        if isinstance(error, PatronNotFoundError):
-            return error_response("NOT_FOUND", f"Patron not found: {patron_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+    # Get max sequence for sequence_latest
+    max_seq_result = get_table_max_sequence(conn, resolved_table_id)
+    if isinstance(max_seq_result, Failure):
+        error = max_seq_result.failure()
+        return error_response("DATABASE_ERROR", f"Failed to get table sequence: {error}")
+    sequence_latest = max_seq_result.unwrap()
 
-    now = datetime.now(UTC)
-    seat_id = SeatId(str(uuid.uuid4()))
-
-    seat = Seat(
-        id=seat_id,
-        table_id=table_id,
-        patron_id=patron_id,
-        state=SeatState.JOINED,
-        last_heartbeat=now,
-        joined_at=now,
+    # Get initial history window
+    history_result = get_recent_sayings(
+        conn, resolved_table_id, limit=history_limit, max_bytes=history_max_bytes
     )
+    if isinstance(history_result, Failure):
+        error = history_result.failure()
+        return error_response("DATABASE_ERROR", f"Failed to get history: {error}")
 
-    seat_result = create_seat(conn, seat)
-    if isinstance(seat_result, Failure):
-        error = seat_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to create seat: {error}")
+    history_sayings, history_sequence, has_more_history = history_result.unwrap()
 
-    created_seat = seat_result.unwrap()
-    expires_at = calculate_expiry_time(created_seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
+    # Compute next_sequence from history
+    if history_sayings:
+        next_sequence = max(s.sequence for s in history_sayings) + 1
+    else:
+        next_sequence = 0
+
+    # Create seat if patron_id provided (optional - allows human join without seat)
+    seat_data = None
+    if patron_id is not None:
+        # Verify patron exists
+        patron_result = get_patron(conn, PatronId(patron_id))
+        if isinstance(patron_result, Failure):
+            error = patron_result.failure()
+            if isinstance(error, PatronNotFoundError):
+                return error_response("NOT_FOUND", f"Patron not found: {patron_id}")
+            return error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+
+        now = datetime.now(UTC)
+        seat_id = SeatId(str(uuid.uuid4()))
+
+        seat = Seat(
+            id=seat_id,
+            table_id=resolved_table_id,
+            patron_id=patron_id,
+            state=SeatState.JOINED,
+            last_heartbeat=now,
+            joined_at=now,
+        )
+
+        seat_result = create_seat(conn, seat)
+        if isinstance(seat_result, Failure):
+            error = seat_result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to create seat: {error}")
+
+        created_seat = seat_result.unwrap()
+        expires_at = calculate_expiry_time(created_seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
+
+        seat_data = {
+            "id": created_seat.id,
+            "table_id": created_seat.table_id,
+            "patron_id": created_seat.patron_id,
+            "state": created_seat.state.value,
+            "last_heartbeat": created_seat.last_heartbeat.isoformat(),
+            "joined_at": created_seat.joined_at.isoformat(),
+            "expires_at": expires_at.isoformat(),
+        }
 
     return success_response(
         {
@@ -534,15 +665,29 @@ def table_join(
                 "created_at": table.created_at.isoformat(),
                 "updated_at": table.updated_at.isoformat(),
             },
-            "seat": {
-                "id": created_seat.id,
-                "table_id": created_seat.table_id,
-                "patron_id": created_seat.patron_id,
-                "state": created_seat.state.value,
-                "last_heartbeat": created_seat.last_heartbeat.isoformat(),
-                "joined_at": created_seat.joined_at.isoformat(),
-                "expires_at": expires_at.isoformat(),
+            "sequence_latest": sequence_latest,
+            "history_sequence": history_sequence,
+            "initial": {
+                "sayings": [
+                    {
+                        "id": s.id,
+                        "table_id": s.table_id,
+                        "sequence": s.sequence,
+                        "speaker": {
+                            "kind": s.speaker.kind.value,
+                            "name": s.speaker.name,
+                            "patron_id": s.speaker.patron_id,
+                        },
+                        "content": s.content,
+                        "pinned": s.pinned,
+                        "created_at": s.created_at.isoformat(),
+                    }
+                    for s in history_sayings
+                ],
+                "next_sequence": next_sequence,
+                "has_more_history": has_more_history,
             },
+            **({"seat": seat_data} if seat_data is not None else {}),
         }
     )
 
@@ -790,7 +935,7 @@ def table_say(
         else:
             patrons = patrons_result.unwrap()
             patron_matches = [
-                PatronMatch(patron_id=p.id, alias=None, display_name=p.name) for p in patrons
+                PatronMatch(patron_id=p.id, alias=p.alias, display_name=p.name) for p in patrons
             ]
             mentions_result = resolve_mentions(mentions, patron_matches)
 
@@ -884,6 +1029,24 @@ def table_listen(
     Error codes:
         - NOT_FOUND: Table not found
         - DATABASE_ERROR: Failed to list sayings
+
+    Doctests:
+        >>> # Non-empty case: next_sequence equals max sequence of returned sayings
+        >>> # (not max + 1, per spec)
+        >>> sayings_data = [
+        ...     type('Saying', (), {'id': '1', 'table_id': 't1', 'sequence': 3,
+        ...              'speaker': type('Speaker', (), {'kind': type('Kind', (), {'value': lambda s: 'agent'})(), 'name': 'A', 'patron_id': 'p1'}),
+        ...              'content': 'hi', 'pinned': False, 'created_at': None})()
+        ... ]
+        >>> max(s.sequence for s in sayings_data)
+        3
+        >>> # Spec: next_sequence = max(sequence) = 3, NOT 4
+        >>> # Client uses next_sequence=3 as since_sequence for next call
+        >>> # Server returns sayings with sequence > 3, avoiding duplicates
+
+        >>> # Empty case: next_sequence indicates where to poll next
+        >>> # since_sequence=-1, no sayings -> next_sequence=0
+        >>> # since_sequence=5, no sayings -> next_sequence=6 (no new data)
     """
     conn = next(get_mcp_db())
 
@@ -904,9 +1067,11 @@ def table_listen(
 
     sayings = result.unwrap()
 
-    # Compute next_sequence
+    # Compute next_sequence per spec:
+    # - Non-empty: next_sequence = max(sequence) of returned sayings
+    # - Empty: next_sequence = since_sequence + 1 (or 0 if since_sequence < 0)
     if sayings:
-        next_sequence = max(s.sequence for s in sayings) + 1
+        next_sequence = max(s.sequence for s in sayings)
     else:
         next_sequence = since_sequence + 1 if since_sequence >= 0 else 0
 

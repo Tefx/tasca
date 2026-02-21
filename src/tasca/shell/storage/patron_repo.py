@@ -8,8 +8,10 @@ Shell layer - handles I/O (database operations) and returns Result[T, E].
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime
+from typing import Any
 
 from returns.result import Failure, Result, Success
 
@@ -52,16 +54,30 @@ def _row_to_patron(row: tuple) -> Patron:
     """Convert a database row to a Patron object.
 
     Args:
-        row: Database row tuple (id, name, kind, created_at).
+        row: Database row tuple (id, name, kind, alias, meta, created_at).
 
     Returns:
         Patron domain object.
     """
+    # Handle both old schema (4 columns) and new schema (6 columns)
+    if len(row) >= 6:
+        alias_val = row[3]  # type: ignore[misc]
+        meta_str = row[4]  # type: ignore[misc]
+        meta_val: dict[str, Any] | None = json.loads(meta_str) if meta_str else None
+        created_at_val = row[5]  # type: ignore[misc]
+    else:
+        # Legacy schema without alias/meta columns
+        alias_val = None
+        meta_val = None
+        created_at_val = row[3]  # type: ignore[misc]
+
     return Patron(
-        id=PatronId(row[0]),
-        name=row[1],
-        kind=row[2],
-        created_at=datetime.fromisoformat(row[3]),
+        id=PatronId(row[0]),  # type: ignore[misc]
+        name=row[1],  # type: ignore[misc]
+        kind=row[2],  # type: ignore[misc]
+        alias=alias_val,
+        meta=meta_val,
+        created_at=datetime.fromisoformat(created_at_val),  # type: ignore[misc]
     )
 
 
@@ -84,6 +100,8 @@ def create_patron(conn: sqlite3.Connection, patron: Patron) -> Result[Patron, Pa
         ...     id=PatronId("test-id"),
         ...     name="Test Agent",
         ...     kind="agent",
+        ...     alias="test",
+        ...     meta={"key": "value"},
         ...     created_at=datetime.now(UTC)
         ... )
         >>> result = create_patron(conn, patron)
@@ -91,18 +109,23 @@ def create_patron(conn: sqlite3.Connection, patron: Patron) -> Result[Patron, Pa
         True
         >>> result.unwrap().name == "Test Agent"
         True
+        >>> result.unwrap().alias == "test"
+        True
         >>> conn.close()
     """
     try:
+        meta_json = json.dumps(patron.meta) if patron.meta else None
         conn.execute(
             """
-            INSERT INTO patrons (id, name, kind, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO patrons (id, name, kind, alias, meta, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 patron.id,
                 patron.name,
                 patron.kind,
+                patron.alias,
+                meta_json,
                 patron.created_at.isoformat(),
             ),
         )
@@ -139,7 +162,7 @@ def get_patron(conn: sqlite3.Connection, patron_id: PatronId) -> Result[Patron, 
     try:
         cursor = conn.execute(
             """
-            SELECT id, name, kind, created_at
+            SELECT id, name, kind, alias, meta, created_at
             FROM patrons WHERE id = ?
             """,
             (patron_id,),
@@ -177,7 +200,7 @@ def find_patron_by_name(conn: sqlite3.Connection, name: str) -> Result[Patron | 
     try:
         cursor = conn.execute(
             """
-            SELECT id, name, kind, created_at
+            SELECT id, name, kind, alias, meta, created_at
             FROM patrons WHERE name = ?
             """,
             (name,),
@@ -217,7 +240,7 @@ def list_patrons(conn: sqlite3.Connection) -> Result[list[Patron], PatronError]:
     try:
         cursor = conn.execute(
             """
-            SELECT id, name, kind, created_at
+            SELECT id, name, kind, alias, meta, created_at
             FROM patrons
             ORDER BY name
             """

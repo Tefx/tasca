@@ -21,6 +21,24 @@ if TYPE_CHECKING:
 _mcp_db_connection: sqlite3.Connection | None = None
 
 
+def _run_schema_migrations(conn: sqlite3.Connection) -> None:
+    """Run schema migrations for backward compatibility.
+
+    This function adds missing columns to existing tables.
+    Safe to run multiple times - ALTER TABLE ADD COLUMN is idempotent
+    because we check if the column exists first.
+    """
+    # Migration: Add alias and meta columns to patrons table
+    cursor = conn.execute("PRAGMA table_info(patrons)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    if "alias" not in columns:
+        conn.execute("ALTER TABLE patrons ADD COLUMN alias TEXT")
+
+    if "meta" not in columns:
+        conn.execute("ALTER TABLE patrons ADD COLUMN meta TEXT")
+
+
 def get_mcp_db() -> Generator[sqlite3.Connection]:
     """Get database connection for MCP tools.
 
@@ -59,6 +77,10 @@ def get_mcp_db() -> Generator[sqlite3.Connection]:
         # Apply schema (tables, indexes, and FTS5 virtual tables/triggers)
         for stmt in get_all_table_ddl() + get_all_index_ddl() + get_all_fts_ddl():
             _mcp_db_connection.execute(stmt)
+        _mcp_db_connection.commit()
+
+        # Run migrations for backward compatibility
+        _run_schema_migrations(_mcp_db_connection)
         _mcp_db_connection.commit()
 
     yield _mcp_db_connection

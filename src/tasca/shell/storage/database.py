@@ -185,10 +185,32 @@ def apply_schema(conn: sqlite3.Connection) -> Result[int, str]:
         for stmt in statements:
             conn.execute(stmt)
         conn.commit()
+
+        # Run migrations for backward compatibility (adds missing columns)
+        _run_migrations(conn)
+
         return Success(len(statements))
     except sqlite3.Error as e:
         conn.rollback()
         return Failure(f"Schema application failed: {e}")
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Run schema migrations for backward compatibility.
+
+    Safe to run multiple times - checks for column existence before adding.
+    """
+    # Migration: Add alias and meta columns to patrons table
+    cursor = conn.execute("PRAGMA table_info(patrons)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    if "alias" not in columns:
+        conn.execute("ALTER TABLE patrons ADD COLUMN alias TEXT")
+
+    if "meta" not in columns:
+        conn.execute("ALTER TABLE patrons ADD COLUMN meta TEXT")
+
+    conn.commit()
 
 
 # @shell_complexity: 4 branches for journal/timeout/fk config parsing

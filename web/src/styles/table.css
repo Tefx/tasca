@@ -1313,6 +1313,16 @@
   outline-offset: 2px;
 }
 
+/* Console controls row (Pause/Resume in footer) */
+.mc-console-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--mc-border);
+  margin-top: 0.25rem;
+}
+
 /* =============================================================================
    Mention Input — Active Prefix Label
    ============================================================================= */

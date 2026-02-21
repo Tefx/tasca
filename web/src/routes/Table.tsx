@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getTable, type Table as TableType } from '../api/tables'
+import { getTable, pauseTable, resumeTable, type Table as TableType } from '../api/tables'
 import { listSeats, postSaying, type Seat } from '../api/sayings'
 import { useSayingsStream } from '../hooks/useLongPoll'
 import { Board } from '../components/Board'
@@ -138,19 +138,36 @@ function shareUrl(tableId: string): string {
 // =============================================================================
 
 interface CommandConsoleProps {
-  tableId: string
+  table: TableType
   seats: Seat[]
   patrons?: Map<string, PatronInfo>
   /** Called after a saying is successfully posted (to trigger stream refresh). */
   onPosted?: () => void
+  /** Called when table status changes successfully */
+  onStatusChange?: (table: TableType) => void
+  /** Called when an error occurs */
+  onError?: (error: Error) => void
 }
 
-function CommandConsole({ tableId, seats, patrons, onPosted }: CommandConsoleProps) {
-  const { mode } = useAuth()
+/** Check if table can be paused. */
+function canPause(status: string): boolean {
+  return status === 'open'
+}
+
+/** Check if table can be resumed. */
+function canResume(status: string): boolean {
+  return status === 'paused'
+}
+
+function CommandConsole({ table, seats, patrons, onPosted, onStatusChange, onError }: CommandConsoleProps) {
+  const { mode, hasToken } = useAuth()
   const [value, setValue] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const isAdmin = mode === 'admin'
+  const [controlState, setControlState] = useState<'idle' | 'pausing' | 'resuming'>('idle')
+  
+  const isAdmin = mode === 'admin' && hasToken
+  const isOperating = controlState !== 'idle'
 
   const handleSubmit = useCallback(async () => {
     const trimmed = value.trim()
@@ -159,7 +176,7 @@ function CommandConsole({ tableId, seats, patrons, onPosted }: CommandConsolePro
     setIsSubmitting(true)
     setError(null)
     try {
-      await postSaying(tableId, { speaker_name: 'Human', content: trimmed, patron_id: null })
+      await postSaying(table.id, { speaker_name: 'Human', content: trimmed, patron_id: null })
       setValue('')
       onPosted?.()
     } catch (err) {
@@ -167,7 +184,35 @@ function CommandConsole({ tableId, seats, patrons, onPosted }: CommandConsolePro
     } finally {
       setIsSubmitting(false)
     }
-  }, [value, isAdmin, isSubmitting, tableId, onPosted])
+  }, [value, isAdmin, isSubmitting, table.id, onPosted])
+
+  const handlePause = useCallback(async () => {
+    if (!canPause(table.status) || isOperating) return
+
+    setControlState('pausing')
+    try {
+      const updated = await pauseTable(table)
+      onStatusChange?.(updated)
+    } catch (err) {
+      onError?.(err instanceof Error ? err : new Error('Failed to pause table'))
+    } finally {
+      setControlState('idle')
+    }
+  }, [table, isOperating, onStatusChange, onError])
+
+  const handleResume = useCallback(async () => {
+    if (!canResume(table.status) || isOperating) return
+
+    setControlState('resuming')
+    try {
+      const updated = await resumeTable(table)
+      onStatusChange?.(updated)
+    } catch (err) {
+      onError?.(err instanceof Error ? err : new Error('Failed to resume table'))
+    } finally {
+      setControlState('idle')
+    }
+  }, [table, isOperating, onStatusChange, onError])
 
   return (
     <div className="mc-console">
@@ -199,6 +244,34 @@ function CommandConsole({ tableId, seats, patrons, onPosted }: CommandConsolePro
           </button>
         )}
       </div>
+      
+      {/* Pause/Resume controls in footer — only for admin */}
+      {isAdmin && (
+        <div className="mc-console-controls">
+          {canPause(table.status) && (
+            <button
+              type="button"
+              className="mc-control-btn mc-control-btn--pause"
+              onClick={handlePause}
+              disabled={isOperating}
+              title="Pause table — prevent new joins"
+            >
+              {controlState === 'pausing' ? 'Pausing...' : 'Pause'}
+            </button>
+          )}
+          {canResume(table.status) && (
+            <button
+              type="button"
+              className="mc-control-btn mc-control-btn--resume"
+              onClick={handleResume}
+              disabled={isOperating}
+              title="Resume table — allow new joins"
+            >
+              {controlState === 'resuming' ? 'Resuming...' : 'Resume'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -296,6 +369,15 @@ export function Table() {
   }, [])
 
   // ---------------------------------------------------------------------------
+  // Handle errors from console controls
+  // ---------------------------------------------------------------------------
+
+  const handleError = useCallback((error: Error) => {
+    // For now, just log the error. Could be enhanced with toast notifications.
+    console.error('Table control error:', error.message)
+  }, [])
+
+  // ---------------------------------------------------------------------------
   // Reset local table when static data loads
   // ---------------------------------------------------------------------------
 
@@ -340,7 +422,12 @@ export function Table() {
         </div>
         <div className="mc-col-center">
           <Stream sayings={sayings} connectionStatus={connectionStatus} />
-          <CommandConsole tableId={table.id} seats={seats} />
+          <CommandConsole 
+            table={table} 
+            seats={seats} 
+            onStatusChange={handleStatusChange}
+            onError={handleError}
+          />
         </div>
         <SeatDeck seats={seats} activeCount={activeCount} />
       </div>

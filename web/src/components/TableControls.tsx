@@ -1,18 +1,15 @@
 /**
- * TableControls — Pause/Resume/Close controls for table.
+ * TableControls — Status indicator and Close control for table HUD header.
  *
- * Provides admin controls for table lifecycle management:
- * - Pause/Resume toggle
- * - Close (end meeting)
+ * Provides status display and Close (end meeting) control.
+ * Pause/Resume controls are now in the footer console area.
  *
- * Design source: Task web.controls_pause_resume_close
+ * Design source: Task web_fix.s1-pause-resume-footer (Spec §E Controls)
  */
 
 import { useState, useCallback } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import {
-  pauseTable,
-  resumeTable,
   closeTable,
   type Table as TableType,
   type TableStatus,
@@ -33,7 +30,7 @@ interface TableControlsProps {
   onError?: (error: Error) => void
 }
 
-type OperationState = 'idle' | 'pausing' | 'resuming' | 'closing'
+type OperationState = 'idle' | 'closing'
 
 // =============================================================================
 // Status Helpers
@@ -63,16 +60,6 @@ function statusLabel(status: TableStatus): string {
   }
 }
 
-/** Check if table can be paused. */
-function canPause(status: TableStatus): boolean {
-  return status === 'open'
-}
-
-/** Check if table can be resumed. */
-function canResume(status: TableStatus): boolean {
-  return status === 'paused'
-}
-
 /** Check if table can be closed. */
 function canClose(status: TableStatus): boolean {
   return status === 'open' || status === 'paused'
@@ -97,34 +84,6 @@ export function TableControls({
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
-
-  const handlePause = useCallback(async () => {
-    if (!canPause(table.status) || isOperating) return
-
-    setOperation('pausing')
-    try {
-      const updated = await pauseTable(table)
-      onStatusChange(updated)
-    } catch (error) {
-      onError?.(error instanceof Error ? error : new Error('Failed to pause table'))
-    } finally {
-      setOperation('idle')
-    }
-  }, [table, isOperating, onStatusChange, onError])
-
-  const handleResume = useCallback(async () => {
-    if (!canResume(table.status) || isOperating) return
-
-    setOperation('resuming')
-    try {
-      const updated = await resumeTable(table)
-      onStatusChange(updated)
-    } catch (error) {
-      onError?.(error instanceof Error ? error : new Error('Failed to resume table'))
-    } finally {
-      setOperation('idle')
-    }
-  }, [table, isOperating, onStatusChange, onError])
 
   const handleClose = useCallback(async () => {
     if (!canClose(table.status) || isOperating) return
@@ -166,46 +125,18 @@ export function TableControls({
           </span>
         </div>
 
-        {/* Control buttons — only visible in admin mode */}
-        {isAdmin && (
+        {/* Close button — only visible in admin mode */}
+        {isAdmin && canClose(table.status) && (
           <div className="mc-table-controls-actions">
-            {/* Pause/Resume button */}
-            {canPause(table.status) && (
-              <button
-                type="button"
-                className="mc-control-btn mc-control-btn--pause"
-                onClick={handlePause}
-                disabled={isOperating}
-                title="Pause table — prevent new joins"
-              >
-                {operation === 'pausing' ? 'Pausing...' : 'Pause'}
-              </button>
-            )}
-
-            {canResume(table.status) && (
-              <button
-                type="button"
-                className="mc-control-btn mc-control-btn--resume"
-                onClick={handleResume}
-                disabled={isOperating}
-                title="Resume table — allow new joins"
-              >
-                {operation === 'resuming' ? 'Resuming...' : 'Resume'}
-              </button>
-            )}
-
-            {/* Close button */}
-            {canClose(table.status) && (
-              <button
-                type="button"
-                className="mc-control-btn mc-control-btn--close"
-                onClick={handleClose}
-                disabled={isOperating}
-                title="End meeting — close table permanently"
-              >
-                {operation === 'closing' ? 'Closing...' : 'End Meeting'}
-              </button>
-            )}
+            <button
+              type="button"
+              className="mc-control-btn mc-control-btn--close"
+              onClick={handleClose}
+              disabled={isOperating}
+              title="End meeting — close table permanently"
+            >
+              {operation === 'closing' ? 'Closing...' : 'End Meeting'}
+            </button>
           </div>
         )}
 

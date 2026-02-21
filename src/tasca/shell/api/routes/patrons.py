@@ -54,11 +54,11 @@ async def register_patron_endpoint(
 ) -> PatronRegisterResponse:
     """Register a new patron with deduplication.
 
-    Deduplication is based on the patron name. If a patron with the same
-    name already exists, the existing patron is returned with is_new=False.
+    Deduplication is based on the patron display_name. If a patron with the same
+    display_name already exists, the existing patron is returned with is_new=False.
 
     Args:
-        data: Patron creation data with name and optional kind.
+        data: Patron creation data with display_name and optional kind.
         conn: Database connection (injected via dependency).
 
     Returns:
@@ -68,7 +68,7 @@ async def register_patron_endpoint(
         HTTPException: 500 if database operation fails.
     """
     # Check for existing patron by name (dedup)
-    existing_result = find_patron_by_name(conn, data.name)
+    existing_result = find_patron_by_name(conn, data.display_name)
 
     if isinstance(existing_result, Failure):
         error = existing_result.failure()
@@ -94,7 +94,7 @@ async def register_patron_endpoint(
 
     patron = Patron(
         id=patron_id,
-        name=data.name,
+        name=data.display_name,
         kind=data.kind,
         created_at=now,
     )

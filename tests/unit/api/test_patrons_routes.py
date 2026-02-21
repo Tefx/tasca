@@ -67,7 +67,7 @@ class TestRegisterPatron:
         """Register a new patron successfully."""
         response = client.post(
             "/patrons",
-            json={"name": "Test Agent", "kind": "agent"},
+            json={"display_name": "Test Agent", "kind": "agent"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -81,7 +81,7 @@ class TestRegisterPatron:
         """Register patron with default kind."""
         response = client.post(
             "/patrons",
-            json={"name": "Default Agent"},
+            json={"display_name": "Default Agent"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -92,7 +92,7 @@ class TestRegisterPatron:
         """Register patron with human kind."""
         response = client.post(
             "/patrons",
-            json={"name": "Human User", "kind": "human"},
+            json={"display_name": "Human User", "kind": "human"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -101,21 +101,21 @@ class TestRegisterPatron:
         assert data["is_new"] is True
 
     def test_register_patron_dedup_returns_existing(self, client: TestClient) -> None:
-        """Registering same name returns existing patron with is_new=False."""
+        """Registering same display_name returns existing patron with is_new=False."""
         # First registration
         response1 = client.post(
             "/patrons",
-            json={"name": "Duplicate Agent"},
+            json={"display_name": "Duplicate Agent"},
         )
         assert response1.status_code == 200
         data1 = response1.json()
         assert data1["is_new"] is True
         first_id = data1["id"]
 
-        # Second registration with same name - should return existing
+        # Second registration with same display_name - should return existing
         response2 = client.post(
             "/patrons",
-            json={"name": "Duplicate Agent"},
+            json={"display_name": "Duplicate Agent"},
         )
         assert response2.status_code == 200
         data2 = response2.json()
@@ -124,14 +124,14 @@ class TestRegisterPatron:
         assert data2["name"] == "Duplicate Agent"
 
     def test_register_patron_different_names_different_ids(self, client: TestClient) -> None:
-        """Registering different names creates different patrons."""
+        """Registering different display_names creates different patrons."""
         response1 = client.post(
             "/patrons",
-            json={"name": "Agent One"},
+            json={"display_name": "Agent One"},
         )
         response2 = client.post(
             "/patrons",
-            json={"name": "Agent Two"},
+            json={"display_name": "Agent Two"},
         )
 
         assert response1.status_code == 200
@@ -144,8 +144,8 @@ class TestRegisterPatron:
         assert data1["is_new"] is True
         assert data2["is_new"] is True
 
-    def test_register_patron_missing_name(self, client: TestClient) -> None:
-        """Register with missing name returns 422."""
+    def test_register_patron_missing_display_name(self, client: TestClient) -> None:
+        """Register with missing display_name returns 422."""
         response = client.post(
             "/patrons",
             json={"kind": "agent"},
@@ -172,7 +172,7 @@ class TestGetPatron:
         # Create a patron
         create_response = client.post(
             "/patrons",
-            json={"name": "Existing Agent", "kind": "agent"},
+            json={"display_name": "Existing Agent", "kind": "agent"},
         )
         patron_id = create_response.json()["id"]
 
@@ -198,7 +198,7 @@ class TestPatronFlow:
         # Register
         register_response = client.post(
             "/patrons",
-            json={"name": "Flow Agent", "kind": "agent"},
+            json={"display_name": "Flow Agent", "kind": "agent"},
         )
         assert register_response.status_code == 200
         data = register_response.json()
@@ -213,7 +213,7 @@ class TestPatronFlow:
         # Register duplicate
         dup_response = client.post(
             "/patrons",
-            json={"name": "Flow Agent"},
+            json={"display_name": "Flow Agent"},
         )
         assert dup_response.status_code == 200
         assert dup_response.json()["is_new"] is False
@@ -226,7 +226,7 @@ class TestPatronFlow:
         for i in range(3):
             response = client.post(
                 "/patrons",
-                json={"name": f"Agent-{i}", "kind": "agent"},
+                json={"display_name": f"Agent-{i}", "kind": "agent"},
             )
             assert response.status_code == 200
             ids.append(response.json()["id"])

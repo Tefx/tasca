@@ -164,7 +164,6 @@
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 500;
-  text-transform: capitalize;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -301,12 +300,21 @@
 }
 
 /* =============================================================================
-   Center Column — Stream
+   Center Column — Stream + Console
    ============================================================================= */
 
 .mc-col-center {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Stream panel — fills remaining space within the center column */
+.mc-stream-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }
@@ -1148,6 +1156,185 @@
   font-size: 0.6875rem;
   color: var(--mc-text-muted);
   text-transform: uppercase;
+}
+
+/* =============================================================================
+   Log Block — Reply anchor + Mention chips
+   ============================================================================= */
+
+.mc-log-reply-anchor {
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--mc-accent);
+  background: rgba(96, 165, 250, 0.1);
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--mc-radius-sm);
+  text-decoration: none;
+  cursor: default;
+}
+
+.mc-log-mentions-warn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.375rem;
+  background: rgba(234, 179, 8, 0.08);
+  border-left: 2px solid rgba(234, 179, 8, 0.5);
+  border-radius: 0 var(--mc-radius-sm) var(--mc-radius-sm) 0;
+}
+
+.mc-log-mentions-warn-icon {
+  font-size: 0.75rem;
+  color: #eab308;
+  flex-shrink: 0;
+}
+
+.mc-log-mention-chip {
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.375rem;
+  border-radius: 999px;
+}
+
+.mc-log-mention-chip--unresolved {
+  color: #eab308;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+/* Markdown content inside log blocks */
+.mc-log-content p {
+  margin: 0 0 0.25em;
+}
+
+.mc-log-content p:last-child {
+  margin-bottom: 0;
+}
+
+.mc-log-content code {
+  font-family: var(--mc-font-mono);
+  font-size: 0.8125em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.125em 0.3em;
+  border-radius: 3px;
+}
+
+.mc-log-content pre {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.625rem;
+  border-radius: var(--mc-radius-sm);
+  overflow-x: auto;
+  margin: 0.25rem 0;
+}
+
+.mc-log-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.mc-log-content ul,
+.mc-log-content ol {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.mc-log-content li {
+  margin: 0.125rem 0;
+}
+
+.mc-log-content blockquote {
+  border-left: 3px solid var(--mc-border);
+  margin: 0.25rem 0;
+  padding-left: 0.625rem;
+  color: var(--mc-text-muted);
+}
+
+/* =============================================================================
+   Command Console (footer input)
+   ============================================================================= */
+
+.mc-console {
+  flex-shrink: 0;
+  border-top: 1px solid var(--mc-border);
+  padding: 0.625rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.mc-console-error {
+  font-size: 0.75rem;
+  color: #f87171;
+  margin: 0;
+  padding: 0.25rem 0.375rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: var(--mc-radius-sm);
+}
+
+.mc-console-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.mc-console-input {
+  flex: 1;
+}
+
+.mc-console-send-btn {
+  flex-shrink: 0;
+  padding: 0.5rem 0.875rem;
+  background: var(--mc-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--mc-radius);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+  min-height: 44px;
+}
+
+.mc-console-send-btn:hover:not(:disabled) {
+  background: var(--mc-accent-hover);
+}
+
+.mc-console-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mc-console-send-btn:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+/* =============================================================================
+   Mention Input — Active Prefix Label
+   ============================================================================= */
+
+.mc-mention-input-prefix {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mc-accent);
+  pointer-events: none;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+/* When prefix is shown, indent the textarea */
+.mc-mention-input-wrapper:has(.mc-mention-input-prefix) .mc-mention-input {
+  padding-left: 4.5rem;
 }
 
 /* =============================================================================

@@ -14,13 +14,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getTable, type Table as TableType } from '../api/tables'
-import { listSeats, type Seat } from '../api/sayings'
+import { listSeats, postSaying, type Seat } from '../api/sayings'
 import { useSayingsStream } from '../hooks/useLongPoll'
 import { Board } from '../components/Board'
 import { Stream } from '../components/Stream'
-import { SeatDeck } from '../components/SeatDeck'
+import { SeatDeck, type PatronInfo } from '../components/SeatDeck'
 import { ModeIndicator } from '../components/ModeIndicator'
 import { TableControls } from '../components/TableControls'
+import { MentionInput } from '../components/MentionInput'
+import { useAuth } from '../auth/AuthContext'
 import '../styles/table.css'
 
 // =============================================================================
@@ -129,6 +131,76 @@ function shortCode(id: string): string {
 /** Build the share URL for a table. */
 function shareUrl(tableId: string): string {
   return `${window.location.origin}/tables/${tableId}`
+}
+
+// =============================================================================
+// Command Console
+// =============================================================================
+
+interface CommandConsoleProps {
+  tableId: string
+  seats: Seat[]
+  patrons?: Map<string, PatronInfo>
+  /** Called after a saying is successfully posted (to trigger stream refresh). */
+  onPosted?: () => void
+}
+
+function CommandConsole({ tableId, seats, patrons, onPosted }: CommandConsoleProps) {
+  const { mode } = useAuth()
+  const [value, setValue] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const isAdmin = mode === 'admin'
+
+  const handleSubmit = useCallback(async () => {
+    const trimmed = value.trim()
+    if (!trimmed || !isAdmin || isSubmitting) return
+
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await postSaying(tableId, { speaker_name: 'Human', content: trimmed, patron_id: null })
+      setValue('')
+      onPosted?.()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send saying')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [value, isAdmin, isSubmitting, tableId, onPosted])
+
+  return (
+    <div className="mc-console">
+      {error && (
+        <p className="mc-console-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="mc-console-row">
+        <MentionInput
+          value={value}
+          onChange={setValue}
+          seats={seats}
+          patrons={patrons}
+          disabled={!isAdmin}
+          onSubmit={handleSubmit}
+          placeholder={isAdmin ? 'Say something…' : 'Viewer mode — enter admin to post'}
+          className="mc-console-input"
+        />
+        {isAdmin && (
+          <button
+            type="button"
+            className="mc-console-send-btn"
+            onClick={handleSubmit}
+            disabled={!value.trim() || isSubmitting}
+            title="Send saying (Enter)"
+          >
+            {isSubmitting ? '…' : 'Send'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // =============================================================================
@@ -266,7 +338,10 @@ export function Table() {
         <div className="mc-col-left">
           <Board table={table} />
         </div>
-        <Stream sayings={sayings} connectionStatus={connectionStatus} />
+        <div className="mc-col-center">
+          <Stream sayings={sayings} connectionStatus={connectionStatus} />
+          <CommandConsole tableId={table.id} seats={seats} />
+        </div>
         <SeatDeck seats={seats} activeCount={activeCount} />
       </div>
     </div>

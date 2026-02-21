@@ -45,9 +45,21 @@ function statusDescription(status: TableStatus): string {
     case 'open':
       return 'Open for discussion'
     case 'paused':
-      return 'Paused — no new joins'
+      return 'PAUSED (soft) — no new joins'
     case 'closed':
       return 'Closed — meeting ended'
+  }
+}
+
+/** Get display label for the status pill. */
+function statusLabel(status: TableStatus): string {
+  switch (status) {
+    case 'open':
+      return 'open'
+    case 'paused':
+      return 'PAUSED (soft)'
+    case 'closed':
+      return 'closed'
   }
 }
 
@@ -150,7 +162,7 @@ export function TableControls({
             className={`mc-status-pill mc-status-pill--${table.status}`}
             title={statusDescription(table.status)}
           >
-            {table.status}
+            {statusLabel(table.status)}
           </span>
         </div>
 

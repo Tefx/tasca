@@ -266,11 +266,13 @@ export function MentionInput({
   return (
     <div ref={containerRef} className={`mc-mention-input-container ${className}`}>
       <div className="mc-mention-input-wrapper">
-        {disabled && (
+        {disabled ? (
           <div className="mc-mention-input-disabled-overlay" aria-label="Input disabled in viewer mode">
             <span className="mc-mention-input-label">HUMAN</span>
             <span className="mc-mention-input-readonly">View only — enter admin mode to post</span>
           </div>
+        ) : (
+          <span className="mc-mention-input-prefix" aria-hidden="true">HUMAN &gt;</span>
         )}
         <textarea
           ref={textareaRef}

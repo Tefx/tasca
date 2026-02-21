@@ -48,6 +48,20 @@ export interface Saying {
   pinned: boolean
   /** ISO timestamp — when the saying was created */
   created_at: string
+  /** Sequence of the saying this is a reply to (null if not a reply) */
+  reply_to?: number | null
+  /** Unresolved @mention handles (present when mentions could not be resolved) */
+  mentions_unresolved?: string[]
+}
+
+/** Request model for creating a new saying. */
+export interface SayingCreate {
+  /** Display name of the speaker */
+  speaker_name: string
+  /** Markdown content */
+  content: string
+  /** Patron ID if speaker is an AI agent; null for humans */
+  patron_id?: string | null
 }
 
 /** Response model from GET /tables/{id}/sayings — mirrors backend SayingListResponse. */
@@ -143,13 +157,26 @@ export function waitForSayings(
 ): Promise<SayingWaitResponse> {
   const params = new URLSearchParams({
     since_sequence: String(sinceSequence),
-    wait_ms: String(waitMs),
-    include_table: 'true',
+    // Backend expects `timeout` in seconds
+    timeout: String(Math.round(waitMs / 1000)),
   })
   return apiClient<SayingWaitResponse>(
     `/tables/${tableId}/sayings/wait?${params.toString()}`,
     { signal }
   )
+}
+
+/**
+ * Post a new saying to a table.
+ *
+ * Requires admin authentication (token set via setAuthToken).
+ * Backend endpoint: POST /tables/{tableId}/sayings
+ */
+export function postSaying(tableId: string, data: SayingCreate): Promise<Saying> {
+  return apiClient<Saying>(`/tables/${tableId}/sayings`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
 }
 
 /**

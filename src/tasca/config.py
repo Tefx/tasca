@@ -69,7 +69,7 @@ class Settings(BaseSettings):
                 "connect-src 'self'",
                 "font-src 'self'",
                 "object-src 'none'",
-                "base-uri 'self'",
+                "base-uri 'none'",
                 "frame-ancestors 'none'",
             ]
         else:

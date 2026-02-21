@@ -48,11 +48,14 @@ const ALLOWED_SVG_ELEMENTS = new Set([
   // Text
   'text',
   'tspan',
-  'textPath',
-  // Styling
-  'style',
-  // Links (will have href sanitized)
-  'a',
+  'textpath',
+  // Gradients (ADR-002 §1 - optional but commonly needed)
+  // NOTE: Element names must be lowercase since we use tagName.toLowerCase()
+  'lineargradient',
+  'radialgradient',
+  'stop',
+  // NOTE: 'style' element is FORBIDDEN per ADR-002 §4
+  // NOTE: 'a' element is FORBIDDEN per ADR-002 §2
 ])
 
 /**
@@ -65,7 +68,7 @@ const ALLOWED_SVG_ATTRIBUTES = new Set([
   // Core
   'id',
   'class',
-  'style',
+  // NOTE: 'style' attribute is FORBIDDEN per ADR-002 §4
   // Presentation
   'fill',
   'stroke',
@@ -124,6 +127,15 @@ const ALLOWED_SVG_ATTRIBUTES = new Set([
   'refX',
   'refY',
   'orient',
+  // Gradient (ADR-002 §1 - optional but commonly needed)
+  'gradientUnits',
+  'gradientTransform',
+  'spreadMethod',
+  'fx',
+  'fy',
+  'offset',
+  'stop-color',
+  'stop-opacity',
   // Use
   'xlink:title',
   // Accessibility
@@ -212,8 +224,26 @@ function sanitizeElement(element: Element): void {
 
   // Remove disallowed elements but keep their children (for some cases)
   if (!ALLOWED_SVG_ELEMENTS.has(tagName)) {
-    // For dangerous elements, remove them entirely
-    if (tagName === 'script' || tagName === 'foreignobject' || tagName === 'iframe') {
+    // Dangerous elements that are removed entirely (per ADR-002 §2)
+    // Includes: script, foreignObject, iframe, object, embed, audio, video, image, a, style
+    // SMIL animation tags: animate, set, animateTransform, animateMotion
+    const DANGEROUS_ELEMENTS = new Set([
+      'script',
+      'foreignobject',
+      'iframe',
+      'object',
+      'embed',
+      'audio',
+      'video',
+      'image',
+      'a',
+      'style',
+      'animate',
+      'set',
+      'animatetransform',
+      'animatemotion',
+    ])
+    if (DANGEROUS_ELEMENTS.has(tagName)) {
       element.remove()
       return
     }
@@ -274,12 +304,22 @@ function sanitizeElement(element: Element): void {
  * @returns True if dangerous content is found
  */
 export function hasDangerousSvgContent(svgString: string): boolean {
+  // Dangerous elements per ADR-002 §2 and §4
   const dangerousPatterns = [
     /<script\b/i,
     /<foreignobject\b/i,
     /<iframe\b/i,
     /<embed\b/i,
     /<object\b/i,
+    /<audio\b/i,
+    /<video\b/i,
+    /<image\b/i,
+    /<a\b/i, // Links forbidden per ADR-002 §2
+    /<style\b/i, // Style element forbidden per ADR-002 §4
+    /<animate\b/i, // SMIL animations forbidden per ADR-002 §2
+    /<set\b/i,
+    /<animatetransform\b/i,
+    /<animatemotion\b/i,
     /\bon\w+\s*=/i, // Event handlers
     /javascript:/i,
     /data:text\/html/i,
@@ -301,14 +341,43 @@ export function hasDangerousSvgContent(svgString: string): boolean {
 export function sanitizeSvgRegex(svgString: string): string {
   let result = svgString
 
+  // Remove dangerous elements per ADR-002 §2 and §4
+  // script, style, a, foreignObject, iframe, object, embed, audio, video, image
+  // SMIL animations: animate, set, animateTransform, animateMotion
+
   // Remove script tags and content
   result = result.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+
+  // Remove style tags and content (ADR-002 §4)
+  result = result.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
 
   // Remove foreignObject tags and content
   result = result.replace(/<foreignobject\b[^<]*(?:(?!<\/foreignobject>)<[^<]*)*<\/foreignobject>/gi, '')
 
-  // Remove iframe tags
+  // Remove iframe tags and content
   result = result.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+
+  // Remove object tags and content
+  result = result.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+
+  // Remove embed tags (self-closing)
+  result = result.replace(/<embed\b[^>]*\/?>/gi, '')
+
+  // Remove audio/video tags and content
+  result = result.replace(/<audio\b[^<]*(?:(?!<\/audio>)<[^<]*)*<\/audio>/gi, '')
+  result = result.replace(/<video\b[^<]*(?:(?!<\/video>)<[^<]*)*<\/video>/gi, '')
+
+  // Remove image tags
+  result = result.replace(/<image\b[^>]*\/?>/gi, '')
+
+  // Remove a tags and content (ADR-002 §2)
+  result = result.replace(/<a\b[^<]*(?:(?!<\/a>)<[^<]*)*<\/a>/gi, '')
+
+  // Remove SMIL animation tags (ADR-002 §2)
+  result = result.replace(/<animate\b[^>]*\/?>/gi, '')
+  result = result.replace(/<set\b[^>]*\/?>/gi, '')
+  result = result.replace(/<animatetransform\b[^>]*\/?>/gi, '')
+  result = result.replace(/<animatemotion\b[^>]*\/?>/gi, '')
 
   // Remove event handlers
   result = result.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '')

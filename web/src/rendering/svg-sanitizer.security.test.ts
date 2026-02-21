@@ -51,16 +51,17 @@ const XSS_ATTACK_VECTORS = [
     preserved: ['<svg'],
   },
   {
-    name: 'javascript: URL in href',
+    name: 'javascript: URL in href - a element forbidden',
     input: '<svg><a href="javascript:alert(\'XSS\')"><text>Click</text></a></svg>',
-    forbidden: ['javascript:', 'alert'],
-    preserved: ['<text>Click</text>'],
+    // NOTE: <a> element is FORBIDDEN per ADR-002 §2
+    forbidden: ['javascript:', 'alert', '<a'],
+    preserved: ['<svg'], // text content is removed along with the <a> element
   },
   {
-    name: 'data: URL with HTML',
+    name: 'data: URL with HTML - a element forbidden',
     input: '<svg><a href="data:text/html,<script>alert(\'XSS\')</script>"><text>Click</text></a></svg>',
-    forbidden: ['data:text/html', '<script'],
-    preserved: ['<text>Click</text>'],
+    forbidden: ['data:text/html', '<script', '<a'],
+    preserved: ['<svg'],
   },
   {
     name: 'foreignObject with HTML',
@@ -75,25 +76,31 @@ const XSS_ATTACK_VECTORS = [
     preserved: ['<svg'],
   },
   {
-    name: 'style tag with expression',
+    name: 'style tag with expression - FORBIDDEN per ADR-002 §4',
     input: '<svg><style>body{background:expression(alert("XSS"))}</style></svg>',
-    // Note: style tags are ALLOWLISTED but their CSS content is not sanitized
-    // This is acceptable because we control the Mermaid rendering pipeline
-    // and expression() only works in old IE browsers
-    // The sanitizer preserves the style element as it is needed for diagram styling
-    forbidden: ['<script', 'onload'],  // These should definitely be blocked
-    preserved: ['<svg', '<style>'],
-  },
-  {
-    name: 'animate element with onbegin',
-    input: '<svg><animate onbegin="alert(\'XSS\')" attributeName="x"/></svg>',
-    forbidden: ['onbegin', 'alert'],
+    // NOTE: <style> elements are FORBIDDEN per ADR-002 §4
+    // They increase attack surface via CSS url(), @import, and browser quirks
+    forbidden: ['<style', 'expression', 'alert'],
     preserved: ['<svg'],
   },
   {
-    name: 'set element with onbegin',
+    name: 'style element stripped entirely',
+    input: '<svg><style>.foo{fill:red}</style><circle cx="50" cy="50" r="40"/></svg>',
+    forbidden: ['<style', 'fill:red'],
+    preserved: ['<svg', '<circle'],
+  },
+  {
+    name: 'animate element - FORBIDDEN per ADR-002 §2 (SMIL)',
+    input: '<svg><animate onbegin="alert(\'XSS\')" attributeName="x"/></svg>',
+    // NOTE: SMIL animation elements are FORBIDDEN per ADR-002 §2
+    forbidden: ['<animate', 'onbegin', 'alert'],
+    preserved: ['<svg'],
+  },
+  {
+    name: 'set element - FORBIDDEN per ADR-002 §2 (SMIL)',
     input: '<svg><set onbegin="alert(\'XSS\')" attributeName="x"/></svg>',
-    forbidden: ['onbegin', 'alert'],
+    // NOTE: SMIL animation elements are FORBIDDEN per ADR-002 §2
+    forbidden: ['<set', 'onbegin', 'alert'],
     preserved: ['<svg'],
   },
   {
@@ -103,10 +110,10 @@ const XSS_ATTACK_VECTORS = [
     preserved: ['<svg'],
   },
   {
-    name: 'xlink:href javascript',
+    name: 'xlink:href javascript - a element forbidden',
     input: '<svg><a xlink:href="javascript:alert(\'XSS\')"><text>Click</text></a></svg>',
-    forbidden: ['javascript:', 'alert'],
-    preserved: ['<text>Click</text>'],
+    forbidden: ['javascript:', 'alert', '<a'],
+    preserved: ['<svg'],
   },
   {
     name: 'nested script in foreignObject',
@@ -148,14 +155,19 @@ const SAFE_SVG_CASES = [
     preserved: ['<marker', '<path'],
   },
   {
-    name: 'internal link',
-    input: '<svg><a href="#section"><text>Go to section</text></a></svg>',
-    preserved: ['href="#section"', '<text>'],
-  },
-  {
     name: 'named colors in fill',
     input: '<svg><circle cx="50" cy="50" r="30" fill="red" stroke="blue"/></svg>',
     preserved: ['fill="red"', 'stroke="blue"', '<circle'],
+  },
+  {
+    name: 'linearGradient element - ALLOWED per ADR-002 §1',
+    input: '<svg><defs><linearGradient id="grad1"><stop offset="0%" stop-color="red"/><stop offset="100%" stop-color="blue"/></linearGradient></defs></svg>',
+    preserved: ['<linearGradient', '<stop', 'stop-color'],
+  },
+  {
+    name: 'radialGradient element - ALLOWED per ADR-002 §1',
+    input: '<svg><defs><radialGradient id="grad2"><stop offset="0%" stop-color="green"/></radialGradient></defs></svg>',
+    preserved: ['<radialGradient', '<stop'],
   },
 ]
 
@@ -212,6 +224,26 @@ describe('SVG Sanitization', () => {
       expect(hasDangerousSvgContent('<svg><foreignObject></foreignObject></svg>')).toBe(true)
     })
 
+    it('detects a element (FORBIDDEN per ADR-002 §2)', () => {
+      expect(hasDangerousSvgContent('<svg><a href="https://evil.com"></a></svg>')).toBe(true)
+    })
+
+    it('detects style element (FORBIDDEN per ADR-002 §4)', () => {
+      expect(hasDangerousSvgContent('<svg><style>.foo{fill:red}</style></svg>')).toBe(true)
+    })
+
+    it('detects animate element (SMIL, FORBIDDEN per ADR-002 §2)', () => {
+      expect(hasDangerousSvgContent('<svg><animate attributeName="x"/></svg>')).toBe(true)
+    })
+
+    it('detects set element (SMIL, FORBIDDEN per ADR-002 §2)', () => {
+      expect(hasDangerousSvgContent('<svg><set attributeName="x"/></svg>')).toBe(true)
+    })
+
+    it('detects image element (FORBIDDEN per ADR-002 §2)', () => {
+      expect(hasDangerousSvgContent('<svg><image href="https://evil.com/img.png"/></svg>')).toBe(true)
+    })
+
     it('returns false for safe SVG', () => {
       expect(hasDangerousSvgContent('<svg><circle cx="50" cy="50" r="40"/></svg>')).toBe(false)
     })
@@ -228,6 +260,29 @@ describe('SVG Sanitization', () => {
       const result = sanitizeSvgRegex('<svg onload="alert(1)"></svg>')
       expect(result).not.toContain('onload')
       expect(result).not.toContain('alert')
+    })
+
+    it('removes style tags (FORBIDDEN per ADR-002 §4)', () => {
+      const result = sanitizeSvgRegex('<svg><style>.foo{fill:red}</style><circle/></svg>')
+      expect(result).not.toContain('<style')
+      expect(result).not.toContain('fill:red')
+      expect(result).toContain('<circle')
+    })
+
+    it('removes a tags (FORBIDDEN per ADR-002 §2)', () => {
+      const result = sanitizeSvgRegex('<svg><a href="https://evil.com"><text>Click</text></a></svg>')
+      expect(result).not.toContain('<a')
+      expect(result).not.toContain('evil.com')
+    })
+
+    it('removes animate elements (SMIL, FORBIDDEN per ADR-002 §2)', () => {
+      const result = sanitizeSvgRegex('<svg><animate attributeName="x"/></svg>')
+      expect(result).not.toContain('<animate')
+    })
+
+    it('removes set elements (SMIL, FORBIDDEN per ADR-002 §2)', () => {
+      const result = sanitizeSvgRegex('<svg><set attributeName="x"/></svg>')
+      expect(result).not.toContain('<set')
     })
 
     it('preserves safe content', () => {

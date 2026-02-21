@@ -189,3 +189,40 @@ def find_patron_by_name(conn: sqlite3.Connection, name: str) -> Result[Patron | 
         return Success(_row_to_patron(row))
     except sqlite3.Error as e:
         return Failure(PatronDatabaseError(f"Failed to find patron: {e}"))
+
+
+# @shell_orchestration: Repository operation with Result type
+def list_patrons(conn: sqlite3.Connection) -> Result[list[Patron], PatronError]:
+    """List all patrons from the database.
+
+    Used for mention resolution to find matching patrons.
+
+    Args:
+        conn: Database connection.
+
+    Returns:
+        Success with list of all Patrons, or Failure with PatronDatabaseError.
+
+    Example:
+        >>> from tasca.shell.storage.database import apply_schema
+        >>> conn = sqlite3.connect(":memory:")
+        >>> _ = apply_schema(conn)
+        >>> result = list_patrons(conn)
+        >>> isinstance(result, Success)
+        True
+        >>> result.unwrap()
+        []
+        >>> conn.close()
+    """
+    try:
+        cursor = conn.execute(
+            """
+            SELECT id, name, kind, created_at
+            FROM patrons
+            ORDER BY name
+            """
+        )
+        rows = cursor.fetchall()
+        return Success([_row_to_patron(row) for row in rows])
+    except sqlite3.Error as e:
+        return Failure(PatronDatabaseError(f"Failed to list patrons: {e}"))

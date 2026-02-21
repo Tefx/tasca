@@ -18,6 +18,20 @@ class SeatState(str, Enum):
     LEFT = "left"
 
 
+# Map spec states (running|idle|done) to internal states
+SPEC_STATE_TO_INTERNAL: dict[str, SeatState] = {
+    "running": SeatState.JOINED,
+    "idle": SeatState.JOINED,  # Idle still counts as joined/present
+    "done": SeatState.LEFT,
+}
+
+# Map internal states to spec states
+INTERNAL_STATE_TO_SPEC: dict[SeatState, str] = {
+    SeatState.JOINED: "running",  # Active participation
+    SeatState.LEFT: "done",  # Completed
+}
+
+
 SeatId = NewType("SeatId", str)
 
 

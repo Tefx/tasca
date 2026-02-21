@@ -121,6 +121,38 @@ def get_seat(conn: sqlite3.Connection, seat_id: SeatId) -> Result[Seat, SeatErro
         return Failure(SeatDatabaseError(f"Failed to get seat: {e}"))
 
 
+def get_seat_by_patron(
+    conn: sqlite3.Connection, table_id: str, patron_id: str
+) -> Result[Seat, SeatError]:
+    """Get a seat by (table_id, patron_id) from the database.
+
+    Args:
+        conn: Database connection.
+        table_id: ID of the table.
+        patron_id: ID of the patron.
+
+    Returns:
+        Success with Seat, or Failure with SeatNotFoundError or SeatDatabaseError.
+    """
+    try:
+        cursor = conn.execute(
+            """
+            SELECT id, table_id, patron_id, state, last_heartbeat, joined_at
+            FROM seats WHERE table_id = ? AND patron_id = ?
+            """,
+            (table_id, patron_id),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            # Use SeatNotFoundError with a placeholder seat_id
+            # The message will still be useful for debugging
+            return Failure(SeatNotFoundError(SeatId(f"{table_id}:{patron_id}")))
+
+        return Success(_row_to_seat(row))
+    except sqlite3.Error as e:
+        return Failure(SeatDatabaseError(f"Failed to get seat by patron: {e}"))
+
+
 def heartbeat_seat(
     conn: sqlite3.Connection, seat_id: SeatId, now: datetime
 ) -> Result[Seat, SeatError]:
@@ -157,6 +189,61 @@ def heartbeat_seat(
         return Success(seat.model_copy(update={"last_heartbeat": now}))
     except sqlite3.Error as e:
         return Failure(SeatDatabaseError(f"Failed to heartbeat seat: {e}"))
+
+
+def heartbeat_seat_by_patron(
+    conn: sqlite3.Connection,
+    table_id: str,
+    patron_id: str,
+    now: datetime,
+    state: SeatState | None = None,
+) -> Result[Seat, SeatError]:
+    """Update a seat's heartbeat and optionally its state by patron.
+
+    This is the heartbeat mechanism for spec-compliant seat_heartbeat.
+    Seats are looked up by (table_id, patron_id) instead of seat_id.
+
+    Args:
+        conn: Database connection.
+        table_id: ID of the table.
+        patron_id: ID of the patron.
+        now: Current timestamp for the heartbeat.
+        state: Optional new state to set (if None, state is unchanged).
+
+    Returns:
+        Success with updated Seat, or Failure with SeatError.
+    """
+    try:
+        # First get the seat by patron
+        get_result = get_seat_by_patron(conn, table_id, patron_id)
+        if isinstance(get_result, Failure):
+            return get_result
+
+        seat = get_result.unwrap()
+
+        # Update the heartbeat (and optionally state)
+        if state is not None:
+            conn.execute(
+                """
+                UPDATE seats SET last_heartbeat = ?, state = ? WHERE id = ?
+                """,
+                (now.isoformat(), state.value, seat.id),
+            )
+            updated_state = state
+        else:
+            conn.execute(
+                """
+                UPDATE seats SET last_heartbeat = ? WHERE id = ?
+                """,
+                (now.isoformat(), seat.id),
+            )
+            updated_state = seat.state
+
+        conn.commit()
+
+        return Success(seat.model_copy(update={"last_heartbeat": now, "state": updated_state}))
+    except sqlite3.Error as e:
+        return Failure(SeatDatabaseError(f"Failed to heartbeat seat by patron: {e}"))
 
 
 def find_seats_by_table(conn: sqlite3.Connection, table_id: str) -> Result[list[Seat], SeatError]:

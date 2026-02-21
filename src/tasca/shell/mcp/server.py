@@ -29,12 +29,25 @@ from returns.result import Failure
 from tasca.config import settings
 from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
-from tasca.core.domain.seat import Seat, SeatId, SeatState
+from tasca.core.domain.seat import (
+    INTERNAL_STATE_TO_SPEC,
+    SPEC_STATE_TO_INTERNAL,
+    Seat,
+    SeatId,
+    SeatState,
+)
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
 from tasca.core.services.limits_service import (
     LimitError,
     LimitsConfig,
     settings_to_limits_config,
+)
+from tasca.core.services.mention_service import (
+    MentionsResult,
+    PatronMatch,
+    has_ambiguous_mentions,
+    parse_mentions,
+    resolve_mentions,
 )
 from tasca.core.services.seat_service import (
     DEFAULT_SEAT_TTL_SECONDS,
@@ -62,6 +75,7 @@ from tasca.shell.storage.patron_repo import (
     create_patron,
     find_patron_by_name,
     get_patron,
+    list_patrons,
 )
 from tasca.shell.storage.saying_repo import (
     append_saying,
@@ -72,9 +86,9 @@ from tasca.shell.storage.seat_repo import (
     SeatNotFoundError,
     create_seat,
     find_seats_by_table,
-)
-from tasca.shell.storage.seat_repo import (
+    get_seat_by_patron,
     heartbeat_seat as repo_heartbeat_seat,
+    heartbeat_seat_by_patron,
 )
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
@@ -583,14 +597,18 @@ def table_get(table_id: str) -> dict[str, Any]:
     )
 
 
-# @shell_complexity: 10 branches for table lookup + can_say guard + limits enforcement + dedup + mention resolution + error paths
+# @shell_complexity: 12 branches for table lookup + can_say guard + limits enforcement + dedup + mention resolution + validation + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def table_say(
     table_id: str,
     content: str,
-    speaker_name: str,
+    speaker_kind: Literal["agent", "human"] = "agent",
     patron_id: str | None = None,
+    speaker_name: str | None = None,
+    saying_type: str | None = None,
+    mentions: list[str] | None = None,
+    reply_to_sequence: int | None = None,
     dedup_id: str | None = None,
 ) -> dict[str, Any]:
     """Append a saying (message) to a table.
@@ -598,8 +616,15 @@ def table_say(
     Args:
         table_id: UUID of the table.
         content: Markdown content of the saying.
-        speaker_name: Name of the speaker.
-        patron_id: Patron ID of the speaker (optional, recommended for agents).
+        speaker_kind: Kind of speaker - "agent" or "human". Defaults to "agent".
+            If "agent", patron_id is REQUIRED.
+            If "human", patron_id MUST be omitted or null.
+        patron_id: Patron ID of the speaker (REQUIRED if speaker_kind is "agent").
+        speaker_name: Display name of the speaker (optional, derived from patron if not provided).
+        saying_type: Type classification of the saying (optional, future field).
+        mentions: List of mention handles to resolve (e.g., ["alice", "all"]).
+            Optional - if provided, mentions are resolved and results returned.
+        reply_to_sequence: Sequence number of saying this replies to (optional, future field).
         dedup_id: Optional explicit idempotency key for request deduplication.
             When provided, duplicate requests with the same dedup_id within
             the same scope (table_id + speaker) return the cached response
@@ -620,17 +645,50 @@ def table_say(
                 },
                 "content": "Hello world",
                 "pinned": false,
-                "created_at": "2024-01-01T00:00:00Z"
+                "created_at": "2024-01-01T00:00:00Z",
+                "mentions_all": false,
+                "mentions_resolved": ["patron-id-1"],
+                "mentions_unresolved": []
             }
         }
 
     Error codes:
+        - INVALID_REQUEST: patron_id required for agent speakers, or patron_id not allowed for human speakers
         - NOT_FOUND: Table not found
         - OPERATION_NOT_ALLOWED: Table is closed (cannot add sayings)
         - LIMIT_EXCEEDED: Content limits exceeded (max_content_length, max_sayings_per_table, max_mentions_per_saying, max_bytes_per_table)
         - DATABASE_ERROR: Failed to append saying
     """
     conn = next(get_mcp_db())
+
+    # Backward compatibility: if speaker_kind is default "agent" but patron_id is not provided,
+    # treat as human (matching old behavior where patron_id=None meant human).
+    # If speaker_kind is explicitly "human" or "agent", validate per spec constraints.
+    actual_speaker_kind = speaker_kind
+    if speaker_kind == "agent" and patron_id is None and speaker_name is not None:
+        # Old API: speaker_name provided but no patron_id → treat as human
+        actual_speaker_kind = "human"
+    elif speaker_kind == "agent" and patron_id is None:
+        # Default speaker_kind="agent" but no patron_id → treat as human
+        actual_speaker_kind = "human"
+
+    # Validate speaker_kind + patron_id constraints per spec
+    # If speaker_kind == "agent", patron_id is REQUIRED
+    # If speaker_kind == "human", patron_id MUST be omitted or null
+    if actual_speaker_kind == "agent":
+        if patron_id is None:
+            return error_response(
+                "INVALID_REQUEST",
+                "patron_id is required when speaker_kind is 'agent'",
+                {"speaker_kind": actual_speaker_kind},
+            )
+    else:  # actual_speaker_kind == "human"
+        if patron_id is not None:
+            return error_response(
+                "INVALID_REQUEST",
+                "patron_id must be null or omitted when speaker_kind is 'human'",
+                {"speaker_kind": actual_speaker_kind, "patron_id": patron_id},
+            )
 
     # Verify table exists
     table_result = get_table(conn, TableId(table_id))
@@ -650,18 +708,37 @@ def table_say(
             {"table_status": table.status.value},
         )
 
+    # Resolve speaker name: if not provided, look up patron or use default
+    resolved_name = speaker_name
+    if resolved_name is None:
+        if patron_id is not None:
+            # Look up patron name
+            patron_result = get_patron(conn, PatronId(patron_id))
+            if isinstance(patron_result, Failure):
+                error = patron_result.failure()
+                if isinstance(error, PatronNotFoundError):
+                    return error_response("NOT_FOUND", f"Patron not found: {patron_id}")
+                return error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+            patron = patron_result.unwrap()
+            resolved_name = patron.name
+        else:
+            # Human speaker without name - use default
+            resolved_name = "Human"
+
     # Create speaker
-    if patron_id is not None:
+    if actual_speaker_kind == "agent":
+        # patron_id is guaranteed non-None due to validation above
+        assert patron_id is not None  # for type checker
         speaker = Speaker(
             kind=SpeakerKind.AGENT,
-            name=speaker_name,
+            name=resolved_name,
             patron_id=PatronId(patron_id),
         )
         speaker_key = patron_id
-    else:
+    else:  # actual_speaker_kind == "human"
         speaker = Speaker(
             kind=SpeakerKind.HUMAN,
-            name=speaker_name,
+            name=resolved_name,
             patron_id=None,
         )
         speaker_key = "human"
@@ -696,6 +773,47 @@ def table_say(
 
     saying = result.unwrap()
 
+    # Resolve mentions if provided
+    mentions_all = False
+    mentions_resolved: list[str] = []
+    mentions_unresolved: list[str] = []
+
+    if mentions:
+        # Get all patrons for mention resolution
+        patrons_result = list_patrons(conn)
+        if isinstance(patrons_result, Failure):
+            # Log but don't fail - mentions are optional enhancement
+            logger.warning(
+                "Failed to fetch patrons for mention resolution",
+                extra={"error": str(patrons_result.failure())},
+            )
+        else:
+            patrons = patrons_result.unwrap()
+            patron_matches = [
+                PatronMatch(patron_id=p.id, alias=None, display_name=p.name) for p in patrons
+            ]
+            mentions_result = resolve_mentions(mentions, patron_matches)
+
+            # Check for ambiguous mentions (error condition per spec)
+            if has_ambiguous_mentions(mentions_result):
+                return error_response(
+                    "AMBIGUOUS_MENTION",
+                    "Multiple patrons match the provided mention handle(s)",
+                    {
+                        "ambiguous": [
+                            {
+                                "handle": am.handle,
+                                "candidates": [c.patron_id for c in am.candidates],
+                            }
+                            for am in mentions_result.ambiguous
+                        ],
+                    },
+                )
+
+            mentions_all = mentions_result.mentions_all
+            mentions_resolved = [r.patron_id for r in mentions_result.resolved]
+            mentions_unresolved = [u.handle for u in mentions_result.unresolved]
+
     # Log saying append
     log_say(
         logger,
@@ -706,10 +824,20 @@ def table_say(
         patron_id=saying.speaker.patron_id,
     )
 
+    # Build response per spec, with backward-compatible fields
+    # Spec output: saying_id, sequence, created_at, mentions_all, mentions_resolved, mentions_unresolved
+    # Backward-compatible: id, table_id, speaker, content, pinned
     response_data = {
+        # Spec fields
+        "saying_id": saying.id,
+        "sequence": saying.sequence,
+        "created_at": saying.created_at.isoformat(),
+        "mentions_all": mentions_all,
+        "mentions_resolved": mentions_resolved,
+        "mentions_unresolved": mentions_unresolved,
+        # Backward-compatible fields (not in spec but maintained for existing clients)
         "id": saying.id,
         "table_id": saying.table_id,
-        "sequence": saying.sequence,
         "speaker": {
             "kind": saying.speaker.kind.value,
             "name": saying.speaker.name,
@@ -717,7 +845,6 @@ def table_say(
         },
         "content": saying.content,
         "pinned": saying.pinned,
-        "created_at": saying.created_at.isoformat(),
     }
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
@@ -1299,49 +1426,68 @@ async def table_wait(
 # =============================================================================
 
 
-# @shell_complexity: 6 branches for seat lookup + TTL update + state transition + expiry GC + error paths
+# @shell_complexity: 8 branches for patron/seat lookup + state mapping + TTL handling + idempotency + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def seat_heartbeat(
     table_id: str,
-    seat_id: str,
+    patron_id: str | None = None,
+    state: Literal["running", "idle", "done"] | None = None,
+    ttl_ms: int | None = None,
     dedup_id: str | None = None,
+    seat_id: str | None = None,
 ) -> dict[str, Any]:
     """Update a seat's heartbeat to indicate presence.
 
+    This is the spec-compliant heartbeat endpoint. Seats are identified by
+    (table_id, patron_id) as per v0.1 spec. The deprecated seat_id parameter
+    is kept for backward compatibility.
+
     Args:
         table_id: UUID of the table.
-        seat_id: UUID of the seat to update.
+        patron_id: UUID of the patron (spec-compliant, preferred).
+        state: Seat state - "running" (active), "idle" (present but inactive),
+            or "done" (finished). If None, state is unchanged.
+        ttl_ms: Heartbeat timeout in milliseconds. If None, uses default (60s).
         dedup_id: Optional explicit idempotency key for request deduplication.
             When provided, duplicate requests with the same dedup_id return
             the cached response (default TTL: 24 hours).
-            Dedup scope is: {seat_id, dedup_id}.
+            Dedup scope is: {table_id, patron_id or seat_id, dedup_id}.
+        seat_id: UUID of the seat (deprecated, use patron_id instead).
 
     Returns:
-        Success envelope with seat details and expiry:
+        Success envelope with expiry time:
         {
             "ok": true,
             "data": {
-                "seat": {
-                    "id": "uuid-string",
-                    "table_id": "table-uuid",
-                    "patron_id": "patron-uuid",
-                    "state": "joined",
-                    "last_heartbeat": "2024-01-01T00:00:00Z",
-                    "joined_at": "2024-01-01T00:00:00Z"
-                },
                 "expires_at": "2024-01-01T00:01:00Z"
             }
         }
 
     Error codes:
-        - NOT_FOUND: Seat not found
+        - NOT_FOUND: Seat not found (or patron not found at table)
+        - INVALID_REQUEST: Neither patron_id nor seat_id provided
         - DATABASE_ERROR: Failed to update heartbeat
     """
     conn = next(get_mcp_db())
 
-    # Resource key for idempotency scope: {seat_id}
-    resource_key = f"seat:{seat_id}"
+    # Validate: must provide either patron_id or seat_id
+    if patron_id is None and seat_id is None:
+        return error_response(
+            "INVALID_REQUEST",
+            "Either patron_id or seat_id must be provided",
+        )
+
+    # Determine the resource key for idempotency
+    # Use patron_id if available (spec-compliant), otherwise seat_id (legacy)
+    if patron_id is not None:
+        resource_key = f"seat:{table_id}:{patron_id}"
+        lookup_key = patron_id
+    else:
+        # At this point, seat_id is guaranteed not None (validated above)
+        assert seat_id is not None  # for type checker
+        resource_key = f"seat:{seat_id}"
+        lookup_key = seat_id
 
     # Check idempotency key if provided
     if dedup_id is not None:
@@ -1352,35 +1498,47 @@ def seat_heartbeat(
 
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
-            # Log dedup hit
             log_dedup_hit(logger, "seat_heartbeat", resource_key, dedup_id)
-            # Return cached response (return_existing semantics)
             return success_response(cached_response["data"])
 
     now = datetime.now(UTC)
 
-    result = repo_heartbeat_seat(conn, SeatId(seat_id), now)
+    # Determine TTL (convert ms to seconds, default 60s)
+    ttl_seconds = int(ttl_ms / 1000) if ttl_ms is not None else DEFAULT_SEAT_TTL_SECONDS
+
+    # Map spec state to internal state
+    internal_state = None
+    if state is not None:
+        internal_state = SPEC_STATE_TO_INTERNAL.get(state)
+        if internal_state is None:
+            return error_response(
+                "INVALID_REQUEST",
+                f"Invalid state value: {state}. Must be 'running', 'idle', or 'done'",
+            )
+
+    # Get seat and update heartbeat
+    if patron_id is not None:
+        # Spec-compliant path: lookup by (table_id, patron_id)
+        result = heartbeat_seat_by_patron(conn, table_id, patron_id, now, internal_state)
+    else:
+        # Legacy path: lookup by seat_id (seat_id guaranteed not None by validation above)
+        result = repo_heartbeat_seat(conn, SeatId(seat_id), now)  # type: ignore[arg-type]
+        # Note: legacy path doesn't support state update
 
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, SeatNotFoundError):
-            return error_response("NOT_FOUND", f"Seat not found: {seat_id}")
+            return error_response("NOT_FOUND", f"Seat not found: {lookup_key}")
         return error_response("DATABASE_ERROR", f"Failed to update heartbeat: {error}")
 
     seat = result.unwrap()
-    expires_at = calculate_expiry_time(seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
+    expires_at = calculate_expiry_time(seat.last_heartbeat, ttl_seconds)
 
+    # Spec-compliant response (simple, just expires_at)
     response_data = {
-        "seat": {
-            "id": seat.id,
-            "table_id": seat.table_id,
-            "patron_id": seat.patron_id,
-            "state": seat.state.value,
-            "last_heartbeat": seat.last_heartbeat.isoformat(),
-            "joined_at": seat.joined_at.isoformat(),
-        },
         "expires_at": expires_at.isoformat(),
     }
+
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
         _ = store_idempotency_key(

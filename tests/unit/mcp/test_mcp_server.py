@@ -383,8 +383,32 @@ class TestSeatHeartbeat:
         assert result["ok"] is False
         assert result["error"]["code"] == "NOT_FOUND"
 
-    def test_heartbeat_seat_success(self) -> None:
-        """Heartbeat updates seat and returns expiry."""
+    def test_heartbeat_requires_patron_or_seat_id(self) -> None:
+        """Heartbeat requires either patron_id or seat_id."""
+        result = seat_heartbeat(table_id="any-table")
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "INVALID_REQUEST"
+
+    def test_heartbeat_with_patron_id(self) -> None:
+        """Heartbeat with patron_id returns expiry (spec-compliant path)."""
+        # Create patron, table, and seat
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Test question")
+        table_id = table_result["data"]["id"]
+        table_join(table_id=table_id, patron_id=patron_id)
+
+        # Heartbeat with patron_id (spec-compliant)
+        result = seat_heartbeat(table_id=table_id, patron_id=patron_id)
+
+        assert result["ok"] is True
+        data = result["data"]
+        # Spec-compliant response is minimal: just expires_at
+        assert "expires_at" in data
+
+    def test_heartbeat_with_seat_id_legacy(self) -> None:
+        """Heartbeat with seat_id returns expiry (legacy path)."""
         # Create patron, table, and seat
         patron_result = patron_register(name=unique_name())
         patron_id = patron_result["data"]["id"]
@@ -393,14 +417,65 @@ class TestSeatHeartbeat:
         join_result = table_join(table_id=table_id, patron_id=patron_id)
         seat_id = join_result["data"]["seat"]["id"]
 
-        # Heartbeat
+        # Heartbeat with seat_id (legacy)
         result = seat_heartbeat(table_id=table_id, seat_id=seat_id)
 
         assert result["ok"] is True
         data = result["data"]
-        assert data["seat"]["id"] == seat_id
-        assert data["seat"]["state"] == "joined"
         assert "expires_at" in data
+
+    def test_heartbeat_with_state_running(self) -> None:
+        """Heartbeat with state=running updates seat."""
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Test question")
+        table_id = table_result["data"]["id"]
+        table_join(table_id=table_id, patron_id=patron_id)
+
+        result = seat_heartbeat(table_id=table_id, patron_id=patron_id, state="running")
+
+        assert result["ok"] is True
+        assert "expires_at" in result["data"]
+
+    def test_heartbeat_with_state_done(self) -> None:
+        """Heartbeat with state=done marks seat as left."""
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Test question")
+        table_id = table_result["data"]["id"]
+        table_join(table_id=table_id, patron_id=patron_id)
+
+        result = seat_heartbeat(table_id=table_id, patron_id=patron_id, state="done")
+
+        assert result["ok"] is True
+        assert "expires_at" in result["data"]
+
+    def test_heartbeat_with_custom_ttl(self) -> None:
+        """Heartbeat with custom ttl_ms returns appropriate expiry."""
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Test question")
+        table_id = table_result["data"]["id"]
+        table_join(table_id=table_id, patron_id=patron_id)
+
+        # Custom TTL of 30 seconds (30000 ms)
+        result = seat_heartbeat(table_id=table_id, patron_id=patron_id, ttl_ms=30000)
+
+        assert result["ok"] is True
+        assert "expires_at" in result["data"]
+
+    def test_heartbeat_patron_not_at_table(self) -> None:
+        """Heartbeat for patron not at table returns NOT_FOUND."""
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Test question")
+        table_id = table_result["data"]["id"]
+        # Note: patron has NOT joined the table
+
+        result = seat_heartbeat(table_id=table_id, patron_id=patron_id)
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
 
 
 class TestSeatList:

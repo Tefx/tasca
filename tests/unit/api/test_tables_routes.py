@@ -6,6 +6,8 @@ Uses FastAPI TestClient with an in-memory SQLite database.
 
 from __future__ import annotations
 
+import json
+import logging
 import sqlite3
 from typing import Generator
 from unittest.mock import patch
@@ -404,3 +406,104 @@ class TestTableFlow:
         # Verify deleted
         get_response2 = admin_client.get(f"/tables/{table_id}")
         assert get_response2.status_code == 404
+
+
+# =============================================================================
+# Observability Tests - caplog-based structured log assertions
+# =============================================================================
+
+
+class TestTablesObservability:
+    """Tests for structured logging observability during table operations.
+
+    These tests use pytest's caplog fixture to capture log output at runtime
+    and assert on the structured JSON fields.
+    """
+
+    def test_create_table_emits_structured_log(
+        self, admin_client: TestClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """POST /tables emits table_created structured log event."""
+        caplog.set_level(logging.INFO, logger="tasca.shell.api.routes.tables")
+
+        response = admin_client.post(
+            "/tables",
+            json={"question": "Test observability?", "context": "Testing logs"},
+        )
+        assert response.status_code == 200
+        table_id = response.json()["id"]
+
+        # Find the table_created log event
+        table_created_logs = [r for r in caplog.records if "table_created" in r.getMessage()]
+        assert len(table_created_logs) >= 1, "Expected table_created log event"
+
+        # Parse and assert structured fields
+        log_data = json.loads(table_created_logs[0].getMessage())
+        assert log_data["event"] == "table_created"
+        assert log_data["table_id"] == table_id
+        assert log_data["speaker"] == "rest:admin"
+        assert "timestamp" in log_data
+
+    def test_update_table_emits_structured_log(
+        self, admin_client: TestClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """PUT /tables/{id} emits table_updated structured log event."""
+        caplog.set_level(logging.INFO, logger="tasca.shell.api.routes.tables")
+
+        # Create a table
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Original?"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Clear logs from create
+        caplog.clear()
+
+        # Update the table
+        update_response = admin_client.put(
+            f"/tables/{table_id}?expected_version=1",
+            json={"question": "Updated?", "context": None, "status": "open"},
+        )
+        assert update_response.status_code == 200
+
+        # Find the table_updated log event
+        table_updated_logs = [r for r in caplog.records if "table_updated" in r.getMessage()]
+        assert len(table_updated_logs) >= 1, "Expected table_updated log event"
+
+        # Parse and assert structured fields
+        log_data = json.loads(table_updated_logs[0].getMessage())
+        assert log_data["event"] == "table_updated"
+        assert log_data["table_id"] == table_id
+        assert log_data["version"] == 2
+        assert log_data["speaker"] == "rest:admin"
+
+    def test_delete_table_emits_structured_log(
+        self, admin_client: TestClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """DELETE /tables/{id} emits table_deleted structured log event."""
+        caplog.set_level(logging.INFO, logger="tasca.shell.api.routes.tables")
+
+        # Create a table
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "To delete?"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Clear logs from create
+        caplog.clear()
+
+        # Delete the table
+        delete_response = admin_client.delete(f"/tables/{table_id}")
+        assert delete_response.status_code == 200
+
+        # Find the table_deleted log event
+        table_deleted_logs = [r for r in caplog.records if "table_deleted" in r.getMessage()]
+        assert len(table_deleted_logs) >= 1, "Expected table_deleted log event"
+
+        # Parse and assert structured fields
+        log_data = json.loads(table_deleted_logs[0].getMessage())
+        assert log_data["event"] == "table_deleted"
+        assert log_data["table_id"] == table_id
+        assert log_data["speaker"] == "rest:admin"

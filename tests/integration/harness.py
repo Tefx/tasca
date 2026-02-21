@@ -64,19 +64,19 @@ The harness covers the following scenarios:
    - tools/call - Invoke a tool
 
 2. **Patron Tools**
-   - tasca.patron.register - Register a new patron
-   - tasca.patron.get - Retrieve patron details
+   - tasca.patron.register - Register a new patron (name, kind, dedup_id)
+   - tasca.patron.get - Retrieve patron details by ID
 
 3. **Table Tools**
-   - tasca.table.create - Create a discussion table
-   - tasca.table.join - Join a table via invite code
-   - tasca.table.get - Get table details
-   - tasca.table.say - Add a saying to a table
-   - tasca.table.listen - Listen for new sayings
+   - tasca.table.create - Create a discussion table (question, context, dedup_id)
+   - tasca.table.join - Join a table by table_id and patron_id
+   - tasca.table.get - Get table details by ID
+   - tasca.table.say - Add a saying to a table (table_id, content, speaker_kind, patron_id, mentions, dedup_id)
+   - tasca.table.listen - Listen for new sayings (table_id, since_sequence, limit)
 
 4. **Seat Tools**
-   - tasca.seat.heartbeat - Update seat presence
-   - tasca.seat.list - List all seats on a table
+   - tasca.seat.heartbeat - Update seat presence by seat_id
+   - tasca.seat.list - List all seats on a table (table_id, active_only)
 
 ### MCP STDIO Scenarios
 
@@ -463,31 +463,23 @@ class MCPHTTPHarness:
 
     async def patron_register(
         self,
-        patron_id: str | None = None,
-        display_name: str | None = None,
-        alias: str | None = None,
-        meta: dict | None = None,
+        name: str,
+        kind: str = "agent",
+        dedup_id: str | None = None,
     ) -> dict:
         """Register a new patron.
 
         Args:
-            patron_id: Optional patron ID (auto-generated if omitted)
-            display_name: Human-readable name
-            alias: Short alias for mentions
-            meta: Optional metadata
+            name: Name or identifier for the patron (used for deduplication).
+            kind: Type of patron - 'agent' or 'human' (default 'agent').
+            dedup_id: Optional explicit idempotency key for request deduplication.
 
         Returns:
-            Registered patron details
+            Registered patron details with ok, data, and is_new flag.
         """
-        args: dict = {}
-        if patron_id is not None:
-            args["patron_id"] = patron_id
-        if display_name is not None:
-            args["display_name"] = display_name
-        if alias is not None:
-            args["alias"] = alias
-        if meta is not None:
-            args["meta"] = meta
+        args: dict = {"name": name, "kind": kind}
+        if dedup_id is not None:
+            args["dedup_id"] = dedup_id
         return await self.call_tool("patron_register", args)
 
     async def patron_get(self, patron_id: str) -> dict:
@@ -507,67 +499,45 @@ class MCPHTTPHarness:
 
     async def table_create(
         self,
-        created_by: str,
-        title: str,
-        host_ids: list[str] | None = None,
-        metadata: dict | None = None,
-        policy: dict | None = None,
-        board: dict | None = None,
+        question: str,
+        context: str | None = None,
         dedup_id: str | None = None,
     ) -> dict:
         """Create a new discussion table.
 
         Args:
-            created_by: Patron ID of creator
-            title: Table title
-            host_ids: Optional list of host patron IDs
-            metadata: Optional metadata
-            policy: Optional policy config
-            board: Optional board data
-            dedup_id: Optional deduplication ID
+            question: The question or topic for discussion.
+            context: Optional context for the discussion.
+            dedup_id: Optional explicit idempotency key for request deduplication.
 
         Returns:
-            Created table details
+            Created table details.
         """
-        args: dict = {"created_by": created_by, "title": title}
-        if host_ids is not None:
-            args["host_ids"] = host_ids
-        if metadata is not None:
-            args["metadata"] = metadata
-        if policy is not None:
-            args["policy"] = policy
-        if board is not None:
-            args["board"] = board
+        args: dict = {"question": question}
+        if context is not None:
+            args["context"] = context
         if dedup_id is not None:
             args["dedup_id"] = dedup_id
         return await self.call_tool("table_create", args)
 
     async def table_join(
         self,
-        invite_code: str,
-        patron_id: str | None = None,
-        history_limit: int = 10,
-        history_max_bytes: int = 65536,
+        table_id: str,
+        patron_id: str,
     ) -> dict:
-        """Join a table by invite code.
+        """Join a discussion table by creating a seat.
 
         Args:
-            invite_code: Invite code or tasca:// URL
-            patron_id: Optional patron ID joining
-            history_limit: Max sayings to fetch
-            history_max_bytes: Max bytes of history
+            table_id: UUID of the table to join.
+            patron_id: UUID of the patron joining the table.
 
         Returns:
-            Table details and initial sayings
+            Table details and seat info.
         """
-        args: dict = {
-            "invite_code": invite_code,
-            "history_limit": history_limit,
-            "history_max_bytes": history_max_bytes,
-        }
-        if patron_id is not None:
-            args["patron_id"] = patron_id
-        return await self.call_tool("table_join", args)
+        return await self.call_tool(
+            "table_join",
+            {"table_id": table_id, "patron_id": patron_id},
+        )
 
     async def table_get(self, table_id: str) -> dict:
         """Get table details.
@@ -584,36 +554,43 @@ class MCPHTTPHarness:
         self,
         table_id: str,
         content: str,
-        patron_id: str | None = None,
         speaker_kind: str = "agent",
-        saying_type: str = "text",
+        patron_id: str | None = None,
+        speaker_name: str | None = None,
+        saying_type: str | None = None,
         mentions: list[str] | None = None,
         reply_to_sequence: int | None = None,
         dedup_id: str | None = None,
     ) -> dict:
-        """Add a saying to a table.
+        """Append a saying (message) to a table.
 
         Args:
-            table_id: Table UUID
-            content: Saying content
-            patron_id: Speaker patron ID
-            speaker_kind: "agent" or "human"
-            saying_type: Type of saying
-            mentions: List of patron IDs to mention
-            reply_to_sequence: Sequence number being replied to
-            dedup_id: Deduplication ID
+            table_id: UUID of the table.
+            content: Markdown content of the saying.
+            speaker_kind: Kind of speaker - "agent" or "human". Defaults to "agent".
+                If "agent", patron_id is REQUIRED.
+                If "human", patron_id MUST be omitted or null.
+            patron_id: Patron ID of the speaker (REQUIRED if speaker_kind is "agent").
+            speaker_name: Display name of the speaker (optional, derived from patron if not provided).
+            saying_type: Type classification of the saying (optional).
+            mentions: List of mention handles to resolve (e.g., ["alice", "all"]).
+            reply_to_sequence: Sequence number of saying this replies to (optional).
+            dedup_id: Optional explicit idempotency key for request deduplication.
 
         Returns:
-            Created saying details
+            Created saying details.
         """
         args: dict = {
             "table_id": table_id,
             "content": content,
             "speaker_kind": speaker_kind,
-            "saying_type": saying_type,
         }
         if patron_id is not None:
             args["patron_id"] = patron_id
+        if speaker_name is not None:
+            args["speaker_name"] = speaker_name
+        if saying_type is not None:
+            args["saying_type"] = saying_type
         if mentions is not None:
             args["mentions"] = mentions
         if reply_to_sequence is not None:
@@ -625,20 +602,18 @@ class MCPHTTPHarness:
     async def table_listen(
         self,
         table_id: str,
-        since_sequence: int = 0,
+        since_sequence: int = -1,
         limit: int = 50,
-        include_table: bool = True,
     ) -> dict:
-        """Listen for new sayings.
+        """Listen for sayings on a table.
 
         Args:
-            table_id: Table UUID
-            since_sequence: Get sayings after this sequence
-            limit: Max sayings to return
-            include_table: Include table snapshot
+            table_id: UUID of the table.
+            since_sequence: Get sayings with sequence > this value (-1 for all).
+            limit: Maximum number of sayings to return (default 50).
 
         Returns:
-            List of sayings and next_sequence
+            List of sayings and next_sequence.
         """
         return await self.call_tool(
             "table_listen",
@@ -646,7 +621,6 @@ class MCPHTTPHarness:
                 "table_id": table_id,
                 "since_sequence": since_sequence,
                 "limit": limit,
-                "include_table": include_table,
             },
         )
 
@@ -657,36 +631,56 @@ class MCPHTTPHarness:
     async def seat_heartbeat(
         self,
         table_id: str,
-        patron_id: str,
-        state: str = "running",
-        ttl_ms: int = 60000,
+        patron_id: str | None = None,
+        state: str | None = None,
+        ttl_ms: int | None = None,
+        dedup_id: str | None = None,
+        seat_id: str | None = None,
     ) -> dict:
-        """Update seat presence.
+        """Update a seat's heartbeat to indicate presence.
 
         Args:
-            table_id: Table UUID
-            patron_id: Patron ID
-            state: "running", "idle", or "done"
-            ttl_ms: Time-to-live in milliseconds
+            table_id: UUID of the table.
+            patron_id: UUID of the patron (spec-compliant, preferred).
+            state: Seat state - "running", "idle", or "done".
+            ttl_ms: Heartbeat timeout in milliseconds.
+            dedup_id: Optional explicit idempotency key.
+            seat_id: UUID of the seat (deprecated, use patron_id instead).
 
         Returns:
-            Seat details with expires_at
+            expires_at timestamp.
+        """
+        args: dict = {"table_id": table_id}
+        if patron_id is not None:
+            args["patron_id"] = patron_id
+        if seat_id is not None:
+            args["seat_id"] = seat_id
+        if state is not None:
+            args["state"] = state
+        if ttl_ms is not None:
+            args["ttl_ms"] = ttl_ms
+        if dedup_id is not None:
+            args["dedup_id"] = dedup_id
+        return await self.call_tool("seat_heartbeat", args)
+
+    async def seat_list(
+        self,
+        table_id: str,
+        active_only: bool = True,
+    ) -> dict:
+        """List all seats (presences) on a table.
+
+        Args:
+            table_id: UUID of the table.
+            active_only: Filter to active (non-expired) seats only (default True).
+
+        Returns:
+            List of seats and active_count.
         """
         return await self.call_tool(
-            "seat_heartbeat",
-            {"table_id": table_id, "patron_id": patron_id, "state": state, "ttl_ms": ttl_ms},
+            "seat_list",
+            {"table_id": table_id, "active_only": active_only},
         )
-
-    async def seat_list(self, table_id: str) -> dict:
-        """List seats on a table.
-
-        Args:
-            table_id: Table UUID
-
-        Returns:
-            List of active seats
-        """
-        return await self.call_tool("seat_list", {"table_id": table_id})
 
 
 class MCPASGIHarness:
@@ -854,31 +848,23 @@ class MCPASGIHarness:
 
     async def patron_register(
         self,
-        patron_id: str | None = None,
-        display_name: str | None = None,
-        alias: str | None = None,
-        meta: dict | None = None,
+        name: str,
+        kind: str = "agent",
+        dedup_id: str | None = None,
     ) -> dict:
         """Register a new patron.
 
         Args:
-            patron_id: Optional patron ID (auto-generated if omitted)
-            display_name: Human-readable name
-            alias: Short alias for mentions
-            meta: Optional metadata
+            name: Name or identifier for the patron (used for deduplication).
+            kind: Type of patron - 'agent' or 'human' (default 'agent').
+            dedup_id: Optional explicit idempotency key for request deduplication.
 
         Returns:
-            Registered patron details
+            Registered patron details with ok, data, and is_new flag.
         """
-        args: dict = {}
-        if patron_id is not None:
-            args["patron_id"] = patron_id
-        if display_name is not None:
-            args["display_name"] = display_name
-        if alias is not None:
-            args["alias"] = alias
-        if meta is not None:
-            args["meta"] = meta
+        args: dict = {"name": name, "kind": kind}
+        if dedup_id is not None:
+            args["dedup_id"] = dedup_id
         return await self.call_tool("patron_register", args)
 
     async def patron_get(self, patron_id: str) -> dict:
@@ -898,67 +884,45 @@ class MCPASGIHarness:
 
     async def table_create(
         self,
-        created_by: str,
-        title: str,
-        host_ids: list[str] | None = None,
-        metadata: dict | None = None,
-        policy: dict | None = None,
-        board: dict | None = None,
+        question: str,
+        context: str | None = None,
         dedup_id: str | None = None,
     ) -> dict:
         """Create a new discussion table.
 
         Args:
-            created_by: Patron ID of creator
-            title: Table title
-            host_ids: Optional list of host patron IDs
-            metadata: Optional metadata
-            policy: Optional policy config
-            board: Optional board data
-            dedup_id: Optional deduplication ID
+            question: The question or topic for discussion.
+            context: Optional context for the discussion.
+            dedup_id: Optional explicit idempotency key for request deduplication.
 
         Returns:
-            Created table details
+            Created table details.
         """
-        args: dict = {"created_by": created_by, "title": title}
-        if host_ids is not None:
-            args["host_ids"] = host_ids
-        if metadata is not None:
-            args["metadata"] = metadata
-        if policy is not None:
-            args["policy"] = policy
-        if board is not None:
-            args["board"] = board
+        args: dict = {"question": question}
+        if context is not None:
+            args["context"] = context
         if dedup_id is not None:
             args["dedup_id"] = dedup_id
         return await self.call_tool("table_create", args)
 
     async def table_join(
         self,
-        invite_code: str,
-        patron_id: str | None = None,
-        history_limit: int = 10,
-        history_max_bytes: int = 65536,
+        table_id: str,
+        patron_id: str,
     ) -> dict:
-        """Join a table by invite code.
+        """Join a discussion table by creating a seat.
 
         Args:
-            invite_code: Invite code or tasca:// URL
-            patron_id: Optional patron ID joining
-            history_limit: Max sayings to fetch
-            history_max_bytes: Max bytes of history
+            table_id: UUID of the table to join.
+            patron_id: UUID of the patron joining the table.
 
         Returns:
-            Table details and initial sayings
+            Table details and seat info.
         """
-        args: dict = {
-            "invite_code": invite_code,
-            "history_limit": history_limit,
-            "history_max_bytes": history_max_bytes,
-        }
-        if patron_id is not None:
-            args["patron_id"] = patron_id
-        return await self.call_tool("table_join", args)
+        return await self.call_tool(
+            "table_join",
+            {"table_id": table_id, "patron_id": patron_id},
+        )
 
     async def table_get(self, table_id: str) -> dict:
         """Get table details.
@@ -975,36 +939,43 @@ class MCPASGIHarness:
         self,
         table_id: str,
         content: str,
-        patron_id: str | None = None,
         speaker_kind: str = "agent",
-        saying_type: str = "text",
+        patron_id: str | None = None,
+        speaker_name: str | None = None,
+        saying_type: str | None = None,
         mentions: list[str] | None = None,
         reply_to_sequence: int | None = None,
         dedup_id: str | None = None,
     ) -> dict:
-        """Add a saying to a table.
+        """Append a saying (message) to a table.
 
         Args:
-            table_id: Table UUID
-            content: Saying content
-            patron_id: Speaker patron ID
-            speaker_kind: "agent" or "human"
-            saying_type: Type of saying
-            mentions: List of patron IDs to mention
-            reply_to_sequence: Sequence number being replied to
-            dedup_id: Deduplication ID
+            table_id: UUID of the table.
+            content: Markdown content of the saying.
+            speaker_kind: Kind of speaker - "agent" or "human". Defaults to "agent".
+                If "agent", patron_id is REQUIRED.
+                If "human", patron_id MUST be omitted or null.
+            patron_id: Patron ID of the speaker (REQUIRED if speaker_kind is "agent").
+            speaker_name: Display name of the speaker (optional, derived from patron if not provided).
+            saying_type: Type classification of the saying (optional).
+            mentions: List of mention handles to resolve (e.g., ["alice", "all"]).
+            reply_to_sequence: Sequence number of saying this replies to (optional).
+            dedup_id: Optional explicit idempotency key for request deduplication.
 
         Returns:
-            Created saying details
+            Created saying details.
         """
         args: dict = {
             "table_id": table_id,
             "content": content,
             "speaker_kind": speaker_kind,
-            "saying_type": saying_type,
         }
         if patron_id is not None:
             args["patron_id"] = patron_id
+        if speaker_name is not None:
+            args["speaker_name"] = speaker_name
+        if saying_type is not None:
+            args["saying_type"] = saying_type
         if mentions is not None:
             args["mentions"] = mentions
         if reply_to_sequence is not None:
@@ -1016,20 +987,18 @@ class MCPASGIHarness:
     async def table_listen(
         self,
         table_id: str,
-        since_sequence: int = 0,
+        since_sequence: int = -1,
         limit: int = 50,
-        include_table: bool = True,
     ) -> dict:
-        """Listen for new sayings.
+        """Listen for sayings on a table.
 
         Args:
-            table_id: Table UUID
-            since_sequence: Get sayings after this sequence
-            limit: Max sayings to return
-            include_table: Include table snapshot
+            table_id: UUID of the table.
+            since_sequence: Get sayings with sequence > this value (-1 for all).
+            limit: Maximum number of sayings to return (default 50).
 
         Returns:
-            List of sayings and next_sequence
+            List of sayings and next_sequence.
         """
         return await self.call_tool(
             "table_listen",
@@ -1037,7 +1006,6 @@ class MCPASGIHarness:
                 "table_id": table_id,
                 "since_sequence": since_sequence,
                 "limit": limit,
-                "include_table": include_table,
             },
         )
 
@@ -1048,36 +1016,56 @@ class MCPASGIHarness:
     async def seat_heartbeat(
         self,
         table_id: str,
-        patron_id: str,
-        state: str = "running",
-        ttl_ms: int = 60000,
+        patron_id: str | None = None,
+        state: str | None = None,
+        ttl_ms: int | None = None,
+        dedup_id: str | None = None,
+        seat_id: str | None = None,
     ) -> dict:
-        """Update seat presence.
+        """Update a seat's heartbeat to indicate presence.
 
         Args:
-            table_id: Table UUID
-            patron_id: Patron ID
-            state: "running", "idle", or "done"
-            ttl_ms: Time-to-live in milliseconds
+            table_id: UUID of the table.
+            patron_id: UUID of the patron (spec-compliant, preferred).
+            state: Seat state - "running", "idle", or "done".
+            ttl_ms: Heartbeat timeout in milliseconds.
+            dedup_id: Optional explicit idempotency key.
+            seat_id: UUID of the seat (deprecated, use patron_id instead).
 
         Returns:
-            Seat details with expires_at
+            expires_at timestamp.
+        """
+        args: dict = {"table_id": table_id}
+        if patron_id is not None:
+            args["patron_id"] = patron_id
+        if seat_id is not None:
+            args["seat_id"] = seat_id
+        if state is not None:
+            args["state"] = state
+        if ttl_ms is not None:
+            args["ttl_ms"] = ttl_ms
+        if dedup_id is not None:
+            args["dedup_id"] = dedup_id
+        return await self.call_tool("seat_heartbeat", args)
+
+    async def seat_list(
+        self,
+        table_id: str,
+        active_only: bool = True,
+    ) -> dict:
+        """List all seats (presences) on a table.
+
+        Args:
+            table_id: UUID of the table.
+            active_only: Filter to active (non-expired) seats only (default True).
+
+        Returns:
+            List of seats and active_count.
         """
         return await self.call_tool(
-            "seat_heartbeat",
-            {"table_id": table_id, "patron_id": patron_id, "state": state, "ttl_ms": ttl_ms},
+            "seat_list",
+            {"table_id": table_id, "active_only": active_only},
         )
-
-    async def seat_list(self, table_id: str) -> dict:
-        """List seats on a table.
-
-        Args:
-            table_id: Table UUID
-
-        Returns:
-            List of active seats
-        """
-        return await self.call_tool("seat_list", {"table_id": table_id})
 
 
 class MCPSTDIOHarness:
@@ -1092,13 +1080,19 @@ class MCPSTDIOHarness:
             assert "result" in result
     """
 
-    def __init__(self, timeout: float = REQUEST_TIMEOUT) -> None:
+    def __init__(
+        self,
+        timeout: float = REQUEST_TIMEOUT,
+        startup_timeout: float = 10.0,
+    ) -> None:
         """Initialize MCP STDIO harness.
 
         Args:
             timeout: Communication timeout in seconds
+            startup_timeout: Timeout for process startup in seconds
         """
         self.timeout = timeout
+        self.startup_timeout = startup_timeout
         self._process: asyncio.subprocess.Process | None = None
         self._request_id = 0
         self._reader_task: asyncio.Task | None = None
@@ -1106,14 +1100,21 @@ class MCPSTDIOHarness:
 
     async def __aenter__(self) -> "MCPSTDIOHarness":
         """Enter async context and start tasca-mcp process."""
-        self._process = await asyncio.create_subprocess_exec(
-            "uv",
-            "run",
-            "tasca-mcp",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        # Wrap subprocess creation in timeout to prevent indefinite hangs
+        try:
+            self._process = await asyncio.wait_for(
+                asyncio.create_subprocess_exec(
+                    "uv",
+                    "run",
+                    "tasca-mcp",
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                ),
+                timeout=self.startup_timeout,
+            )
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Process startup timed out after {self.startup_timeout}s") from None
         # Start background reader task
         self._reader_task = asyncio.create_task(self._read_responses())
         return self
@@ -1317,15 +1318,15 @@ def get_scenarios() -> dict[str, list[str]]:
             "patron_get - Retrieve patron details",
         ],
         "mcp_table": [
-            "table_create - Create a discussion table",
-            "table_join - Join a table via invite code",
-            "table_get - Get table details",
-            "table_say - Add a saying to a table",
-            "table_listen - Listen for new sayings",
+            "table_create - Create a discussion table (question, context, dedup_id)",
+            "table_join - Join a table by table_id and patron_id",
+            "table_get - Get table details by ID",
+            "table_say - Add a saying (table_id, content, speaker_kind, patron_id, mentions, dedup_id)",
+            "table_listen - Listen for sayings (table_id, since_sequence, limit)",
         ],
         "mcp_seat": [
-            "seat_heartbeat - Update seat presence",
-            "seat_list - List all seats on a table",
+            "seat_heartbeat - Update seat presence by patron_id (table_id, patron_id, state, ttl_ms, dedup_id)",
+            "seat_list - List all seats on a table (table_id, active_only)",
         ],
         "mcp_stdio": [
             "Process startup and shutdown",

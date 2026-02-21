@@ -930,3 +930,209 @@ class TestStateGuardsTableSay:
 
         assert result["ok"] is True
         assert result["data"]["content"] == "This should work on paused table"
+
+
+# =============================================================================
+# Limits Enforcement Tests
+# =============================================================================
+
+
+class TestLimitsEnforcementTableSay:
+    """Tests for limits enforcement on table_say MCP tool."""
+
+    @pytest.fixture
+    def table_with_patron(self, test_db: sqlite3.Connection) -> dict[str, str]:
+        """Create table and patron for limits tests."""
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+
+        table_id = TableId(str(uuid.uuid4()))
+        now = datetime.now(UTC)
+        table = Table(
+            id=table_id,
+            question="Limits test table",
+            context=None,
+            status=TableStatus.OPEN,
+            version=Version(1),
+            created_at=now,
+            updated_at=now,
+        )
+        create_table(test_db, table)
+
+        return {"table_id": str(table_id), "patron_id": patron_id}
+
+    def test_table_say_respects_content_length_limit(
+        self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Content length limit is enforced on table_say."""
+        # Patch settings directly to set the limit
+        from tasca import config
+        from tasca.core.services.limits_service import LimitsConfig
+
+        monkeypatch.setattr(
+            config,
+            "settings",
+            config.Settings(max_content_length=50),
+        )
+
+        # Reload the server module to pick up the new settings
+        from tasca.shell.mcp import server
+        import importlib
+
+        importlib.reload(server)
+
+        # Create a saying that exceeds the limit
+        long_content = "x" * 100  # 100 chars, limit is 50
+        result = server.table_say(
+            table_id=table_with_patron["table_id"],
+            content=long_content,
+            speaker_name="Test Speaker",
+        )
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "LIMIT_EXCEEDED"
+        assert result["error"]["details"]["limit_kind"] == "content"
+        assert result["error"]["details"]["limit"] == 50
+        assert result["error"]["details"]["actual"] == 100
+
+    def test_table_say_respects_history_count_limit(
+        self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """History count limit is enforced on table_say."""
+        from tasca import config
+        import importlib
+        from tasca.shell.mcp import server
+
+        # Set a small history limit
+        monkeypatch.setattr(
+            config,
+            "settings",
+            config.Settings(max_sayings_per_table=2),
+        )
+        importlib.reload(server)
+
+        table_id = table_with_patron["table_id"]
+
+        # Add 2 sayings (limit is 2, so we should be able to have 2 total)
+        result1 = server.table_say(
+            table_id=table_id,
+            content="First saying",
+            speaker_name="Speaker 1",
+        )
+        assert result1["ok"] is True
+
+        result2 = server.table_say(
+            table_id=table_id,
+            content="Second saying",
+            speaker_name="Speaker 2",
+        )
+        assert result2["ok"] is True
+
+        # Third saying should fail (already have 2, at limit)
+        result3 = server.table_say(
+            table_id=table_id,
+            content="Third saying - should fail",
+            speaker_name="Speaker 3",
+        )
+
+        assert result3["ok"] is False
+        assert result3["error"]["code"] == "LIMIT_EXCEEDED"
+        assert result3["error"]["details"]["limit_kind"] == "history"
+        assert result3["error"]["details"]["limit"] == 2
+        assert result3["error"]["details"]["actual"] == 2
+
+    def test_table_say_respects_mentions_limit(
+        self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Mentions limit is enforced on table_say."""
+        from tasca import config
+        import importlib
+        from tasca.shell.mcp import server
+
+        # Set a small mentions limit
+        monkeypatch.setattr(
+            config,
+            "settings",
+            config.Settings(max_mentions_per_saying=2),
+        )
+        importlib.reload(server)
+
+        # Create a saying with too many mentions
+        content_with_many_mentions = "Hello @alice @bob @charlie @dave - too many!"
+        result = server.table_say(
+            table_id=table_with_patron["table_id"],
+            content=content_with_many_mentions,
+            speaker_name="Test Speaker",
+        )
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "LIMIT_EXCEEDED"
+        assert result["error"]["details"]["limit_kind"] == "mentions"
+        assert result["error"]["details"]["limit"] == 2
+        assert result["error"]["details"]["actual"] == 4
+
+    def test_table_say_succeeds_when_under_all_limits(
+        self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """table_say succeeds when all limits are respected."""
+        from tasca import config
+        import importlib
+        from tasca.shell.mcp import server
+
+        # Set limits
+        monkeypatch.setattr(
+            config,
+            "settings",
+            config.Settings(
+                max_content_length=100,
+                max_sayings_per_table=10,
+                max_mentions_per_saying=3,
+            ),
+        )
+        importlib.reload(server)
+
+        # Create a valid saying
+        result = server.table_say(
+            table_id=table_with_patron["table_id"],
+            content="Hello @alice and @bob!",  # Under all limits
+            speaker_name="Test Speaker",
+        )
+
+        assert result["ok"] is True
+        assert result["data"]["content"] == "Hello @alice and @bob!"
+
+    def test_table_say_bytes_limit_enforced(
+        self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Bytes limit is enforced on table_say."""
+        from tasca import config
+        import importlib
+        from tasca.shell.mcp import server
+
+        # Set a very small bytes limit (100 bytes)
+        monkeypatch.setattr(
+            config,
+            "settings",
+            config.Settings(max_bytes_per_table=100),
+        )
+        importlib.reload(server)
+
+        # First saying should work
+        result1 = server.table_say(
+            table_id=table_with_patron["table_id"],
+            content="Hello world",  # 11 bytes
+            speaker_name="Speaker 1",
+        )
+        assert result1["ok"] is True
+
+        # Second saying with large content should fail
+        large_content = "x" * 200  # 200 bytes, would exceed 100 byte limit
+        result2 = server.table_say(
+            table_id=table_with_patron["table_id"],
+            content=large_content,
+            speaker_name="Speaker 2",
+        )
+
+        assert result2["ok"] is False
+        assert result2["error"]["code"] == "LIMIT_EXCEEDED"
+        assert result2["error"]["details"]["limit_kind"] == "bytes"

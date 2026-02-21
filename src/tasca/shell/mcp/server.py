@@ -30,12 +30,20 @@ from tasca.core.domain.patron import Patron, PatronCreate, PatronId
 from tasca.core.domain.seat import Seat, SeatId, SeatState
 from tasca.core.domain.saying import Saying, Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableCreate, TableId, TableStatus, Version
+from tasca.core.services.limits_service import (
+    LimitError,
+    LimitsConfig,
+    settings_to_limits_config,
+)
 from tasca.core.services.seat_service import (
     DEFAULT_SEAT_TTL_SECONDS,
     calculate_expiry_time,
     filter_active_seats,
 )
 from tasca.core.table_state_machine import can_join, can_say
+from tasca.shell.services.limited_saying_service import (
+    append_saying_with_limits,
+)
 from tasca.shell.api import deps
 from tasca.shell.storage.patron_repo import (
     PatronNotFoundError,
@@ -49,7 +57,7 @@ from tasca.shell.storage.seat_repo import (
     find_seats_by_table,
     heartbeat_seat as repo_heartbeat_seat,
 )
-from tasca.shell.storage.saying_repo import append_saying, list_sayings_by_table
+from tasca.shell.storage.saying_repo import list_sayings_by_table
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     create_table,
@@ -495,6 +503,38 @@ def table_get(table_id: str) -> dict[str, Any]:
 
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_pure_logic: Simple dict construction is pure
+def _limits_config_from_settings() -> LimitsConfig:
+    """Get limits configuration from application settings.
+
+    Returns:
+        LimitsConfig with values from settings.
+    """
+    return settings_to_limits_config(settings)
+
+
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
+    """Convert a LimitError to an MCP error response.
+
+    Args:
+        error: The limit error.
+
+    Returns:
+        Error envelope with limit details.
+    """
+    return _error_response(
+        "LIMIT_EXCEEDED",
+        error.message,
+        {
+            "limit_kind": error.kind.value,
+            "limit": error.limit,
+            "actual": error.actual,
+        },
+    )
+
+
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def table_say(
     table_id: str,
@@ -532,7 +572,7 @@ def table_say(
     Error codes:
         - NOT_FOUND: Table not found
         - OPERATION_NOT_ALLOWED: Table is closed (cannot add sayings)
-        - VALIDATION_ERROR: Invalid content or limits exceeded
+        - LIMIT_EXCEEDED: Content limits exceeded (max_content_length, max_sayings_per_table, max_mentions_per_saying, max_bytes_per_table)
         - DATABASE_ERROR: Failed to append saying
     """
     conn = _get_db_connection()
@@ -569,11 +609,15 @@ def table_say(
             patron_id=None,
         )
 
-    # Append saying
-    result = append_saying(conn, table_id, speaker, content)
+    # Get limits configuration and append with limits check
+    limits = _limits_config_from_settings()
+    result = append_saying_with_limits(conn, table_id, speaker, content, limits)
 
     if isinstance(result, Failure):
         error = result.failure()
+        # Handle LimitError specifically
+        if isinstance(error, LimitError):
+            return _limit_error_to_response(error)
         return _error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
 
     saying = result.unwrap()

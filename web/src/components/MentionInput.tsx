@@ -9,7 +9,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
-import { MentionPicker } from './SeatDeck'
+import { MentionPicker, IDLE_THRESHOLD_SECONDS } from './SeatDeck'
 import type { PatronInfo } from './SeatDeck'
 import type { Seat } from '../api/sayings'
 
@@ -156,7 +156,7 @@ export const MentionInput = forwardRef<MentionInputRef, MentionInputProps>(funct
       const lastHeartbeat = new Date(seat.last_heartbeat)
       const now = new Date()
       const diffSeconds = (now.getTime() - lastHeartbeat.getTime()) / 1000
-      return diffSeconds <= 60 // Same as IDLE_THRESHOLD_SECONDS
+      return diffSeconds <= IDLE_THRESHOLD_SECONDS
     })
   }, [seats])
 

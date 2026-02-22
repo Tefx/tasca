@@ -66,7 +66,7 @@ interface SeatDeckProps {
 const ACTIVE_THRESHOLD_SECONDS = 30
 
 /** TTL threshold for "idle" presence (last heartbeat within this many seconds). */
-const IDLE_THRESHOLD_SECONDS = 60
+export const IDLE_THRESHOLD_SECONDS = 60
 
 // =============================================================================
 // Utility Functions

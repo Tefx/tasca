@@ -18,12 +18,16 @@ that can be serialized to JSON. Internal service calls use Result[T, E].
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastmcp import FastMCP
+from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
+from fastmcp.tools.tool import ToolResult
+from mcp.types import TextContent
 from returns.result import Failure
 
 from tasca.config import settings
@@ -70,10 +74,14 @@ from tasca.shell.logging import (
 )
 from tasca.shell.mcp.database import get_mcp_db
 from tasca.shell.mcp.proxy import (
+    forward_jsonrpc_request,
     get_upstream_config,
     switch_to_local,
     switch_to_remote,
 )
+
+# Tools that must always run locally (never forwarded to upstream)
+LOCAL_ONLY_TOOLS: frozenset[str] = frozenset({"connect", "connection_status"})
 from tasca.shell.mcp.responses import error_response, success_response
 from tasca.shell.services.limited_saying_service import (
     append_saying_with_limits,
@@ -2010,6 +2018,125 @@ def connection_status() -> dict[str, Any]:
 
 
 # =============================================================================
+# Proxy Middleware
+# =============================================================================
+
+
+class ProxyMiddleware(Middleware):
+    """Middleware that forwards tool calls to upstream server in remote mode.
+
+    In remote mode (when upstream.is_remote is True), all tool calls except
+    those in LOCAL_ONLY_TOOLS are forwarded to the upstream server via
+    forward_jsonrpc_request().
+
+    In local mode, all tool calls proceed through normal local handlers.
+    """
+
+    async def on_call_tool(
+        self,
+        context: MiddlewareContext,  # type: ignore[type-arg]
+        call_next,  # type: ignore[no-untyped-def]
+    ) -> ToolResult:
+        """Intercept tool calls and forward to upstream if in remote mode.
+
+        Args:
+            context: The middleware context containing the tool call request.
+            call_next: The next handler in the middleware chain.
+
+        Returns:
+            ToolResult from either the upstream server or local handler.
+        """
+        # Get tool name and arguments from the request
+        tool_name = context.message.name
+        arguments = context.message.arguments or {}
+
+        # Get upstream configuration (single attribute read for mode check)
+        upstream = get_upstream_config()
+
+        # Check if we should forward
+        if upstream.is_remote and tool_name not in LOCAL_ONLY_TOOLS:
+            # Forward to upstream server
+            logger.debug(
+                "forwarding_tool_call",
+                extra={"tool": tool_name, "upstream_url": upstream.url},
+            )
+
+            # Build JSON-RPC request for tools/call
+            response = await forward_jsonrpc_request(
+                config=upstream,
+                method="tools/call",
+                params={"name": tool_name, "arguments": arguments},
+            )
+
+            # Convert response back to ToolResult
+            return self._response_to_tool_result(response)
+
+        # Local mode or local-only tool: proceed with local handler
+        return await call_next(context)
+
+    def _response_to_tool_result(self, response: dict[str, Any]) -> ToolResult:
+        """Convert JSON-RPC response to ToolResult.
+
+        Args:
+            response: Response dict from forward_jsonrpc_request.
+                Either a success envelope from upstream or error_response envelope.
+
+        Returns:
+            ToolResult with appropriate content.
+        """
+        # Check for error envelope (from forward_jsonrpc_request or upstream)
+        if "error" in response and response.get("ok") is False:
+            # Error envelope from our forward_jsonrpc_request
+            error = response["error"]
+            error_data = {
+                "code": error.get("code", "PROXY_ERROR"),
+                "message": error.get("message", "Unknown proxy error"),
+            }
+            if "details" in error:
+                error_data["details"] = error["details"]
+
+            content = TextContent(
+                type="text",
+                text=json.dumps({"ok": False, "error": error_data}),
+            )
+            return ToolResult(content=[content])
+
+        # Check for JSON-RPC error response from upstream
+        if "error" in response:
+            # JSON-RPC error from upstream
+            error = response["error"]
+            error_data = {
+                "code": error.get("code", "UPSTREAM_ERROR"),
+                "message": error.get("message", "Upstream error"),
+            }
+            if "data" in error:
+                error_data["details"] = error["data"]
+
+            content = TextContent(
+                type="text",
+                text=json.dumps({"ok": False, "error": error_data}),
+            )
+            return ToolResult(content=[content])
+
+        # Success response from upstream
+        # JSON-RPC success: {"jsonrpc": "2.0", "id": "...", "result": {...}}
+        result = response.get("result", response)
+
+        # Normalize to our envelope format
+        if "ok" in result:
+            # Already an envelope
+            content = TextContent(type="text", text=json.dumps(result))
+        else:
+            # Wrap in success envelope
+            content = TextContent(
+                type="text",
+                text=json.dumps({"ok": True, "data": result}),
+            )
+
+        return ToolResult(content=[content])
+
+
+# =============================================================================
 # Server Entry Point
 # =============================================================================
 
@@ -2022,4 +2149,7 @@ def run_mcp_server(transport: TransportType = "stdio") -> None:
     Args:
         transport: Transport protocol ('stdio', 'http', 'sse').
     """
+    # Add proxy middleware for request forwarding
+    mcp.add_middleware(ProxyMiddleware())
+
     mcp.run(transport=transport)

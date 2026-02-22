@@ -584,10 +584,10 @@ def table_join(
                 },
                 "sequence_latest": 5,
                 "history_sequence": 2,
-                "initial": {
+                "initial_sayings": {
                     "sayings": [...],
                     "next_sequence": 5,
-                    "has_more_history": true
+                    "has_more": true
                 },
                 "seat": {
                     "id": "uuid-string",
@@ -712,7 +712,7 @@ def table_join(
             },
             "sequence_latest": sequence_latest,
             "history_sequence": history_sequence,
-            "initial": {
+            "initial_sayings": {
                 "sayings": [
                     {
                         "id": s.id,
@@ -730,7 +730,7 @@ def table_join(
                     for s in history_sayings
                 ],
                 "next_sequence": next_sequence,
-                "has_more_history": has_more_history,
+                "has_more": has_more_history,
             },
             **({"seat": seat_data} if seat_data is not None else {}),
         }

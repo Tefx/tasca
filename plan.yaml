@@ -7547,7 +7547,7 @@ phases:
       \ websockets observed; non-blocking."
 - id: token_persistence
   name: Token auto-generate + persistence (P1)
-  status: in_progress
+  status: done
   context: 'Superseded by proxy architecture. No file persistence needed. admin_token_fix
     handles auto-generation; cli_tasca_new handles startup banner. Token flow: server
     stderr → human → agent calls connect(url, token).'
@@ -7556,7 +7556,7 @@ phases:
   steps:
   - id: token_persistence.generate-and-persist-tk-token
     name: Generate and persist tk_ token
-    status: pending
+    status: skipped
     description: When TASCA_ADMIN_TOKEN is not set, auto-generate a token with tk_
       prefix (e.g. tk_ + secrets.token_hex(24)). Persist the generated token to ~/.tasca/token
       (or configurable path). On subsequent startups, read the persisted token from
@@ -7566,9 +7566,10 @@ phases:
       to .tasca/token with 0600 permissions; on restart without env var, same token
       is read from file.'
     agent: python-engineer
+    skipped_reason: superseded
   - id: token_persistence.update-auth-to-read-persisted-token
     name: Update auth to read persisted token
-    status: pending
+    status: skipped
     description: 'Update auth.py verify_admin_token to use the token from settings
       (which now reads from persisted file when env var is absent). Ensure the auth
       flow works with: (1) env var set explicitly, (2) token read from .tasca/token
@@ -7579,9 +7580,10 @@ phases:
     depends_on:
     - token_persistence.generate-and-persist-tk-token
     agent: python-engineer
+    skipped_reason: superseded
   - id: token_persistence.print-token-in-startup-banner
     name: Print token in startup banner
-    status: pending
+    status: skipped
     description: 'Update main.py startup output to print the admin token when it was
       auto-generated (not user-supplied via env var). Print to stderr with clear formatting:
       ''Admin token: tk_xxxx (persisted to ~/.tasca/token)''. Do NOT print the token
@@ -7592,9 +7594,10 @@ phases:
     depends_on:
     - token_persistence.update-auth-to-read-persisted-token
     agent: python-engineer
+    skipped_reason: superseded
   - id: token_persistence.tests-for-token-persistence
     name: Tests for token persistence
-    status: pending
+    status: skipped
     description: 'Write tests covering: (1) token generation format (starts with tk_,
       correct length), (2) file persistence (written to .tasca/token with 0600 perms),
       (3) file read on restart (same token returned), (4) auth integration (persisted
@@ -7605,9 +7608,10 @@ phases:
     depends_on:
     - token_persistence.print-token-in-startup-banner
     agent: python-engineer
+    skipped_reason: superseded
   - id: token_persistence.l1-guard-verify
     name: L1 guard verify
-    status: pending
+    status: skipped
     description: Run invar guard and full test suite to verify token persistence introduces
       no regressions.
     verification: 'L1: invar guard passes with 0 new errors; all existing tests pass;
@@ -7615,6 +7619,7 @@ phases:
     depends_on:
     - token_persistence.tests-for-token-persistence
     agent: python-engineer
+    skipped_reason: superseded
 - id: fix_mcp_double_path
   name: Fix /mcp/mcp double path (P1)
   status: done
@@ -9399,7 +9404,7 @@ phases:
       - Plan step: l3_fix2.f1-table-wait-next-sequence'
   - id: l3_fix2.f5-table-wait-tests
     name: f5-table-wait-tests
-    status: claimed
+    status: done
     description: 'Add minimum test coverage for table_wait (currently zero tests in
       unit or integration suite). Add at minimum: (1) timeout path — empty sayings
       list + timeout=true returned when no new sayings arrive within window; (2) data
@@ -9418,9 +9423,34 @@ phases:
     agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T10:34:20.079055+00:00'
+    evidence: 'Artifact:
+
+      - PR: ff06a09 (no additional change needed for this verification pass)
+
+
+      Verification:
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py -k table_wait -v -> 6
+      passed, 87 deselected
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py::TestTableWait::test_table_wait_timeout_returns_empty_sayings
+      -v -> PASSED
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py::TestTableWait::test_table_wait_returns_sayings_when_present
+      -v -> PASSED
+
+
+      Spec link:
+
+      - l3_fix2.f5-table-wait-tests
+
+
+      Files changed:
+
+      - []'
   - id: l3_fix2.f2-stub-test-comments
     name: f2-stub-test-comments
-    status: pending
+    status: done
     description: Update TestNotImplementedErrorCodes stubs in tests/unit/mcp/test_mcp_server.py
       (lines 822-880). Two stubs claim table_control and table_update do not exist
       — they now do. Either convert stubs to real tests that exercise actual error
@@ -9437,6 +9467,32 @@ phases:
     depends_on:
     - l3_fix2.f5-table-wait-tests
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T12:11:58.052206+00:00'
+    evidence: 'Artifact:
+
+      - PR: no change
+
+
+      Verification:
+
+      - Run: grep -inE "don''?t exist|not exist|not implemented" tests/unit/mcp/test_mcp_server.py
+      | grep -iE "table_control|table_update" -> no matches
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py::TestNotImplementedErrorCodes
+      -v -> 4 passed, no skipped/xfail
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py -v -> 93 passed
+
+
+      Spec link:
+
+      - l3_fix2.f2-stub-test-comments
+
+
+      Files changed:
+
+      - []'
   - id: l3_fix2.f3-tool-discovery-expected-tools
     name: f3-tool-discovery-expected-tools
     status: claimed
@@ -9454,7 +9510,7 @@ phases:
     claimed_at: '2026-02-22T09:37:19.627916+00:00'
   - id: l3_fix2.f4-patron-register-spec-fields
     name: f4-patron-register-spec-fields
-    status: pending
+    status: done
     description: Extend patron_register unit tests (tests/unit/mcp/test_mcp_server.py
       lines 80-123) to assert spec fields display_name and patron_id in addition to
       the existing backward-compat assertions on name and id. Tests currently only
@@ -9467,6 +9523,29 @@ phases:
     depends_on:
     - l3_fix2.f2-stub-test-comments
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T12:13:55.015826+00:00'
+    evidence: 'Artifact:
+
+      - PR: no change
+
+
+      Verification:
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py::TestPatronRegister -v
+      -> 4 passed
+
+      - Verified patron_register tests assert data[''display_name''] and data[''patron_id'']
+
+
+      Spec link:
+
+      - l3_fix2.f4-patron-register-spec-fields
+
+
+      Files changed:
+
+      - []'
   - id: l3_fix2.guard-verify
     name: guard-verify
     status: pending

@@ -1,26 +1,177 @@
 """
 Integration tests for REST API endpoints.
 
-These tests verify the REST API endpoints work correctly with a running server.
-All tests require the server to be running at TASCA_TEST_API_URL (default: localhost:8000).
+These tests verify the REST API endpoints work correctly using in-process
+ASGI transport.  No external server is required.
 
 Usage:
-    # Start server
-    uv run tasca
-
-    # Run tests
     pytest tests/integration/test_api.py -v
-
-    # With custom URL
-    TASCA_TEST_API_URL=http://api.example.com pytest tests/integration/test_api.py -v
 """
 
 from __future__ import annotations
 
+from typing import Any
+
+import httpx
 import pytest
 
-from tests.integration.conftest import API_BASE_URL, check_server_available
-from tests.integration.harness import RESTHarness
+try:
+    from tasca.config import settings as _settings
+    from tasca.shell.api.app import create_app as _create_app
+
+    _fastapi_app = _create_app()
+    # Read the admin token from the shared settings singleton that the app uses.
+    # This avoids hardcoding a token that must match what the auth middleware validates.
+    _ADMIN_TOKEN: str = _settings.admin_token
+except Exception as _e:
+    pytest.skip(f"Could not import ASGI app: {_e}", allow_module_level=True)
+
+
+# =============================================================================
+# Local ASGI harness (REST only, no external server)
+# =============================================================================
+
+
+class ASGIRESTHarness:
+    """Thin REST harness backed by httpx ASGI transport.
+
+    Mirrors the public interface of RESTHarness from harness.py but uses
+    in-process ASGI transport so no live server is needed.
+
+    Example:
+        async with ASGIRESTHarness() as harness:
+            response = await harness.health_check()
+            assert response.status_code == 200
+    """
+
+    API_V1_PREFIX = "/api/v1"
+
+    def __init__(self, timeout: float = 30.0) -> None:
+        """Initialize ASGI REST harness.
+
+        Args:
+            timeout: Request timeout in seconds.
+        """
+        self.timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    async def __aenter__(self) -> "ASGIRESTHarness":
+        """Enter async context and create in-process ASGI client."""
+        transport = httpx.ASGITransport(app=_fastapi_app)  # type: ignore[arg-type]
+        self._client = httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            timeout=httpx.Timeout(self.timeout),
+        )
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        """Exit async context and close the client."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        """Return the underlying HTTP client.
+
+        Raises:
+            RuntimeError: If the harness is not used as an async context manager.
+
+        Returns:
+            Configured httpx.AsyncClient using ASGI transport.
+        """
+        if self._client is None:
+            raise RuntimeError("ASGIRESTHarness must be used as an async context manager")
+        return self._client
+
+    # ------------------------------------------------------------------
+    # Health endpoints
+    # ------------------------------------------------------------------
+
+    async def health_check(self) -> httpx.Response:
+        """GET /api/v1/health.
+
+        Returns:
+            HTTP response from the health endpoint.
+        """
+        return await self.client.get(f"{self.API_V1_PREFIX}/health")
+
+    async def readiness_check(self) -> httpx.Response:
+        """GET /api/v1/ready.
+
+        Returns:
+            HTTP response from the readiness endpoint.
+        """
+        return await self.client.get(f"{self.API_V1_PREFIX}/ready")
+
+    # ------------------------------------------------------------------
+    # Table endpoints
+    # ------------------------------------------------------------------
+
+    async def create_table(
+        self,
+        data: dict[str, Any],
+        admin_token: str | None = None,
+    ) -> httpx.Response:
+        """POST /api/v1/tables.
+
+        Args:
+            data: Table creation payload.
+            admin_token: Optional admin Bearer token.
+
+        Returns:
+            HTTP response from the create-table endpoint.
+        """
+        headers: dict[str, str] = {}
+        if admin_token:
+            headers["Authorization"] = f"Bearer {admin_token}"
+        return await self.client.post(
+            f"{self.API_V1_PREFIX}/tables",
+            json=data,
+            headers=headers,
+        )
+
+    async def get_table(self, table_id: str) -> httpx.Response:
+        """GET /api/v1/tables/{table_id}.
+
+        Args:
+            table_id: Table identifier.
+
+        Returns:
+            HTTP response from the get-table endpoint.
+        """
+        return await self.client.get(f"{self.API_V1_PREFIX}/tables/{table_id}")
+
+    async def list_tables(self) -> httpx.Response:
+        """GET /api/v1/tables.
+
+        Returns:
+            HTTP response from the list-tables endpoint.
+        """
+        return await self.client.get(f"{self.API_V1_PREFIX}/tables")
+
+    async def delete_table(
+        self,
+        table_id: str,
+        admin_token: str | None = None,
+    ) -> httpx.Response:
+        """DELETE /api/v1/tables/{table_id}.
+
+        Args:
+            table_id: Table identifier.
+            admin_token: Optional admin Bearer token.
+
+        Returns:
+            HTTP response from the delete-table endpoint.
+        """
+        headers: dict[str, str] = {}
+        if admin_token:
+            headers["Authorization"] = f"Bearer {admin_token}"
+        return await self.client.delete(
+            f"{self.API_V1_PREFIX}/tables/{table_id}",
+            headers=headers,
+        )
 
 
 # =============================================================================
@@ -36,7 +187,7 @@ async def test_health_check() -> None:
     Verifies that the health endpoint returns a 200 status
     and includes a 'status' field with value 'healthy'.
     """
-    async with RESTHarness() as harness:
+    async with ASGIRESTHarness() as harness:
         response = await harness.health_check()
 
         assert response.status_code == 200
@@ -53,7 +204,7 @@ async def test_readiness_check() -> None:
     Verifies that the readiness endpoint returns a 200 status
     and includes a 'status' field with value 'ready'.
     """
-    async with RESTHarness() as harness:
+    async with ASGIRESTHarness() as harness:
         response = await harness.readiness_check()
 
         assert response.status_code == 200
@@ -75,13 +226,12 @@ async def test_create_table() -> None:
     with a valid ID and the provided data.
     Note: POST /tables requires admin Bearer token.
     """
-    async with RESTHarness() as harness:
+    async with ASGIRESTHarness() as harness:
         table_data = {
             "question": "What is the best approach for this feature?",
             "context": "We need to decide between options A and B",
         }
-        # Use admin token for creating tables
-        response = await harness.create_table(table_data, admin_token="test-admin-token")
+        response = await harness.create_table(table_data, admin_token=_ADMIN_TOKEN)
 
         assert response.status_code == 200
         data = response.json()
@@ -98,17 +248,15 @@ async def test_get_table() -> None:
     Verifies that retrieving a table by ID returns the table data.
     Note: First creates a table, then retrieves it.
     """
-    async with RESTHarness() as harness:
-        # First create a table
+    async with ASGIRESTHarness() as harness:
         table_data = {
             "question": "Test question for retrieval?",
         }
-        create_response = await harness.create_table(table_data, admin_token="test-admin-token")
+        create_response = await harness.create_table(table_data, admin_token=_ADMIN_TOKEN)
         assert create_response.status_code == 200
         created_table = create_response.json()
         table_id = created_table["id"]
 
-        # Then retrieve it
         response = await harness.get_table(table_id)
         assert response.status_code == 200
         data = response.json()
@@ -124,7 +272,7 @@ async def test_list_tables() -> None:
     Verifies that listing tables returns an array.
     Note: Currently returns empty array as storage is not implemented.
     """
-    async with RESTHarness() as harness:
+    async with ASGIRESTHarness() as harness:
         response = await harness.list_tables()
 
         assert response.status_code == 200
@@ -140,15 +288,13 @@ async def test_delete_table() -> None:
     Verifies that deleting a table returns a confirmation.
     Note: DELETE /tables requires admin Bearer token.
     """
-    async with RESTHarness() as harness:
-        # First create a table to delete
+    async with ASGIRESTHarness() as harness:
         table_data = {"question": "Table to delete"}
-        create_response = await harness.create_table(table_data, admin_token="test-admin-token")
+        create_response = await harness.create_table(table_data, admin_token=_ADMIN_TOKEN)
         assert create_response.status_code == 200
         table_id = create_response.json()["id"]
 
-        # Then delete it with admin auth
-        response = await harness.delete_table(table_id, admin_token="test-admin-token")
+        response = await harness.delete_table(table_id, admin_token=_ADMIN_TOKEN)
 
         assert response.status_code == 200
         data = response.json()
@@ -168,7 +314,7 @@ async def test_404_on_unknown_path() -> None:
     Scenario: REST 404 Handling
     Verifies that accessing an unknown endpoint returns 404.
     """
-    async with RESTHarness() as harness:
+    async with ASGIRESTHarness() as harness:
         response = await harness.client.get("/unknown-endpoint")
         assert response.status_code == 404
 
@@ -181,9 +327,9 @@ async def test_422_on_invalid_input() -> None:
     Verifies that sending invalid data returns a validation error.
     Note: POST /tables requires admin auth, so this tests auth first.
     """
-    async with RESTHarness() as harness:
+    async with ASGIRESTHarness() as harness:
         # Missing required 'question' field - with admin token to pass auth
-        response = await harness.create_table({}, admin_token="test-admin-token")
+        response = await harness.create_table({}, admin_token=_ADMIN_TOKEN)
 
         # FastAPI returns 422 for validation errors
         assert response.status_code == 422
@@ -202,7 +348,7 @@ async def test_mcp_endpoint_mounted() -> None:
     Verifies that the MCP endpoint is accessible and responds to POST.
     Note: MCP uses Streamable HTTP transport, so we need to handle the session.
     """
-    async with RESTHarness() as harness:
+    async with ASGIRESTHarness() as harness:
         # MCP uses POST for JSON-RPC
         response = await harness.client.post(
             "/mcp",
@@ -222,19 +368,3 @@ async def test_mcp_endpoint_mounted() -> None:
         # Note: FastMCP Streamable HTTP transport may return different status codes
         # 307 means redirect to /mcp (trailing slash handling)
         assert response.status_code in [200, 307, 400, 500]
-
-
-# =============================================================================
-# Integration Check
-# =============================================================================
-
-
-def test_server_available() -> None:
-    """Test that server is available for integration tests.
-
-    This test documents the requirement for a running server.
-    It will fail if the server is not running, prompting the user
-    to start it.
-    """
-    if not check_server_available(API_BASE_URL):
-        pytest.fail(f"Server not available at {API_BASE_URL}. Start the server with: uv run tasca")

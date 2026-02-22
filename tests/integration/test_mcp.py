@@ -20,10 +20,14 @@ Usage:
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import pytest
 
 from tests.integration.harness import MCPSTDIOHarness
+
+if TYPE_CHECKING:
+    from tests.integration.conftest import MCPSession
 
 
 def _parse_sse_response(text: str) -> dict:
@@ -71,14 +75,14 @@ def test_mcp_initialize(mcp_test_client) -> None:
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
 
-    assert "result" in data or "error" in data
+    assert "result" in data
     if "result" in data:
         result = data["result"]
         assert "protocolVersion" in result
         assert "serverInfo" in result
 
 
-def test_mcp_list_tools(mcp_test_client) -> None:
+def test_mcp_list_tools(mcp_session: "MCPSession") -> None:
     """Test MCP tools/list request.
 
     Scenario: MCP Tool Discovery
@@ -86,34 +90,8 @@ def test_mcp_list_tools(mcp_test_client) -> None:
     Expected tools: patron_register, patron_get, table_create, table_join,
     table_get, table_say, table_listen, seat_heartbeat, seat_list.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {
-                    "name": "tasca-test-client",
-                    "version": "0.1.0",
-                },
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-
-    # Get session ID from response headers
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
     # List tools
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -121,13 +99,13 @@ def test_mcp_list_tools(mcp_test_client) -> None:
             "method": "tools/list",
             "params": {},
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
 
-    assert "result" in data or "error" in data
+    assert "result" in data
     if "result" in data:
         tools = data["result"].get("tools", [])
         tool_names = {t["name"] for t in tools}
@@ -141,6 +119,9 @@ def test_mcp_list_tools(mcp_test_client) -> None:
             "table_get",
             "table_say",
             "table_listen",
+            "table_control",
+            "table_update",
+            "table_wait",
             "seat_heartbeat",
             "seat_list",
         }
@@ -153,34 +134,13 @@ def test_mcp_list_tools(mcp_test_client) -> None:
 # =============================================================================
 
 
-def test_mcp_patron_register(mcp_test_client) -> None:
+def test_mcp_patron_register(mcp_session: "MCPSession") -> None:
     """Test patron_register tool.
 
     Scenario: MCP Patron Registration
     Verifies that patron registration can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -194,42 +154,21 @@ def test_mcp_patron_register(mcp_test_client) -> None:
                 },
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
-def test_mcp_patron_get(mcp_test_client) -> None:
+def test_mcp_patron_get(mcp_session: "MCPSession") -> None:
     """Test patron_get tool.
 
     Scenario: MCP Patron Retrieval
     Verifies that patron retrieval can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -240,12 +179,12 @@ def test_mcp_patron_get(mcp_test_client) -> None:
                 "arguments": {"patron_id": "test-patron-001"},
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
 # =============================================================================
@@ -253,34 +192,13 @@ def test_mcp_patron_get(mcp_test_client) -> None:
 # =============================================================================
 
 
-def test_mcp_table_create(mcp_test_client) -> None:
+def test_mcp_table_create(mcp_session: "MCPSession") -> None:
     """Test table_create tool.
 
     Scenario: MCP Table Creation
     Verifies that table creation can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -293,42 +211,21 @@ def test_mcp_table_create(mcp_test_client) -> None:
                 },
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
-def test_mcp_table_join(mcp_test_client) -> None:
+def test_mcp_table_join(mcp_session: "MCPSession") -> None:
     """Test table_join tool.
 
     Scenario: MCP Table Join
     Verifies that table join can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -342,42 +239,21 @@ def test_mcp_table_join(mcp_test_client) -> None:
                 },
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
-def test_mcp_table_get(mcp_test_client) -> None:
+def test_mcp_table_get(mcp_session: "MCPSession") -> None:
     """Test table_get tool.
 
     Scenario: MCP Table Retrieval
     Verifies that table retrieval can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -388,42 +264,21 @@ def test_mcp_table_get(mcp_test_client) -> None:
                 "arguments": {"table_id": "test-table-001"},
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
-def test_mcp_table_say(mcp_test_client) -> None:
+def test_mcp_table_say(mcp_session: "MCPSession") -> None:
     """Test table_say tool.
 
     Scenario: MCP Table Saying
     Verifies that adding a saying can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -438,42 +293,21 @@ def test_mcp_table_say(mcp_test_client) -> None:
                 },
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
-def test_mcp_table_listen(mcp_test_client) -> None:
+def test_mcp_table_listen(mcp_session: "MCPSession") -> None:
     """Test table_listen tool.
 
     Scenario: MCP Table Listening
     Verifies that listening for sayings can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -484,12 +318,12 @@ def test_mcp_table_listen(mcp_test_client) -> None:
                 "arguments": {"table_id": "test-table-001"},
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
 # =============================================================================
@@ -497,34 +331,13 @@ def test_mcp_table_listen(mcp_test_client) -> None:
 # =============================================================================
 
 
-def test_mcp_seat_heartbeat(mcp_test_client) -> None:
+def test_mcp_seat_heartbeat(mcp_session: "MCPSession") -> None:
     """Test seat_heartbeat tool.
 
     Scenario: MCP Seat Presence Update
     Verifies that seat heartbeat can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -538,42 +351,21 @@ def test_mcp_seat_heartbeat(mcp_test_client) -> None:
                 },
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
-def test_mcp_seat_list(mcp_test_client) -> None:
+def test_mcp_seat_list(mcp_session: "MCPSession") -> None:
     """Test seat_list tool.
 
     Scenario: MCP Seat Listing
     Verifies that listing seats can be invoked.
     """
-    # Initialize first and get session ID
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
-    response = mcp_test_client.post(
+    response = mcp_session["client"].post(
         "/mcp/mcp",
         json={
             "jsonrpc": "2.0",
@@ -584,12 +376,12 @@ def test_mcp_seat_list(mcp_test_client) -> None:
                 "arguments": {"table_id": "test-table-001"},
             },
         },
-        headers=headers,
+        headers=mcp_session["headers"],
     )
 
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
-    assert "result" in data or "error" in data
+    assert "result" in data
 
 
 # =============================================================================
@@ -609,7 +401,7 @@ async def test_mcp_stdio_initialize() -> None:
     async with MCPSTDIOHarness() as harness:
         response = await harness.initialize()
 
-        assert "result" in response or "error" in response
+        assert "result" in response
         if "result" in response:
             result = response["result"]
             assert "protocolVersion" in result
@@ -629,7 +421,7 @@ async def test_mcp_stdio_list_tools() -> None:
 
         response = await harness.list_tools()
 
-        assert "result" in response or "error" in response
+        assert "result" in response
         if "result" in response:
             tools = response["result"].get("tools", [])
             tool_names = {t["name"] for t in tools}
@@ -658,7 +450,7 @@ async def test_mcp_stdio_tool_call() -> None:
         )
 
         # Either result or error is acceptable
-        assert "result" in response or "error" in response
+        assert "result" in response or "error" in response  # smoke-test: intentionally tests error response; STDIO transport test verifies only that the process responds, not that the tool succeeds (table_get with a non-existent ID may return an error)
 
 
 # =============================================================================
@@ -666,7 +458,7 @@ async def test_mcp_stdio_tool_call() -> None:
 # =============================================================================
 
 
-def test_mcp_full_cycle_patron_flow(mcp_test_client) -> None:
+def test_mcp_full_cycle_patron_flow(mcp_session: "MCPSession") -> None:
     """Test full patron flow: register → create table → join → say → listen.
 
     This integration test exercises the complete patron lifecycle:
@@ -698,38 +490,13 @@ def test_mcp_full_cycle_patron_flow(mcp_test_client) -> None:
             raise AssertionError("Empty content in response")
         return json.loads(content[0].get("text", "{}"))
 
-    # Initialize session
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "full-cycle-test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-    init_data = _parse_mcp_response(init_response.text)
-    assert "result" in init_data
-
-    # Extract session ID for subsequent requests
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
     request_id = 1
 
     def call_tool(name: str, arguments: dict) -> dict:
         """Helper to call MCP tool."""
         nonlocal request_id
         request_id += 1
-        response = mcp_test_client.post(
+        response = mcp_session["client"].post(
             "/mcp/mcp",
             json={
                 "jsonrpc": "2.0",
@@ -737,7 +504,7 @@ def test_mcp_full_cycle_patron_flow(mcp_test_client) -> None:
                 "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             },
-            headers=headers,
+            headers=mcp_session["headers"],
         )
         assert response.status_code == 200
         return _extract_tool_result(_parse_mcp_response(response.text))
@@ -825,7 +592,7 @@ def test_mcp_full_cycle_patron_flow(mcp_test_client) -> None:
     assert any(s["id"] == seat_id for s in seats), "Our seat should appear in seat_list"
 
 
-def test_mcp_full_cycle_multiple_patrons(mcp_test_client) -> None:
+def test_mcp_full_cycle_multiple_patrons(mcp_session: "MCPSession") -> None:
     """Test multi-patron flow: register multiple patrons, join, say, listen.
 
     This integration test exercises:
@@ -856,36 +623,13 @@ def test_mcp_full_cycle_multiple_patrons(mcp_test_client) -> None:
             raise AssertionError("Empty content in response")
         return json.loads(content[0].get("text", "{}"))
 
-    # Initialize session
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "multi-patron-test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-
-    # Extract session ID for subsequent requests
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
     request_id = 1
 
     def call_tool(name: str, arguments: dict) -> dict:
         """Helper to call MCP tool."""
         nonlocal request_id
         request_id += 1
-        response = mcp_test_client.post(
+        response = mcp_session["client"].post(
             "/mcp/mcp",
             json={
                 "jsonrpc": "2.0",
@@ -893,7 +637,7 @@ def test_mcp_full_cycle_multiple_patrons(mcp_test_client) -> None:
                 "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             },
-            headers=headers,
+            headers=mcp_session["headers"],
         )
         assert response.status_code == 200
         return _extract_tool_result(_parse_mcp_response(response.text))
@@ -968,7 +712,7 @@ def test_mcp_full_cycle_multiple_patrons(mcp_test_client) -> None:
 # =============================================================================
 
 
-def test_mcp_error_table_closed(mcp_test_client) -> None:
+def test_mcp_error_table_closed(mcp_session: "MCPSession") -> None:
     """Test TableClosed error - post to closed table is rejected.
 
     Per spec v0.1 Section 1.1:
@@ -995,34 +739,12 @@ def test_mcp_error_table_closed(mcp_test_client) -> None:
             return {"ok": False, "error": "Empty content"}
         return json.loads(content[0].get("text", "{}"))
 
-    # Initialize session
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "error-path-test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
     request_id = 1
 
     def call_tool(name: str, arguments: dict) -> dict:
         nonlocal request_id
         request_id += 1
-        response = mcp_test_client.post(
+        response = mcp_session["client"].post(
             "/mcp/mcp",
             json={
                 "jsonrpc": "2.0",
@@ -1030,7 +752,7 @@ def test_mcp_error_table_closed(mcp_test_client) -> None:
                 "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             },
-            headers=headers,
+            headers=mcp_session["headers"],
         )
         assert response.status_code == 200
         return _extract_tool_result(_parse_mcp_response(response.text))
@@ -1089,7 +811,7 @@ def test_mcp_error_table_closed(mcp_test_client) -> None:
     assert listen_result.get("ok"), f"table_listen should work on closed table: {listen_result}"
 
 
-def test_mcp_error_dedup_collision(mcp_test_client) -> None:
+def test_mcp_error_dedup_collision(mcp_session: "MCPSession") -> None:
     """Test dedup_id collision returns same response (idempotency).
 
     Per spec v0.1 Section 3:
@@ -1116,34 +838,12 @@ def test_mcp_error_dedup_collision(mcp_test_client) -> None:
             return {"ok": False, "error": "Empty content"}
         return json.loads(content[0].get("text", "{}"))
 
-    # Initialize session
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "dedup-test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
     request_id = 1
 
     def call_tool(name: str, arguments: dict) -> dict:
         nonlocal request_id
         request_id += 1
-        response = mcp_test_client.post(
+        response = mcp_session["client"].post(
             "/mcp/mcp",
             json={
                 "jsonrpc": "2.0",
@@ -1151,7 +851,7 @@ def test_mcp_error_dedup_collision(mcp_test_client) -> None:
                 "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             },
-            headers=headers,
+            headers=mcp_session["headers"],
         )
         assert response.status_code == 200
         return _extract_tool_result(_parse_mcp_response(response.text))
@@ -1209,7 +909,7 @@ def test_mcp_error_dedup_collision(mcp_test_client) -> None:
     )
 
 
-def test_mcp_error_paused_table(mcp_test_client) -> None:
+def test_mcp_error_paused_table(mcp_session: "MCPSession") -> None:
     """Test PAUSED table behavior per spec v0.1 Section 1.1.
 
     Per spec:
@@ -1236,34 +936,12 @@ def test_mcp_error_paused_table(mcp_test_client) -> None:
             return {"ok": False, "error": "Empty content"}
         return json.loads(content[0].get("text", "{}"))
 
-    # Initialize session
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "paused-test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
     request_id = 1
 
     def call_tool(name: str, arguments: dict) -> dict:
         nonlocal request_id
         request_id += 1
-        response = mcp_test_client.post(
+        response = mcp_session["client"].post(
             "/mcp/mcp",
             json={
                 "jsonrpc": "2.0",
@@ -1271,7 +949,7 @@ def test_mcp_error_paused_table(mcp_test_client) -> None:
                 "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             },
-            headers=headers,
+            headers=mcp_session["headers"],
         )
         assert response.status_code == 200
         return _extract_tool_result(_parse_mcp_response(response.text))
@@ -1339,7 +1017,7 @@ def test_mcp_error_paused_table(mcp_test_client) -> None:
     assert say_result.get("ok"), f"table_say should work after resume: {say_result}"
 
 
-def test_mcp_error_version_conflict(mcp_test_client) -> None:
+def test_mcp_error_version_conflict(mcp_session: "MCPSession") -> None:
     """Test VersionConflict error for optimistic concurrency.
 
     Per spec v0.1 Section 5.2:
@@ -1365,34 +1043,12 @@ def test_mcp_error_version_conflict(mcp_test_client) -> None:
             return {"ok": False, "error": "Empty content"}
         return json.loads(content[0].get("text", "{}"))
 
-    # Initialize session
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "version-test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
     request_id = 1
 
     def call_tool(name: str, arguments: dict) -> dict:
         nonlocal request_id
         request_id += 1
-        response = mcp_test_client.post(
+        response = mcp_session["client"].post(
             "/mcp/mcp",
             json={
                 "jsonrpc": "2.0",
@@ -1400,7 +1056,7 @@ def test_mcp_error_version_conflict(mcp_test_client) -> None:
                 "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             },
-            headers=headers,
+            headers=mcp_session["headers"],
         )
         assert response.status_code == 200
         return _extract_tool_result(_parse_mcp_response(response.text))
@@ -1455,7 +1111,7 @@ def test_mcp_error_version_conflict(mcp_test_client) -> None:
     )
 
 
-def test_mcp_error_invalid_request(mcp_test_client) -> None:
+def test_mcp_error_invalid_request(mcp_session: "MCPSession") -> None:
     """Test invalid requests return appropriate error codes.
 
     Per spec Section 1.3:
@@ -1480,34 +1136,12 @@ def test_mcp_error_invalid_request(mcp_test_client) -> None:
             return {"ok": False, "error": "Empty content"}
         return json.loads(content[0].get("text", "{}"))
 
-    # Initialize session
-    init_response = mcp_test_client.post(
-        "/mcp/mcp",
-        json={
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "invalid-req-test", "version": "0.1.0"},
-            },
-        },
-        headers={"Accept": "application/json, text/event-stream"},
-    )
-    assert init_response.status_code == 200
-
-    session_id = init_response.headers.get("mcp-session-id")
-    headers = {"Accept": "application/json, text/event-stream"}
-    if session_id:
-        headers["mcp-session-id"] = session_id
-
     request_id = 1
 
     def call_tool(name: str, arguments: dict) -> dict:
         nonlocal request_id
         request_id += 1
-        response = mcp_test_client.post(
+        response = mcp_session["client"].post(
             "/mcp/mcp",
             json={
                 "jsonrpc": "2.0",
@@ -1515,7 +1149,7 @@ def test_mcp_error_invalid_request(mcp_test_client) -> None:
                 "method": "tools/call",
                 "params": {"name": name, "arguments": arguments},
             },
-            headers=headers,
+            headers=mcp_session["headers"],
         )
         assert response.status_code == 200
         return _extract_tool_result(_parse_mcp_response(response.text))

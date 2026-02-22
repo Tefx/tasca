@@ -23,16 +23,15 @@ Usage:
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator, Generator
+from collections.abc import Generator
+from typing import TYPE_CHECKING, TypedDict
 
 import pytest
 import pytest_asyncio
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    import httpx
     from fastapi import FastAPI
     from starlette.testclient import TestClient
 
@@ -223,43 +222,42 @@ async def mcp_http_client(asgi_app: "FastAPI") -> AsyncGenerator:
 
 
 # =============================================================================
-# MCP Helper Functions
+# MCP Session Fixture
 # =============================================================================
 
 
-class MCPClient:
-    """Helper class for MCP JSON-RPC testing.
+class MCPSession(TypedDict):
+    """Initialized MCP session state for use in tests.
 
-    This class provides utility methods for constructing and sending
-    MCP protocol messages over HTTP transport.
+    Attributes:
+        client: Starlette TestClient bound to the app under test.
+        headers: HTTP headers including Accept and mcp-session-id (if present).
+        session_id: MCP session ID returned by the server, or None if absent.
     """
 
-    def __init__(self, http_client: "httpx.AsyncClient") -> None:
-        """Initialize MCP client with HTTP client.
+    client: "TestClient"
+    headers: dict[str, str]
+    session_id: str | None
 
-        Args:
-            http_client: Configured httpx AsyncClient targeting MCP endpoint
-        """
-        self._client = http_client
-        self._request_id = 0
 
-    def _next_id(self) -> int:
-        """Get next request ID for JSON-RPC."""
-        self._request_id += 1
-        return self._request_id
+@pytest.fixture
+def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, None]:
+    """Provide an initialized MCP session for HTTP transport tests.
 
-    async def initialize(self) -> dict:
-        """Send MCP initialize request.
+    Sends the MCP initialize request and extracts the session ID so that
+    individual test functions do not need to repeat the boilerplate.
 
-        Returns:
-            Server capabilities and info
-        """
-        import httpx
+    Args:
+        mcp_test_client: Starlette TestClient with proper lifespan handling.
 
-        request_id = self._next_id()
-        payload = {
+    Yields:
+        MCPSession containing the client, initialized headers, and session_id.
+    """
+    init_response = mcp_test_client.post(
+        "/mcp/mcp",
+        json={
             "jsonrpc": "2.0",
-            "id": request_id,
+            "id": 1,
             "method": "initialize",
             "params": {
                 "protocolVersion": "2024-11-05",
@@ -269,108 +267,17 @@ class MCPClient:
                     "version": "0.1.0",
                 },
             },
-        }
+        },
+        headers={"Accept": "application/json, text/event-stream"},
+    )
+    assert init_response.status_code == 200
 
-        response = await self._client.post("/", json=payload)
-        response.raise_for_status()
-        return response.json()
+    session_id: str | None = init_response.headers.get("mcp-session-id")
+    headers: dict[str, str] = {"Accept": "application/json, text/event-stream"}
+    if session_id:
+        headers["mcp-session-id"] = session_id
 
-    async def list_tools(self) -> dict:
-        """Send MCP tools/list request.
-
-        Returns:
-            List of available MCP tools
-        """
-        import httpx
-
-        request_id = self._next_id()
-        payload = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": "tools/list",
-            "params": {},
-        }
-
-        response = await self._client.post("/", json=payload)
-        response.raise_for_status()
-        return response.json()
-
-    async def call_tool(self, name: str, arguments: dict | None = None) -> dict:
-        """Send MCP tools/call request.
-
-        Args:
-            name: Tool name to call
-            arguments: Optional tool arguments
-
-        Returns:
-            Tool execution result
-        """
-        import httpx
-
-        request_id = self._next_id()
-        payload = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": "tools/call",
-            "params": {
-                "name": name,
-                "arguments": arguments or {},
-            },
-        }
-
-        response = await self._client.post("/", json=payload)
-        response.raise_for_status()
-        return response.json()
-
-
-@pytest_asyncio.fixture
-async def mcp_client(mcp_http_client: "httpx.AsyncClient") -> AsyncGenerator[MCPClient, None]:
-    """MCP client helper for HTTP transport.
-
-    Provides an MCPClient instance for easy MCP protocol testing.
-
-    Yields:
-        MCPClient instance configured for the MCP endpoint
-    """
-    yield MCPClient(mcp_http_client)
-
-
-# =============================================================================
-# Server Availability Checks
-# =============================================================================
-
-
-def check_server_available(url: str, timeout: float = 5.0) -> bool:
-    """Check if a server is available at the given URL.
-
-    Args:
-        url: Server URL to check
-        timeout: Connection timeout in seconds
-
-    Returns:
-        True if server is available, False otherwise
-    """
-    import httpx
-
-    try:
-        response = httpx.get(f"{url}/api/v1/health", timeout=timeout)
-        return response.status_code == 200
-    except Exception:
-        return False
-
-
-@pytest.fixture
-def skip_if_server_unavailable() -> Generator[None, None, None]:
-    """Skip test if server is not available.
-
-    This fixture checks if the API server is running and skips the test
-    if it's not available. Useful for tests that require a live server.
-    """
-    import pytest
-
-    if not check_server_available(API_BASE_URL):
-        pytest.skip(f"Server not available at {API_BASE_URL}")
-    yield
+    yield MCPSession(client=mcp_test_client, headers=headers, session_id=session_id)
 
 
 # =============================================================================

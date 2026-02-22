@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from returns.result import Success
+
 from tasca.shell.mcp.proxy import UpstreamConfig
 from tasca.shell.mcp.server import LOCAL_ONLY_TOOLS, ProxyMiddleware
 
@@ -120,7 +122,7 @@ class TestProxyMiddlewareLocalMode:
         """In local mode, tool calls are handled by local handler."""
         # Setup: local mode (no upstream URL)
         with patch("tasca.shell.mcp.server.get_upstream_config") as mock_config:
-            mock_config.return_value = UpstreamConfig(url=None, token=None)
+            mock_config.return_value = Success(UpstreamConfig(url=None, token=None))
 
             result = await middleware.on_call_tool(mock_context, mock_call_next)
 
@@ -138,7 +140,7 @@ class TestProxyMiddlewareLocalMode:
     ) -> None:
         """Local mode when url is None (explicit check)."""
         with patch("tasca.shell.mcp.server.get_upstream_config") as mock_config:
-            mock_config.return_value = UpstreamConfig(url=None, token=None)
+            mock_config.return_value = Success(UpstreamConfig(url=None, token=None))
 
             result = await middleware.on_call_tool(mock_context, mock_call_next)
 
@@ -164,8 +166,8 @@ class TestProxyMiddlewareRemoteMode:
                 "tasca.shell.mcp.server.forward_jsonrpc_request", new_callable=AsyncMock
             ) as mock_forward,
         ):
-            mock_config.return_value = UpstreamConfig(
-                url="http://upstream.example.com", token="test-token"
+            mock_config.return_value = Success(
+                UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
             mock_forward.return_value = success_tool_result
 
@@ -200,8 +202,8 @@ class TestProxyMiddlewareRemoteMode:
                 "tasca.shell.mcp.server.forward_jsonrpc_request", new_callable=AsyncMock
             ) as mock_forward,
         ):
-            mock_config.return_value = UpstreamConfig(
-                url="http://upstream.example.com", token="test-token"
+            mock_config.return_value = Success(
+                UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
 
             result = await middleware.on_call_tool(context, mock_call_next)
@@ -227,8 +229,8 @@ class TestProxyMiddlewareRemoteMode:
                 "tasca.shell.mcp.server.forward_jsonrpc_request", new_callable=AsyncMock
             ) as mock_forward,
         ):
-            mock_config.return_value = UpstreamConfig(
-                url="http://upstream.example.com", token="test-token"
+            mock_config.return_value = Success(
+                UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
 
             result = await middleware.on_call_tool(context, mock_call_next)
@@ -258,8 +260,8 @@ class TestProxyMiddlewareResponseConversion:
                 "tasca.shell.mcp.server.forward_jsonrpc_request", new_callable=AsyncMock
             ) as mock_forward,
         ):
-            mock_config.return_value = UpstreamConfig(
-                url="http://upstream.example.com", token="test-token"
+            mock_config.return_value = Success(
+                UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
             mock_forward.return_value = success_tool_result
 
@@ -290,8 +292,8 @@ class TestProxyMiddlewareResponseConversion:
                 "tasca.shell.mcp.server.forward_jsonrpc_request", new_callable=AsyncMock
             ) as mock_forward,
         ):
-            mock_config.return_value = UpstreamConfig(
-                url="http://upstream.example.com", token="test-token"
+            mock_config.return_value = Success(
+                UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
             mock_forward.return_value = error_tool_result
 
@@ -329,8 +331,8 @@ class TestProxyMiddlewareResponseConversion:
                 "tasca.shell.mcp.server.forward_jsonrpc_request", new_callable=AsyncMock
             ) as mock_forward,
         ):
-            mock_config.return_value = UpstreamConfig(
-                url="http://upstream.example.com", token="test-token"
+            mock_config.return_value = Success(
+                UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
             mock_forward.return_value = proxy_error
 
@@ -366,8 +368,8 @@ class TestProxyMiddlewareRequestMethod:
                 "tasca.shell.mcp.server.forward_jsonrpc_request", new_callable=AsyncMock
             ) as mock_forward,
         ):
-            mock_config.return_value = UpstreamConfig(
-                url="http://upstream.example.com", token="test-token"
+            mock_config.return_value = Success(
+                UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
             mock_forward.return_value = success_tool_result
 
@@ -403,8 +405,8 @@ class TestProxyMiddlewareRequestMethod:
                     "tasca.shell.mcp.server.forward_jsonrpc_request", new_callable=AsyncMock
                 ) as mock_forward,
             ):
-                mock_config.return_value = UpstreamConfig(
-                    url="http://upstream.example.com", token="test-token"
+                mock_config.return_value = Success(
+                    UpstreamConfig(url="http://upstream.example.com", token="test-token")
                 )
                 mock_forward.return_value = success_tool_result
 
@@ -425,7 +427,7 @@ class TestProxyMiddlewareModeCheck:
     ) -> None:
         """Mode check reads is_remote attribute (single attribute read)."""
         with patch("tasca.shell.mcp.server.get_upstream_config") as mock_config:
-            mock_config.return_value = UpstreamConfig(url=None, token=None)
+            mock_config.return_value = Success(UpstreamConfig(url=None, token=None))
 
             await middleware.on_call_tool(mock_context, mock_call_next)
 
@@ -447,7 +449,7 @@ class TestProxyMiddlewareModeCheck:
             return ToolResult(content=[TextContent(type="text", text='{"ok": true, "data": {}}')])
 
         with patch("tasca.shell.mcp.server.get_upstream_config") as mock_config:
-            mock_config.return_value = UpstreamConfig(url=None, token=None)
+            mock_config.return_value = Success(UpstreamConfig(url=None, token=None))
             call_order.append("config_called")
 
             await middleware.on_call_tool(mock_context, tracking_call_next)

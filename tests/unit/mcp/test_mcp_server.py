@@ -273,7 +273,7 @@ class TestTableList:
 
     def test_list_tables_invalid_status(self) -> None:
         """List tables with unsupported status returns error."""
-        result = table_list(status="closed")
+        result = table_list(status="closed")  # type: ignore[arg-type]
 
         assert result["ok"] is False
         assert result["error"]["code"] == "INVALID_REQUEST"
@@ -1813,7 +1813,8 @@ class TestConnect:
             assert result["ok"] is True
             assert result["data"]["mode"] == "remote"
             assert result["data"]["url"] == "http://api.example.com"
-            assert result["data"]["token"] == "secret-token"
+            assert result["data"]["has_token"] is True
+            assert "token" not in result["data"]
 
             # Verify global config was updated
             config = get_upstream_config().unwrap()
@@ -1834,7 +1835,8 @@ class TestConnect:
             assert result["ok"] is True
             assert result["data"]["mode"] == "remote"
             assert result["data"]["url"] == "http://api.example.com"
-            assert result["data"]["token"] is None
+            assert result["data"]["has_token"] is False
+            assert "token" not in result["data"]
 
             config = get_upstream_config().unwrap()
             assert config.is_remote is True
@@ -1858,7 +1860,8 @@ class TestConnect:
             assert result["ok"] is True
             assert result["data"]["mode"] == "local"
             assert result["data"]["url"] is None
-            assert result["data"]["token"] is None
+            assert result["data"]["has_token"] is False
+            assert "token" not in result["data"]
 
             config = get_upstream_config().unwrap()
             assert config.is_remote is False
@@ -1901,7 +1904,8 @@ class TestConnect:
             data = result["data"]
             assert "mode" in data
             assert "url" in data
-            assert "token" in data
+            assert "has_token" in data
+            assert "token" not in data
             assert data["mode"] in ("local", "remote")
         finally:
             switch_to_local()

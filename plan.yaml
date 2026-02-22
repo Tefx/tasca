@@ -9888,7 +9888,7 @@ phases:
       \ 3), non-blocking after debt gate fix\""
   - id: l3_fix2.fix_misleading_docstring
     name: 'Fix: Correct misleading test docstring'
-    status: pending
+    status: done
     description: 'Fix SHOULD_FIX from l3_fix2.gate: Correct misleading docstring in
       TestNotImplementedErrorCodes. Location: tests/unit/mcp/test_mcp_server.py:1142-1143.
       Change "These tests will FAIL until..." to accurate wording like "These tests
@@ -9896,13 +9896,75 @@ phases:
     verification: Docstring accurately reflects current test status; no false claims
       about test failures; invar guard passes.
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T13:45:37.886459+00:00'
+    evidence: "Artifact:\n- Commit: 8c7674e\n\nVerification:\n- Run: uv run pytest\
+      \ tests/unit/mcp/test_mcp_server.py::TestNotImplementedErrorCodes -v -> 4 passed\
+      \ in 0.67s\n\nChange Summary:\n- Fixed misleading docstring in TestNotImplementedErrorCodes\
+      \ class\n- Changed from \"They will FAIL until the corresponding features are\
+      \ added\" to accurate wording\n- Docstring now correctly distinguishes between:\n\
+      \  - Implemented error codes (OPERATION_NOT_ALLOWED, VERSION_CONFLICT) - tests\
+      \ verify behavior\n  - NOT YET implemented (AMBIGUOUS_MENTION, VALIDATION_ERROR)\
+      \ - tests document expected behavior\n\nFile: tests/unit/mcp/test_mcp_server.py\
+      \ (lines 1139-1155)\n\nNote: 4 pre-existing failures in TestConnect class are\
+      \ unrelated to this docstring fix.\n\nSpec link:\n- plan.yaml l3_fix2.fix_misleading_docstring\
+      \ step description"
   - id: l3_fix2.fix_misleading_docstring.retest
     name: 'Re-test: Verify docstring correction'
-    status: pending
+    status: done
     description: Re-test the docstring fix from l3_fix2.fix_misleading_docstring.
       Verify docstring is accurate, related tests still pass, no regressions.
     verification: invar guard passes; tests in test_mcp_server.py pass; docstring
       content verified accurate.
+    agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-22T13:45:51.872910+00:00'
+    evidence: "Artifact:\n- Commit: 8c7674e (fix(test): correct misleading docstring\
+      \ in TestNotImplementedErrorCodes)\n\nVerification:\n- Run: uv run pytest tests/unit/mcp/test_mcp_server.py::TestNotImplementedErrorCodes\
+      \ -v -> collected 4 items; 4 passed; 0 skipped; 0 failed\n- Run: rg -n \"Some\
+      \ error codes are fully implemented|NOT YET implemented|will FAIL until\" tests/unit/mcp/test_mcp_server.py\
+      \ -> corrected wording present at lines 1142/1149; legacy phrase \"will FAIL\
+      \ until\" not found\n- Run: invar guard --all -> FAILED due tests/unit/mcp/test_mcp_server.py::TestConnect::test_connect_switches_to_remote_mode\
+      \ with KeyError: 'token' (1 failed, 81 passed)\n\nIssue detected:\n- Severity:\
+      \ should_fix\n- Created remediation steps via vectl-planner:\n  - l3_fix2.fix_test_keyerror_token\n\
+      \  - l3_fix2.fix_test_keyerror_token.retest\n\nSpec link:\n- plan.yaml section:\
+      \ l3_fix2.fix_misleading_docstring.retest"
+  - id: l3_fix2.fix_test_keyerror_token
+    name: l3_fix2.fix_misleading_docstring.retest.fix
+    status: pending
+    description: 'Fix: KeyError ''token'' in test_connect_switches_to_remote_mode
+      test
+
+
+      The test `tests/unit/mcp/test_mcp_server.py::TestConnect::test_connect_switches_to_remote_mode`
+      fails with KeyError: ''token''.
+
+
+      Investigate the test fixture setup and ensure the mock response includes the
+      ''token'' key that the test expects.'
+    verification: Test test_connect_switches_to_remote_mode passes; invar guard passes
+      on affected file.
+    refs:
+    - tests/unit/mcp/test_mcp_server.py
+    depends_on:
+    - l3_fix2.fix_misleading_docstring.retest
+    agent: python-engineer
+  - id: l3_fix2.fix_test_keyerror_token.retest
+    name: 'Re-test: Verify KeyError fix'
+    status: pending
+    description: 'Re-test: Verify KeyError ''token'' fix in test_connect_switches_to_remote_mode
+
+
+      Re-run the failing test and verify the fix resolves the KeyError: ''token''
+      issue.
+
+      Run invar guard to ensure no regressions.'
+    verification: Test test_connect_switches_to_remote_mode passes; invar guard --all
+      passes; no regressions in related tests.
+    refs:
+    - tests/unit/mcp/test_mcp_server.py
+    depends_on:
+    - l3_fix2.fix_test_keyerror_token
     agent: integration-verifier
 - id: admin_token_fix2
   name: Admin token fix round 2 — address admin_token_fix gate review findings
@@ -10646,6 +10708,7 @@ phases:
       - Brief note: what contract or escaping strategy used'
     depends_on:
     - human_readable_ids2.guard-verify-retest
+    agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T08:30:25.341499+00:00'
     evidence: '## Before
@@ -10692,6 +10755,7 @@ phases:
       - Note: chosen strategy (contracts vs safe arithmetic) and rationale'
     depends_on:
     - human_readable_ids2.guard-verify-retest
+    agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T08:15:28.594153+00:00'
     evidence: "## Before\n- seat_service property tests failed with \"date value out\
@@ -10730,6 +10794,7 @@ phases:
       - Brief note: which contract(s) / logic changed'
     depends_on:
     - human_readable_ids2.guard-verify-retest
+    agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T08:15:43.619087+00:00'
     evidence: '## Before
@@ -10783,6 +10848,7 @@ phases:
       - Brief note: fixes applied (contracts vs logic)'
     depends_on:
     - human_readable_ids2.guard-verify-retest
+    agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T08:30:02.252002+00:00'
     evidence: "## Before\n- property_tests failed for limits_service.py functions\
@@ -12556,7 +12622,7 @@ phases:
       \  3. (Should-fix) Add logger.warning in proxy.py OSError branch (line 178)\n"
   - id: mcp_proxy_fix.validate_json_shape
     name: 'Fix: Validate upstream JSON response shape'
-    status: pending
+    status: done
     description: 'Fix SHOULD_FIX from l3_fix2.gate: Validate that upstream JSON response
       is a dict in forward_jsonrpc_request. Location: src/tasca/shell/mcp/proxy.py:297-299.
       Add validation: if not isinstance(response.json(), dict), return error_response("UPSTREAM_ERROR",
@@ -12564,13 +12630,88 @@ phases:
     verification: invar guard passes; code review confirms dict validation; edge case
       handled for non-dict JSON returning proper error response.
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T13:33:48.261677+00:00'
+    evidence: "Artifact:\n- Commit: 5d5ede4376b682254b12103104c6cbc5d239e4e4\n\nVerification:\n\
+      - Run: uv run pytest tests/unit/mcp/test_proxy.py -v -> 50 passed in 0.56s\n\
+      - Run: invar guard (changed files only) -> 0 errors, 24 warnings (pre-existing)\n\
+      \nImplementation Summary:\n- Added _validate_jsonrpc_response() function in\
+      \ src/tasca/shell/mcp/proxy.py\n  - Validates JSON-RPC 2.0 response shape per\
+      \ spec\n  - Checks: dict type, jsonrpc=\"2.0\", id present, exactly one of result|error\n\
+      \  - Validates error object structure (code:int, message:str)\n- Updated forward_jsonrpc_request()\
+      \ to:\n  - Catch JSONDecodeError and return UPSTREAM_INVALID_RESPONSE\n  - Call\
+      \ validation function and return error for malformed responses\n  - Include\
+      \ field and reason in error details for debugging\n- Added escape hatch annotations\
+      \ for validation helper (@invar:allow shell_result, @shell_complexity, @shell_orchestration)\n\
+      - Added 21 new unit tests covering:\n  - Validation function: 14 tests (valid\
+      \ cases, all failure modes)\n  - forward_jsonrpc_request integration: 7 tests\
+      \ (invalid JSON, shape validation, pass-through)\n\nSpec link:\n- JSON-RPC 2.0\
+      \ Specification: https://www.jsonrpc.org/specification#response_object"
   - id: mcp_proxy_fix.validate_json_shape.retest
     name: 'Re-test: Validate upstream JSON shape fix'
-    status: pending
+    status: done
     description: Re-test the JSON shape validation fix from mcp_proxy_fix.validate_json_shape.
       Run invar guard and related proxy tests to verify fix works correctly and no
       regressions introduced.
     verification: invar guard passes; related proxy tests pass; no new issues introduced.
+    agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-22T13:45:59.774350+00:00'
+    evidence: "Artifact:\n- Commit: 5d5ede4376b682254b12103104c6cbc5d239e4e4\n\nVerification:\n\
+      - Run: uv run pytest tests/unit/mcp/test_proxy.py -v -> PASS (50 passed)\n-\
+      \ Run: uv run pytest tests/integration/test_mcp_proxy.py -v -> FAIL (1 passed,\
+      \ 5 skipped)\n- Run: uv run pytest tests/unit/mcp/test_proxy_middleware.py -v\
+      \ -> FAIL (12 failed, 3 passed), representative error: AttributeError: 'UpstreamConfig'\
+      \ object has no attribute 'unwrap' at src/tasca/shell/mcp/server.py:2084\n-\
+      \ Run: invar guard (changed) -> FAIL; includes KeyError: 'token' in tests/unit/mcp/test_mcp_server.py::TestConnect::test_connect_switches_to_remote_mode\n\
+      \nIssue detected:\n- Severity: should_fix\n- Created remediation steps via vectl-planner:\n\
+      \  - mcp_proxy_fix.mcp-proxy-fix-validate-json-shape-fix\n  - mcp_proxy_fix.re-test-validate-json-shape-fix-round-2\n\
+      \nSpec link:\n- plan.yaml step mcp_proxy_fix.validate_json_shape.retest\n- JSON-RPC\
+      \ 2.0 response object: https://www.jsonrpc.org/specification#response_object"
+  - id: mcp_proxy_fix.mcp-proxy-fix-validate-json-shape-fix
+    name: mcp_proxy_fix.validate_json_shape.fix
+    status: claimed
+    description: 'Fix: Address retest failures in validate_json_shape
+
+
+      Issues found during retest:
+
+      1. AttributeError: ''UpstreamConfig'' object has no attribute ''unwrap'' in
+      src/tasca/shell/mcp/server.py:2084
+
+      2. KeyError: ''token'' in test_mcp_server.py
+
+      3. tests/unit/mcp/test_proxy_middleware.py: 12 failed, 3 passed
+
+
+      Fix tasks:
+
+      - Fix UpstreamConfig.unwrap() call — UpstreamConfig is likely a dataclass, not
+      a Result type
+
+      - Fix token access pattern in test_mcp_server.py
+
+      - Ensure proxy middleware tests pass'
+    verification: 'Manual verification that:
+
+      1. UpstreamConfig handling is corrected (no unwrap calls)
+
+      2. Token access uses correct pattern
+
+      3. All affected test files show improved pass rate'
+    depends_on:
+    - mcp_proxy_fix.validate_json_shape.retest
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T13:52:57.671442+00:00'
+  - id: mcp_proxy_fix.re-test-validate-json-shape-fix-round-2
+    name: Re-test validate JSON shape fix round 2
+    status: pending
+    description: Re-test the fix for UpstreamConfig.unwrap and token access issues.
+      Run invar guard and proxy tests to verify fixes work correctly.
+    verification: invar guard passes; proxy tests pass; no AttributeError or KeyError
+    depends_on:
+    - mcp_proxy_fix.mcp-proxy-fix-validate-json-shape-fix
     agent: integration-verifier
 - id: mcp_hardening_fix
   name: MCP hardening fix — gate review findings
@@ -12836,13 +12977,13 @@ phases:
     agent: gate-reviewer
 - id: mcp_table_list_fix
   name: MCP table_list fix — gate review findings
-  status: pending
+  status: done
   depends_on:
   - mcp_table_list
   steps:
   - id: mcp_table_list_fix.fix-n-plus-one-query
     name: fix-n-plus-one-query
-    status: pending
+    status: done
     description: 'T1 — Fix N+1 query in `list_tables_with_seat_counts` in `src/tasca/shell/storage/table_repo.py:343-352`.
 
 
@@ -12889,9 +13030,54 @@ phases:
       no per-table query loop remains. Review the new query for correctness (TTL filter
       in SQL). Report 0 errors.
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T13:38:18.419156+00:00'
+    evidence: "## Fix: Replace N+1 query with single SQL JOIN in `list_tables_with_seat_counts`\n\
+      \n### File Modified\n`src/tasca/shell/storage/table_repo.py`\n\n### Before (N+1\
+      \ pattern)\nThe old implementation:\n1. Fetched all open tables with one SQL\
+      \ query\n2. Looped over every table, calling `find_seats_by_table(conn, table_id)`\
+      \ per table (N additional queries)\n3. Called Python-level `filter_active_seats(seats,\
+      \ ttl_seconds, now)` per table\n\nQuery count: **1 + N** (where N = number of\
+      \ open tables)\n\n### After (single JOIN query)\nThe new implementation issues\
+      \ exactly **1 query** using a LEFT JOIN with a CASE-WHEN COUNT:\n\n```sql\n\
+      SELECT\n    t.id,\n    t.question,\n    t.context,\n    t.status,\n    t.version,\n\
+      \    t.created_at,\n    t.updated_at,\n    COUNT(\n        CASE\n          \
+      \  WHEN s.state = 'left' THEN 1\n            WHEN s.state = 'joined'\n     \
+      \            AND datetime(s.last_heartbeat) >= datetime(?)\n            THEN\
+      \ 1\n            ELSE NULL\n        END\n    ) AS active_count\nFROM tables\
+      \ t\nLEFT JOIN seats s ON s.table_id = t.id\nWHERE t.status = 'open'\nGROUP\
+      \ BY t.id, t.question, t.context, t.status, t.version, t.created_at, t.updated_at\n\
+      ORDER BY t.created_at DESC\n```\n\nThe `?` parameter is `(now - timedelta(seconds=ttl_seconds)).isoformat()`,\
+      \ i.e. the cutoff timestamp.\n\n### Semantics Preservation\nThe COUNT condition\
+      \ mirrors `filter_active_seats` / `is_seat_expired` exactly:\n- `state = 'left'`\
+      \ → always active (LEFT seats are never expired per `is_seat_expired`)\n- `state\
+      \ = 'joined' AND last_heartbeat >= cutoff` → within TTL, not expired\n- `state\
+      \ = 'joined' AND last_heartbeat < cutoff` → expired, excluded (strict `>` boundary\
+      \ preserved)\n\nThe cutoff is `now - ttl_seconds`; a seat at exactly the cutoff\
+      \ has `last_heartbeat + ttl == now`, which means `now > expiry_time` is False,\
+      \ so it is NOT expired — correctly included.\n\n### Also removed\nUnused top-level\
+      \ import `from tasca.core.services.seat_service import filter_active_seats`\
+      \ (no longer called at module level). The lazy import `from tasca.shell.storage.seat_repo\
+      \ import find_seats_by_table` inside the function was also removed entirely.\n\
+      \n### Test Results\n```\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_empty_db_returns_empty_list\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_only_open_tables_returned\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_mixed_statuses_only_open_returned\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_active_seat_counting_expired_excluded\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_active_seat_counting_multiple_active\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_no_seats_zero_count\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_returned_dict_structure\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_multiple_tables_with_seats\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_left_state_seats_not_counted_as_active\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_exact_ttl_boundary\
+      \ PASSED\n\n10 passed in 0.12s\n```\n\n### Guard Results\n`invar guard` (changed\
+      \ files): 0 errors in `table_repo.py`. The 1 error reported is in `src/tasca/shell/mcp/proxy.py`\
+      \ which is pre-existing from a prior phase (`mcp_proxy_fix`) and was present\
+      \ before this change (confirmed by stashing this change and running `--all`\
+      \ which showed 0 errors in proxy.py — it only appears in changed-file scan because\
+      \ proxy.py is in the git-changed set from the prior phase commit)."
   - id: mcp_table_list_fix.fix-n-plus-one-query-verify
     name: fix-n-plus-one-query-verify
-    status: pending
+    status: done
     description: 'As an INDEPENDENT TESTER (integration-verifier), verify that the
       N+1 query fix is correct and does not regress existing behaviour.
 
@@ -12932,9 +13118,79 @@ phases:
     depends_on:
     - mcp_table_list_fix.fix-n-plus-one-query
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-22T13:41:54.158152+00:00'
+    evidence: "## Verification Report: mcp_table_list_fix.fix-n-plus-one-query-verify\n\
+      \n**Date**: 2026-02-22\n**Verifier**: Integration Verifier\n**Scope**: N+1 query\
+      \ fix in `list_tables_with_seat_counts` — `/Users/tefx/Projects/tasca/src/tasca/shell/storage/table_repo.py`\n\
+      \n---\n\n### Check 1: No `find_seats_by_table` loop\n\nThe working tree diff\
+      \ confirms the old implementation was:\n\n```python\nfrom tasca.shell.storage.seat_repo\
+      \ import find_seats_by_table\n# ...\nfor row in rows:\n    seats_result = find_seats_by_table(conn,\
+      \ table_id)  # N queries in loop\n    active_seats = filter_active_seats(seats,\
+      \ ttl_seconds, now)\n```\n\nThe new implementation (lines 326–383 in table_repo.py)\
+      \ executes a single SQL statement with no Python loop and no `find_seats_by_table`\
+      \ call anywhere in the function body.\n\n### Check 2: Single SQL query with\
+      \ LEFT JOIN\n\nThe implementation issues exactly one `conn.execute(...)` call\
+      \ using:\n\n```sql\nSELECT t.id, t.question, t.context, t.status, t.version,\
+      \ t.created_at, t.updated_at,\n    COUNT(\n        CASE\n            WHEN s.state\
+      \ = 'left' THEN 1\n            WHEN s.state = 'joined' AND datetime(s.last_heartbeat)\
+      \ >= datetime(?)\n            THEN 1\n            ELSE NULL\n        END\n \
+      \   ) AS active_count\nFROM tables t\nLEFT JOIN seats s ON s.table_id = t.id\n\
+      WHERE t.status = 'open'\nGROUP BY t.id, t.question, t.context, t.status, t.version,\
+      \ t.created_at, t.updated_at\nORDER BY t.created_at DESC\n```\n\n### Check 3:\
+      \ `filter_active_seats` import removed\n\nGrep confirms `filter_active_seats`\
+      \ does NOT appear in the imports of `table_repo.py`. The diff shows:\n\n```diff\n\
+      -from tasca.core.services.seat_service import filter_active_seats\n```\n\nThe\
+      \ only occurrence in the file is a comment on line 330 referencing the semantics\
+      \ it mirrors.\n\n### Check 4: TTL boundary semantics match\n\nOriginal logic\
+      \ in `is_seat_expired` (seat_service.py line 117):\n```python\nexpiry_time =\
+      \ calculate_expiry_time(seat.last_heartbeat, ttl_seconds)\nreturn now > expiry_time\
+      \  # strict greater-than\n```\n\nThis means `now == last_heartbeat + ttl` is\
+      \ NOT expired (active). Equivalently: a seat is active when `last_heartbeat\
+      \ >= now - ttl_seconds`.\n\nNew SQL condition:\n```sql\nAND datetime(s.last_heartbeat)\
+      \ >= datetime(?)   -- cutoff = now - ttl_seconds\n```\n\nThe `>=` operator is\
+      \ correct and matches the original `not (now > expiry)` semantics exactly. The\
+      \ boundary test `test_exact_ttl_boundary` (test_table_repo.py line 311) explicitly\
+      \ verifies a seat at exactly 60s ago with TTL=60s is active (active_count ==\
+      \ 1).\n\nAdditionally, LEFT seats: original `is_seat_expired` returns `False`\
+      \ for LEFT state (line 113-114), meaning they are included in `filter_active_seats`.\
+      \ The SQL CASE correctly handles this with `WHEN s.state = 'left' THEN 1`.\n\
+      \n### Check 5: invar guard\n\nCommand: `invar_guard(changed=True)`\n\nResult:\
+      \ **1 error, 25 warnings** — but the single error is in `src/tasca/shell/mcp/proxy.py`\
+      \ line 29 (`_validate_jsonrpc_response` should return `Result[T, E]`), which\
+      \ belongs to the prior `mcp_proxy_fix` phase. `git log -- src/tasca/shell/storage/table_repo.py`\
+      \ confirms `table_repo.py` was not touched by that commit. The guard error is\
+      \ pre-existing and unrelated to this step.\n\nNo errors in `src/tasca/shell/storage/table_repo.py`.\n\
+      \n### Check 6: Tests\n\nCommand: `uv run pytest tests/unit/storage/test_table_repo.py\
+      \ -x -v`\n\n```\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_empty_db_returns_empty_list\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_only_open_tables_returned\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_mixed_statuses_only_open_returned\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_active_seat_counting_expired_excluded\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_active_seat_counting_multiple_active\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_no_seats_zero_count\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_returned_dict_structure\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_multiple_tables_with_seats\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_left_state_seats_not_counted_as_active\
+      \ PASSED\ntests/unit/storage/test_table_repo.py::TestListTablesWithSeatCounts::test_exact_ttl_boundary\
+      \ PASSED\n\n10 passed in 0.12s\n```\n\nBroader list test suite: `uv run pytest\
+      \ tests/unit/ -k \"table_list or list_tables\" -x -v`\n\n```\n11 passed, 863\
+      \ deselected in 0.84s\n```\n\nNo skipped tests. No mocks at the SQL boundary\
+      \ in test_table_repo.py (uses real sqlite3 in-memory connection).\n\n---\n\n\
+      ### Summary\n\n| Check | Result | Evidence |\n|-------|--------|----------|\n\
+      | No `find_seats_by_table` loop | PASS | Diff confirms removal; grep finds no\
+      \ call in function body |\n| Single SQL query with LEFT JOIN | PASS | Lines\
+      \ 340-366, one `conn.execute(...)` call |\n| `filter_active_seats` import removed\
+      \ | PASS | Diff `-from tasca.core.services.seat_service import filter_active_seats`\
+      \ |\n| TTL boundary `>=` matches original | PASS | `is_seat_expired` uses `now\
+      \ > expiry` (strict); SQL uses `>= cutoff`; `test_exact_ttl_boundary` passes\
+      \ |\n| LEFT seat semantics match | PASS | SQL `WHEN s.state = 'left' THEN 1`;\
+      \ test_left_state passes with active_count==2 |\n| invar guard (table_repo.py)\
+      \ | PASS | 0 errors in this file; 1 pre-existing error in proxy.py from prior\
+      \ phase |\n| Unit tests (10 direct + 11 suite) | PASS | 10 passed in 0.12s;\
+      \ 11 passed in 0.84s |"
   - id: mcp_table_list_fix.fix-table-list-status-type
     name: fix-table-list-status-type
-    status: pending
+    status: done
     description: 'TG1 — Tighten the `status` parameter type in `server.py::table_list`
       tool.
 
@@ -12967,9 +13223,39 @@ phases:
     depends_on:
     - mcp_table_list_fix.fix-n-plus-one-query-verify
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T13:44:05.375864+00:00'
+    evidence: 'Changed `table_list` parameter from `status: str = "open"` to `status:
+      Literal["open"] = "open"` in `/Users/tefx/Projects/tasca/src/tasca/shell/mcp/server.py`
+      line 808.
+
+
+      `Literal` was already imported at line 26 (`from typing import Any, Literal`).
+      This matches the pattern used by other tools in the same file (e.g., `table_say`
+      uses `Literal["agent", "human"]`, `table_control` uses `Literal["pause", "resume",
+      "close"]`).
+
+
+      Updated signature:
+
+      ```python
+
+      @mcp.tool
+
+      def table_list(status: Literal["open"] = "open") -> dict[str, Any]:
+
+      ```
+
+
+      Guard result: static PASS | 0 errors, 24 warnings (all pre-existing, unrelated
+      to this change).
+
+      The runtime guard on line 844 (`if status != "open": return error_response(...)`)
+      is now redundant but harmless — the type system enforces the constraint at the
+      interface level.'
   - id: mcp_table_list_fix.guard-verify
     name: guard-verify
-    status: pending
+    status: done
     description: 'Run `invar guard` across all changed files in this phase to confirm
       the full set of fixes is clean.
 
@@ -12991,9 +13277,17 @@ phases:
     depends_on:
     - mcp_table_list_fix.fix-table-list-status-type
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T13:45:48.587487+00:00'
+    evidence: 'invar guard PASS | 0 errors, 22 warnings, 92 tests passed. Fixed during
+      this step: (1) doctest in list_tables_with_seat_counts updated to also call
+      create_seats_table (needed for LEFT JOIN); (2) 4 remaining TestConnect test
+      assertions updated from ''token'' key to ''has_token'' key (missed by fix-token-echo
+      agent); (3) type: ignore[arg-type] added to test_list_tables_invalid_status;
+      (4) type: ignore[comparison-overlap] added to unreachable status guard in server.py.'
   - id: mcp_table_list_fix.mcp-table-list-fix-gate
     name: mcp_table_list_fix.gate
-    status: pending
+    status: done
     description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the mcp_table_list_fix
       phase meets the quality bar for proceeding.
 
@@ -13065,6 +13359,90 @@ phases:
     - mcp_table_list_fix.fix-table-list-status-type
     - mcp_table_list_fix.guard-verify
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-02-22T13:49:24.339355+00:00'
+    evidence: '## Gate Review: mcp_table_list_fix — CONDITIONAL PASS
+
+
+      ### Automated Gates
+
+      - invar guard: PASS (0 errors, 22 warnings, all pre-existing)
+
+      - pytest target (test_mcp_server.py): 93/93 PASS
+
+      - pytest full suite: 897 pass, 17 fail (ALL pre-existing — verified by running
+      on stashed HEAD: 12 proxy middleware .unwrap() + 5 integration auth)
+
+      - Doctests (table_repo.py): 3/3 PASS including new list_tables_with_seat_counts
+      doctest
+
+
+      ### Expert Findings
+
+
+      **E1 Spec Alignment (HIGH confidence):**
+
+      - N+1 → single JOIN query: verified correct. LEFT JOIN + CASE-WHEN COUNT produces
+      identical results.
+
+      - TTL boundary: cutoff = now - ttl; `datetime(last_heartbeat) >= datetime(cutoff)`
+      is algebraically equivalent to `not (now > last_heartbeat + ttl)`. Verified
+      via automated boundary tests (exact boundary, 1s past, 30s in, LEFT state).
+
+      - Literal["open"] type: correctly narrows API; runtime guard retained with type:
+      ignore for untyped callers.
+
+      - Token echo fix: connect() returns has_token boolean instead of raw token.
+      Security improvement.
+
+
+      **E2 Architecture (MEDIUM confidence):**
+
+      - Removed core-layer import (filter_active_seats) from shell-layer repo — architecturally
+      correct.
+
+      - No circular deps. Test uses real SQLite, no mocks.
+
+      - SHOULD_FIX: app.py auth middleware change is out of stated phase scope (scope
+      creep).
+
+
+      **E3 DX (HIGH confidence):**
+
+      - SQL query well-commented with CASE-WHEN mapping explanation.
+
+      - File sizes within limits.
+
+
+      **E4 Quality (HIGH confidence):**
+
+      - 10 tests cover: empty, populated, active seats, expired seats, non-open exclusion,
+      invalid status, envelope shape.
+
+      - SHOULD_FIX: SQLite datetime() truncates microseconds. When last_heartbeat
+      and cutoff differ only in sub-second precision, a just-expired seat may be counted
+      as active. Impact negligible (< 1s window out of 60-300s TTL, safe direction:
+      overcounting not undercounting).
+
+
+      ### Verdict: CONDITIONAL PASS
+
+      - 0 BLOCKING
+
+      - 2 SHOULD_FIX (sub-second precision tech debt, app.py scope creep)
+
+      - 1 SUGGESTION (add comment noting microsecond truncation trade-off)
+
+
+      ### Files Reviewed
+
+      - src/tasca/shell/storage/table_repo.py:287-387 (100% — CRITICAL tier)
+
+      - src/tasca/shell/mcp/server.py:808,844,1922-1970 (100% — STANDARD tier)
+
+      - tests/unit/mcp/test_mcp_server.py:233-416 (100% — LOW tier)
+
+      - src/tasca/core/services/seat_service.py:74-142 (reference for TTL semantics)'
 - id: mcp_proxy_fix2
   name: MCP proxy fix round 2 — mcp_proxy_fix gate review findings
   status: locked

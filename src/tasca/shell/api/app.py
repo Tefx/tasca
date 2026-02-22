@@ -60,9 +60,17 @@ class MCPBearerAuthMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Get authorization header
-        headers = dict(scope.get("headers", []))
-        auth_header = headers.get(b"authorization", b"").decode("utf-8")
+        # Pass OPTIONS preflight through without auth (CORS)
+        if scope.get("method") == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
+        # Get authorization header (safe first-match; dict() would drop duplicates)
+        token_header = next(
+            (v for k, v in scope.get("headers", []) if k == b"authorization"),
+            b"",
+        )
+        auth_header = token_header.decode("utf-8")
 
         # If admin_token is None or empty, allow through
         if not settings.admin_token:

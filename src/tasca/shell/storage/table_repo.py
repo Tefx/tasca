@@ -14,7 +14,6 @@ from datetime import datetime
 from returns.result import Failure, Result, Success
 
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
-from tasca.core.services.seat_service import filter_active_seats
 from tasca.core.services.table_service import (
     VersionMismatchError,
     prepare_versioned_update,
@@ -314,55 +313,74 @@ def list_tables_with_seat_counts(
     Example:
         >>> import sqlite3
         >>> from datetime import datetime
+        >>> from tasca.shell.storage.seat_repo import create_seats_table
         >>> conn = sqlite3.connect(":memory:")
-        >>> _ = create_tables_table(conn)  # Setup schema
+        >>> _ = create_tables_table(conn)  # Setup tables schema
+        >>> _ = create_seats_table(conn)   # Setup seats schema (needed for JOIN)
         >>> result = list_tables_with_seat_counts(conn, 300, datetime.now())
         >>> isinstance(result, Success)
         True
         >>> result.unwrap()  # Empty list since no tables exist
         []
     """
-    from tasca.shell.storage.seat_repo import find_seats_by_table
+    from datetime import timedelta
 
     try:
-        # Query only open tables
+        # Compute the cutoff ISO string: seats with last_heartbeat + ttl >= now are active.
+        # A JOINED seat is expired when: now > last_heartbeat + ttl_seconds
+        # A LEFT seat is never expired (always counts as active).
+        # We mirror filter_active_seats / is_seat_expired semantics exactly in SQL.
+        cutoff = (now - timedelta(seconds=ttl_seconds)).isoformat()
+
+        # Single JOIN query: COUNT only active seats per open table.
+        # Active seat condition (matching is_seat_expired logic):
+        #   state = 'left'  → always active (LEFT seats are never expired)
+        #   state = 'joined' AND last_heartbeat >= cutoff  → within TTL, not expired
+        #   state = 'joined' AND last_heartbeat < cutoff   → expired, not counted
+        # The cutoff is now - ttl_seconds; a seat with last_heartbeat == cutoff is
+        # not expired (expiry requires now > last_heartbeat + ttl, i.e. strict gt).
         cursor = conn.execute(
             """
-            SELECT id, question, context, status, version, created_at, updated_at
-            FROM tables
-            WHERE status = 'open'
-            ORDER BY created_at DESC
-            """
+            SELECT
+                t.id,
+                t.question,
+                t.context,
+                t.status,
+                t.version,
+                t.created_at,
+                t.updated_at,
+                COUNT(
+                    CASE
+                        WHEN s.state = 'left' THEN 1
+                        WHEN s.state = 'joined'
+                             AND s.last_heartbeat >= ?
+                        THEN 1
+                        ELSE NULL
+                    END
+                ) AS active_count
+            FROM tables t
+            LEFT JOIN seats s ON s.table_id = t.id
+            WHERE t.status = 'open'
+            GROUP BY t.id, t.question, t.context, t.status, t.version, t.created_at, t.updated_at
+            ORDER BY t.created_at DESC
+            """,
+            (cutoff,),
         )
         rows = cursor.fetchall()
 
-        result_tables: list[dict] = []
-        for row in rows:
-            table_id = row[0]
-
-            # Get seats for this table
-            seats_result = find_seats_by_table(conn, table_id)
-            if isinstance(seats_result, Failure):
-                return Failure(TableDatabaseError(f"Failed to get seats for table {table_id}"))
-
-            seats = seats_result.unwrap()
-
-            # Filter active seats using core logic
-            active_seats = filter_active_seats(seats, ttl_seconds, now)
-            active_count = len(active_seats)
-
-            result_tables.append(
-                {
-                    "id": table_id,
-                    "question": row[1],
-                    "context": row[2],
-                    "status": row[3],
-                    "version": row[4],
-                    "created_at": row[5],
-                    "updated_at": row[6],
-                    "active_count": active_count,
-                }
-            )
+        result_tables: list[dict] = [
+            {
+                "id": row[0],
+                "question": row[1],
+                "context": row[2],
+                "status": row[3],
+                "version": row[4],
+                "created_at": row[5],
+                "updated_at": row[6],
+                "active_count": row[7],
+            }
+            for row in rows
+        ]
 
         return Success(result_tables)
     except sqlite3.Error as e:

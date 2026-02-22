@@ -805,7 +805,7 @@ def table_get(table_id: str) -> dict[str, Any]:
 
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
-def table_list(status: str = "open") -> dict[str, Any]:
+def table_list(status: Literal["open"] = "open") -> dict[str, Any]:
     """List discussion tables with active seat counts.
 
     Returns tables matching the status filter with their active seat counts.
@@ -840,8 +840,8 @@ def table_list(status: str = "open") -> dict[str, Any]:
         - INVALID_REQUEST: Invalid status filter value
         - DATABASE_ERROR: Failed to list tables
     """
-    # Currently only 'open' status is supported
-    if status != "open":
+    # Currently only 'open' status is supported; guard kept for untyped callers
+    if status != "open":  # type: ignore[comparison-overlap]
         return error_response(
             "INVALID_REQUEST",
             f"Invalid status filter: '{status}'. Currently only 'open' status is supported.",
@@ -1922,7 +1922,7 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
             "data": {
                 "mode": "local" | "remote",
                 "url": "..." | null,
-                "token": "..." | null
+                "has_token": true | false
             }
         }
 
@@ -1933,6 +1933,8 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
         True
         >>> result["data"]["mode"]
         'remote'
+        >>> result["data"]["has_token"]
+        True
 
         >>> # Switch to local mode
         >>> result = connect()
@@ -1940,6 +1942,8 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
         True
         >>> result["data"]["mode"]
         'local'
+        >>> result["data"]["has_token"]
+        False
     """
     if url is not None:
         # Switch to remote mode
@@ -1961,7 +1965,7 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
         {
             "mode": mode,
             "url": config.url,
-            "token": config.token,
+            "has_token": config.token is not None,
         }
     )
 
@@ -1974,6 +1978,9 @@ def connection_status() -> dict[str, Any]:
     This tool returns the current proxy mode and health status.
     It is a proxy-control tool that NEVER forwards to remote servers -
     it always runs locally to provide status information.
+
+    Note: is_healthy reflects whether a URL is configured, not whether the upstream
+    is reachable. No HTTP ping is performed.
 
     Returns:
         Success envelope with connection status:
@@ -2029,6 +2036,7 @@ def connection_status() -> dict[str, Any]:
         {
             "mode": mode,
             "url": config.url,
+            # is_healthy: True if url is configured (no HTTP ping in v1)
             "is_healthy": is_healthy,
         }
     )

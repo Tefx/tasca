@@ -29,7 +29,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import mermaid, { type MermaidConfig } from 'mermaid'
+import mermaid from 'mermaid'
 import { sanitizeSvg } from './svg-sanitizer'
 
 // =============================================================================
@@ -144,15 +144,12 @@ export function hasMermaidInitDirectives(code: string): boolean {
  *
  * @property code - Mermaid diagram code (will be sanitized before rendering)
  * @property className - Optional CSS class name for the container
- * @property config - Optional Mermaid configuration (securityLevel is always 'strict')
  */
 export interface MermaidRendererProps {
   /** Mermaid diagram code (will be sanitized before rendering) */
   code: string
   /** Optional CSS class name */
   className?: string
-  /** Optional Mermaid config (securityLevel will be overridden to 'strict') */
-  config?: MermaidConfig
 }
 
 /**

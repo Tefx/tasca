@@ -18,7 +18,7 @@ from tasca.config import settings
 bearer_scheme = HTTPBearer(
     scheme_name="bearerAuth",
     description="Admin Bearer token authentication",
-    auto_error=True,  # Raise 403 if credentials missing (we convert to 401)
+    auto_error=True,  # Returns 401 when no Bearer token is provided
 )
 
 

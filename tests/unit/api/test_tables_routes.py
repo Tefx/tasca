@@ -24,7 +24,6 @@ from tasca.shell.storage.table_repo import (
     VersionConflictError,
     create_table,
     get_table,
-    list_tables,
 )
 
 
@@ -72,7 +71,6 @@ def client(app: FastAPI) -> TestClient:
 def admin_client(app: FastAPI) -> TestClient:
     """Create a test client with admin auth enabled."""
     from tasca.config import settings
-    from unittest.mock import MagicMock
 
     # Mock settings to have an admin token
     with patch.object(settings, "admin_token", "test-admin-token"):

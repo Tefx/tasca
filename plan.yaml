@@ -7855,11 +7855,11 @@ phases:
     description: 'Create src/tasca/shell/mcp/proxy.py with an UpstreamConfig dataclass
       holding: url (str | None), token (str | None), is_remote (bool, derived from
       url). Provide a module-level singleton instance (default: local mode, url=None).
-      The model is pure runtime state (in-memory), not persisted to DB or file.
-      Connection is driven exclusively by the connect() tool at runtime. Include
-      a switch_to_remote(url, token) method and a switch_to_local() method that mutate
-      the singleton. Follow shell-layer conventions: no @pre/@post (I/O module), but
-      add doctests for the dataclass defaults.'
+      The model is pure runtime state (in-memory), not persisted to DB or file. Connection
+      is driven exclusively by the connect() tool at runtime. Include a switch_to_remote(url,
+      token) method and a switch_to_local() method that mutate the singleton. Follow
+      shell-layer conventions: no @pre/@post (I/O module), but add doctests for the
+      dataclass defaults.'
     verification: 'L1: UpstreamConfig dataclass has url, token, is_remote fields;
       default state is local (url=None, is_remote=False); switch_to_remote sets url+token
       and is_remote=True; switch_to_local resets to defaults. Doctests pass.'
@@ -14064,7 +14064,7 @@ phases:
       \  - mcp_proxy_fix2.fix-e2e-validation\n  - mcp_proxy_fix2.retest-e2e-validation"
   - id: mcp_proxy_fix2.fix-e2e-validation
     name: fix-e2e-validation
-    status: claimed
+    status: pending
     description: 'Fix: Proxy-forwarded tool responses fail JSON parsing and connect
       response missing token key.
 
@@ -14100,8 +14100,6 @@ phases:
     depends_on:
     - mcp_proxy_fix2.retest-e2e-external-server
     agent: python-engineer
-    claimed_by: python-engineer
-    claimed_at: '2026-02-22T15:14:51.391383+00:00'
   - id: mcp_proxy_fix2.retest-e2e-validation
     name: retest-e2e-validation
     status: pending

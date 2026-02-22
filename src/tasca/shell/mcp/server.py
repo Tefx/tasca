@@ -136,10 +136,10 @@ MCP_AGENT_INSTRUCTIONS = """
 Tasca MCP Server - A discussion table service for coding agents.
 
 ## Connection
-If you were given a server URL and token, call tasca.connect(url=..., token=...)
-first, then call tasca.connection_status to verify. If no connection details were
-provided and you did not receive a connect error, you are already connected
-(either local mode or auto-configured via upstream config file).
+You start in local mode (standalone, no remote server).
+If the user gives you a server URL and token, call tasca.connect(url=..., token=...)
+to switch to remote mode, then call tasca.connection_status to verify.
+To disconnect and return to local mode, call tasca.connect() with no arguments.
 
 ## Setup Sequence
 1. Register your identity with tasca.patron_register (provide display_name).
@@ -2180,9 +2180,13 @@ class ProxyMiddleware(Middleware):
         Args:
             response: Response dict from forward_jsonrpc_request.
                 Either a success envelope from upstream or error_response envelope.
+                Expected formats:
+                - JSON-RPC success: {"jsonrpc": "2.0", "id": "...", "result": {...}}
+                - JSON-RPC error: {"jsonrpc": "2.0", "id": "...", "error": {...}}
+                - Our error envelope: {"ok": False, "error": {...}}
 
         Returns:
-            ToolResult with appropriate content.
+            ToolResult with appropriate content and structured_content.
         """
         # Check for error envelope (from forward_jsonrpc_request or upstream)
         if "error" in response and response.get("ok") is False:
@@ -2220,21 +2224,52 @@ class ProxyMiddleware(Middleware):
 
         # Success response from upstream
         # JSON-RPC success: {"jsonrpc": "2.0", "id": "...", "result": {...}}
+        # MCP tools/call result structure:
+        #   {"content": [{"type": "text", "text": "..."}], "structuredContent": {...}}
         result = response.get("result", response)
 
-        # Normalize to our envelope format
-        if "ok" in result:
-            # Already an envelope
-            envelope = result
-        else:
-            # Wrap in success envelope
-            envelope = {"ok": True, "data": result}
+        # Extract content blocks from MCP result
+        # The MCP result has a "content" array with content blocks
+        mcp_content = result.get("content", [])
+        structured_content = result.get("structuredContent")
 
-        content = TextContent(type="text", text=json.dumps(envelope))
+        # If no content blocks, create from structured_content or result
+        if not mcp_content:
+            if structured_content:
+                text = json.dumps(structured_content)
+            else:
+                text = json.dumps(result)
+            mcp_content = [TextContent(type="text", text=text)]
+
+        # Convert MCP content blocks to ToolResult content
+        # MCP content blocks have {type: "text", text: "..."} format
+        content_blocks = []
+        for block in mcp_content:
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    content_blocks.append(TextContent(type="text", text=block.get("text", "")))
+                else:
+                    # Pass through other content types as-is
+                    content_blocks.append(block)  # type: ignore[arg-type]
+            else:
+                # Already a content block object
+                content_blocks.append(block)  # type: ignore[arg-type]
+
+        # Extract structured_content if not provided
+        # For tools with outputSchema, structuredContent should match the envelope format
+        if structured_content is None:
+            # Try to parse content as JSON to get structured output
+            if content_blocks and len(content_blocks) == 1:
+                first_block = content_blocks[0]
+                if isinstance(first_block, TextContent):
+                    try:
+                        structured_content = json.loads(first_block.text)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
 
         # Provide structured_content for tools with outputSchema
         # FastMCP requires structured_content when a tool has outputSchema defined
-        return ToolResult(content=[content], structured_content=envelope)
+        return ToolResult(content=content_blocks, structured_content=structured_content)
 
 
 # =============================================================================

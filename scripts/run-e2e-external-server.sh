@@ -93,6 +93,10 @@ start_server() {
     
     log_info "Starting Tasca server on port ${TASCA_PORT}..."
     
+    # Use a known admin token for test authentication
+    # Tests import this token from tests/integration/conftest.py: TEST_ADMIN_TOKEN
+    export TASCA_ADMIN_TOKEN="test-admin-token-fixture"
+    
     # Start server in background
     TASCA_PORT="${TASCA_PORT}" uv run tasca > "${SERVER_LOG}" 2>&1 &
     SERVER_PID=$!

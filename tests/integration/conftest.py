@@ -308,6 +308,83 @@ def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, No
 
 
 # =============================================================================
+# Upstream Server Fixture (for proxy E2E tests)
+# =============================================================================
+
+UPSTREAM_TOKEN = "test-upstream-token"
+
+
+@pytest.fixture(scope="module")
+def upstream_server(tmp_path_factory: pytest.TempPathFactory):
+    """Start a real upstream tasca server as a subprocess for proxy E2E tests.
+
+    Uses subprocess isolation to avoid module-level singleton conflicts
+    (_config, mcp) that cause self-referencing proxy loops when running
+    two instances in the same process.
+
+    Yields:
+        Dict with 'url' (MCP endpoint), 'token', and 'port'.
+    """
+    import socket
+    import subprocess
+    import time
+
+    import httpx
+
+    # Find a free port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    db_path = tmp_path_factory.mktemp("upstream") / "upstream.db"
+
+    proc = subprocess.Popen(
+        [
+            "uv", "run", "tasca", "new", "proxy-e2e-test",
+            "--host", "127.0.0.1", "--port", str(port),
+        ],
+        env={
+            **os.environ,
+            "TASCA_DB_PATH": str(db_path),
+            "TASCA_ADMIN_TOKEN": UPSTREAM_TOKEN,
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    # Poll until server is ready (max 10s)
+    base_url = f"http://127.0.0.1:{port}"
+    ready = False
+    for _ in range(100):
+        try:
+            r = httpx.get(f"{base_url}/api/v1/health", timeout=1)
+            if r.status_code == 200:
+                ready = True
+                break
+        except (httpx.ConnectError, httpx.ReadError):
+            pass
+        time.sleep(0.1)
+
+    if not ready:
+        proc.kill()
+        stdout = proc.stdout.read().decode() if proc.stdout else ""
+        stderr = proc.stderr.read().decode() if proc.stderr else ""
+        raise RuntimeError(
+            f"Upstream server failed to start on port {port}.\n"
+            f"stdout: {stdout[:500]}\nstderr: {stderr[:500]}"
+        )
+
+    yield {"url": f"{base_url}/mcp", "token": UPSTREAM_TOKEN, "port": port}
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
+# =============================================================================
 # Test Data Fixtures
 # =============================================================================
 

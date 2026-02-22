@@ -42,6 +42,39 @@ MCP_CLIENT_NAME = "tasca-proxy"
 MCP_CLIENT_VERSION = "0.1.0"
 
 
+def _parse_sse_or_json(text: str) -> Any:  # @invar:allow shell_result: Pure parsing helper, not a shell operation
+    """Parse response body that may be SSE or plain JSON.
+
+    FastMCP's Streamable HTTP transport returns SSE format:
+        event: message
+        data: {"jsonrpc": "2.0", ...}
+
+    This helper extracts the JSON payload from either format.
+
+    Args:
+        text: Response body text.
+
+    Returns:
+        Parsed JSON data.
+
+    Raises:
+        json.JSONDecodeError: If neither SSE nor JSON can be parsed.
+
+    Examples:
+        >>> _parse_sse_or_json('{"ok": true}')
+        {'ok': True}
+        >>> _parse_sse_or_json('event: message\\ndata: {"ok": true}\\n\\n')
+        {'ok': True}
+    """
+    # Try SSE format first (FastMCP default for Streamable HTTP)
+    if text.startswith("event:"):
+        for line in text.split("\n"):
+            if line.startswith("data:"):
+                return json.loads(line[5:].strip())
+    # Fall back to plain JSON
+    return json.loads(text)
+
+
 # @invar:allow shell_result: Validation helper returns optional error dict, not Result
 # @shell_complexity: Multiple validation branches for JSON-RPC spec compliance
 # @shell_orchestration: Pure validation logic used by forward_jsonrpc_request
@@ -564,9 +597,9 @@ async def forward_jsonrpc_request(
                     {"status_code": response.status_code},
                 )
 
-            # Parse and validate JSON response
+            # Parse response (may be SSE or plain JSON from FastMCP)
             try:
-                data = response.json()
+                data = _parse_sse_or_json(response.text)
             except json.JSONDecodeError as e:
                 return error_response(
                     "UPSTREAM_INVALID_RESPONSE",

@@ -72,6 +72,9 @@ interface UseTablesResult {
   refetch: () => void
 }
 
+/** Poll interval for background table list refresh (ms). */
+const POLL_INTERVAL_MS = 15_000
+
 function useTables(): UseTablesResult {
   const [tables, setTables] = useState<Table[]>([])
   const [loading, setLoading] = useState(true)
@@ -91,9 +94,25 @@ function useTables(): UseTablesResult {
     }
   }, [])
 
+  // Initial load
   useEffect(() => {
     fetchTables()
   }, [fetchTables])
+
+  // Background poll — silently refresh without resetting loading state
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const data = await listTables()
+        setTables(data)
+        setError(null)
+      } catch {
+        // Ignore poll errors — user can retry manually
+      }
+    }
+    const id = setInterval(poll, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [])
 
   return { tables, loading, error, refetch: fetchTables }
 }

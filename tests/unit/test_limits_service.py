@@ -9,6 +9,7 @@ Tests verify that all limit validation functions work correctly:
 - check_content_limits: composite validation
 """
 
+import deal
 import pytest
 
 from tasca.core.services.limits_service import (
@@ -355,6 +356,16 @@ class TestCheckContentLimits:
         error = check_content_limits("short", 10, 500, config)
         assert error.kind == LimitKind.HISTORY
 
+    def test_check_content_limits_rejects_negative_saying_count(self) -> None:
+        config = LimitsConfig(max_sayings_per_table=10)
+        with pytest.raises(deal.PreContractError):
+            check_content_limits("hello", -1, 0, config)
+
+    def test_check_content_limits_rejects_negative_bytes(self) -> None:
+        config = LimitsConfig(max_sayings_per_table=10)
+        with pytest.raises(deal.PreContractError):
+            check_content_limits("hello", 0, -1, config)
+
 
 # =============================================================================
 # compute_content_bytes Tests
@@ -440,6 +451,16 @@ class TestGetLimitsStatus:
         status = get_limits_status(50, 5000, config)
         assert "history" in status
         assert "bytes" in status
+
+    def test_get_limits_status_rejects_negative_saying_count(self) -> None:
+        config = LimitsConfig(max_sayings_per_table=10)
+        with pytest.raises(deal.PreContractError):
+            get_limits_status(-1, 0, config)
+
+    def test_get_limits_status_rejects_negative_bytes(self) -> None:
+        config = LimitsConfig(max_sayings_per_table=10)
+        with pytest.raises(deal.PreContractError):
+            get_limits_status(0, -1, config)
 
 
 # =============================================================================

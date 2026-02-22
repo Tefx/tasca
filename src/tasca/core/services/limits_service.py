@@ -320,10 +320,7 @@ def validate_mentions(content: str, max_mentions: int | None) -> bool:
 
 
 # @invar:allow partial_contract: content (str) has no value constraint; config validated by __post_init__
-@deal.pre(
-    lambda content, current_saying_count, current_bytes, config:
-        current_saying_count >= 0 and current_bytes >= 0
-)
+@deal.pre(lambda content, current_saying_count, current_bytes, config: current_saying_count >= 0 and current_bytes >= 0)
 @deal.post(lambda result: result is None or isinstance(result, LimitError))
 def check_content_limits(
     content: str,

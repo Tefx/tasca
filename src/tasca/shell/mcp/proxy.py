@@ -67,9 +67,14 @@ def _parse_sse_or_json(text: str) -> Any:  # @invar:allow shell_result: Pure par
         {'ok': True}
     """
     # Try SSE format first (FastMCP default for Streamable HTTP)
+    # Track event type so we only extract data from "event: message" blocks,
+    # not from other event types (e.g. heartbeats) in multi-event responses.
     if text.startswith("event:"):
+        in_message_event = False
         for line in text.split("\n"):
-            if line.startswith("data:"):
+            if line.startswith("event:"):
+                in_message_event = line.split(":", 1)[1].strip() == "message"
+            elif line.startswith("data:") and in_message_event:
                 return json.loads(line[5:].strip())
     # Fall back to plain JSON
     return json.loads(text)
@@ -517,9 +522,10 @@ async def switch_to_remote_with_session(
     session_id = session_result.unwrap()
 
     # Update config with URL, token, and session ID
+    # Use the encapsulated method to set url+token (which also resets session_id),
+    # then overlay the actual session_id from the upstream handshake.
     global _config
-    _config.url = url
-    _config.token = token
+    _config.switch_to_remote(url, token)
     _config.session_id = session_id if session_id else None
 
     logger.info(

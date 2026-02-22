@@ -361,7 +361,7 @@ def upstream_server(tmp_path_factory: pytest.TempPathFactory):
             if r.status_code == 200:
                 ready = True
                 break
-        except (httpx.ConnectError, httpx.ReadError):
+        except (httpx.ConnectError, httpx.ReadError, httpx.TimeoutException):
             pass
         time.sleep(0.1)
 

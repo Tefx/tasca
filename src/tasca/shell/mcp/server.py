@@ -2145,9 +2145,11 @@ class ProxyMiddleware(Middleware):
         tool_name = context.message.name
         arguments = context.message.arguments or {}
 
-        # Get upstream configuration (single attribute read for mode check)
+        # Get upstream configuration (single attribute read for mode check).
+        # get_upstream_config() always returns Success in the current single-process
+        # design (module-level singleton); the Result wrapper is kept for API symmetry.
         upstream_result = get_upstream_config()
-        if isinstance(upstream_result, Failure):
+        if isinstance(upstream_result, Failure):  # pragma: no cover
             err = upstream_result.failure()
             return self._response_to_tool_result(error_response("CONFIG_ERROR", str(err)))
 

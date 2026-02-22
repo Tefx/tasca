@@ -16,6 +16,7 @@
 import { useMemo } from 'react'
 import type { Seat } from '../api/sayings'
 import type { PatronKind } from '../api/patrons'
+import { IDLE_THRESHOLD_SECONDS } from '../constants/presence'
 
 // Re-export Seat for consumers
 export type { Seat } from '../api/sayings'
@@ -66,7 +67,7 @@ interface SeatDeckProps {
 const ACTIVE_THRESHOLD_SECONDS = 30
 
 /** TTL threshold for "idle" presence (last heartbeat within this many seconds). */
-export const IDLE_THRESHOLD_SECONDS = 60
+// Source: ../constants/presence.ts — imported above
 
 // =============================================================================
 // Utility Functions

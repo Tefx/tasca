@@ -9,7 +9,8 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
-import { MentionPicker, IDLE_THRESHOLD_SECONDS } from './SeatDeck'
+import { MentionPicker } from './SeatDeck'
+import { IDLE_THRESHOLD_SECONDS } from '../constants/presence'
 import type { PatronInfo } from './SeatDeck'
 import type { Seat } from '../api/sayings'
 

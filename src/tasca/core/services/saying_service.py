@@ -69,6 +69,7 @@ def validate_sequence_is_next(new_seq: int, current_max: int) -> bool:
     return new_seq == current_max + 1
 
 
+@deal.pre(lambda sequences: all(s >= 0 for s in sequences))
 @deal.post(lambda result: result >= -1)
 def get_max_sequence(sequences: list[int]) -> int:
     """Get the maximum sequence from a list.
@@ -77,6 +78,7 @@ def get_max_sequence(sequences: list[int]) -> int:
 
     Args:
         sequences: List of sequence numbers (may be empty).
+            All sequence numbers must be non-negative (>= 0).
 
     Returns:
         Maximum sequence, or -1 if list is empty (so next would be 0).
@@ -92,7 +94,13 @@ def get_max_sequence(sequences: list[int]) -> int:
     return max(sequences) if sequences else -1
 
 
-@deal.pre(lambda start_seq, count: start_seq >= 0 and count >= 0)
+# Maximum practical count for sequence ranges to prevent memory exhaustion
+MAX_SEQUENCE_RANGE_COUNT = 100_000
+
+
+@deal.pre(
+    lambda start_seq, count: start_seq >= 0 and count >= 0 and count <= MAX_SEQUENCE_RANGE_COUNT
+)
 @deal.post(lambda result: isinstance(result, list))
 @deal.ensure(lambda start_seq, count, result: len(result) == count)
 def generate_sequence_range(start_seq: int, count: int) -> list[int]:
@@ -102,7 +110,8 @@ def generate_sequence_range(start_seq: int, count: int) -> list[int]:
 
     Args:
         start_seq: Starting sequence number (inclusive).
-        count: Number of sequences to generate.
+        count: Number of sequences to generate. Maximum is 100,000 to prevent
+            memory exhaustion and overflow issues.
 
     Returns:
         List of sequence numbers from start_seq to start_seq + count - 1.

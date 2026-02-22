@@ -217,8 +217,10 @@ def find_closing_tag(content: str, tag_name: str, start_pos: int) -> re.Match[st
     """
     depth = 1
     pos = start_pos
-    open_pattern = re.compile(rf"<{tag_name}[^>]*?(?<!/)>", re.IGNORECASE)
-    close_pattern = re.compile(rf"</{tag_name}\s*>", re.IGNORECASE)
+    # Escape tag_name to prevent regex injection from special characters
+    escaped_tag = re.escape(tag_name)
+    open_pattern = re.compile(rf"<{escaped_tag}[^>]*?(?<!/)>", re.IGNORECASE)
+    close_pattern = re.compile(rf"</{escaped_tag}\s*>", re.IGNORECASE)
 
     while pos < len(content) and depth > 0:
         next_open = open_pattern.search(content, pos)

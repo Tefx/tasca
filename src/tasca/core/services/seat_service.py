@@ -19,6 +19,47 @@ from tasca.core.domain.seat import Seat, SeatId, SeatState
 # Default TTL in seconds (5 minutes)
 DEFAULT_SEAT_TTL_SECONDS = 300
 
+# Maximum TTL to prevent datetime overflow with extreme values
+# Ensure: max_datetime + timedelta(seconds=MAX_TTL_SECONDS) <= datetime.MAX
+MAX_TTL_SECONDS = 10_000_000  # ~115 days
+
+# Reasonable year range for seat timestamps (prevents overflow edge cases)
+# Allow enough margin for TTL addition
+_MIN_SAFE_YEAR = 2000
+_MAX_SAFE_YEAR = 2100
+
+
+# =============================================================================
+# Contract Helpers
+# =============================================================================
+
+
+@deal.pre(lambda dt: dt is not None)
+@deal.post(lambda result: isinstance(result, bool))
+def _is_safe_datetime(dt: datetime) -> bool:
+    """Check if datetime is within safe bounds for arithmetic operations.
+
+    Prevents OverflowError when adding timedelta near datetime limits.
+    """
+    return _MIN_SAFE_YEAR <= dt.year <= _MAX_SAFE_YEAR
+
+
+@deal.pre(lambda ttl_seconds: ttl_seconds is not None)
+@deal.post(lambda result: isinstance(result, bool))
+def _is_safe_ttl(ttl_seconds: int) -> bool:
+    """Check if TTL is within safe bounds to prevent overflow.
+
+    Ensures: datetime + timedelta(seconds=ttl) stays representable.
+    """
+    return 0 < ttl_seconds <= MAX_TTL_SECONDS
+
+
+@deal.pre(lambda seat: seat is not None)
+@deal.post(lambda result: isinstance(result, bool))
+def _seat_has_safe_datetimes(seat: Seat) -> bool:
+    """Check if seat's datetime fields are within safe bounds."""
+    return _is_safe_datetime(seat.last_heartbeat) and _is_safe_datetime(seat.joined_at)
+
 
 # =============================================================================
 # TTL Calculations (Pure Logic)
@@ -26,6 +67,9 @@ DEFAULT_SEAT_TTL_SECONDS = 300
 
 
 @deal.pre(lambda seat, ttl_seconds, now: seat is not None and ttl_seconds > 0 and now is not None)
+@deal.pre(lambda seat, ttl_seconds, now: _is_safe_datetime(now))
+@deal.pre(lambda seat, ttl_seconds, now: _is_safe_ttl(ttl_seconds))
+@deal.pre(lambda seat, ttl_seconds, now: _seat_has_safe_datetimes(seat))
 @deal.post(lambda result: isinstance(result, bool))
 def is_seat_expired(seat: Seat, ttl_seconds: int, now: datetime) -> bool:
     """Check if a seat has expired based on TTL.
@@ -74,6 +118,8 @@ def is_seat_expired(seat: Seat, ttl_seconds: int, now: datetime) -> bool:
 
 
 @deal.pre(lambda last_heartbeat, ttl_seconds: last_heartbeat is not None and ttl_seconds > 0)
+@deal.pre(lambda last_heartbeat, ttl_seconds: _is_safe_datetime(last_heartbeat))
+@deal.pre(lambda last_heartbeat, ttl_seconds: _is_safe_ttl(ttl_seconds))
 @deal.post(lambda result: result is not None)
 def calculate_expiry_time(last_heartbeat: datetime, ttl_seconds: int) -> datetime:
     """Calculate when a seat expires based on its last heartbeat.
@@ -97,6 +143,9 @@ def calculate_expiry_time(last_heartbeat: datetime, ttl_seconds: int) -> datetim
 
 
 @deal.pre(lambda seat, ttl_seconds, now: seat is not None and ttl_seconds > 0 and now is not None)
+@deal.pre(lambda seat, ttl_seconds, now: _is_safe_datetime(now))
+@deal.pre(lambda seat, ttl_seconds, now: _is_safe_ttl(ttl_seconds))
+@deal.pre(lambda seat, ttl_seconds, now: _seat_has_safe_datetimes(seat))
 @deal.post(lambda result: result >= 0)
 def seconds_until_expiry(seat: Seat, ttl_seconds: int, now: datetime) -> float:
     """Calculate seconds remaining before a seat expires.
@@ -137,6 +186,8 @@ def seconds_until_expiry(seat: Seat, ttl_seconds: int, now: datetime) -> float:
 
 
 @deal.pre(lambda seats, ttl_seconds, now: seats is not None and ttl_seconds > 0 and now is not None)
+@deal.pre(lambda seats, ttl_seconds, now: _is_safe_datetime(now))
+@deal.pre(lambda seats, ttl_seconds, now: _is_safe_ttl(ttl_seconds))
 @deal.post(lambda result: isinstance(result, list))
 def filter_expired_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> list[Seat]:
     """Filter seats that have expired based on TTL.
@@ -175,6 +226,8 @@ def filter_expired_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> 
 
 
 @deal.pre(lambda seats, ttl_seconds, now: seats is not None and ttl_seconds > 0 and now is not None)
+@deal.pre(lambda seats, ttl_seconds, now: _is_safe_datetime(now))
+@deal.pre(lambda seats, ttl_seconds, now: _is_safe_ttl(ttl_seconds))
 @deal.post(lambda result: isinstance(result, list))
 def filter_active_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> list[Seat]:
     """Filter seats that are still active (not expired).

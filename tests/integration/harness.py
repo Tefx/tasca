@@ -137,6 +137,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -305,73 +306,30 @@ class RESTHarness:
         return await self.client.delete(f"{self.API_V1_PREFIX}/tables/{table_id}", headers=headers)
 
 
-class MCPHTTPHarness:
-    """Test harness for MCP HTTP transport.
+class MCPHarnessBase(ABC):
+    """Abstract base class for MCP test harnesses.
 
-    Provides convenient methods for testing MCP protocol endpoints with
-    automatic resource management.
+    Provides shared MCP protocol methods and convenience tool wrappers.
+    Subclasses implement transport-specific __aenter__ and _send_request.
 
-    Example:
-        async with MCPHTTPHarness() as harness:
-            result = await harness.initialize()
-            assert "result" in result
+    Shared by MCPHTTPHarness, MCPASGIHarness, and MCPSTDIOHarness.
     """
 
-    def __init__(
-        self,
-        base_url: str = MCP_BASE_URL,
-        timeout: float = REQUEST_TIMEOUT,
-    ) -> None:
-        """Initialize MCP HTTP harness.
+    def __init__(self, timeout: float = REQUEST_TIMEOUT) -> None:
+        """Initialize MCP harness base.
 
         Args:
-            base_url: Base URL for the MCP endpoint
             timeout: Request timeout in seconds
         """
-        self.base_url = base_url
         self.timeout = timeout
-        self._client: httpx.AsyncClient | None = None
         self._request_id = 0
-
-    async def __aenter__(self) -> "MCPHTTPHarness":
-        """Enter async context and create HTTP client."""
-        import httpx
-
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=httpx.Timeout(self.timeout),
-            headers={
-                "Accept": "application/json, text/event-stream",
-            },
-            follow_redirects=True,
-        )
-        return self
-
-    async def __aexit__(self, *args: Any) -> None:
-        """Exit async context and close HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
-
-    @property
-    def client(self) -> "httpx.AsyncClient":
-        """Get the HTTP client.
-
-        Raises:
-            RuntimeError: If harness is not used as async context manager
-
-        Returns:
-            Configured httpx AsyncClient
-        """
-        if self._client is None:
-            raise RuntimeError("MCPHTTPHarness must be used as async context manager")
-        return self._client
 
     def _next_id(self) -> int:
         """Get next JSON-RPC request ID."""
         self._request_id += 1
         return self._request_id
 
+    @abstractmethod
     async def _send_request(self, method: str, params: dict | None = None) -> dict:
         """Send a JSON-RPC request.
 
@@ -382,25 +340,7 @@ class MCPHTTPHarness:
         Returns:
             JSON response as dictionary
         """
-        payload = {
-            "jsonrpc": "2.0",
-            "id": self._next_id(),
-            "method": method,
-            "params": params or {},
-        }
-        response = await self.client.post("/", json=payload)
-        response.raise_for_status()
-
-        # FastMCP returns SSE format: "event: message\ndata: {...}\n\n"
-        text = response.text
-        if text.startswith("event:"):
-            # Parse SSE format
-            for line in text.split("\n"):
-                if line.startswith("data:"):
-                    return json.loads(line[5:].strip())
-
-        # Fallback to regular JSON
-        return response.json()
+        ...
 
     # =========================================================================
     # MCP Protocol Operations
@@ -528,7 +468,7 @@ class MCPHTTPHarness:
         """Join a discussion table by creating a seat.
 
         Args:
-            table_id: UUID of the table to join.
+            table_id: Human-readable table ID (e.g., "clever-fox-jumps").
             patron_id: UUID of the patron joining the table.
 
         Returns:
@@ -543,7 +483,7 @@ class MCPHTTPHarness:
         """Get table details.
 
         Args:
-            table_id: Table UUID
+            table_id: Human-readable table ID (e.g., "clever-fox-jumps").
 
         Returns:
             Table details
@@ -565,7 +505,7 @@ class MCPHTTPHarness:
         """Append a saying (message) to a table.
 
         Args:
-            table_id: UUID of the table.
+            table_id: Human-readable table ID (e.g., "clever-fox-jumps").
             content: Markdown content of the saying.
             speaker_kind: Kind of speaker - "agent" or "human". Defaults to "agent".
                 If "agent", patron_id is REQUIRED.
@@ -608,7 +548,7 @@ class MCPHTTPHarness:
         """Listen for sayings on a table.
 
         Args:
-            table_id: UUID of the table.
+            table_id: Human-readable table ID (e.g., "clever-fox-jumps").
             since_sequence: Get sayings with sequence > this value (-1 for all).
             limit: Maximum number of sayings to return (default 50).
 
@@ -640,7 +580,7 @@ class MCPHTTPHarness:
         """Update a seat's heartbeat to indicate presence.
 
         Args:
-            table_id: UUID of the table.
+            table_id: Human-readable table ID (e.g., "clever-fox-jumps").
             patron_id: UUID of the patron (spec-compliant, preferred).
             state: Seat state - "running", "idle", or "done".
             ttl_ms: Heartbeat timeout in milliseconds.
@@ -671,7 +611,7 @@ class MCPHTTPHarness:
         """List all seats (presences) on a table.
 
         Args:
-            table_id: UUID of the table.
+            table_id: Human-readable table ID (e.g., "clever-fox-jumps").
             active_only: Filter to active (non-expired) seats only (default True).
 
         Returns:
@@ -683,7 +623,99 @@ class MCPHTTPHarness:
         )
 
 
-class MCPASGIHarness:
+class MCPHTTPHarness(MCPHarnessBase):
+    """Test harness for MCP HTTP transport.
+
+    Provides convenient methods for testing MCP protocol endpoints with
+    automatic resource management.
+
+    Example:
+        async with MCPHTTPHarness() as harness:
+            result = await harness.initialize()
+            assert "result" in result
+    """
+
+    def __init__(
+        self,
+        base_url: str = MCP_BASE_URL,
+        timeout: float = REQUEST_TIMEOUT,
+    ) -> None:
+        """Initialize MCP HTTP harness.
+
+        Args:
+            base_url: Base URL for the MCP endpoint
+            timeout: Request timeout in seconds
+        """
+        super().__init__(timeout=timeout)
+        self.base_url = base_url
+        self._client: httpx.AsyncClient | None = None
+
+    async def __aenter__(self) -> "MCPHTTPHarness":
+        """Enter async context and create HTTP client."""
+        import httpx
+
+        self._client = httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=httpx.Timeout(self.timeout),
+            headers={
+                "Accept": "application/json, text/event-stream",
+            },
+            follow_redirects=True,
+        )
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        """Exit async context and close HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    @property
+    def client(self) -> "httpx.AsyncClient":
+        """Get the HTTP client.
+
+        Raises:
+            RuntimeError: If harness is not used as async context manager
+
+        Returns:
+            Configured httpx AsyncClient
+        """
+        if self._client is None:
+            raise RuntimeError("MCPHTTPHarness must be used as async context manager")
+        return self._client
+
+    async def _send_request(self, method: str, params: dict | None = None) -> dict:
+        """Send a JSON-RPC request.
+
+        Args:
+            method: JSON-RPC method name
+            params: Optional method parameters
+
+        Returns:
+            JSON response as dictionary
+        """
+        payload = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": method,
+            "params": params or {},
+        }
+        response = await self.client.post("/", json=payload)
+        response.raise_for_status()
+
+        # FastMCP returns SSE format: "event: message\ndata: {...}\n\n"
+        text = response.text
+        if text.startswith("event:"):
+            # Parse SSE format
+            for line in text.split("\n"):
+                if line.startswith("data:"):
+                    return json.loads(line[5:].strip())
+
+        # Fallback to regular JSON
+        return response.json()
+
+
+class MCPASGIHarness(MCPHarnessBase):
     """Test harness for MCP using ASGI transport (in-process testing).
 
     This harness tests MCP endpoints without requiring an external server
@@ -709,10 +741,9 @@ class MCPASGIHarness:
             app: FastAPI application instance (from create_app())
             timeout: Request timeout in seconds
         """
+        super().__init__(timeout=timeout)
         self.app = app
-        self.timeout = timeout
         self._client: "httpx.AsyncClient | None" = None
-        self._request_id = 0
 
     async def __aenter__(self) -> "MCPASGIHarness":
         """Enter async context and create HTTP client with ASGI transport."""
@@ -752,11 +783,6 @@ class MCPASGIHarness:
             raise RuntimeError("MCPASGIHarness must be used as async context manager")
         return self._client
 
-    def _next_id(self) -> int:
-        """Get next JSON-RPC request ID."""
-        self._request_id += 1
-        return self._request_id
-
     async def _send_request(self, method: str, params: dict | None = None) -> dict:
         """Send a JSON-RPC request.
 
@@ -787,288 +813,8 @@ class MCPASGIHarness:
         # Fallback to regular JSON
         return response.json()
 
-    # =========================================================================
-    # MCP Protocol Operations (delegated to same implementation)
-    # =========================================================================
 
-    async def initialize(
-        self,
-        client_name: str = "tasca-test-client",
-        client_version: str = "0.1.0",
-        protocol_version: str = "2024-11-05",
-    ) -> dict:
-        """Initialize MCP session.
-
-        Args:
-            client_name: Client name to send
-            client_version: Client version to send
-            protocol_version: MCP protocol version
-
-        Returns:
-            Server capabilities and info
-        """
-        return await self._send_request(
-            "initialize",
-            {
-                "protocolVersion": protocol_version,
-                "capabilities": {},
-                "clientInfo": {
-                    "name": client_name,
-                    "version": client_version,
-                },
-            },
-        )
-
-    async def list_tools(self) -> dict:
-        """List available MCP tools.
-
-        Returns:
-            List of available tools
-        """
-        return await self._send_request("tools/list")
-
-    async def call_tool(self, name: str, arguments: dict | None = None) -> dict:
-        """Call an MCP tool.
-
-        Args:
-            name: Tool name (e.g., "patron_register")
-            arguments: Tool arguments
-
-        Returns:
-            Tool execution result
-        """
-        return await self._send_request(
-            "tools/call",
-            {"name": name, "arguments": arguments or {}},
-        )
-
-    # =========================================================================
-    # Patron Tools
-    # =========================================================================
-
-    async def patron_register(
-        self,
-        name: str,
-        kind: str = "agent",
-        dedup_id: str | None = None,
-    ) -> dict:
-        """Register a new patron.
-
-        Args:
-            name: Name or identifier for the patron (used for deduplication).
-            kind: Type of patron - 'agent' or 'human' (default 'agent').
-            dedup_id: Optional explicit idempotency key for request deduplication.
-
-        Returns:
-            Registered patron details with ok, data, and is_new flag.
-        """
-        args: dict = {"name": name, "kind": kind}
-        if dedup_id is not None:
-            args["dedup_id"] = dedup_id
-        return await self.call_tool("patron_register", args)
-
-    async def patron_get(self, patron_id: str) -> dict:
-        """Get patron details.
-
-        Args:
-            patron_id: Patron UUID
-
-        Returns:
-            Patron details
-        """
-        return await self.call_tool("patron_get", {"patron_id": patron_id})
-
-    # =========================================================================
-    # Table Tools
-    # =========================================================================
-
-    async def table_create(
-        self,
-        question: str,
-        context: str | None = None,
-        dedup_id: str | None = None,
-    ) -> dict:
-        """Create a new discussion table.
-
-        Args:
-            question: The question or topic for discussion.
-            context: Optional context for the discussion.
-            dedup_id: Optional explicit idempotency key for request deduplication.
-
-        Returns:
-            Created table details.
-        """
-        args: dict = {"question": question}
-        if context is not None:
-            args["context"] = context
-        if dedup_id is not None:
-            args["dedup_id"] = dedup_id
-        return await self.call_tool("table_create", args)
-
-    async def table_join(
-        self,
-        table_id: str,
-        patron_id: str,
-    ) -> dict:
-        """Join a discussion table by creating a seat.
-
-        Args:
-            table_id: UUID of the table to join.
-            patron_id: UUID of the patron joining the table.
-
-        Returns:
-            Table details and seat info.
-        """
-        return await self.call_tool(
-            "table_join",
-            {"table_id": table_id, "patron_id": patron_id},
-        )
-
-    async def table_get(self, table_id: str) -> dict:
-        """Get table details.
-
-        Args:
-            table_id: Table UUID
-
-        Returns:
-            Table details
-        """
-        return await self.call_tool("table_get", {"table_id": table_id})
-
-    async def table_say(
-        self,
-        table_id: str,
-        content: str,
-        speaker_kind: str = "agent",
-        patron_id: str | None = None,
-        speaker_name: str | None = None,
-        saying_type: str | None = None,
-        mentions: list[str] | None = None,
-        reply_to_sequence: int | None = None,
-        dedup_id: str | None = None,
-    ) -> dict:
-        """Append a saying (message) to a table.
-
-        Args:
-            table_id: UUID of the table.
-            content: Markdown content of the saying.
-            speaker_kind: Kind of speaker - "agent" or "human". Defaults to "agent".
-                If "agent", patron_id is REQUIRED.
-                If "human", patron_id MUST be omitted or null.
-            patron_id: Patron ID of the speaker (REQUIRED if speaker_kind is "agent").
-            speaker_name: Display name of the speaker (optional, derived from patron if not provided).
-            saying_type: Type classification of the saying (optional).
-            mentions: List of mention handles to resolve (e.g., ["alice", "all"]).
-            reply_to_sequence: Sequence number of saying this replies to (optional).
-            dedup_id: Optional explicit idempotency key for request deduplication.
-
-        Returns:
-            Created saying details.
-        """
-        args: dict = {
-            "table_id": table_id,
-            "content": content,
-            "speaker_kind": speaker_kind,
-        }
-        if patron_id is not None:
-            args["patron_id"] = patron_id
-        if speaker_name is not None:
-            args["speaker_name"] = speaker_name
-        if saying_type is not None:
-            args["saying_type"] = saying_type
-        if mentions is not None:
-            args["mentions"] = mentions
-        if reply_to_sequence is not None:
-            args["reply_to_sequence"] = reply_to_sequence
-        if dedup_id is not None:
-            args["dedup_id"] = dedup_id
-        return await self.call_tool("table_say", args)
-
-    async def table_listen(
-        self,
-        table_id: str,
-        since_sequence: int = -1,
-        limit: int = 50,
-    ) -> dict:
-        """Listen for sayings on a table.
-
-        Args:
-            table_id: UUID of the table.
-            since_sequence: Get sayings with sequence > this value (-1 for all).
-            limit: Maximum number of sayings to return (default 50).
-
-        Returns:
-            List of sayings and next_sequence.
-        """
-        return await self.call_tool(
-            "table_listen",
-            {
-                "table_id": table_id,
-                "since_sequence": since_sequence,
-                "limit": limit,
-            },
-        )
-
-    # =========================================================================
-    # Seat Tools
-    # =========================================================================
-
-    async def seat_heartbeat(
-        self,
-        table_id: str,
-        patron_id: str | None = None,
-        state: str | None = None,
-        ttl_ms: int | None = None,
-        dedup_id: str | None = None,
-        seat_id: str | None = None,
-    ) -> dict:
-        """Update a seat's heartbeat to indicate presence.
-
-        Args:
-            table_id: UUID of the table.
-            patron_id: UUID of the patron (spec-compliant, preferred).
-            state: Seat state - "running", "idle", or "done".
-            ttl_ms: Heartbeat timeout in milliseconds.
-            dedup_id: Optional explicit idempotency key.
-            seat_id: UUID of the seat (deprecated, use patron_id instead).
-
-        Returns:
-            expires_at timestamp.
-        """
-        args: dict = {"table_id": table_id}
-        if patron_id is not None:
-            args["patron_id"] = patron_id
-        if seat_id is not None:
-            args["seat_id"] = seat_id
-        if state is not None:
-            args["state"] = state
-        if ttl_ms is not None:
-            args["ttl_ms"] = ttl_ms
-        if dedup_id is not None:
-            args["dedup_id"] = dedup_id
-        return await self.call_tool("seat_heartbeat", args)
-
-    async def seat_list(
-        self,
-        table_id: str,
-        active_only: bool = True,
-    ) -> dict:
-        """List all seats (presences) on a table.
-
-        Args:
-            table_id: UUID of the table.
-            active_only: Filter to active (non-expired) seats only (default True).
-
-        Returns:
-            List of seats and active_count.
-        """
-        return await self.call_tool(
-            "seat_list",
-            {"table_id": table_id, "active_only": active_only},
-        )
-
-
-class MCPSTDIOHarness:
+class MCPSTDIOHarness(MCPHarnessBase):
     """Test harness for MCP STDIO transport.
 
     Provides methods for testing MCP protocol over stdin/stdout
@@ -1091,10 +837,9 @@ class MCPSTDIOHarness:
             timeout: Communication timeout in seconds
             startup_timeout: Timeout for process startup in seconds
         """
-        self.timeout = timeout
+        super().__init__(timeout=timeout)
         self.startup_timeout = startup_timeout
         self._process: asyncio.subprocess.Process | None = None
-        self._request_id = 0
         self._reader_task: asyncio.Task | None = None
         self._response_queue: asyncio.Queue = asyncio.Queue()
 
@@ -1164,11 +909,6 @@ class MCPSTDIOHarness:
             except asyncio.CancelledError:
                 break
 
-    def _next_id(self) -> int:
-        """Get next JSON-RPC request ID."""
-        self._request_id += 1
-        return self._request_id
-
     async def _send_request(self, method: str, params: dict | None = None) -> dict:
         """Send a JSON-RPC request via stdin.
 
@@ -1182,7 +922,7 @@ class MCPSTDIOHarness:
         if not self._process or not self._process.stdin:
             raise RuntimeError("MCPSTDIOHarness must be used as async context manager")
 
-        request_id = self._request_id
+        request_id = self._next_id()
         payload = {
             "jsonrpc": "2.0",
             "id": request_id,
@@ -1209,57 +949,6 @@ class MCPSTDIOHarness:
                 await asyncio.sleep(0.01)
         except asyncio.TimeoutError:
             raise TimeoutError(f"No response received for request {request_id}")
-
-    async def initialize(
-        self,
-        client_name: str = "tasca-test-client",
-        client_version: str = "0.1.0",
-        protocol_version: str = "2024-11-05",
-    ) -> dict:
-        """Initialize MCP session.
-
-        Args:
-            client_name: Client name to send
-            client_version: Client version to send
-            protocol_version: MCP protocol version
-
-        Returns:
-            Server capabilities and info
-        """
-        return await self._send_request(
-            "initialize",
-            {
-                "protocolVersion": protocol_version,
-                "capabilities": {},
-                "clientInfo": {
-                    "name": client_name,
-                    "version": client_version,
-                },
-            },
-        )
-
-    async def list_tools(self) -> dict:
-        """List available MCP tools.
-
-        Returns:
-            List of available tools
-        """
-        return await self._send_request("tools/list")
-
-    async def call_tool(self, name: str, arguments: dict | None = None) -> dict:
-        """Call an MCP tool.
-
-        Args:
-            name: Tool name
-            arguments: Tool arguments
-
-        Returns:
-            Tool execution result
-        """
-        return await self._send_request(
-            "tools/call",
-            {"name": name, "arguments": arguments or {}},
-        )
 
 
 # =============================================================================

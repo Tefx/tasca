@@ -289,6 +289,106 @@ class TestTableList:
         assert isinstance(result["data"]["tables"], list)
         assert isinstance(result["data"]["total"], int)
 
+    def test_list_tables_excludes_non_open_tables(self, test_db: sqlite3.Connection) -> None:
+        """List tables excludes closed/paused tables (status filter)."""
+        from tasca.shell.storage.table_repo import update_table
+
+        # Create multiple tables
+        result_open = table_create(question="Open table")
+        open_table_id = result_open["data"]["id"]
+
+        result_to_close = table_create(question="Will be closed")
+        closed_table_id = result_to_close["data"]["id"]
+
+        result_to_pause = table_create(question="Will be paused")
+        paused_table_id = result_to_pause["data"]["id"]
+
+        # Update tables to closed/paused status
+        now = datetime.now(UTC)
+        from tasca.core.domain.table import TableStatus, TableUpdate
+
+        close_update = TableUpdate(
+            question="Will be closed", context=None, status=TableStatus.CLOSED
+        )
+        pause_update = TableUpdate(
+            question="Will be paused", context=None, status=TableStatus.PAUSED
+        )
+
+        update_table(
+            test_db,
+            TableId(closed_table_id),
+            close_update,
+            Version(1),
+            now,
+        )
+        update_table(
+            test_db,
+            TableId(paused_table_id),
+            pause_update,
+            Version(1),
+            now,
+        )
+
+        # List tables - only open should appear
+        result = table_list()
+
+        assert result["ok"] is True
+        tables = result["data"]["tables"]
+        table_ids = {t["id"] for t in tables}
+
+        # Open table should be in list
+        assert open_table_id in table_ids
+        # Closed and paused should NOT be in list
+        assert closed_table_id not in table_ids
+        assert paused_table_id not in table_ids
+        # Total should only count open tables
+        assert result["data"]["total"] == 1
+
+    def test_list_tables_excludes_expired_seats_from_count(
+        self, test_db: sqlite3.Connection
+    ) -> None:
+        """Active count excludes seats with expired heartbeats."""
+        from tasca.core.domain.seat import Seat, SeatId, SeatState
+        from tasca.core.services.seat_service import DEFAULT_SEAT_TTL_SECONDS
+        from tasca.shell.storage.seat_repo import create_seat
+
+        # Create patron and table
+        patron_result = patron_register(name=unique_name())
+        patron_active = patron_result["data"]["id"]
+        patron_result2 = patron_register(name=unique_name())
+        patron_expired = patron_result2["data"]["id"]
+
+        table_result = table_create(question="Table with mixed seats")
+        table_id = table_result["data"]["id"]
+
+        # Create an active seat
+        table_join(table_id=table_id, patron_id=patron_active)
+
+        # Create an expired seat directly in DB (old heartbeat)
+        now = datetime.now(UTC)
+        expired_time = now.replace(year=now.year - 1)  # 1 year ago - definitely expired
+        expired_seat = Seat(
+            id=SeatId("expired-seat-123"),
+            table_id=table_id,
+            patron_id=patron_expired,
+            state=SeatState.JOINED,
+            last_heartbeat=expired_time,
+            joined_at=expired_time,
+        )
+        create_seat(test_db, expired_seat)
+
+        # List tables
+        result = table_list()
+
+        assert result["ok"] is True
+        tables = result["data"]["tables"]
+
+        # Find our table
+        our_table = next((t for t in tables if t["id"] == table_id), None)
+        assert our_table is not None
+        # Only the active seat should be counted (expired seat excluded)
+        assert our_table["active_count"] == 1
+
 
 class TestTableJoin:
     """Tests for table_join MCP tool."""

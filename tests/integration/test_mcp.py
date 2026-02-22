@@ -55,7 +55,7 @@ def test_mcp_initialize(mcp_test_client) -> None:
     with server capabilities and protocol version.
     """
     response = mcp_test_client.post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 1,
@@ -92,7 +92,7 @@ def test_mcp_list_tools(mcp_session: "MCPSession") -> None:
     """
     # List tools
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -142,7 +142,7 @@ def test_mcp_patron_register(mcp_session: "MCPSession") -> None:
     Verifies that patron registration can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -170,7 +170,7 @@ def test_mcp_patron_get(mcp_session: "MCPSession") -> None:
     Verifies that patron retrieval can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -200,7 +200,7 @@ def test_mcp_table_create(mcp_session: "MCPSession") -> None:
     Verifies that table creation can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -227,7 +227,7 @@ def test_mcp_table_join(mcp_session: "MCPSession") -> None:
     Verifies that table join can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -255,7 +255,7 @@ def test_mcp_table_get(mcp_session: "MCPSession") -> None:
     Verifies that table retrieval can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -280,7 +280,7 @@ def test_mcp_table_say(mcp_session: "MCPSession") -> None:
     Verifies that adding a saying can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -309,7 +309,7 @@ def test_mcp_table_listen(mcp_session: "MCPSession") -> None:
     Verifies that listening for sayings can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -339,7 +339,7 @@ def test_mcp_seat_heartbeat(mcp_session: "MCPSession") -> None:
     Verifies that seat heartbeat can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -367,7 +367,7 @@ def test_mcp_seat_list(mcp_session: "MCPSession") -> None:
     Verifies that listing seats can be invoked.
     """
     response = mcp_session["client"].post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -500,7 +500,7 @@ def test_mcp_full_cycle_patron_flow(mcp_session: "MCPSession") -> None:
         nonlocal request_id
         request_id += 1
         response = mcp_session["client"].post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -633,7 +633,7 @@ def test_mcp_full_cycle_multiple_patrons(mcp_session: "MCPSession") -> None:
         nonlocal request_id
         request_id += 1
         response = mcp_session["client"].post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -748,7 +748,7 @@ def test_mcp_error_table_closed(mcp_session: "MCPSession") -> None:
         nonlocal request_id
         request_id += 1
         response = mcp_session["client"].post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -847,7 +847,7 @@ def test_mcp_error_dedup_collision(mcp_session: "MCPSession") -> None:
         nonlocal request_id
         request_id += 1
         response = mcp_session["client"].post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -945,7 +945,7 @@ def test_mcp_error_paused_table(mcp_session: "MCPSession") -> None:
         nonlocal request_id
         request_id += 1
         response = mcp_session["client"].post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -1052,7 +1052,7 @@ def test_mcp_error_version_conflict(mcp_session: "MCPSession") -> None:
         nonlocal request_id
         request_id += 1
         response = mcp_session["client"].post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -1145,7 +1145,7 @@ def test_mcp_error_invalid_request(mcp_session: "MCPSession") -> None:
         nonlocal request_id
         request_id += 1
         response = mcp_session["client"].post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": request_id,

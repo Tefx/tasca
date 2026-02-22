@@ -156,7 +156,7 @@ if TYPE_CHECKING:
 import os
 
 API_BASE_URL = os.environ.get("TASCA_TEST_API_URL", "http://localhost:8000")
-MCP_BASE_URL = os.environ.get("TASCA_TEST_MCP_URL", f"{API_BASE_URL}/mcp/mcp")
+MCP_BASE_URL = os.environ.get("TASCA_TEST_MCP_URL", f"{API_BASE_URL}/mcp")
 REQUEST_TIMEOUT = int(os.environ.get("TASCA_TEST_TIMEOUT", "30"))
 
 # Environment variable to force external server (skip ASGI fixture)
@@ -750,11 +750,11 @@ class MCPASGIHarness(MCPHarnessBase):
         import httpx
 
         # ASGI transport for in-process testing
-        # MCP endpoint is at /mcp/mcp
+        # MCP endpoint is at /mcp
         transport = httpx.ASGITransport(app=self.app)
         self._client = httpx.AsyncClient(
             transport=transport,
-            base_url="http://test/mcp/mcp",
+            base_url="http://test/mcp",
             timeout=httpx.Timeout(self.timeout),
             headers={
                 "Accept": "application/json, text/event-stream",

@@ -64,7 +64,7 @@ class TestIntegrationCreateTableViaRest:
         # Create table via REST-like flow through MCP
         # First initialize MCP session
         init_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -90,7 +90,7 @@ class TestIntegrationCreateTableViaRest:
 
         # Create table
         create_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -134,7 +134,7 @@ class TestIntegrationCreateTableViaRest:
         """
         # Initialize
         init_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -159,7 +159,7 @@ class TestIntegrationCreateTableViaRest:
 
         # First create
         create_response1 = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -182,7 +182,7 @@ class TestIntegrationCreateTableViaRest:
 
         # Second create with same dedup_id
         create_response2 = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 3,
@@ -244,7 +244,7 @@ class TestIntegrationCreateTableViaMCP:
         }
 
         init_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json=init_request,
             headers={"Accept": "application/json, text/event-stream"},
         )
@@ -277,7 +277,7 @@ class TestIntegrationCreateTableViaMCP:
         }
 
         tool_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json=tool_request,
             headers=headers,
         )
@@ -305,7 +305,7 @@ class TestIntegrationCreateTableViaMCP:
         """Test MCP table_create with optional context."""
         # Initialize session
         init_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -328,7 +328,7 @@ class TestIntegrationCreateTableViaMCP:
 
         # Create table with context
         tool_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 2,
@@ -361,7 +361,7 @@ class TestIntegrationCreateTableViaMCP:
         """Test MCP table_create with only required question field."""
         # Initialize session
         init_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -384,7 +384,7 @@ class TestIntegrationCreateTableViaMCP:
 
         # Create table with minimal args (question only)
         tool_response = mcp_test_client.post(
-            "/mcp/mcp",
+            "/mcp",
             json={
                 "jsonrpc": "2.0",
                 "id": 2,

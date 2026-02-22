@@ -41,8 +41,8 @@ if TYPE_CHECKING:
 
 # Base URLs - configurable via environment variables
 API_BASE_URL = os.environ.get("TASCA_TEST_API_URL", "http://localhost:8000")
-# MCP endpoint is at /mcp/mcp (FastMCP mounts at /mcp with internal route /mcp)
-MCP_BASE_URL = os.environ.get("TASCA_TEST_MCP_URL", f"{API_BASE_URL}/mcp/mcp")
+# MCP endpoint is at /mcp
+MCP_BASE_URL = os.environ.get("TASCA_TEST_MCP_URL", f"{API_BASE_URL}/mcp")
 REQUEST_TIMEOUT = int(os.environ.get("TASCA_TEST_TIMEOUT", "30"))
 
 # Environment variable to force external server (skip ASGI fixture)
@@ -215,7 +215,7 @@ async def mcp_http_client(asgi_app: "FastAPI") -> AsyncGenerator:
         transport = httpx.ASGITransport(app=asgi_app)
         async with httpx.AsyncClient(
             transport=transport,
-            base_url="http://test/mcp/mcp",
+            base_url="http://test/mcp",
             timeout=httpx.Timeout(REQUEST_TIMEOUT),
         ) as client:
             yield client
@@ -254,7 +254,7 @@ def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, No
         MCPSession containing the client, initialized headers, and session_id.
     """
     init_response = mcp_test_client.post(
-        "/mcp/mcp",
+        "/mcp",
         json={
             "jsonrpc": "2.0",
             "id": 1,

@@ -76,6 +76,7 @@ from tasca.shell.logging import (
 from tasca.shell.mcp.database import get_mcp_db
 from tasca.shell.mcp.proxy import (
     ProxyConfigError,
+    SessionInitError,
     forward_jsonrpc_request,
     get_upstream_config,
     switch_to_local,
@@ -133,6 +134,12 @@ TransportType = Literal["stdio", "http", "sse", "streamable-http"]
 # This text guides agents in proper table participation behavior.
 MCP_AGENT_INSTRUCTIONS = """
 Tasca MCP Server - A discussion table service for coding agents.
+
+## Connection
+If you were given a server URL and token, call tasca.connect(url=..., token=...)
+first, then call tasca.connection_status to verify. If no connection details were
+provided and you did not receive a connect error, you are already connected
+(either local mode or auto-configured via upstream config file).
 
 ## Setup Sequence
 1. Register your identity with tasca.patron_register (provide display_name).
@@ -1226,6 +1233,7 @@ def table_listen(
         return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
 
     # List sayings
+    # TODO(async-db): sync DB call in async loop — acceptable for v1, consider asyncio DB driver in future
     result = list_sayings_by_table(conn, table_id, since_sequence, limit)
 
     if isinstance(result, Failure):
@@ -1667,6 +1675,7 @@ async def table_wait(
 
     while time.monotonic() < end_time:
         # Check for new sayings
+        # TODO(async-db): sync DB call in async loop — acceptable for v1, consider asyncio DB driver in future
         result = list_sayings_by_table(conn, table_id, since_sequence, limit=limit)
 
         if isinstance(result, Failure):
@@ -1933,17 +1942,24 @@ def seat_list(
 # =============================================================================
 
 
+# @shell_complexity: 5 branches for session init + config state + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
-def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
-    """Switch between local and remote MCP mode.
+async def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
+    """Switch between local and remote MCP mode with session initialization.
 
     This tool controls proxy mode for the MCP server:
-    - When url is provided (non-None): switches to remote/proxy mode
+    - When url is provided (non-None): switches to remote/proxy mode and initializes MCP session
     - When url is None: switches to local mode
 
     This is a proxy-control tool that NEVER forwards to a remote server.
     It always runs locally to manage the upstream configuration.
+
+    MCP Session Management:
+        When connecting to a remote MCP server, this tool:
+        1. Sends an 'initialize' request to the upstream
+        2. Extracts the 'mcp-session-id' from the response
+        3. Stores the session ID for subsequent tool forwarding
 
     Authentication note: Bearer token auth is required for MCP HTTP requests
     when admin_token is configured. OPTIONS/CORS preflight requests are exempt
@@ -1961,9 +1977,13 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
             "data": {
                 "mode": "local" | "remote",
                 "url": "..." | null,
-                "has_token": true | false
+                "has_token": true | false,
+                "has_session": true | false  // true if MCP session initialized
             }
         }
+
+    Error codes:
+        - SESSION_INIT_FAILED: Failed to initialize MCP session with upstream
 
     Examples:
         >>> # Switch to remote mode
@@ -1985,19 +2005,29 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
         False
     """
     if url is not None:
-        # Switch to remote mode
-        switch_to_remote(url, token)
+        # Switch to remote mode with session initialization
+        from tasca.shell.mcp.proxy import switch_to_remote_with_session
+
+        session_result = await switch_to_remote_with_session(url, token)
+        if isinstance(session_result, Failure):
+            err = session_result.failure()
+            return error_response(
+                "SESSION_INIT_FAILED",
+                f"Failed to initialize MCP session with upstream: {err}",
+                getattr(err, "details", {}),
+            )
+        config = session_result.unwrap()
     else:
         # Switch to local mode
         switch_to_local()
 
-    # Get current config to return status
-    config_result = get_upstream_config()
-    if isinstance(config_result, Failure):
-        err = config_result.failure()
-        return error_response("CONFIG_ERROR", str(err))
+        # Get current config to return status
+        config_result = get_upstream_config()
+        if isinstance(config_result, Failure):
+            err = config_result.failure()
+            return error_response("CONFIG_ERROR", str(err))
+        config = config_result.unwrap()
 
-    config = config_result.unwrap()
     mode = "remote" if config.is_remote else "local"
 
     return success_response(
@@ -2005,6 +2035,7 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
             "mode": mode,
             "url": config.url,
             "has_token": config.token is not None,
+            "has_session": config.session_id is not None,
         }
     )
 
@@ -2194,15 +2225,16 @@ class ProxyMiddleware(Middleware):
         # Normalize to our envelope format
         if "ok" in result:
             # Already an envelope
-            content = TextContent(type="text", text=json.dumps(result))
+            envelope = result
         else:
             # Wrap in success envelope
-            content = TextContent(
-                type="text",
-                text=json.dumps({"ok": True, "data": result}),
-            )
+            envelope = {"ok": True, "data": result}
 
-        return ToolResult(content=[content])
+        content = TextContent(type="text", text=json.dumps(envelope))
+
+        # Provide structured_content for tools with outputSchema
+        # FastMCP requires structured_content when a tool has outputSchema defined
+        return ToolResult(content=[content], structured_content=envelope)
 
 
 # =============================================================================

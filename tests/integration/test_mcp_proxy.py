@@ -256,7 +256,8 @@ def test_e2e_proxy_mode_connect_disconnect_cycle(mcp_session):
     )
     assert connect2["data"]["mode"] == "remote"
     assert connect2["data"]["url"] == MCP_BASE_URL
-    assert connect2["data"]["token"] == "test-token"
+    # Token is never returned in response for security; only has_token boolean
+    assert connect2["data"]["has_token"] is True
 
     # Final disconnect
     disconnect2 = _call_tool(local_client, headers, "connect", {}, 5)

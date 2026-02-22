@@ -456,3 +456,40 @@ class TestProxyMiddlewareModeCheck:
 
         # Config should be checked before call_next
         assert call_order == ["config_called", "call_next"] or call_order[0] == "config_called"
+
+
+# =============================================================================
+# ProxyMiddleware Config Error Tests
+# =============================================================================
+
+
+class TestProxyMiddlewareConfigError:
+    """Tests for ProxyMiddleware when config loading fails."""
+
+    @pytest.mark.asyncio
+    async def test_config_error_returns_error_tool_result(
+        self, middleware: ProxyMiddleware, mock_context: MagicMock
+    ) -> None:
+        """CONFIG_ERROR is returned when get_upstream_config fails."""
+        from returns.result import Failure
+        from tasca.shell.mcp.proxy import ProxyConfigError
+
+        config_error = ProxyConfigError("Cannot read file: Permission denied")
+        local_call_next = AsyncMock()
+
+        with patch("tasca.shell.mcp.server.get_upstream_config") as mock_config:
+            mock_config.return_value = Failure(config_error)
+
+            result = await middleware.on_call_tool(mock_context, local_call_next)
+
+        # call_next should NOT be called (we short-circuit on config error)
+        local_call_next.assert_not_called()
+
+        # Result should be an error ToolResult
+        assert result is not None
+        assert len(result.content) == 1
+        text = result.content[0].text
+        data = json.loads(text)
+        assert data["ok"] is False
+        assert "error" in data
+        assert data["error"]["code"] == "CONFIG_ERROR"

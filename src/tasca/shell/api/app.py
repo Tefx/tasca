@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from tasca.config import settings
-from tasca.shell.api.auth import _validate_bearer_token
+from tasca.shell.api.auth import validate_bearer_token
 from tasca.shell.api.routes import export, health, patrons, sayings, seats, tables
 from tasca.shell.api.routes import search
 from tasca.shell.mcp import mcp
@@ -60,7 +60,11 @@ class MCPBearerAuthMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Pass OPTIONS preflight through without auth (CORS)
+        # Pass OPTIONS preflight through without auth (CORS).
+        # Although the scope["type"] != "http" check above already excludes non-HTTP
+        # events (WebSocket, lifespan), browser CORS preflight sends OPTIONS over HTTP
+        # and must reach the app without a Bearer token — browsers never attach
+        # credentials to preflight requests.
         if scope.get("method") == "OPTIONS":
             await self.app(scope, receive, send)
             return
@@ -85,7 +89,7 @@ class MCPBearerAuthMiddleware:
         token = auth_header[7:]  # Remove "Bearer " prefix
 
         # Use constant-time comparison to prevent timing attacks
-        if not _validate_bearer_token(token, settings.admin_token):
+        if not validate_bearer_token(token, settings.admin_token):
             await self._send_401(scope, send, "Invalid or missing token")
             return
 

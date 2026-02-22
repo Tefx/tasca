@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import pytest
@@ -40,6 +41,88 @@ def _parse_sse_response(text: str) -> dict:
             if line.startswith("data:"):
                 return json.loads(line[5:].strip())
     return json.loads(text)
+
+
+# =============================================================================
+# Full-Cycle Test Helpers
+# =============================================================================
+
+
+def _extract_tool_result_strict(response: dict) -> dict:
+    """Extract tool result from MCP response, raising on any error.
+
+    Used in happy-path tests where MCP errors are unexpected.
+
+    Args:
+        response: Parsed MCP JSON-RPC response dict.
+
+    Returns:
+        Parsed content payload dict.
+
+    Raises:
+        AssertionError: If the response contains an MCP error or empty content.
+    """
+    if "error" in response:
+        raise AssertionError(f"MCP error: {response['error']}")
+    content = response.get("result", {}).get("content", [])
+    if not content:
+        raise AssertionError("Empty content in response")
+    return json.loads(content[0].get("text", "{}"))
+
+
+def _extract_tool_result_lenient(response: dict) -> dict:
+    """Extract tool result from MCP response, returning error dict on failure.
+
+    Used in error-path tests where MCP errors are part of the expected behavior.
+
+    Args:
+        response: Parsed MCP JSON-RPC response dict.
+
+    Returns:
+        Parsed content payload dict, or ``{"ok": False, "error": ...}`` on failure.
+    """
+    if "error" in response:
+        return {"ok": False, "error": response["error"]}
+    content = response.get("result", {}).get("content", [])
+    if not content:
+        return {"ok": False, "error": "Empty content"}
+    return json.loads(content[0].get("text", "{}"))
+
+
+def make_call_tool(
+    session: "MCPSession",
+    request_counter: list[int],
+    extract_fn: Callable[[dict], dict],
+) -> Callable[[str, dict], dict]:
+    """Return a stateful ``call_tool`` helper bound to a session and counter.
+
+    Args:
+        session: Initialized MCP session providing ``client`` and ``headers``.
+        request_counter: Single-element list used as a mutable integer counter.
+            Pass ``[1]`` to start; the counter is incremented before each call.
+        extract_fn: Result extractor — either ``_extract_tool_result_strict``
+            or ``_extract_tool_result_lenient``.
+
+    Returns:
+        Callable ``call_tool(name, arguments) -> dict`` ready for use in tests.
+    """
+
+    def call_tool(name: str, arguments: dict) -> dict:
+        request_counter[0] += 1
+        response = session["client"].post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": request_counter[0],
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+            headers=session["headers"],
+        )
+        assert response.status_code == 200
+        return extract_fn(_parse_sse_response(response.text))
+
+    return call_tool
 
 
 # =============================================================================
@@ -581,41 +664,8 @@ def test_mcp_full_cycle_patron_flow(mcp_session: "MCPSession") -> None:
     with proper data consistency between operations.
     """
 
-    def _parse_mcp_response(response_text: str) -> dict:
-        """Parse MCP response from FastMCP SSE format."""
-        if response_text.startswith("event:"):
-            for line in response_text.split("\n"):
-                if line.startswith("data:"):
-                    return json.loads(line[5:].strip())
-        return json.loads(response_text)
-
-    def _extract_tool_result(response: dict) -> dict:
-        """Extract tool result from MCP response."""
-        if "error" in response:
-            raise AssertionError(f"MCP error: {response['error']}")
-        content = response.get("result", {}).get("content", [])
-        if not content:
-            raise AssertionError("Empty content in response")
-        return json.loads(content[0].get("text", "{}"))
-
-    request_id = 1
-
-    def call_tool(name: str, arguments: dict) -> dict:
-        """Helper to call MCP tool."""
-        nonlocal request_id
-        request_id += 1
-        response = mcp_session["client"].post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            },
-            headers=mcp_session["headers"],
-        )
-        assert response.status_code == 200
-        return _extract_tool_result(_parse_mcp_response(response.text))
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_strict)
 
     # 1. Register patron
     patron_result = call_tool("patron_register", {"name": "FullCycleTestAgent", "kind": "agent"})
@@ -714,41 +764,8 @@ def test_mcp_full_cycle_multiple_patrons(mcp_session: "MCPSession") -> None:
     Verifies that multiple patrons can participate in a table discussion.
     """
 
-    def _parse_mcp_response(response_text: str) -> dict:
-        """Parse MCP response from FastMCP SSE format."""
-        if response_text.startswith("event:"):
-            for line in response_text.split("\n"):
-                if line.startswith("data:"):
-                    return json.loads(line[5:].strip())
-        return json.loads(response_text)
-
-    def _extract_tool_result(response: dict) -> dict:
-        """Extract tool result from MCP response."""
-        if "error" in response:
-            raise AssertionError(f"MCP error: {response['error']}")
-        content = response.get("result", {}).get("content", [])
-        if not content:
-            raise AssertionError("Empty content in response")
-        return json.loads(content[0].get("text", "{}"))
-
-    request_id = 1
-
-    def call_tool(name: str, arguments: dict) -> dict:
-        """Helper to call MCP tool."""
-        nonlocal request_id
-        request_id += 1
-        response = mcp_session["client"].post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            },
-            headers=mcp_session["headers"],
-        )
-        assert response.status_code == 200
-        return _extract_tool_result(_parse_mcp_response(response.text))
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_strict)
 
     # Register two patrons
     patron1_result = call_tool("patron_register", {"name": "Patron1-Agent", "kind": "agent"})
@@ -832,38 +849,8 @@ def test_mcp_error_table_closed(mcp_session: "MCPSession") -> None:
     Verify that posting to a closed table returns OPERATION_NOT_ALLOWED.
     """
 
-    def _parse_mcp_response(response_text: str) -> dict:
-        if response_text.startswith("event:"):
-            for line in response_text.split("\n"):
-                if line.startswith("data:"):
-                    return json.loads(line[5:].strip())
-        return json.loads(response_text)
-
-    def _extract_tool_result(response: dict) -> dict:
-        if "error" in response:
-            return {"ok": False, "error": response["error"]}
-        content = response.get("result", {}).get("content", [])
-        if not content:
-            return {"ok": False, "error": "Empty content"}
-        return json.loads(content[0].get("text", "{}"))
-
-    request_id = 1
-
-    def call_tool(name: str, arguments: dict) -> dict:
-        nonlocal request_id
-        request_id += 1
-        response = mcp_session["client"].post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            },
-            headers=mcp_session["headers"],
-        )
-        assert response.status_code == 200
-        return _extract_tool_result(_parse_mcp_response(response.text))
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_lenient)
 
     # Setup: register patron and create table
     patron_result = call_tool("patron_register", {"name": "TableClosedTestAgent", "kind": "agent"})
@@ -931,38 +918,8 @@ def test_mcp_error_dedup_collision(mcp_session: "MCPSession") -> None:
     """
     import uuid
 
-    def _parse_mcp_response(response_text: str) -> dict:
-        if response_text.startswith("event:"):
-            for line in response_text.split("\n"):
-                if line.startswith("data:"):
-                    return json.loads(line[5:].strip())
-        return json.loads(response_text)
-
-    def _extract_tool_result(response: dict) -> dict:
-        if "error" in response:
-            return {"ok": False, "error": response["error"]}
-        content = response.get("result", {}).get("content", [])
-        if not content:
-            return {"ok": False, "error": "Empty content"}
-        return json.loads(content[0].get("text", "{}"))
-
-    request_id = 1
-
-    def call_tool(name: str, arguments: dict) -> dict:
-        nonlocal request_id
-        request_id += 1
-        response = mcp_session["client"].post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            },
-            headers=mcp_session["headers"],
-        )
-        assert response.status_code == 200
-        return _extract_tool_result(_parse_mcp_response(response.text))
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_lenient)
 
     # Setup
     patron_result = call_tool("patron_register", {"name": "DedupTestAgent", "kind": "agent"})
@@ -1029,38 +986,8 @@ def test_mcp_error_paused_table(mcp_session: "MCPSession") -> None:
     Verify that read operations work while paused, and resume restores open state.
     """
 
-    def _parse_mcp_response(response_text: str) -> dict:
-        if response_text.startswith("event:"):
-            for line in response_text.split("\n"):
-                if line.startswith("data:"):
-                    return json.loads(line[5:].strip())
-        return json.loads(response_text)
-
-    def _extract_tool_result(response: dict) -> dict:
-        if "error" in response:
-            return {"ok": False, "error": response["error"]}
-        content = response.get("result", {}).get("content", [])
-        if not content:
-            return {"ok": False, "error": "Empty content"}
-        return json.loads(content[0].get("text", "{}"))
-
-    request_id = 1
-
-    def call_tool(name: str, arguments: dict) -> dict:
-        nonlocal request_id
-        request_id += 1
-        response = mcp_session["client"].post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            },
-            headers=mcp_session["headers"],
-        )
-        assert response.status_code == 200
-        return _extract_tool_result(_parse_mcp_response(response.text))
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_lenient)
 
     # Setup
     patron_result = call_tool("patron_register", {"name": "PausedTestAgent", "kind": "agent"})
@@ -1136,38 +1063,8 @@ def test_mcp_error_version_conflict(mcp_session: "MCPSession") -> None:
     Verify that stale version number triggers VersionConflict error.
     """
 
-    def _parse_mcp_response(response_text: str) -> dict:
-        if response_text.startswith("event:"):
-            for line in response_text.split("\n"):
-                if line.startswith("data:"):
-                    return json.loads(line[5:].strip())
-        return json.loads(response_text)
-
-    def _extract_tool_result(response: dict) -> dict:
-        if "error" in response:
-            return {"ok": False, "error": response["error"]}
-        content = response.get("result", {}).get("content", [])
-        if not content:
-            return {"ok": False, "error": "Empty content"}
-        return json.loads(content[0].get("text", "{}"))
-
-    request_id = 1
-
-    def call_tool(name: str, arguments: dict) -> dict:
-        nonlocal request_id
-        request_id += 1
-        response = mcp_session["client"].post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            },
-            headers=mcp_session["headers"],
-        )
-        assert response.status_code == 200
-        return _extract_tool_result(_parse_mcp_response(response.text))
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_lenient)
 
     # Setup
     patron_result = call_tool("patron_register", {"name": "VersionTestAgent", "kind": "agent"})
@@ -1229,38 +1126,8 @@ def test_mcp_error_invalid_request(mcp_session: "MCPSession") -> None:
     Verify that missing required fields trigger appropriate errors.
     """
 
-    def _parse_mcp_response(response_text: str) -> dict:
-        if response_text.startswith("event:"):
-            for line in response_text.split("\n"):
-                if line.startswith("data:"):
-                    return json.loads(line[5:].strip())
-        return json.loads(response_text)
-
-    def _extract_tool_result(response: dict) -> dict:
-        if "error" in response:
-            return {"ok": False, "error": response["error"]}
-        content = response.get("result", {}).get("content", [])
-        if not content:
-            return {"ok": False, "error": "Empty content"}
-        return json.loads(content[0].get("text", "{}"))
-
-    request_id = 1
-
-    def call_tool(name: str, arguments: dict) -> dict:
-        nonlocal request_id
-        request_id += 1
-        response = mcp_session["client"].post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            },
-            headers=mcp_session["headers"],
-        )
-        assert response.status_code == 200
-        return _extract_tool_result(_parse_mcp_response(response.text))
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_lenient)
 
     # Setup
     patron_result = call_tool("patron_register", {"name": "InvalidReqAgent", "kind": "agent"})

@@ -3,6 +3,17 @@ Upstream configuration for MCP proxy mode.
 
 This module provides runtime state management for switching between
 local mode (default) and remote upstream mode.
+
+MCP HTTP Transport Session Management:
+    MCP HTTP transport requires session management via the 'mcp-session-id' header:
+    1. Client sends 'initialize' request to upstream
+    2. Server responds with 'mcp-session-id' header
+    3. Client must include this header on all subsequent requests (tools/call, etc.)
+
+    The proxy mode handles this automatically:
+    - When switching to remote mode, it initializes an MCP session with upstream
+    - The session_id is stored in UpstreamConfig
+    - All forwarded requests include the mcp-session-id header
 """
 
 from __future__ import annotations
@@ -24,6 +35,12 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+# MCP protocol version for session initialization
+MCP_PROTOCOL_VERSION = "2024-11-05"
+MCP_CLIENT_NAME = "tasca-proxy"
+MCP_CLIENT_VERSION = "0.1.0"
 
 
 # @invar:allow shell_result: Validation helper returns optional error dict, not Result
@@ -116,6 +133,7 @@ class UpstreamConfig:
     Attributes:
         url: The upstream server URL (None for local mode).
         token: Authentication token for upstream server.
+        session_id: MCP session ID for the upstream connection (required for HTTP transport).
 
     Examples:
         >>> config = UpstreamConfig()
@@ -141,6 +159,7 @@ class UpstreamConfig:
 
     url: str | None = None
     token: str | None = None
+    session_id: str | None = None
 
     @property
     def is_remote(self) -> bool:
@@ -176,6 +195,7 @@ class UpstreamConfig:
         """
         self.url = url
         self.token = token
+        self.session_id = None  # Reset session on config change
 
     def switch_to_local(self) -> None:
         """Switch to local mode (reset to defaults).
@@ -193,11 +213,19 @@ class UpstreamConfig:
         self.url = None
         self.token = None
 
+    # Display serialization: shows the token field with a redacted sentinel value
+    # ("***") so the key is always present in output. Use for human-readable
+    # status messages and debug UI where the field structure must be consistent.
+    # Prefer safe_dict() for machine-readable logging (e.g. structured JSON logs).
     def to_dict(self) -> dict[str, str | None]:
-        """Export config as dictionary with token masked for safe logging.
+        """Serialize config for human-readable display, with token redacted as "***".
 
-        WARNING: Do not log self.token directly. Use this method for
-        status/debug output only.
+        Audience: Display and debug output (status messages, CLI output, debug UI).
+        The token key is always present; its value is "***" when a token is set,
+        or None when no token is configured.
+
+        Prefer safe_dict() when writing to structured logs or passing config data
+        to downstream consumers that check token presence programmatically.
 
         Examples:
             >>> UpstreamConfig().to_dict()
@@ -207,11 +235,20 @@ class UpstreamConfig:
         """
         return {"url": self.url, "token": "***" if self.token else None}
 
+    # Logging serialization: replaces the token field with a boolean presence flag
+    # so structured log consumers can check authentication status without any
+    # risk of token leakage via log aggregators. Use for machine-readable output.
+    # Prefer to_dict() when displaying config to a human operator.
     def safe_dict(self) -> dict[str, str | None | bool]:
-        """Export config for safe logging (token redacted).
+        """Serialize config for structured logging, replacing token with a boolean flag.
 
-        Returns a dictionary suitable for logging that does not expose
-        the authentication token.
+        Audience: Machine-readable structured logs (e.g. JSON log streams, metrics).
+        The token is never included; has_token records whether authentication is
+        configured, so downstream consumers can check token presence safely.
+
+        Prefer to_dict() when the output is read by a human operator and the
+        field structure (always showing a "token" key) is more important than
+        strict absence of the value.
 
         Examples:
             >>> UpstreamConfig().safe_dict()
@@ -248,6 +285,119 @@ class ProxyConfigError(Exception):
         super().__init__(f"{message}: {path}")
 
 
+class SessionInitError(Exception):
+    """Error initializing MCP session with upstream server."""
+
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
+        self.details = details or {}
+        super().__init__(message)
+
+
+# @shell_complexity: Multiple branches for HTTP status codes, JSON parse errors, network failures
+async def initialize_upstream_session(
+    url: str, token: str | None = None
+) -> Result[str, SessionInitError]:
+    """Initialize an MCP session with the upstream server.
+
+    Sends an 'initialize' request to the upstream MCP server and extracts
+    the session ID from the response headers.
+
+    Args:
+        url: The upstream MCP server URL.
+        token: Optional authentication token for upstream server.
+
+    Returns:
+        Success with the session ID string, or Failure with SessionInitError.
+
+    Examples:
+        >>> # async test - actual network call
+        >>> # result = await initialize_upstream_session("http://localhost:8000/mcp", "secret")
+        >>> # isinstance(result, Success)  # True if server is running
+    """
+    request_id = str(uuid.uuid4())
+    payload = {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "capabilities": {},
+            "clientInfo": {
+                "name": MCP_CLIENT_NAME,
+                "version": MCP_CLIENT_VERSION,
+            },
+        },
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+
+            # Check for authentication failures
+            if response.status_code in (401, 403):
+                return Failure(
+                    SessionInitError(
+                        f"Authentication failed with status {response.status_code}",
+                        {"status_code": response.status_code},
+                    )
+                )
+
+            # Check for other HTTP errors
+            if response.status_code >= 400:
+                return Failure(
+                    SessionInitError(
+                        f"Upstream returned status {response.status_code}",
+                        {"status_code": response.status_code},
+                    )
+                )
+
+            # Extract session ID from response headers
+            session_id = response.headers.get("mcp-session-id")
+            if not session_id:
+                # Session ID might be optional for some transports, log warning
+                logger.warning(
+                    "upstream_session_id_missing",
+                    extra={"url": url, "status_code": response.status_code},
+                )
+                # Return empty string to indicate no session ID (some transports don't use it)
+                return Success("")
+
+            logger.info(
+                "upstream_session_initialized",
+                extra={"url": url, "session_id": session_id[:8] + "..."},
+            )
+            return Success(session_id)
+
+        except httpx.ConnectError as e:
+            return Failure(
+                SessionInitError(
+                    f"Cannot connect to upstream at {url}",
+                    {"error": str(e), "error_type": "connect"},
+                )
+            )
+        except httpx.TimeoutException as e:
+            return Failure(
+                SessionInitError(
+                    f"Timeout connecting to upstream at {url}",
+                    {"error": str(e), "error_type": "timeout"},
+                )
+            )
+        except Exception as e:
+            return Failure(
+                SessionInitError(
+                    f"Unexpected error initializing session: {e}",
+                    {"error": str(e), "error_type": type(e).__name__},
+                )
+            )
+
+
 # @shell_complexity: Config load must branch for missing file, invalid JSON, schema mismatch, and OS errors
 def _load_config_from_file() -> Result[dict[str, str | None], ProxyConfigError]:
     """Load configuration from .tasca/upstream.json if it exists.
@@ -259,7 +409,9 @@ def _load_config_from_file() -> Result[dict[str, str | None], ProxyConfigError]:
         Success with config dict (empty values if file doesn't exist).
         Failure with ProxyConfigError if file exists but cannot be read/parsed.
     """
-    config_path = Path(".tasca/upstream.json")
+    config_path = Path(
+        ".tasca/upstream.json"
+    )  # Relative to CWD where tasca server is launched (project root)
     if not config_path.exists():
         # File doesn't exist is not an error - return empty config
         logger.debug("Config file %s not found; using defaults", config_path)
@@ -340,6 +492,50 @@ def switch_to_local() -> None:
     _config.switch_to_local()
 
 
+async def switch_to_remote_with_session(
+    url: str, token: str | None = None
+) -> Result[UpstreamConfig, SessionInitError]:
+    """Switch to remote mode and initialize MCP session with upstream.
+
+    This is the preferred way to switch to remote mode for MCP HTTP transport,
+    as it properly initializes the session with the upstream server.
+
+    Args:
+        url: The upstream server URL.
+        token: Optional authentication token for upstream server.
+
+    Returns:
+        Success with the configured UpstreamConfig (including session_id).
+        Failure with SessionInitError if session initialization fails.
+
+    Examples:
+        >>> # async example - requires actual server
+        >>> # result = await switch_to_remote_with_session("http://localhost:8000/mcp")
+        >>> # if isinstance(result, Success):
+        >>> #     config = result.unwrap()
+        >>> #     config.session_id  # MCP session ID from upstream
+    """
+    # Initialize MCP session with upstream
+    session_result = await initialize_upstream_session(url, token)
+    if isinstance(session_result, Failure):
+        return session_result
+
+    session_id = session_result.unwrap()
+
+    # Update config with URL, token, and session ID
+    global _config
+    _config.url = url
+    _config.token = token
+    _config.session_id = session_id if session_id else None
+
+    logger.info(
+        "switched_to_remote",
+        extra={"url": url, "has_session": bool(session_id)},
+    )
+
+    return Success(_config)
+
+
 # @shell_complexity: Upstream proxying requires distinct branches for auth, HTTP status mapping, and network failures
 # @invar:allow shell_result: MCP response envelopes return primitives, not Result[T, E]
 async def forward_jsonrpc_request(
@@ -348,7 +544,7 @@ async def forward_jsonrpc_request(
     """Send a JSON-RPC request to the upstream MCP endpoint via httpx.
 
     Args:
-        config: UpstreamConfig containing the target URL and auth token.
+        config: UpstreamConfig containing the target URL, auth token, and session ID.
         method: JSON-RPC method name to call.
         params: Parameters for the JSON-RPC method.
 
@@ -374,9 +570,15 @@ async def forward_jsonrpc_request(
 
     headers = {
         "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
     }
     if config.token:
         headers["Authorization"] = f"Bearer {config.token}"
+
+    # Include MCP session ID header if we have a session
+    # MCP HTTP transport requires this for all requests after initialization
+    if config.session_id:
+        headers["mcp-session-id"] = config.session_id
 
     # timeout: 30s default; for table_wait (10s internal cap), upstream may respond in ~10s
     # Consider per-tool timeout in future versions

@@ -549,6 +549,16 @@ def cmd_new(args: argparse.Namespace) -> int:
 
         admin_token = f"tk_{secrets.token_hex(16)}"
 
+    # Write .tasca/upstream.json for tasca-mcp auto-connect
+    import pathlib
+
+    tasca_dir = pathlib.Path(".tasca")
+    tasca_dir.mkdir(parents=True, exist_ok=True)
+    upstream_data = {"url": f"http://{host}:{port}/mcp", "token": admin_token}
+    (tasca_dir / "upstream.json").write_text(
+        json.dumps(upstream_data, indent=2) + "\n"
+    )
+
     # Step 2: Print startup banner
     print_startup_banner(
         table_data=table_data,

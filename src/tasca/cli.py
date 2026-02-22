@@ -11,14 +11,142 @@ which is the standard pattern for command-line tools.
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
+import os
+import signal
 import subprocess
 import sys
+import time
 from typing import Any
 
 import httpx
 
 from tasca.config import settings
+
+# Track if we started the server (for cleanup)
+_started_server_process: subprocess.Popen[str] | None = None
+
+
+# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
+# @shell_complexity: 3 branches for server check logic (connect, port in use error, unexpected error)
+def is_server_running(base_url: str) -> bool:
+    """Check if the Tasca server is already running.
+
+    Args:
+        base_url: Base URL of the Tasca REST API.
+
+    Returns:
+        True if server is responding, False otherwise.
+    """
+    try:
+        with httpx.Client(timeout=2.0) as client:
+            response = client.get(f"{base_url.rstrip('/')}/api/v1/health")
+            return response.status_code == 200
+    except httpx.ConnectError:
+        return False
+    except httpx.TimeoutException:
+        return False
+
+
+# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
+# @shell_complexity: 5 branches for server startup (find module, start, wait, timeout, error)
+def start_server_background(host: str, port: int) -> subprocess.Popen[str]:
+    """Start the Tasca server in background.
+
+    Args:
+        host: Host to bind.
+        port: Port to bind.
+
+    Returns:
+        The server subprocess.
+
+    Raises:
+        SystemExit: If server cannot be started.
+    """
+    global _started_server_process
+
+    # Use the 'tasca' console script to start the server
+    # Pass host and port via environment variables
+    env = os.environ.copy()
+    env["TASCA_API_HOST"] = host
+    env["TASCA_API_PORT"] = str(port)
+
+    try:
+        process = subprocess.Popen(
+            ["tasca"],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        _started_server_process = process
+        return process
+    except FileNotFoundError as e:
+        print("Error: Cannot find 'tasca' command to start server", file=sys.stderr)
+        print("Make sure tasca is installed: pip install -e .", file=sys.stderr)
+        raise SystemExit(1) from e
+
+
+# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
+# @shell_orchestration: Polling loop that calls is_server_running (which does HTTP I/O)
+def wait_for_server_ready(base_url: str, timeout: float = 30.0) -> bool:
+    """Wait for the server to become ready.
+
+    Args:
+        base_url: Base URL of the Tasca REST API.
+        timeout: Maximum seconds to wait.
+
+    Returns:
+        True if server became ready, False on timeout.
+    """
+    start_time = time.monotonic()
+    poll_interval = 0.1
+
+    while time.monotonic() - start_time < timeout:
+        if is_server_running(base_url):
+            return True
+        time.sleep(poll_interval)
+
+    return False
+
+
+def stop_server() -> None:
+    """Stop the server if we started it.
+
+    This is called via atexit to ensure cleanup on exit.
+    """
+    global _started_server_process
+
+    if _started_server_process is not None:
+        try:
+            # Try graceful shutdown first
+            _started_server_process.terminate()
+            try:
+                _started_server_process.wait(timeout=5.0)
+            except subprocess.TimeoutExpired:
+                # Force kill if graceful shutdown didn't work
+                _started_server_process.kill()
+                _started_server_process.wait(timeout=2.0)
+        except Exception:
+            pass  # Best-effort cleanup
+        finally:
+            _started_server_process = None
+
+
+# Register cleanup handler
+atexit.register(stop_server)
+
+
+# Handle signals for graceful shutdown
+def _signal_handler(signum: int, frame: Any) -> None:
+    """Handle termination signals by cleaning up the server."""
+    stop_server()
+    sys.exit(128 + signum)
+
+
+signal.signal(signal.SIGTERM, _signal_handler)
+signal.signal(signal.SIGINT, _signal_handler)
 
 
 # @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
@@ -203,6 +331,7 @@ def create_table_via_mcp(
 
 
 # @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
+# @shell_complexity: 8 branches for server lifecycle and table creation
 def cmd_new(args: argparse.Namespace) -> int:
     """Execute the 'new' subcommand.
 
@@ -215,11 +344,36 @@ def cmd_new(args: argparse.Namespace) -> int:
     question = args.question
     context = args.context
     use_mcp = args.mcp
-    base_url = args.url or f"http://{settings.api_host}:{settings.api_port}"
+    no_start = args.no_start
 
     if use_mcp:
         result = create_table_via_mcp(question, context)
     else:
+        # Server lifecycle management for REST API
+        # Determine host and port for binding (server) and connection (client)
+        host = args.host or settings.api_host
+        port = args.port or settings.api_port
+
+        # HTTP client connects to localhost, not 0.0.0.0
+        # 0.0.0.0 is for binding to all interfaces, but clients connect via localhost/127.0.0.1
+        client_host = "localhost" if host in ("0.0.0.0", "") else host
+        base_url = args.url or f"http://{client_host}:{port}"
+
+        if not no_start:
+            # Check if server is already running
+            if is_server_running(base_url):
+                pass  # Server already running, proceed
+            else:
+                # Start server in background
+                print(f"Starting Tasca server on {host}:{port}...", file=sys.stderr)
+                start_server_background(host, port)
+
+                # Wait for server to be ready
+                print("Waiting for server to be ready...", file=sys.stderr)
+                if not wait_for_server_ready(base_url, timeout=30.0):
+                    print("Error: Server did not become ready in time", file=sys.stderr)
+                    return 1
+
         # Use admin token from args, or from settings
         admin_token = args.token or settings.admin_token
         result = create_table_via_rest(question, context, base_url, admin_token)
@@ -287,6 +441,20 @@ def main(argv: list[str] | None = None) -> int:
         "-t",
         "--token",
         help="Admin token for authentication (default: from TASCA_ADMIN_TOKEN env)",
+    )
+    new_parser.add_argument(
+        "--no-start",
+        action="store_true",
+        help="Do not auto-start server if not running (fail instead)",
+    )
+    new_parser.add_argument(
+        "--host",
+        help="Host to bind when starting server (default: from TASCA_API_HOST)",
+    )
+    new_parser.add_argument(
+        "--port",
+        type=int,
+        help="Port to bind when starting server (default: from TASCA_API_PORT)",
     )
     new_parser.set_defaults(func=cmd_new)
 

@@ -4,10 +4,9 @@ Application configuration using pydantic-settings.
 Environment variables can be used to override defaults.
 """
 
-import os
 import secrets
 
-from pydantic import Field, computed_field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,12 +35,17 @@ class Settings(BaseSettings):
     # Security
     # Auto-generate a secure 64-character token (32 bytes hex-encoded) if not set via env var
     admin_token: str = Field(default_factory=lambda: secrets.token_hex(32))
+    admin_token_from_env: bool = False  # Set by model_validator if token came from env var
 
-    @computed_field
-    @property
-    def admin_token_from_env(self) -> bool:
+    @model_validator(mode="after")
+    def set_admin_token_from_env(self) -> "Settings":
         """Check if admin_token was provided via TASCA_ADMIN_TOKEN environment variable."""
-        return "TASCA_ADMIN_TOKEN" in os.environ
+        # This runs after all fields are populated
+        # We check if the env var exists (not if it matches, since pydantic already loaded it)
+        import os
+
+        self.admin_token_from_env = "TASCA_ADMIN_TOKEN" in os.environ
+        return self
 
     # CORS
     cors_origins: list[str] = []  # Empty = CORS disabled; ["*"] = allow all (no credentials)

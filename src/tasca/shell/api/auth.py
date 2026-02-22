@@ -5,6 +5,8 @@ This module provides token validation for admin-protected endpoints
 and exports the OpenAPI security scheme for Bearer token authentication.
 """
 
+import hmac
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -36,7 +38,7 @@ async def verify_admin_token(
             (contains .scheme and .credentials attributes).
 
     Returns:
-        None on success (either auth disabled or valid token).
+        None on success (valid token).
 
     Raises:
         HTTPException: 401 if token is missing or invalid.
@@ -45,9 +47,6 @@ async def verify_admin_token(
         Token value is never logged or exposed in error messages.
 
     Examples:
-        >>> # Auth disabled (settings.admin_token is None)
-        >>> # Returns None without checking
-
         >>> # Valid token
         >>> # Authorization: "Bearer correct-token"
         >>> # Returns None
@@ -56,10 +55,6 @@ async def verify_admin_token(
         >>> # Authorization: "Bearer wrong-token"
         >>> # Raises HTTPException(401, "Invalid or missing token")
     """
-    # If admin_token is not configured, authentication is disabled
-    if settings.admin_token is None:
-        return None
-
     # HTTPBearer with auto_error=True raises 403 for missing credentials,
     # but we want 401 for consistency. Handle the edge case here.
     if credentials is None:
@@ -68,8 +63,8 @@ async def verify_admin_token(
             detail="Invalid or missing token",
         )
 
-    # Validate token (never log or print the token value)
-    if credentials.credentials != settings.admin_token:
+    # Validate token using constant-time comparison (never log or print the token value)
+    if not hmac.compare_digest(credentials.credentials, settings.admin_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing token",

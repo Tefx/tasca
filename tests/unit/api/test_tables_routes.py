@@ -120,10 +120,8 @@ class TestCreateTable:
             "/tables",
             json={"question": "Test question?", "context": "Test context"},
         )
-        # If admin_token is None (disabled), should succeed
-        # If admin_token is set, should return 401
-        # Default settings have admin_token=None
-        assert response.status_code in [200, 401]
+        # Authentication is always required now (admin_token auto-generated)
+        assert response.status_code == 401
 
     def test_create_table_with_auth(self, admin_client: TestClient) -> None:
         """Create table succeeds with admin auth."""
@@ -319,9 +317,8 @@ class TestDeleteTable:
     def test_delete_table_requires_auth(self, client: TestClient) -> None:
         """Delete table requires admin authentication."""
         response = client.delete("/tables/some-id")
-        # Default settings have admin_token=None, so auth is disabled
-        # If auth is enabled, would return 401
-        assert response.status_code in [200, 401, 404]
+        # Authentication is always required now (admin_token auto-generated)
+        assert response.status_code == 401
 
     def test_delete_table_not_found(self, admin_client: TestClient) -> None:
         """Delete non-existent table returns 404."""

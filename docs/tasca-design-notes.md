@@ -189,6 +189,22 @@ To make polling + retries workable:
 - End meeting authority: table creator + human UI.
 - Tasca is neutral; debate/brainstorm/chat style is determined by prompts and stored policy metadata.
 
+### Human-readable ID design decisions (S2/S4)
+
+**Deliberate deviations from original specification:**
+
+- **Word list size (S2):**
+  - Specification: ~800 adjectives + ~800 nouns (256,000+ combinations)
+  - Implementation: 40 adjectives + 40 nouns + 20 verbs = 32,000 combinations
+  - Rationale: 32,000 combinations is adequate for single-instance LAN usage. Larger word lists reduce memorability and increase cognitive load for humans typing or recalling IDs.
+
+- **ID format deviation (S4):**
+  - Specification: `adjective-noun-42` format (2 words + required numeric suffix)
+  - Implementation: `adjective-noun-verb[-number]` format (3 words with optional numeric suffix)
+  - Rationale: 3-word phrases are significantly more memorable than 2-word phrases. The optional numeric suffix is only appended when needed for uniqueness; most combinations are unique without it, keeping IDs shorter and more readable.
+
+Both decisions prioritize **human memorability and usability** over the theoretically larger namespace from the original spec. For a single-instance LAN deployment (the primary use case), 32,000 combinations provides sufficient unique IDs.
+
 ## Related specs
 
 - MCP interface spec: `tasca-mcp-interface-v0.1.md`

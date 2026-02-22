@@ -6,7 +6,7 @@ Examples: "clever-fox-jumps-123", "brave-panda-dances-456"
 
 Design:
 - Core module: Pure logic, no I/O, randomness injected as parameter
-- Word lists are constants (no external file dependencies)
+- Word lists imported from _word_lists module
 - Format: adjective-noun-verb[-suffix]
 
 Usage in shell layer:
@@ -26,121 +26,7 @@ from typing import Callable
 
 import deal
 
-# =============================================================================
-# Word Lists
-# =============================================================================
-
-# Adjectives: Safe, positive, memorable
-ADJECTIVES: tuple[str, ...] = (
-    "able",
-    "active",
-    "brave",
-    "bright",
-    "calm",
-    "clever",
-    "cool",
-    "curious",
-    "eager",
-    "fair",
-    "fine",
-    "gentle",
-    "glad",
-    "good",
-    "great",
-    "happy",
-    "kind",
-    "keen",
-    "light",
-    "lively",
-    "lucky",
-    "nice",
-    "polite",
-    "proud",
-    "quick",
-    "quiet",
-    "rare",
-    "rich",
-    "right",
-    "safe",
-    "sharp",
-    "smart",
-    "soft",
-    "strong",
-    "swift",
-    "tall",
-    "true",
-    "warm",
-    "wise",
-    "witty",
-)
-
-# Nouns: Common animals, objects, concepts
-NOUNS: tuple[str, ...] = (
-    "ant",
-    "bear",
-    "bee",
-    "bird",
-    "camel",
-    "cat",
-    "deer",
-    "dog",
-    "duck",
-    "eagle",
-    "fish",
-    "fox",
-    "frog",
-    "goat",
-    "goose",
-    "hawk",
-    "horse",
-    "lion",
-    "llama",
-    "moose",
-    "mouse",
-    "owl",
-    "panda",
-    "pig",
-    "rabbit",
-    "raven",
-    "seal",
-    "shark",
-    "sheep",
-    "snake",
-    "swan",
-    "tiger",
-    "toad",
-    "whale",
-    "wolf",
-    "zebra",
-    "moon",
-    "star",
-    "tree",
-    "wind",
-)
-
-# Verbs: Simple, common actions
-VERBS: tuple[str, ...] = (
-    "dances",
-    "dreams",
-    "flies",
-    "glides",
-    "hops",
-    "hunts",
-    "jogs",
-    "jumps",
-    "leaps",
-    "moves",
-    "plays",
-    "runs",
-    "sings",
-    "sleeps",
-    "soars",
-    "spins",
-    "swims",
-    "walks",
-    "wanders",
-    "waves",
-)
+from tasca.core._word_lists import ADJECTIVES, NOUNS, VERBS
 
 
 # =============================================================================

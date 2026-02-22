@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react'
-import { postSaying, type Seat } from '../api/sayings'
+import { postSaying, type Saying, type Seat } from '../api/sayings'
 import { pauseTable, resumeTable, type Table as TableType } from '../api/tables'
 import { MentionInput, type MentionInputRef } from './MentionInput'
 import { type PatronInfo } from './SeatDeck'
@@ -23,8 +23,8 @@ export interface CommandConsoleProps {
   table: TableType
   seats: Seat[]
   patrons?: Map<string, PatronInfo>
-  /** Called after a saying is successfully posted (to trigger stream refresh). */
-  onPosted?: () => void
+  /** Called after a saying is successfully posted — receives the new saying for optimistic update. */
+  onPosted?: (saying: Saying) => void
   /** Called when table status changes successfully */
   onStatusChange?: (table: TableType) => void
   /** Called when an error occurs */
@@ -67,9 +67,9 @@ export function CommandConsole({ table, seats, patrons, onPosted, onStatusChange
     setIsSubmitting(true)
     setError(null)
     try {
-      await postSaying(table.id, { speaker_name: 'Human', content: trimmed, patron_id: null })
+      const newSaying = await postSaying(table.id, { speaker_name: 'Human', content: trimmed, patron_id: null })
       setValue('')
-      onPosted?.()
+      onPosted?.(newSaying)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send saying')
     } finally {

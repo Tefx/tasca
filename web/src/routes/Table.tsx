@@ -245,6 +245,7 @@ export function Table() {
     sayings,
     table: streamTable,
     connectionStatus,
+    appendSaying,
   } = useSayingsStream(tableId)
 
   // ---------------------------------------------------------------------------
@@ -332,10 +333,11 @@ export function Table() {
         </div>
         <div className="mc-col-center">
           <Stream sayings={sayings} connectionStatus={connectionStatus} />
-          <CommandConsole 
-            table={table} 
-            seats={seats} 
+          <CommandConsole
+            table={table}
+            seats={seats}
             patrons={patronsMap}
+            onPosted={appendSaying}
             onStatusChange={handleStatusChange}
             onError={handleError}
           />

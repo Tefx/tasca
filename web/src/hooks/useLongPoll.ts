@@ -37,6 +37,8 @@ export interface SayingsStreamResult {
   nextSequence: number
   /** Live/connecting/offline status for the stream badge. */
   connectionStatus: ConnectionStatus
+  /** Optimistically append a saying (e.g. immediately after local post). Deduped against existing. */
+  appendSaying: (saying: Saying) => void
 }
 
 // =============================================================================
@@ -263,5 +265,12 @@ export function useSayingsStream(
     }
   }, [tableId, updateNextSequence])
 
-  return { sayings, table, nextSequence, connectionStatus }
+  const appendSaying = useCallback((saying: Saying) => {
+    setSayings((prev) => {
+      if (prev.some((s) => s.id === saying.id)) return prev
+      return [...prev, saying]
+    })
+  }, [])
+
+  return { sayings, table, nextSequence, connectionStatus, appendSaying }
 }

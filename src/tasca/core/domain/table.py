@@ -78,3 +78,4 @@ class Table(BaseModel):
     version: Version = Field(default=Version(1), description="Version for optimistic concurrency")
     created_at: datetime
     updated_at: datetime
+    creator_patron_id: str | None = None

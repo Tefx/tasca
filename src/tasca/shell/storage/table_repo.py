@@ -109,6 +109,7 @@ def _row_to_table(row: tuple) -> Table:
         version=Version(row[4]),
         created_at=datetime.fromisoformat(row[5]),
         updated_at=datetime.fromisoformat(row[6]),
+        creator_patron_id=row[7] if len(row) > 7 else None,
     )
 
 
@@ -125,8 +126,8 @@ def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableE
     try:
         conn.execute(
             """
-            INSERT INTO tables (id, question, context, status, version, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tables (id, question, context, status, version, created_at, updated_at, creator_patron_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 table.id,
@@ -136,6 +137,7 @@ def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableE
                 table.version,
                 table.created_at.isoformat(),
                 table.updated_at.isoformat(),
+                table.creator_patron_id,
             ),
         )
         conn.commit()
@@ -159,7 +161,7 @@ def get_table(conn: sqlite3.Connection, table_id: TableId) -> Result[Table, Tabl
     try:
         cursor = conn.execute(
             """
-            SELECT id, question, context, status, version, created_at, updated_at
+            SELECT id, question, context, status, version, created_at, updated_at, creator_patron_id
             FROM tables WHERE id = ?
             """,
             (table_id,),
@@ -272,7 +274,7 @@ def list_tables(conn: sqlite3.Connection) -> Result[list[Table], TableError]:
     try:
         cursor = conn.execute(
             """
-            SELECT id, question, context, status, version, created_at, updated_at
+            SELECT id, question, context, status, version, created_at, updated_at, creator_patron_id
             FROM tables
             ORDER BY created_at DESC
             """

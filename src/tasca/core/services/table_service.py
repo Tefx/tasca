@@ -186,6 +186,7 @@ def prepare_table_update(table: Table, update: TableUpdate, now: datetime) -> Ta
         version=new_version,
         created_at=table.created_at,
         updated_at=now,
+        creator_patron_id=table.creator_patron_id,
     )
 
 

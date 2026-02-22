@@ -210,6 +210,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     if "meta" not in columns:
         conn.execute("ALTER TABLE patrons ADD COLUMN meta TEXT")
 
+    # Migration: Add creator_patron_id column to tables table
+    cursor = conn.execute("PRAGMA table_info(tables)")
+    table_columns = {row[1] for row in cursor.fetchall()}
+
+    if "creator_patron_id" not in table_columns:
+        conn.execute("ALTER TABLE tables ADD COLUMN creator_patron_id TEXT")
+
     conn.commit()
 
 

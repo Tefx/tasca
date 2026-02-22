@@ -465,6 +465,7 @@ def patron_get(patron_id: str) -> dict[str, Any]:
 def table_create(
     question: str,
     context: str | None = None,
+    creator_patron_id: str | None = None,
     dedup_id: str | None = None,
 ) -> dict[str, Any]:
     """Create a new discussion table.
@@ -472,6 +473,9 @@ def table_create(
     Args:
         question: The question or topic for discussion.
         context: Optional context for the discussion.
+        creator_patron_id: Optional patron ID of the agent creating this table.
+            When provided, the table records who created it. Agents should pass
+            their own patron_id here so the table reflects the correct host.
         dedup_id: Optional explicit idempotency key for request deduplication.
             When provided, duplicate requests with the same dedup_id return
             the cached response (default TTL: 24 hours).
@@ -531,6 +535,7 @@ def table_create(
         version=Version(1),
         created_at=now,
         updated_at=now,
+        creator_patron_id=creator_patron_id,
     )
 
     result = create_table(conn, table)
@@ -552,6 +557,7 @@ def table_create(
         "version": created.version,
         "created_at": created.created_at.isoformat(),
         "updated_at": created.updated_at.isoformat(),
+        "creator_patron_id": created.creator_patron_id,
     }
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:

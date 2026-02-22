@@ -55,7 +55,8 @@ def create_tables_table_ddl(table_name: str = "tables") -> str:
     status TEXT NOT NULL DEFAULT 'active',
     version INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    creator_patron_id TEXT
 )"""
 
 

@@ -13,6 +13,7 @@ import uvicorn
 
 from tasca.config import settings
 from tasca.shell.api.app import create_app
+from tasca.cli import get_lan_ip
 
 # CLI subcommands that should be delegated to the CLI handler
 CLI_COMMANDS = {"new"}
@@ -55,24 +56,27 @@ def main() -> None:
     # Start the server (default behavior when no command)
     app = create_app()
 
-    # Log startup (no secrets)
-    print(f"Tasca v{settings.version} starting...")
-    print(f"Host: {settings.api_host}")
-    print(f"Port: {settings.api_port}")
-    print(f"Database: {settings.db_path}")
+    lan_ip = get_lan_ip()
+    port = settings.api_port
+    token = settings.admin_token
 
-    # Print admin token to stderr if auto-generated (not set via env var)
-    # This allows operators to see the token in logs without exposing to stdout
-    if not settings.admin_token_from_env:
-        print(
-            f"Generated admin token: {settings.admin_token}",
-            file=sys.stderr,
-        )
+    print(f"Tasca v{settings.version} | {settings.db_path}")
+    print()
+    print(f"  MCP:     http://{lan_ip}:{port}/mcp")
+    print(f"  Web UI:  http://localhost:{port}/")
+    print(f"  Token:   {token}")
+    print()
+    print("  ── Paste to agent ──────────────────────────────────────────")
+    print(f'  Tasca MCP server is running.')
+    print(f"  Call tasca.connect(url=\"http://{lan_ip}:{port}/mcp\", token=\"{token}\")")
+    print(f"  then tasca.table_list() to see available tables.")
+    print("  ────────────────────────────────────────────────────────────")
+    print()
 
     uvicorn.run(
         app,
         host=settings.api_host,
-        port=settings.api_port,
+        port=port,
         ws="wsproto",
     )
 

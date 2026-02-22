@@ -155,15 +155,6 @@ def print_startup_banner(
         }
     }
 
-    # Build HTTP MCP config JSON with LAN IP
-    http_config = {
-        "mcpServers": {
-            "tasca": {
-                "url": f"http://{lan_ip}:{port}/mcp",
-            }
-        }
-    }
-
     # Calculate box width based on content
     version_str = f"TASCA v{settings.version}"
     db_str = f"Database: {db_path}"
@@ -189,14 +180,16 @@ def print_startup_banner(
     else:
         print(f"  Admin token: {admin_token}")
     print()
-    print("  For agents already configured with tasca MCP, tell them:")
-    print(f'    "Connect to http://{lan_ip}:{port}/mcp with token {admin_token}"')
+    print("  ── Paste to agent ──────────────────────────────────────────")
+    print(f'  Connect to the Tasca discussion table "{question}".')
+    print(f"  Server: http://{lan_ip}:{port}/mcp  Token: {admin_token}")
+    print(f"  Table ID: {table_id}")
+    print(f"  Call tasca.connect(url=\"http://{lan_ip}:{port}/mcp\", token=\"{admin_token}\")")
+    print(f"  then tasca.table_get(table_id=\"{table_id}\") to load context.")
+    print("  ────────────────────────────────────────────────────────────")
     print()
     print("  First-time agent setup (paste into MCP config):")
     print(f"  {json.dumps(stdio_config, separators=(',', ':'))}")
-    print()
-    print("  HTTP MCP config (for remote agents):")
-    print(f"  {json.dumps(http_config, separators=(',', ':'))}")
     print()
     print("  Ctrl+C to stop. Logs below.")
     print("  ─────────────────────────────────────────────")

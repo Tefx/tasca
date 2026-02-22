@@ -1946,6 +1946,69 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
     )
 
 
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+@mcp.tool
+def connection_status() -> dict[str, Any]:
+    """Get the current proxy connection status.
+
+    This tool returns the current proxy mode and health status.
+    It is a proxy-control tool that NEVER forwards to remote servers -
+    it always runs locally to provide status information.
+
+    Returns:
+        Success envelope with connection status:
+        {
+            "ok": true,
+            "data": {
+                "mode": "local" | "remote",
+                "url": "..." | null,
+                "is_healthy": true | false
+            }
+        }
+
+    Health check:
+        - In local mode: is_healthy is always True
+        - In remote mode: is_healthy is True if url is configured (lightweight check)
+        - Full HTTP ping is NOT performed for v1
+
+    Examples:
+        >>> # Local mode status
+        >>> result = connection_status()
+        >>> result["ok"]
+        True
+        >>> result["data"]["mode"]
+        'local'
+        >>> result["data"]["is_healthy"]
+        True
+
+        >>> # Remote mode status (after connect)
+        >>> connect(url="http://api.example.com")
+        >>> result = connection_status()
+        >>> result["data"]["mode"]
+        'remote'
+        >>> result["data"]["url"]
+        'http://api.example.com'
+    """
+    config = get_upstream_config()
+    mode = "remote" if config.is_remote else "local"
+
+    # Health check:
+    # - Local mode: always healthy
+    # - Remote mode: healthy if URL is configured (lightweight check, no HTTP ping for v1)
+    if config.is_remote:
+        is_healthy = config.url is not None and len(config.url) > 0
+    else:
+        is_healthy = True
+
+    return success_response(
+        {
+            "mode": mode,
+            "url": config.url,
+            "is_healthy": is_healthy,
+        }
+    )
+
+
 # =============================================================================
 # Server Entry Point
 # =============================================================================

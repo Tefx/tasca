@@ -22,7 +22,6 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -336,7 +335,7 @@ async def initialize_upstream_session(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         try:
             response = await client.post(url, json=payload, headers=headers)
 
@@ -398,47 +397,9 @@ async def initialize_upstream_session(
             )
 
 
-# @shell_complexity: Config load must branch for missing file, invalid JSON, schema mismatch, and OS errors
-def _load_config_from_file() -> Result[dict[str, str | None], ProxyConfigError]:
-    """Load configuration from .tasca/upstream.json if it exists.
-
-    This is a Shell function that performs I/O (file reading).
-    Returns Result to handle file access errors explicitly.
-
-    Returns:
-        Success with config dict (empty values if file doesn't exist).
-        Failure with ProxyConfigError if file exists but cannot be read/parsed.
-    """
-    config_path = Path(
-        ".tasca/upstream.json"
-    )  # Relative to CWD where tasca server is launched (project root)
-    if not config_path.exists():
-        # File doesn't exist is not an error - return empty config
-        logger.debug("Config file %s not found; using defaults", config_path)
-        return Success({"url": None, "token": None})
-    try:
-        with open(config_path) as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                return Success({"url": data.get("url"), "token": data.get("token")})
-            return Failure(ProxyConfigError("Invalid config format: expected dict"))
-    except json.JSONDecodeError as e:
-        logger.warning("Config file %s exists but contains invalid JSON: %s", config_path, e)
-        return Failure(ProxyConfigError(f"Invalid JSON: {e}"))
-    except OSError as e:
-        logger.warning("Config file %s exists but cannot be read: %s", config_path, e)
-        return Failure(ProxyConfigError(f"Cannot read file: {e}"))
-
-
 # Module-level singleton instance
 # Default: local mode (url=None)
 _config: UpstreamConfig = UpstreamConfig()
-
-# Load initial config from file if it exists
-_initial_result = _load_config_from_file()
-if isinstance(_initial_result, Success):
-    _initial_data = _initial_result.unwrap()
-    _config = UpstreamConfig.from_dict(_initial_data)
 
 
 def get_upstream_config() -> Result[UpstreamConfig, ProxyConfigError]:
@@ -582,7 +543,8 @@ async def forward_jsonrpc_request(
 
     # timeout: 30s default; for table_wait (10s internal cap), upstream may respond in ~10s
     # Consider per-tool timeout in future versions
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    # follow_redirects: True to handle /mcp -> /mcp/ redirects
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
         try:
             response = await client.post(config.url, json=payload, headers=headers)
 

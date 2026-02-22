@@ -7855,8 +7855,8 @@ phases:
     description: 'Create src/tasca/shell/mcp/proxy.py with an UpstreamConfig dataclass
       holding: url (str | None), token (str | None), is_remote (bool, derived from
       url). Provide a module-level singleton instance (default: local mode, url=None).
-      Optionally load initial config from .tasca/upstream.json on startup if the file
-      exists. The model is pure runtime state (in-memory), not persisted to DB. Include
+      The model is pure runtime state (in-memory), not persisted to DB or file.
+      Connection is driven exclusively by the connect() tool at runtime. Include
       a switch_to_remote(url, token) method and a switch_to_local() method that mutate
       the singleton. Follow shell-layer conventions: no @pre/@post (I/O module), but
       add doctests for the dataclass defaults.'

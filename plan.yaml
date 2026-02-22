@@ -9495,7 +9495,7 @@ phases:
       - []'
   - id: l3_fix2.f3-tool-discovery-expected-tools
     name: f3-tool-discovery-expected-tools
-    status: claimed
+    status: done
     description: Add table_control, table_update, and table_wait to the expected_tools
       set in tests/integration/test_mcp.py (lines 136-148). These tools are now implemented
       but missing from the discovery assertion, causing the set check to be incomplete.
@@ -9508,6 +9508,27 @@ phases:
     agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T09:37:19.627916+00:00'
+    evidence: 'Artifact:
+
+      - PR: no change
+
+
+      Verification:
+
+      - Run: uv run pytest tests/integration/test_mcp.py -k "list_tools or tool_discovery"
+      -v -> 2 passed, 23 deselected
+
+      - Verified expected_tools contains: table_control, table_update, table_wait
+
+
+      Spec link:
+
+      - l3_fix2.f3-tool-discovery-expected-tools
+
+
+      Files changed:
+
+      - []'
   - id: l3_fix2.f4-patron-register-spec-fields
     name: f4-patron-register-spec-fields
     status: done
@@ -9548,7 +9569,7 @@ phases:
       - []'
   - id: l3_fix2.guard-verify
     name: guard-verify
-    status: pending
+    status: done
     description: Gate verify for l3_fix2 phase. Run invar guard --all across the full
       project AND verify each of the five l3_fix gate review findings is resolved.
       This step is assigned to gate-reviewer (not the implementer) because it requires
@@ -9599,6 +9620,19 @@ phases:
     - l3_fix2.f4-patron-register-spec-fields
     - l3_fix2.f3-tool-discovery-expected-tools
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-02-22T12:16:08.606766+00:00'
+    evidence: "Verification ran and found should-fix issues.\n\n1. invar guard --all\
+      \ indicated errors (non-zero), including:\n- src/tasca/shell/mcp/proxy.py::_load_config_from_file\
+      \ shell_result return-type violation\n- src/tasca/shell/mcp/proxy.py::get_upstream_config\
+      \ shell_result return-type violation\n- one additional guard error reported\
+      \ in full output\n\n2. F1-F5 checklist status:\n- F1 next_sequence alignment:\
+      \ resolved\n- F5 table_wait tests: resolved (6 passed)\n- F2 stale stub comments:\
+      \ resolved\n- F3 expected_tools completeness: resolved\n- F4 patron_register\
+      \ spec fields: resolved\n\n3. Detected issue classification: should_fix\n4.\
+      \ Remediation steps created:\n- l3_fix2.guard-verify.fix (depends_on: l3_fix2.guard-verify)\n\
+      - l3_fix2.guard-verify.retest (depends_on: l3_fix2.guard-verify.fix)\n\nnotes:\n\
+      \  suggestions: []\n  tech_debt: []"
   - id: l3_fix2.gate
     name: l3_fix2.gate
     status: pending
@@ -9640,6 +9674,155 @@ phases:
     depends_on:
     - l3_fix2.guard-verify
     agent: gate-reviewer
+  - id: l3_fix2.guard-verify.fix
+    name: Fix shell Result contract violations from l3_fix2.guard-verify
+    status: done
+    description: Fix issues reported by invar guard --all from l3_fix2.guard-verify,
+      including proxy.py _load_config_from_file/get_upstream_config Result-return
+      violations and the third reported guard error.
+    verification: Code inspection confirms both named functions return Result[...]
+      on all paths; identify and fix the third guard error; no shell-flow regressions.
+    evidence_template: 'Artifact:
+
+      - commit hash
+
+      Verification:
+
+      - commands run and outputs
+
+      Files changed:
+
+      - list'
+    depends_on:
+    - l3_fix2.guard-verify
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T12:19:35.897935+00:00'
+    evidence: 'Artifact:
+
+      - commit hash: f7a342c
+
+
+      Verification:
+
+      - Run: invar guard --all -> PASS (0 errors, 24 warnings, 3 infos; doctest passed)
+
+      - Fixed proxy Result-return contract issues in _load_config_from_file and get_upstream_config
+
+      - Fixed additional guard failure in tests/unit/mcp/test_mcp_server.py (direct
+      get_upstream_config usage aligned)
+
+
+      Files changed:
+
+      - src/tasca/shell/mcp/proxy.py
+
+      - tests/unit/mcp/test_mcp_server.py'
+  - id: l3_fix2.guard-verify.retest
+    name: Retest guard after contract fixes
+    status: done
+    description: Independent reverification after guard-fix step. Re-run invar guard
+      --all and confirm proxy.py contract errors and third error are resolved or report
+      remaining issues.
+    verification: Run invar guard --all; confirm status of _load_config_from_file/get_upstream_config
+      and third error; provide PASS/ISSUES_FOUND verdict.
+    evidence_template: '## Verification Report
+
+      Tester: integration-verifier
+
+      Command: invar guard --all
+
+      Findings:
+
+      - proxy.py::_load_config_from_file: resolved|not
+
+      - proxy.py::get_upstream_config: resolved|not
+
+      - third error: resolved|not (file:line)
+
+      Verdict:
+
+      - PASS | ISSUES_FOUND | INCOMPLETE'
+    depends_on:
+    - l3_fix2.guard-verify.fix
+    agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-22T12:34:44.598201+00:00'
+    evidence: '## Verification Report
+
+      Tester: integration-verifier
+
+      Command: invar guard --all (fallback uvx invar-tools guard --all)
+
+      Findings:
+
+      - proxy.py::_load_config_from_file: resolved
+
+      - proxy.py::get_upstream_config: resolved
+
+      - third error: not resolved (project-level rule shell_complexity_debt, location:
+      <project>:null)
+
+      - Guard summary: failed; errors: 1, warnings: 76, infos: 12
+
+      Verdict:
+
+      - ISSUES_FOUND
+
+
+      Detected issue classification: should_fix
+
+      Remediation steps created:
+
+      - l3_fix2.guard-verify.retest.fix
+
+      - l3_fix2.guard-verify.retest.fix.retest'
+  - id: l3_fix2.guard-verify.retest.fix
+    name: Fix shell_complexity_debt project-level gate failure
+    status: claimed
+    description: Reduce project-level shell complexity debt so invar guard --all no
+      longer fails rule shell_complexity_debt (6 unaddressed warnings, limit 5).
+    verification: Address project-level complexity debt sufficiently to satisfy guard
+      gate; document what was changed and why.
+    evidence_template: 'Artifact:
+
+      - commit hash(es)
+
+      Verification:
+
+      - invar guard --all summary
+
+      Files changed:
+
+      - list'
+    depends_on:
+    - l3_fix2.guard-verify.retest
+    agent: software-architect
+    claimed_by: software-architect
+    claimed_at: '2026-02-22T12:36:50.778467+00:00'
+  - id: l3_fix2.guard-verify.retest.fix.retest
+    name: Retest after shell_complexity_debt fix
+    status: pending
+    description: Independent re-run of invar guard --all after complexity-debt remediation
+      to confirm project-level gate passes.
+    verification: Run invar guard --all and report whether shell_complexity_debt error
+      is resolved.
+    evidence_template: '## Verification Report
+
+      Tester: integration-verifier
+
+      Command: invar guard --all
+
+      Findings:
+
+      - shell_complexity_debt: resolved|not
+
+      Verdict:
+
+      - PASS | ISSUES_FOUND | INCOMPLETE'
+    depends_on:
+    - l3_fix2.guard-verify.retest.fix
+    agent: integration-verifier
 - id: admin_token_fix2
   name: Admin token fix round 2 — address admin_token_fix gate review findings
   status: done
@@ -11538,3 +11721,930 @@ phases:
       9/9 passed. Parent enrich_table_join steps all completed in this session (add-initial-sayings,
       tests, l1-guard-verify). All enrich_table_join_fix steps completed: fix-next-sequence-semantic-bug,
       add-has-more-false-populated-test, clarify-next-sequence-docstring, l1-guard-retest.'
+- id: mcp_proxy_fix
+  name: MCP proxy fix — gate review findings
+  status: pending
+  depends_on:
+  - mcp_proxy
+  steps:
+  - id: mcp_proxy_fix.fix-token-echo
+    name: fix-token-echo
+    status: pending
+    description: 'BLOCKING — Remove upstream Bearer token echo from `connect` tool
+      response body.
+
+
+      In `src/tasca/shell/mcp/server.py:1956` the `connect` tool currently returns
+      `"token": config.token` in its response, which echoes the upstream Bearer secret
+      to the caller.
+
+
+      Replace the field with `"has_token": config.token is not None` so the response
+      only reports whether a token is configured, never its value.
+
+
+      Update the four affected unit tests so assertions match the new field:
+
+      - `test_connect_switches_to_remote_mode`
+
+      - `test_connect_switches_to_remote_without_token`
+
+      - `test_connect_url_none_switches_to_local`
+
+      - `test_connect_returns_current_config_status`
+
+
+      Acceptance criteria:
+
+      - `server.py` `connect` response dict contains `"has_token"` key (bool), NOT
+      `"token"` key.
+
+      - All four named tests pass.
+
+      - `invar guard` reports no errors on changed files.'
+    verification: 'Run `invar guard src/tasca/shell/mcp/server.py tests/unit/mcp/test_mcp_server.py`
+      and confirm 0 errors. Grep the connect tool response dict to confirm absence
+      of the literal string `"token": config.token` and presence of `"has_token"`.'
+    agent: python-engineer
+  - id: mcp_proxy_fix.fix-token-echo-verify
+    name: fix-token-echo-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (integration-verifier), verify that the
+      Bearer token echo fix is correct and complete.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: `connect` tool response with a token set returns `{"has_token":
+      true}`, no `"token"` key.
+
+      - Happy path: `connect` tool response without token returns `{"has_token": false}`.
+
+      - Edge case: confirm no other code path in `server.py` leaks `config.token`
+      in a response dict.
+
+      - Regression: all four named unit tests pass.
+
+
+      Independence Level: L1'
+    verification: Read `server.py` connect tool response construction. Grep for `config.token`
+      in response dicts. Run the four named unit tests. Report any issues found with
+      severity tags (blocker / should_fix / suggestion).
+    evidence_template: "## Verification Report\n\n**Tester**: integration-verifier\
+      \ (independent of implementation)\n**Scope**: connect tool token echo removal\n\
+      **Independence Level**: L1\n**Timestamp**: &lt;ISO 8601&gt;\n\n### Test Execution\n\
+      - Commands executed:\n  ```\n  &lt;grep / invar guard commands&gt;\n  ```\n\
+      - Output summary: &lt;key results&gt;\n\n### Issues Found\n\n| Severity | Description\
+      \ | Location | Reproduction |\n|----------|-------------|----------|--------------|\n\
+      \n### Verdict\n- [ ] PASS: No issues found\n- [ ] ISSUES_FOUND: See issues table\
+      \ above\n- [ ] INCOMPLETE: &lt;reason&gt;\n\n**Confidence**: high/medium/low"
+    depends_on:
+    - mcp_proxy_fix.fix-token-echo
+    agent: integration-verifier
+  - id: mcp_proxy_fix.fix-middleware-headers-cors
+    name: fix-middleware-headers-cors
+    status: pending
+    description: 'Fix two defects in `MCPBearerAuthMiddleware` in `src/tasca/shell/api/app.py`.
+
+
+      S1 — ASGI header extraction (app.py:64):
+
+      - Replace `dict(scope.get("headers", []))` with first-match extraction to correctly
+      handle ASGI headers list (which is a list of (bytes, bytes) pairs where keys
+      may repeat).
+
+      - Use: `next((v for k, v in scope.get("headers", []) if k == b"authorization"),
+      b"")`
+
+      - This avoids silent duplicate-header drop.
+
+
+      S2 — OPTIONS preflight exemption:
+
+      - Add a guard at the top of the middleware `__call__` method: if `scope.get("method")
+      == b"OPTIONS"`, call `await self.app(scope, receive, send)` and return immediately,
+      bypassing Bearer auth.
+
+      - CORS preflights must succeed without credentials.
+
+
+      Both changes are in `app.py` only. No other files should need to change for
+      these fixes.
+
+
+      Acceptance criteria:
+
+      - Header extraction uses `next(...)` idiom, not `dict(...)`.
+
+      - OPTIONS requests bypass auth check.
+
+      - `invar guard` reports no errors on changed files.'
+    verification: Run `invar guard src/tasca/shell/api/app.py`. Grep for `dict(scope.get`
+      to confirm removal. Grep for `OPTIONS` guard to confirm presence. Report 0 errors.
+    depends_on:
+    - mcp_proxy_fix.fix-token-echo-verify
+    agent: python-engineer
+  - id: mcp_proxy_fix.fix-middleware-headers-cors-verify
+    name: fix-middleware-headers-cors-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (integration-verifier), verify the MCPBearerAuthMiddleware
+      header extraction and OPTIONS exemption fixes.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: Authorization header extracted correctly when present as a single
+      entry.
+
+      - Edge case: Duplicate `authorization` header entries — first match wins, no
+      silent drop.
+
+      - Edge case: OPTIONS request with no Authorization header passes through middleware
+      without 401.
+
+      - Edge case: OPTIONS request with invalid Authorization header still passes
+      through (preflight must not be blocked).
+
+      - Regression: authenticated non-OPTIONS requests still require a valid Bearer
+      token.
+
+
+      Independence Level: L1'
+    verification: Read `app.py` middleware code. Verify `next(...)` idiom and OPTIONS
+      guard are present. Check for any existing unit/integration tests covering middleware
+      behaviour. Report any issues found.
+    evidence_template: "## Verification Report\n\n**Tester**: integration-verifier\
+      \ (independent of implementation)\n**Scope**: MCPBearerAuthMiddleware header\
+      \ extraction + OPTIONS exemption\n**Independence Level**: L1\n**Timestamp**:\
+      \ &lt;ISO 8601&gt;\n\n### Test Execution\n- Commands executed:\n  ```\n  &lt;invar\
+      \ guard / grep commands&gt;\n  ```\n- Output summary: &lt;key results&gt;\n\n\
+      ### Issues Found\n\n| Severity | Description | Location | Reproduction |\n|----------|-------------|----------|--------------|\n\
+      \n### Verdict\n- [ ] PASS: No issues found\n- [ ] ISSUES_FOUND: See issues table\
+      \ above\n- [ ] INCOMPLETE: &lt;reason&gt;\n\n**Confidence**: high/medium/low"
+    depends_on:
+    - mcp_proxy_fix.fix-middleware-headers-cors
+    agent: integration-verifier
+  - id: mcp_proxy_fix.add-proxy-mock-tests
+    name: add-proxy-mock-tests
+    status: pending
+    description: 'Add mock-based proxy forwarding tests to `tests/integration/test_mcp_proxy.py`
+      using `respx` (httpx mock library) so the proxy forwarding path has CI coverage
+      without requiring `TASCA_USE_EXTERNAL_SERVER=1`.
+
+
+      Currently all substantive proxy E2E tests are skipped unless the env var is
+      set. Add a new test class (e.g. `TestProxyForwardingMocked`) that:
+
+      1. Uses `respx.mock` to intercept outbound httpx requests to the upstream URL.
+
+      2. Configures the proxy into remote mode with a mock upstream URL and token.
+
+      3. Exercises `forward_jsonrpc_request` (or the MCP proxy tool endpoint) with
+      a realistic JSON-RPC payload.
+
+      4. Asserts: correct upstream URL called, Bearer token forwarded in Authorization
+      header, response body returned to caller.
+
+      5. Also covers the error path: upstream returns 5xx — verify the proxy surfaces
+      an appropriate error.
+
+
+      Do NOT remove the existing `TASCA_USE_EXTERNAL_SERVER` tests; keep them as-is
+      for manual/live testing.
+
+
+      Dependencies: add `respx` to test dependencies if not already present. Check
+      `pyproject.toml` / `requirements*.txt` first.
+
+
+      Acceptance criteria:
+
+      - New tests run in CI (no env-var gate).
+
+      - `invar guard` reports no errors on changed files.'
+    verification: Run `invar guard tests/integration/test_mcp_proxy.py`. Confirm new
+      test class exists and tests are not skipped unconditionally. Count of non-skipped
+      proxy forwarding tests is >= 3.
+    depends_on:
+    - mcp_proxy_fix.fix-middleware-headers-cors-verify
+    agent: python-engineer
+  - id: mcp_proxy_fix.add-proxy-mock-tests-verify
+    name: add-proxy-mock-tests-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (blind-tester), verify that the new mock-based
+      proxy forwarding tests provide real CI coverage and are not trivially passing.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: new tests run without `TASCA_USE_EXTERNAL_SERVER` and actually
+      exercise the forwarding code path.
+
+      - Edge case: check that `respx` mock interceptor is properly scoped (no accidental
+      global leakage between tests).
+
+      - Edge case: error path test (upstream 5xx) actually reaches the error-handling
+      branch.
+
+      - Regression: existing `TASCA_USE_EXTERNAL_SERVER`-gated tests still present
+      and unchanged.
+
+      - Coverage: at least 3 new non-skipped proxy forwarding tests exist.
+
+
+      Independence Level: L1'
+    verification: Read `test_mcp_proxy.py`. Count non-skipped test methods in the
+      new mock class. Confirm `respx` is used. Report any issues.
+    evidence_template: "## Verification Report\n\n**Tester**: blind-tester (independent\
+      \ of implementation)\n**Scope**: Mock-based proxy forwarding tests\n**Independence\
+      \ Level**: L1\n**Timestamp**: &lt;ISO 8601&gt;\n\n### Test Execution\n- Commands\
+      \ executed:\n  ```\n  &lt;read / grep commands&gt;\n  ```\n- Output summary:\
+      \ &lt;key results&gt;\n\n### Issues Found\n\n| Severity | Description | Location\
+      \ | Reproduction |\n|----------|-------------|----------|--------------|\n\n\
+      ### Verdict\n- [ ] PASS: No issues found\n- [ ] ISSUES_FOUND: See issues table\
+      \ above\n- [ ] INCOMPLETE: &lt;reason&gt;\n\n**Confidence**: high/medium/low"
+    depends_on:
+    - mcp_proxy_fix.add-proxy-mock-tests
+    agent: blind-tester
+  - id: mcp_proxy_fix.fix-proxy-suggestions
+    name: fix-proxy-suggestions
+    status: pending
+    description: 'Address four suggestions from the mcp_proxy gate review. All changes
+      are in `proxy.py` and `server.py`.
+
+
+      SG1 — Cleanup in `src/tasca/shell/mcp/proxy.py`:
+
+      - `proxy.py:12`: Remove unused `field` import from `dataclasses`.
+
+      - `proxy.py:282`: Remove the `f` prefix from any f-string that contains no `{...}`
+      placeholders (treat as a plain string).
+
+
+      SG2 — Silent failure in `_load_config_from_file` (`proxy.py:139`):
+
+      - When `Path(".tasca/upstream.json")` does not exist, log a debug message (e.g.
+      `logger.debug("No upstream config file found at .tasca/upstream.json")`).
+
+      - When the file exists but fails to parse (JSON decode error or missing keys),
+      log a warning with the exception details.
+
+      - Use the module logger already present, or add one if absent. Do not raise
+      — keep the current silent-return behaviour but add logging.
+
+
+      SG3 — Misleading `is_healthy` field in `connection_status` tool (`server.py`):
+
+      - Rename `is_healthy` to `url_configured` in the `connection_status` response
+      dict, OR add a comment in the tool instructions string clarifying "healthy means
+      url is set, no HTTP ping is performed". Choose the rename if it does not break
+      any existing tests; otherwise add the clarifying comment.
+
+
+      SG4 — Timeout alignment in `forward_jsonrpc_request` (`proxy.py`):
+
+      - Change `timeout=30.0` to `timeout=15.0` (= MAX_WAIT_MS/1000 + 5 = 10 + 5 =
+      15s) to align with `table_wait` internal maximum.
+
+      - If `MAX_WAIT_MS` is defined as a constant, use `MAX_WAIT_MS / 1000 + 5` directly.
+
+
+      Acceptance criteria:
+
+      - Unused `field` import removed.
+
+      - Bare f-string(s) without placeholders fixed.
+
+      - `_load_config_from_file` logs debug on missing file, warning on parse error.
+
+      - `connection_status` response either renames field or adds clarifying note.
+
+      - `forward_jsonrpc_request` uses 15s timeout.
+
+      - `invar guard` reports no errors on changed files.'
+    verification: Run `invar guard src/tasca/shell/mcp/proxy.py src/tasca/shell/mcp/server.py`.
+      Grep for `field` import in proxy.py to confirm removal. Grep for `timeout=`
+      in forward_jsonrpc_request to confirm value. Report 0 errors.
+    depends_on:
+    - mcp_proxy_fix.add-proxy-mock-tests-verify
+    agent: python-engineer
+  - id: mcp_proxy_fix.guard-verify
+    name: guard-verify
+    status: pending
+    description: 'Run `invar guard --all` across all changed files in this phase to
+      confirm the full set of fixes is clean.
+
+
+      Files in scope:
+
+      - `src/tasca/shell/mcp/server.py`
+
+      - `src/tasca/shell/mcp/proxy.py`
+
+      - `src/tasca/shell/api/app.py`
+
+      - `tests/unit/mcp/test_mcp_server.py`
+
+      - `tests/integration/test_mcp_proxy.py`
+
+
+      Acceptance criteria:
+
+      - `invar guard` reports 0 errors across all files listed above.
+
+      - If warnings are present, document them but they do not block completion.'
+    verification: Run `invar guard src/tasca/shell/mcp/server.py src/tasca/shell/mcp/proxy.py
+      src/tasca/shell/api/app.py tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp_proxy.py`
+      and paste the one-line summary. 0 errors required.
+    depends_on:
+    - mcp_proxy_fix.fix-proxy-suggestions
+    agent: python-engineer
+  - id: mcp_proxy_fix.mcp-proxy-fix-gate
+    name: mcp_proxy_fix.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the mcp_proxy_fix
+      phase meets the quality bar for proceeding to the next phase.
+
+
+      YOU ARE THE QUALITY GATE. Your job is to BLOCK progress if quality is insufficient,
+      not to rubber-stamp completion.
+
+
+      Review criteria:
+
+      1. Completeness: All planned steps executed with evidence?
+
+      2. Evidence Quality: Evidence is specific, verifiable, not vague?
+
+      3. Known Issues: BLOCKING token echo fix confirmed absent in response? Middleware
+      header + OPTIONS fixes verified?
+
+      4. Test Coverage: Mock-based proxy tests exist and are not trivially passing?
+
+      5. Suggestions: All SG1-SG4 items addressed (import cleanup, logging, rename/note,
+      timeout)?
+
+      6. Guard: Final guard-verify passed with 0 errors?
+
+
+      Independence: You MUST NOT be the same agent as any implementation step in this
+      phase.'
+    verification: 'Review all step evidence in the phase. Confirm BLOCKING B1 is resolved.
+      Confirm S1-S3 addressed. Confirm guard-verify passed. Issue gate decision: OPEN
+      or BLOCKED.'
+    evidence_template: '## Gate Review Report
+
+
+      **Reviewer**: gate-reviewer (independent of phase implementation)
+
+      **Phase**: mcp_proxy_fix
+
+      **Timestamp**: &lt;ISO 8601&gt;
+
+
+      ### Step-by-Step Review
+
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      |---------|--------|-----------------|----------|
+
+      | fix-token-echo | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | |
+
+      | fix-token-echo-verify | ✅/⚠️/❌ | | |
+
+      | fix-middleware-headers-cors | ✅/⚠️/❌ | | |
+
+      | fix-middleware-headers-cors-verify | ✅/⚠️/❌ | | |
+
+      | add-proxy-mock-tests | ✅/⚠️/❌ | | |
+
+      | add-proxy-mock-tests-verify | ✅/⚠️/❌ | | |
+
+      | fix-proxy-suggestions | ✅/⚠️/❌ | | |
+
+      | guard-verify | ✅/⚠️/❌ | | |
+
+
+      ### Issues Identified
+
+
+      | Severity | Description | Related Step | Blocking? |
+
+      |----------|-------------|--------------|-----------|
+
+
+      ### Gate Decision
+
+      - [ ] OPEN: Phase passes gate, proceed to next phase
+
+      - [ ] BLOCKED: Issues must be resolved before proceeding'
+    depends_on:
+    - mcp_proxy_fix.fix-token-echo-verify
+    - mcp_proxy_fix.fix-middleware-headers-cors-verify
+    - mcp_proxy_fix.add-proxy-mock-tests-verify
+    - mcp_proxy_fix.fix-proxy-suggestions
+    - mcp_proxy_fix.guard-verify
+    agent: gate-reviewer
+- id: mcp_hardening_fix
+  name: MCP hardening fix — gate review findings
+  status: locked
+  depends_on:
+  - mcp_proxy_fix
+  - mcp_hardening
+  steps:
+  - id: mcp_hardening_fix.fix-auth-test-fixture
+    name: fix-auth-test-fixture
+    status: pending
+    description: 'H3 — Force `admin_token` via fixture so auth tests in `tests/integration/test_mcp.py`
+      always run without skipping.
+
+
+      Currently, auth tests at lines 58-95 skip when `admin_token` is not set in the
+      environment. This means they never run in CI.
+
+
+      Fix:
+
+      - Add (or update) a pytest fixture that sets a known test `admin_token` value
+      (e.g. `"test-admin-token-fixture"`) via monkeypatch or by direct injection into
+      the app/settings.
+
+      - Ensure the fixture is scoped appropriately (function or module scope) and
+      does not leak into other test files.
+
+      - Remove or replace any `pytest.mark.skip` / `skipif` decorators on these tests
+      that gate on `admin_token` presence.
+
+      - Confirm the tests assert meaningful auth behaviour (401 on missing token,
+      200 on valid token).
+
+
+      Note: S1 (header extraction) and S2 (OPTIONS exemption) are already fixed in
+      `mcp_proxy_fix`. Do NOT re-touch `app.py` here — those fixes will already be
+      in place.
+
+
+      Acceptance criteria:
+
+      - Auth tests at `test_mcp.py:58-95` run unconditionally.
+
+      - All auth tests pass with the fixture token.
+
+      - `invar guard` reports no errors.'
+    verification: Run `invar guard tests/integration/test_mcp.py`. Confirm no `skipif`
+      on admin_token presence. Confirm tests pass. Report 0 errors.
+    agent: python-engineer
+  - id: mcp_hardening_fix.fix-auth-test-fixture-verify
+    name: fix-auth-test-fixture-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (integration-verifier), verify that the
+      auth test fixture change makes auth tests run unconditionally and correctly.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: auth tests run without any env var.
+
+      - Edge case: fixture token does not persist beyond the test function scope (no
+      test pollution).
+
+      - Edge case: tests actually exercise real auth logic (not trivially passing
+      with no-op middleware).
+
+      - Regression: other test files are not affected by the new fixture.
+
+      - Coverage: at least the tests at lines 58-95 are covered.
+
+
+      Independence Level: L1'
+    verification: Read `test_mcp.py` around lines 58-95. Confirm skip conditions removed.
+      Confirm fixture sets a real token. Report any issues.
+    evidence_template: "## Verification Report\n\n**Tester**: integration-verifier\
+      \ (independent of implementation)\n**Scope**: Auth test fixture — unconditional\
+      \ auth test execution\n**Independence Level**: L1\n**Timestamp**: &lt;ISO 8601&gt;\n\
+      \n### Test Execution\n- Commands executed:\n  ```\n  &lt;read / grep / invar\
+      \ guard commands&gt;\n  ```\n- Output summary: &lt;key results&gt;\n\n### Issues\
+      \ Found\n\n| Severity | Description | Location | Reproduction |\n|----------|-------------|----------|--------------|\n\
+      \n### Verdict\n- [ ] PASS: No issues found\n- [ ] ISSUES_FOUND: See issues table\
+      \ above\n- [ ] INCOMPLETE: &lt;reason&gt;\n\n**Confidence**: high/medium/low"
+    depends_on:
+    - mcp_hardening_fix.fix-auth-test-fixture
+    agent: integration-verifier
+  - id: mcp_hardening_fix.extract-bearer-token-helper
+    name: extract-bearer-token-helper
+    status: pending
+    description: "HG1 — Extract shared `_validate_bearer_token` helper to eliminate\
+      \ duplication between `MCPBearerAuthMiddleware` (app.py) and `verify_admin_token`\
+      \ (auth.py).\n\nCurrently `MCPBearerAuthMiddleware` in `app.py` duplicates `hmac.compare_digest`\
+      \ logic that already exists in `auth.py::verify_admin_token`.\n\nSteps:\n1.\
+      \ In `src/tasca/shell/api/auth.py`, add (or expose) a `_validate_bearer_token(token:\
+      \ str, expected: str) -> bool` helper that uses `hmac.compare_digest` for constant-time\
+      \ comparison.\n   - Keep it private (underscore prefix) or internal; it is a\
+      \ utility, not a public API.\n   - Add a doctest or @pre/@post contract per\
+      \ project conventions.\n2. In `src/tasca/shell/api/app.py`, replace the inline\
+      \ `hmac.compare_digest` call in `MCPBearerAuthMiddleware` with a call to the\
+      \ new helper (imported from `auth.py`).\n3. Do NOT change any public interface\
+      \ or break existing tests.\n\nAdditionally (HG2), update the `connect` tool\
+      \ docstring / instructions string in `server.py` to clarify that OPTIONS/CORS\
+      \ preflight requests are exempt from Bearer auth (since that fix was applied\
+      \ in mcp_proxy_fix).\n\nAcceptance criteria:\n- `_validate_bearer_token` (or\
+      \ equivalent) exists in `auth.py`.\n- `app.py` middleware uses it instead of\
+      \ inline `hmac.compare_digest`.\n- No duplication of constant-time comparison\
+      \ logic.\n- `connect` docstring/instructions clarifies OPTIONS exemption.\n\
+      - `invar guard` reports no errors."
+    verification: Run `invar guard src/tasca/shell/api/auth.py src/tasca/shell/api/app.py
+      src/tasca/shell/mcp/server.py`. Grep for `hmac.compare_digest` in app.py to
+      confirm removal. Confirm helper in auth.py. Report 0 errors.
+    depends_on:
+    - mcp_hardening_fix.fix-auth-test-fixture-verify
+    agent: python-engineer
+  - id: mcp_hardening_fix.extract-bearer-token-helper-verify
+    name: extract-bearer-token-helper-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (integration-verifier), verify that the
+      bearer token helper extraction is correct and the duplication is genuinely removed.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: middleware still correctly rejects requests with wrong token after
+      refactor.
+
+      - Happy path: middleware still correctly accepts requests with correct token.
+
+      - Edge case: helper uses constant-time comparison (hmac.compare_digest), not
+      `==`.
+
+      - Edge case: helper is not exposed as a public API inadvertently.
+
+      - Regression: existing auth tests still pass.
+
+
+      Independence Level: L1'
+    verification: Read `auth.py` and `app.py`. Confirm shared helper present and used.
+      Grep for inline `hmac.compare_digest` in app.py (should be absent). Report any
+      issues.
+    evidence_template: "## Verification Report\n\n**Tester**: integration-verifier\
+      \ (independent of implementation)\n**Scope**: Bearer token helper extraction\
+      \ — deduplication\n**Independence Level**: L1\n**Timestamp**: &lt;ISO 8601&gt;\n\
+      \n### Test Execution\n- Commands executed:\n  ```\n  &lt;read / grep / invar\
+      \ guard commands&gt;\n  ```\n- Output summary: &lt;key results&gt;\n\n### Issues\
+      \ Found\n\n| Severity | Description | Location | Reproduction |\n|----------|-------------|----------|--------------|\n\
+      \n### Verdict\n- [ ] PASS: No issues found\n- [ ] ISSUES_FOUND: See issues table\
+      \ above\n- [ ] INCOMPLETE: &lt;reason&gt;\n\n**Confidence**: high/medium/low"
+    depends_on:
+    - mcp_hardening_fix.extract-bearer-token-helper
+    agent: integration-verifier
+  - id: mcp_hardening_fix.guard-verify
+    name: guard-verify
+    status: pending
+    description: 'Run `invar guard` across all changed files in this phase to confirm
+      the full set of hardening fixes is clean.
+
+
+      Files in scope:
+
+      - `src/tasca/shell/api/auth.py`
+
+      - `src/tasca/shell/api/app.py`
+
+      - `src/tasca/shell/mcp/server.py`
+
+      - `tests/integration/test_mcp.py`
+
+
+      Acceptance criteria:
+
+      - `invar guard` reports 0 errors across all files listed above.
+
+      - Warnings may be present; document them.'
+    verification: Run `invar guard src/tasca/shell/api/auth.py src/tasca/shell/api/app.py
+      src/tasca/shell/mcp/server.py tests/integration/test_mcp.py` and paste the one-line
+      summary. 0 errors required.
+    depends_on:
+    - mcp_hardening_fix.extract-bearer-token-helper-verify
+    agent: python-engineer
+  - id: mcp_hardening_fix.mcp-hardening-fix-gate
+    name: mcp_hardening_fix.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the mcp_hardening_fix
+      phase meets the quality bar for proceeding.
+
+
+      YOU ARE THE QUALITY GATE. Your job is to BLOCK progress if quality is insufficient,
+      not to rubber-stamp completion.
+
+
+      Review criteria:
+
+      1. Completeness: All planned steps executed with evidence?
+
+      2. Auth tests: H3 — tests at test_mcp.py:58-95 now run unconditionally with
+      fixture?
+
+      3. Deduplication: HG1 — shared `_validate_bearer_token` helper extracted, no
+      inline hmac.compare_digest in app.py?
+
+      4. Documentation: HG2 — OPTIONS/CORS exemption documented in connect instructions?
+
+      5. Guard: guard-verify passed with 0 errors?
+
+
+      Independence: You MUST NOT be the same agent as any implementation step in this
+      phase.'
+    verification: 'Review all step evidence. Confirm H3, HG1, HG2 addressed. Confirm
+      guard passed. Issue gate decision: OPEN or BLOCKED.'
+    evidence_template: '## Gate Review Report
+
+
+      **Reviewer**: gate-reviewer (independent of phase implementation)
+
+      **Phase**: mcp_hardening_fix
+
+      **Timestamp**: &lt;ISO 8601&gt;
+
+
+      ### Step-by-Step Review
+
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      |---------|--------|-----------------|----------|
+
+      | fix-auth-test-fixture | ✅/⚠️/❌ | excellent/adequate/insufficient/missing |
+      |
+
+      | fix-auth-test-fixture-verify | ✅/⚠️/❌ | | |
+
+      | extract-bearer-token-helper | ✅/⚠️/❌ | | |
+
+      | extract-bearer-token-helper-verify | ✅/⚠️/❌ | | |
+
+      | guard-verify | ✅/⚠️/❌ | | |
+
+
+      ### Issues Identified
+
+
+      | Severity | Description | Related Step | Blocking? |
+
+      |----------|-------------|--------------|-----------|
+
+
+      ### Gate Decision
+
+      - [ ] OPEN: Phase passes gate, proceed to next phase
+
+      - [ ] BLOCKED: Issues must be resolved before proceeding'
+    depends_on:
+    - mcp_hardening_fix.fix-auth-test-fixture-verify
+    - mcp_hardening_fix.extract-bearer-token-helper-verify
+    - mcp_hardening_fix.guard-verify
+    agent: gate-reviewer
+- id: mcp_table_list_fix
+  name: MCP table_list fix — gate review findings
+  status: pending
+  depends_on:
+  - mcp_table_list
+  steps:
+  - id: mcp_table_list_fix.fix-n-plus-one-query
+    name: fix-n-plus-one-query
+    status: pending
+    description: 'T1 — Fix N+1 query in `list_tables_with_seat_counts` in `src/tasca/shell/storage/table_repo.py:343-352`.
+
+
+      Current behaviour: calls `find_seats_by_table` in a Python loop, one SQL query
+      per open table. This is an O(N) query fan-out.
+
+
+      Fix: replace with a single SQL JOIN query that:
+
+      1. Selects all open tables in one pass.
+
+      2. JOINs with the seats table to compute per-table seat counts.
+
+      3. Filters active seats inline in SQL: `last_heartbeat > (now - ttl)` using
+      the appropriate TTL constant (check existing code for the correct value; do
+      not hardcode a magic number).
+
+      4. Returns the same data shape as the current implementation so callers are
+      unaffected.
+
+
+      Implementation notes:
+
+      - Inspect the existing schema and query patterns in `table_repo.py` before writing
+      the new query.
+
+      - Follow the same SQLAlchemy / raw SQL patterns already used in the file.
+
+      - Add `@pre` / `@post` contracts per project conventions if the function lacks
+      them.
+
+      - Add or update doctests if the function has them.
+
+
+      Acceptance criteria:
+
+      - `list_tables_with_seat_counts` issues a single SQL query (no Python-level
+      loop over tables).
+
+      - Return value shape is identical to the current implementation.
+
+      - `invar guard` reports no errors.'
+    verification: Run `invar guard src/tasca/shell/storage/table_repo.py`. Confirm
+      no per-table query loop remains. Review the new query for correctness (TTL filter
+      in SQL). Report 0 errors.
+    agent: python-engineer
+  - id: mcp_table_list_fix.fix-n-plus-one-query-verify
+    name: fix-n-plus-one-query-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (integration-verifier), verify that the
+      N+1 query fix is correct and does not regress existing behaviour.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: `list_tables_with_seat_counts` returns the correct seat counts
+      for a set of open tables.
+
+      - Edge case: table with 0 active seats (all expired by TTL) — must appear with
+      count 0, not be omitted.
+
+      - Edge case: table with mixed active/expired seats — only active seats counted.
+
+      - Edge case: no open tables — returns empty result without error.
+
+      - Performance: confirm no per-table query loop in the new implementation (code
+      review).
+
+      - Regression: any existing tests for `list_tables_with_seat_counts` still pass.
+
+
+      Independence Level: L1'
+    verification: Read `table_repo.py` around `list_tables_with_seat_counts`. Confirm
+      single-query pattern. Check for existing tests. Run `invar guard`. Report any
+      issues.
+    evidence_template: "## Verification Report\n\n**Tester**: integration-verifier\
+      \ (independent of implementation)\n**Scope**: N+1 query fix in list_tables_with_seat_counts\n\
+      **Independence Level**: L1\n**Timestamp**: &lt;ISO 8601&gt;\n\n### Test Execution\n\
+      - Commands executed:\n  ```\n  &lt;read / grep / invar guard commands&gt;\n\
+      \  ```\n- Output summary: &lt;key results&gt;\n\n### Issues Found\n\n| Severity\
+      \ | Description | Location | Reproduction |\n|----------|-------------|----------|--------------|\n\
+      \n### Verdict\n- [ ] PASS: No issues found\n- [ ] ISSUES_FOUND: See issues table\
+      \ above\n- [ ] INCOMPLETE: &lt;reason&gt;\n\n**Confidence**: high/medium/low"
+    depends_on:
+    - mcp_table_list_fix.fix-n-plus-one-query
+    agent: integration-verifier
+  - id: mcp_table_list_fix.fix-table-list-status-type
+    name: fix-table-list-status-type
+    status: pending
+    description: 'TG1 — Tighten the `status` parameter type in `server.py::table_list`
+      tool.
+
+
+      Currently `status` is typed as `str` but only `"open"` is a valid value.
+
+
+      Choose one of:
+
+      - Change the type annotation to `Literal["open"] = "open"` and update any downstream
+      handling accordingly.
+
+      - OR, if changing to `Literal` is not feasible in the MCP tool signature context,
+      add a `# TODO: restrict to Literal["open"] once MCP supports enum params` comment
+      directly above or on the `status` parameter line.
+
+
+      Preference: use `Literal["open"]` if the MCP framework supports it; check how
+      other tools in `server.py` handle constrained string params.
+
+
+      Acceptance criteria:
+
+      - `status` parameter in `table_list` is either typed as `Literal["open"]` or
+      has a TODO comment.
+
+      - `invar guard` reports no errors.'
+    verification: Run `invar guard src/tasca/shell/mcp/server.py`. Grep for `table_list`
+      function signature to confirm annotation. Report 0 errors.
+    depends_on:
+    - mcp_table_list_fix.fix-n-plus-one-query-verify
+    agent: python-engineer
+  - id: mcp_table_list_fix.guard-verify
+    name: guard-verify
+    status: pending
+    description: 'Run `invar guard` across all changed files in this phase to confirm
+      the full set of fixes is clean.
+
+
+      Files in scope:
+
+      - `src/tasca/shell/storage/table_repo.py`
+
+      - `src/tasca/shell/mcp/server.py`
+
+
+      Acceptance criteria:
+
+      - `invar guard` reports 0 errors across all files listed above.
+
+      - Warnings may be present; document them.'
+    verification: Run `invar guard src/tasca/shell/storage/table_repo.py src/tasca/shell/mcp/server.py`
+      and paste the one-line summary. 0 errors required.
+    depends_on:
+    - mcp_table_list_fix.fix-table-list-status-type
+    agent: python-engineer
+  - id: mcp_table_list_fix.mcp-table-list-fix-gate
+    name: mcp_table_list_fix.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the mcp_table_list_fix
+      phase meets the quality bar for proceeding.
+
+
+      YOU ARE THE QUALITY GATE. Your job is to BLOCK progress if quality is insufficient,
+      not to rubber-stamp completion.
+
+
+      Review criteria:
+
+      1. Completeness: All planned steps executed with evidence?
+
+      2. N+1 fix: T1 — `list_tables_with_seat_counts` now issues a single SQL query,
+      TTL filter in SQL?
+
+      3. Type fix: TG1 — `status` parameter uses `Literal["open"]` or has a TODO comment?
+
+      4. Guard: guard-verify passed with 0 errors?
+
+      5. No regressions introduced in existing table_list behaviour?
+
+
+      Independence: You MUST NOT be the same agent as any implementation step in this
+      phase.'
+    verification: 'Review all step evidence. Confirm T1 and TG1 addressed. Confirm
+      guard passed. Issue gate decision: OPEN or BLOCKED.'
+    evidence_template: '## Gate Review Report
+
+
+      **Reviewer**: gate-reviewer (independent of phase implementation)
+
+      **Phase**: mcp_table_list_fix
+
+      **Timestamp**: &lt;ISO 8601&gt;
+
+
+      ### Step-by-Step Review
+
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      |---------|--------|-----------------|----------|
+
+      | fix-n-plus-one-query | ✅/⚠️/❌ | excellent/adequate/insufficient/missing |
+      |
+
+      | fix-n-plus-one-query-verify | ✅/⚠️/❌ | | |
+
+      | fix-table-list-status-type | ✅/⚠️/❌ | | |
+
+      | guard-verify | ✅/⚠️/❌ | | |
+
+
+      ### Issues Identified
+
+
+      | Severity | Description | Related Step | Blocking? |
+
+      |----------|-------------|--------------|-----------|
+
+
+      ### Gate Decision
+
+      - [ ] OPEN: Phase passes gate, proceed to next phase
+
+      - [ ] BLOCKED: Issues must be resolved before proceeding'
+    depends_on:
+    - mcp_table_list_fix.fix-n-plus-one-query-verify
+    - mcp_table_list_fix.fix-table-list-status-type
+    - mcp_table_list_fix.guard-verify
+    agent: gate-reviewer

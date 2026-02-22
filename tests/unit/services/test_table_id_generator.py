@@ -15,13 +15,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from returns.result import Failure, Success
 
-from tasca.core.domain.table import TableId
 from tasca.shell.services.table_id_generator import (
     MAX_ID_RETRIES,
     TableIdGenerationError,
     generate_table_id,
 )
-from tasca.shell.storage.table_repo import TableNotFoundError
 
 
 # =============================================================================
@@ -63,7 +61,7 @@ class TestGenerateTableId:
             # Assert
             assert isinstance(result, Success)
             table_id = result.unwrap()
-            assert isinstance(table_id, str)  # TableId is NewType(str)
+            assert isinstance(table_id, str)  # TableId is a NewType alias for str
             assert table_id == "test-id-works"
 
     def test_collision_retry_succeeds_on_second_attempt(self, mock_conn: MagicMock) -> None:

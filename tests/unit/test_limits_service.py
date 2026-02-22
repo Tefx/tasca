@@ -345,6 +345,7 @@ class TestCheckContentLimits:
             max_sayings_per_table=5,
         )
         error = check_content_limits("x" * 10, 10, 500, config)
+        assert error is not None
         assert error.kind == LimitKind.CONTENT
 
     def test_check_order_history(self) -> None:
@@ -354,6 +355,7 @@ class TestCheckContentLimits:
             max_sayings_per_table=5,
         )
         error = check_content_limits("short", 10, 500, config)
+        assert error is not None
         assert error.kind == LimitKind.HISTORY
 
     def test_check_content_limits_rejects_negative_saying_count(self) -> None:

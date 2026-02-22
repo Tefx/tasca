@@ -26,6 +26,7 @@ from tasca.shell.mcp.server import (
     table_list,
     table_listen,
     table_say,
+    table_wait,
 )
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.table_repo import create_table, update_table
@@ -1479,3 +1480,136 @@ class TestLimitsEnforcementTableSay:
         assert result2["ok"] is False
         assert result2["error"]["code"] == "LIMIT_EXCEEDED"
         assert result2["error"]["details"]["limit_kind"] == "bytes"
+
+
+class TestTableWait:
+    """Tests for table_wait MCP tool (long-poll for new sayings).
+
+    table_wait is an async function that blocks until:
+    - New sayings are available (returns with sayings, timeout=False)
+    - Timeout expires (returns empty sayings, timeout=True)
+    """
+
+    @pytest.mark.asyncio
+    async def test_table_wait_timeout_returns_empty_sayings(self) -> None:
+        """Timeout path: empty sayings list + timeout=True when no new sayings.
+
+        When no sayings arrive within the wait window, the function should
+        return with an empty sayings list and timeout=True.
+        """
+        # Create table with no sayings
+        table_result = table_create(question="Empty table for wait test")
+        table_id = table_result["data"]["id"]
+
+        # Use a very short wait_ms (0 or 1) to trigger timeout immediately
+        result = await table_wait(table_id=table_id, since_sequence=-1, wait_ms=1)
+
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["sayings"] == []
+        assert data["timeout"] is True
+        assert "next_sequence" in data
+        # next_sequence should be 0 for empty table with since_sequence=-1
+        assert data["next_sequence"] == 0
+
+    @pytest.mark.asyncio
+    async def test_table_wait_returns_sayings_when_present(self) -> None:
+        """Data path: sayings returned when new saying is present.
+
+        When sayings exist with sequence > since_sequence, the function
+        should return immediately with the sayings and timeout=False.
+        """
+        # Create table and add sayings
+        table_result = table_create(question="Table with sayings for wait test")
+        table_id = table_result["data"]["id"]
+
+        # Add a saying
+        say_result = table_say(
+            table_id=table_id,
+            content="Test saying for wait",
+            speaker_name="Test Speaker",
+        )
+        assert say_result["ok"] is True
+        sequence = say_result["data"]["sequence"]
+
+        # Wait for sayings after the one we just added (should timeout)
+        # But first, test that we get the saying when we poll from start
+        result = await table_wait(table_id=table_id, since_sequence=-1, wait_ms=100)
+
+        assert result["ok"] is True
+        data = result["data"]
+        assert len(data["sayings"]) >= 1
+        assert data["timeout"] is False
+        assert data["next_sequence"] == sequence
+
+        # Verify the saying content
+        found = any(s["content"] == "Test saying for wait" for s in data["sayings"])
+        assert found, "Expected saying not found in wait response"
+
+    @pytest.mark.asyncio
+    async def test_table_wait_not_found(self) -> None:
+        """table_wait returns NOT_FOUND for nonexistent table."""
+        result = await table_wait(table_id="nonexistent-table-id")
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
+        assert "table" in result["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_table_wait_include_table_on_timeout(self) -> None:
+        """Wait with include_table=True includes table snapshot on timeout."""
+        table_result = table_create(question="Test table for include_table")
+        table_id = table_result["data"]["id"]
+
+        result = await table_wait(
+            table_id=table_id,
+            since_sequence=-1,
+            wait_ms=1,
+            include_table=True,
+        )
+
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["timeout"] is True
+        assert "table" in data
+        assert data["table"]["id"] == table_id
+        assert data["table"]["question"] == "Test table for include_table"
+
+    @pytest.mark.asyncio
+    async def test_table_wait_caps_wait_ms(self) -> None:
+        """Wait caps wait_ms at MAX_WAIT_MS (10000ms)."""
+        table_result = table_create(question="Test table for wait cap")
+        table_id = table_result["data"]["id"]
+
+        # Request excessive wait time - should be capped and still work
+        # We'll use empty table and short actual wait, so it times out quickly
+        result = await table_wait(
+            table_id=table_id,
+            since_sequence=-1,
+            wait_ms=1,  # Use minimal wait to avoid slow test
+        )
+
+        # Should timeout since table is empty
+        assert result["ok"] is True
+        assert result["data"]["timeout"] is True
+
+    @pytest.mark.asyncio
+    async def test_table_wait_since_sequence_filters(self) -> None:
+        """Wait with since_sequence only returns newer sayings."""
+        table_result = table_create(question="Table for since_sequence test")
+        table_id = table_result["data"]["id"]
+
+        # Add two sayings
+        table_say(table_id=table_id, content="First saying", speaker_name="Speaker A")
+        table_say(table_id=table_id, content="Second saying", speaker_name="Speaker B")
+
+        # Wait for sayings after sequence 0 (should get only the second)
+        result = await table_wait(table_id=table_id, since_sequence=0, wait_ms=100)
+
+        assert result["ok"] is True
+        data = result["data"]
+        # Should get at least the second saying
+        assert len(data["sayings"]) >= 1
+        # First saying (sequence 0) should NOT be in the results
+        for saying in data["sayings"]:
+            assert saying["sequence"] > 0

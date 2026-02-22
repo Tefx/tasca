@@ -6339,14 +6339,14 @@ phases:
       \ web_fix2 P1 items resolved\n- Web builds cleanly with no errors"
 - id: security_fix2
   name: Security fix round 2 — gate review P1 items
-  status: pending
+  status: done
   depends_on:
   - security_fix
   - admin_token_fix2
   steps:
   - id: security_fix2.s1-mermaid-securitylevel
     name: s1-mermaid-securitylevel
-    status: pending
+    status: done
     description: 'SF-S1 — Explicitly enforce securityLevel: ''strict'' in mermaid.tsx.
       Lines 203-207 in web/src/rendering/mermaid.tsx claim strict mode via JSDoc but
       mermaid.initialize() is never called and no config is passed to mermaid.render().
@@ -6362,9 +6362,48 @@ phases:
     - web/src/rendering/mermaid.tsx
     - docs/adr-001-mermaid-rendering.md
     agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T09:38:47.438455+00:00'
+    evidence: 'Artifact:
+
+      - File: web/src/rendering/mermaid.tsx
+
+
+      Changes made:
+
+      1. Added module-level call `mermaid.initialize({ startOnLoad: false, securityLevel:
+      ''strict'' })` at line 48 (after imports, before any component code), with a
+      JSDoc comment explaining why each option is required.
+
+      2. Removed the misleading inline comment inside `renderDiagram` (lines 203-204
+      in original) that claimed security via "default secure settings" while explicitly
+      NOT calling mermaid.initialize(). Replaced with accurate comment pointing to
+      the module-level init.
+
+      3. Updated the file-level JSDoc to list `mermaid.initialize({ securityLevel:
+      ''strict'' })` as security measure #1 (with note "not relying on library defaults").
+
+      4. Updated `MermaidRenderer` component JSDoc to accurately state enforcement
+      happens via the module-level call.
+
+
+      Verification:
+
+      - Run: `cd /Users/tefx/Projects/tasca/web && npx tsc --noEmit` -> 0 errors,
+      no output
+
+      - mermaid.initialize call site: web/src/rendering/mermaid.tsx line 48
+
+      - No JSDoc or inline comment claims strict mode without the actual call present
+
+
+      Spec link:
+
+      - ADR-001: "Pin Mermaid to a known-safe version" / mandatory security guardrails
+      section'
   - id: security_fix2.s2-remove-svg-stub
     name: s2-remove-svg-stub
-    status: pending
+    status: done
     description: SF-S2 — Eliminate the dead stub web/src/security/svg_sanitize.ts.
       The 7-line file contains only a comment placeholder, is not imported anywhere,
       and sits at a security boundary next to the real implementation at web/src/rendering/svg-sanitizer.ts.
@@ -6384,9 +6423,55 @@ phases:
     depends_on:
     - security_fix2.s1-mermaid-securitylevel
     agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T09:39:51.901153+00:00'
+    evidence: 'Artifact:
+
+      - File deleted: web/src/security/svg_sanitize.ts (7-line stub, comment + placeholder
+      only)
+
+      - File updated: docs/repo-structure-v0.1.md (removed stale tree entry for svg_sanitize.ts)
+
+
+      Actions:
+
+      1. Read web/src/security/svg_sanitize.ts — confirmed 7 lines: JSDoc comment
+      + one inline comment placeholder, zero implementation code.
+
+      2. Verified no production imports: `grep -r "svg_sanitize" web/src --include="*.ts"
+      --include="*.tsx" -l` returned nothing.
+
+      3. Searched docs for references: docs/repo-structure-v0.1.md line 88 listed
+      the stub in the directory tree. Updated that entry to note the stub was removed
+      and point to svg-sanitizer.ts in rendering/.
+
+      4. Deleted the stub file: `rm web/src/security/svg_sanitize.ts`.
+
+      5. Checked plan.yaml: all svg_sanitize references in plan.yaml are within the
+      s2-remove-svg-stub step itself (verification/description fields), not separate
+      steps that need updating.
+
+
+      Verification:
+
+      - Run: `grep -r "svg_sanitize" web/src --include="*.ts" --include="*.tsx" -l`
+      -> no output (no imports)
+
+      - Run: `ls web/src/security/` -> empty (file deleted, no other files remain)
+
+      - Run: `cd web && npx tsc --noEmit` -> 0 errors in mermaid.tsx or any of our
+      changed files; pre-existing Table.tsx errors unrelated to this change (CommandConsole/useAuth/MentionInput
+      symbols, present before this session as confirmed by git diff --stat)
+
+      - File no longer exists: web/src/security/svg_sanitize.ts
+
+
+      Spec link:
+
+      - security_fix2.s2-remove-svg-stub description: "Eliminate the dead stub web/src/security/svg_sanitize.ts"'
   - id: security_fix2.r1-reverify
     name: r1-reverify
-    status: pending
+    status: done
     description: 'R1 — Independent reverification after both security_fix2 fixes.
       Confirm mermaid strict mode is enforced at the call site AND the dead stub is
       resolved. Reviewer must check against: (1) ADR-001 (mermaid rendering security
@@ -6433,9 +6518,183 @@ phases:
     - security_fix2.s3-fix-update-auth-test
     - security_fix2.s4-remove-dead-credentials-guard
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-22T09:42:16.716505+00:00'
+    evidence: '## Independent Reverification: security_fix2 (Batch 1)
+
+
+      ### Check 1: mermaid securityLevel — CONFIRMED
+
+
+      File: `/Users/tefx/Projects/tasca/web/src/rendering/mermaid.tsx`
+
+
+      `mermaid.initialize({ startOnLoad: false, securityLevel: ''strict'' })` is present
+      at **line 52**, at module scope (executed on import, not inside a comment or
+      JSDoc). The JSDoc above it (lines 39-51) describes the call; the actual call
+      site is line 52.
+
+
+      I confirmed securityLevel: ''strict'' is set at `web/src/rendering/mermaid.tsx:52`
+      via call, not comment-only.
+
+
+      ---
+
+
+      ### Check 2: svg_sanitize.ts deleted — CONFIRMED
+
+
+      Command: `ls /Users/tefx/Projects/tasca/web/src/security/`
+
+      Output: (empty — directory exists but contains no files)
+
+
+      Command: `find /Users/tefx/Projects/tasca/web/src/security -type f`
+
+      Output: (no output — exit 0, no files present)
+
+
+      Command: `grep -r "svg_sanitize" /Users/tefx/Projects/tasca/web/src --include="*.ts"
+      --include="*.tsx" -l`
+
+      Output: (no matches — exit 1)
+
+
+      Note: `tsconfig.tsbuildinfo` (a binary build cache artifact) contains a historical
+      reference to the deleted file, but this is a stale incremental compile cache,
+      not source code. TypeScript compiled clean (exit 0) confirming the file is gone.
+
+
+      Docs update at `docs/repo-structure-v0.1.md:87`: `# (stub svg_sanitize.ts removed
+      — see svg-sanitizer.ts in rendering/)` — correctly updated.
+
+
+      I confirmed svg_sanitize.ts is deleted; grep output was empty (no source-file
+      matches).
+
+
+      ---
+
+
+      ### Check 3: Auth test strict == 401 — CONFIRMED
+
+
+      File: `/Users/tefx/Projects/tasca/tests/unit/api/test_tables_routes.py:237`
+
+
+      ```python
+
+      assert response.status_code == 401
+
+      ```
+
+
+      No `in [...]` pattern, no "404 if not" comment. The assertion is a strict equality
+      check.
+
+
+      Command run: `uv run pytest tests/unit/api/test_tables_routes.py::TestUpdateTable::test_update_table_requires_auth
+      -v`
+
+      Result: `1 passed in 0.31s`
+
+
+      I confirmed test_update_table_requires_auth asserts == 401 at line 237.
+
+
+      ---
+
+
+      ### Check 4: Dead guard removed — CONFIRMED
+
+
+      File: `/Users/tefx/Projects/tasca/src/tasca/shell/api/auth.py`
+
+
+      Command: `grep -n "credentials is None" src/tasca/shell/api/auth.py`
+
+      Output: (no output — exit 1, no matches)
+
+
+      The function body (lines 27-66) jumps directly to `hmac.compare_digest(credentials.credentials,
+      settings.admin_token)` with no preceding `if credentials is None` block.
+
+
+      I confirmed `if credentials is None` is absent from auth.py (grep returned no
+      matches).
+
+
+      ---
+
+
+      ### Check 5: TypeScript compile — PASS
+
+
+      Command: `cd /Users/tefx/Projects/tasca/web && npx tsc --noEmit`
+
+      Result: No output, TSC_EXIT_CODE: 0
+
+
+      ---
+
+
+      ### Check 6: Vite build — PASS
+
+
+      Command: `cd /Users/tefx/Projects/tasca/web && npm run build`
+
+      Result:
+
+      ```
+
+      vite v5.4.21 building for production...
+
+      307 modules transformed.
+
+      dist/index.html  0.47 kB  gzip: 0.31 kB
+
+      dist/assets/index-DcItXZHy.css  39.28 kB  gzip: 6.60 kB
+
+      dist/assets/index-BPBOThua.js  359.21 kB  gzip: 111.71 kB
+
+      built in 1.96s
+
+      ```
+
+      BUILD_EXIT: 0
+
+
+      ---
+
+
+      ### Check 7: Python tests — PASS
+
+
+      Command: `uv run pytest tests/unit/api/test_tables_routes.py -v`
+
+      Result: `20 passed in 2.10s`, 0 skipped, 0 errors.
+
+
+      ---
+
+
+      ### ADR cross-reference
+
+
+      `docs/adr-001-mermaid-rendering.md` mandates `securityLevel: ''strict''` enforcement
+      at call time (not relying on library defaults). This is satisfied by `mermaid.tsx:52`.
+      No security regressions found in SVG sanitizer cross-references — `sanitizeSvg()`
+      import from `./svg-sanitizer` is unchanged at line 33.
+
+
+      ### Summary
+
+
+      All 4 fixes from Batch 1 are independently verified. All 7 required checks passed.'
   - id: security_fix2.s3-fix-update-auth-test
     name: Fix test_update_table_requires_auth to strict 401
-    status: pending
+    status: done
     description: 'admin_token_fix2 gate review S1 — test_update_table_requires_auth
       at tests/unit/api/test_tables_routes.py:237 uses `assert response.status_code
       in [401, 404]` with a comment "401 if auth required, 404 if not". This assertion
@@ -6460,9 +6719,14 @@ phases:
     - tests/unit/api/test_tables_routes.py
     - src/tasca/shell/api/auth.py
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:39:02.326526+00:00'
+    evidence: "Updated assertion line:\n  assert response.status_code == 401\n\npytest\
+      \ output:\n  tests/unit/api/test_tables_routes.py::TestUpdateTable::test_update_table_requires_auth\
+      \ PASSED\n  1 passed in 0.71s"
   - id: security_fix2.s4-remove-dead-credentials-guard
     name: Remove dead credentials-is-None guard from auth.py
-    status: pending
+    status: done
     description: 'admin_token_fix2 gate review S2 — auth.py:59-64 contains a dead
       code branch:
 
@@ -6497,9 +6761,15 @@ phases:
     refs:
     - src/tasca/shell/api/auth.py
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:39:23.697450+00:00'
+    evidence: "grep -n \"credentials is None\" src/tasca/shell/api/auth.py — no matches\
+      \ (exit 1, empty output)\n\nRemoved the unreachable block (lines 58-64) that\
+      \ was dead code because HTTPBearer(auto_error=True) raises before returning\
+      \ None.\n\npytest tests/unit/api/test_tables_routes.py -v:\n  20 passed in 0.43s"
 - id: mcp_hardening
   name: MCP HTTP hardening — fix path + add Bearer auth
-  status: locked
+  status: in_progress
   depends_on:
   - security_fix
   - admin_token_fix
@@ -6507,7 +6777,7 @@ phases:
   steps:
   - id: s2-mcp-bearer-auth
     name: 's2: Add Bearer token middleware to MCP HTTP endpoint'
-    status: pending
+    status: done
     description: 'The MCP HTTP app mounted at /mcp currently has no authentication.
       Add a Starlette middleware or FastAPI dependency that validates Authorization:
       Bearer &lt;token&gt; against settings.admin_token for all requests to the /mcp
@@ -6521,10 +6791,26 @@ phases:
       is unaffected
     evidence_template: Paste curl outputs for authenticated and unauthenticated requests
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T10:14:03.973731+00:00'
+    evidence: "Artifact:\n- Commit: 6c9c936f00f16a9b480b3aedeb4ebae864e8c0e6\n\nVerification\
+      \ (curl outputs for unauth/auth):\n- No token:\n  curl ... POST http://127.0.0.1:8766/mcp\
+      \ -> {\"detail\":\"Missing or invalid Authorization header\"} HTTP_CODE:401\n\
+      - Invalid token:\n  curl ... -H \"Authorization: Bearer invalid-wrong-token\"\
+      \ -> {\"detail\":\"Invalid or missing token\"} HTTP_CODE:401\n- Valid token:\n\
+      \  curl ... -H \"Authorization: Bearer test-secret-token-12345\" -> event: message\
+      \ / data: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{...}} HTTP_CODE:200\n\n\
+      Verification (tests):\n- Run: TASCA_ADMIN_TOKEN=\"test-secret-token-12345\"\
+      \ uv run pytest \\\n    tests/integration/test_mcp.py::test_mcp_auth_no_token_returns_401\
+      \ \\\n    tests/integration/test_mcp.py::test_mcp_auth_invalid_token_returns_401\
+      \ \\\n    tests/integration/test_mcp.py::test_mcp_auth_valid_token_succeeds\
+      \ -v -> 3 passed\n- Run: uvx invar-tools guard -> PASS (0 errors)\n\nFiles changed:\n\
+      - src/tasca/shell/api/app.py\n- tests/integration/conftest.py\n- tests/integration/test_mcp.py\n\
+      \nSpec link:\n- Plan step: mcp_hardening.s2-mcp-bearer-auth"
   - id: s3-update-integration-tests
     name: 's3: Update integration tests and agent config examples for new /mcp path
       and auth'
-    status: pending
+    status: done
     description: Find and update any integration test, test harness, or documentation
       that references the old /mcp/mcp endpoint path. Add the Bearer token header
       to MCP HTTP test fixtures. Update any README or usage docs showing MCP client
@@ -6534,6 +6820,14 @@ phases:
     depends_on:
     - s2-mcp-bearer-auth
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T10:28:45.073096+00:00'
+    evidence: "Artifact:\n- Commits:\n  - 2514aed docs(readme): add MCP HTTP authentication\
+      \ documentation with Bearer token example\n  - 1d0b4da test(harness): add Bearer\
+      \ token support to MCPHTTPHarness and MCPASGIHarness\n\nVerification:\n- invar\
+      \ guard -> PASS (0 errors, 17 warnings)\n- Run: pytest tests/integration/test_mcp.py\
+      \ tests/unit/mcp/ -v -> 94 passed\n\nFiles changed:\n- README.md\n- tests/integration/harness.py\n\
+      \nSpec link:\n- Plan step: mcp_hardening.s3-update-integration-tests"
   - id: r1-reverify
     name: 'r1: Reverify — guard + smoke test MCP over HTTP with auth'
     status: pending
@@ -6547,13 +6841,13 @@ phases:
     agent: integration-verifier
 - id: mcp_table_list
   name: MCP table_list tool (P0)
-  status: pending
+  status: done
   depends_on:
   - mcp
   steps:
   - id: mcp_table_list.query-layer-list-tables-with-seat-counts
     name: 'Query layer: list_tables_with_seat_counts'
-    status: pending
+    status: done
     description: Add a list_tables_with_seat_counts() function to table_repo.py (or
       a new query helper). The function queries all tables with status=open and joins
       with seats to compute active_count per table. Returns a list of table dicts
@@ -6563,9 +6857,34 @@ phases:
       test covers empty DB, tables with mixed statuses (only open returned), and correct
       active seat counting (expired seats excluded).'
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:26:26.128245+00:00'
+    evidence: 'Artifact:
+
+      - Commit: d3b5b36
+
+
+      Verification:
+
+      - Run: uv run pytest tests/unit/storage/test_table_repo.py -v -> 10 passed,
+      0 failed
+
+      - Run: uvx invar-tools guard -> PASS, 0 errors, 17 warnings (pre-existing)
+
+
+      Spec link:
+
+      - Plan step: mcp_table_list.query-layer-list-tables-with-seat-counts
+
+
+      Files changed:
+
+      - src/tasca/shell/storage/table_repo.py
+
+      - tests/unit/storage/test_table_repo.py'
   - id: mcp_table_list.mcp-tool-table-list-implementation
     name: 'MCP tool: table_list implementation'
-    status: pending
+    status: done
     description: 'Add @mcp.tool table_list(status: str = ''open'') function to server.py.
       Calls the query layer to fetch tables with seat counts. Returns success_response
       with list of tables and their active_count. Optionally accepts status filter
@@ -6576,9 +6895,42 @@ phases:
     depends_on:
     - mcp_table_list.query-layer-list-tables-with-seat-counts
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:27:05.327015+00:00'
+    evidence: 'Artifact:
+
+      - Commit: 1e03613
+
+
+      Verification:
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py::TestTableList -v ->
+      6 passed
+
+      - Run: uv run pytest tests/integration/test_mcp.py::test_mcp_list_tools -v ->
+      1 passed
+
+      - Run: uv run pytest tests/integration/test_mcp.py::test_mcp_stdio_list_tools
+      -v -> 1 passed
+
+      - Run: uvx invar-tools guard -> PASS (0 errors, 37 warnings)
+
+
+      Spec link:
+
+      - Plan step: mcp_table_list.mcp-tool-table-list-implementation
+
+
+      Files changed:
+
+      - src/tasca/shell/mcp/server.py
+
+      - tests/unit/mcp/test_mcp_server.py
+
+      - tests/integration/test_mcp.py'
   - id: mcp_table_list.unit-tests-for-table-list-tool
     name: Unit tests for table_list tool
-    status: pending
+    status: done
     description: 'Write unit tests for the table_list MCP tool covering: empty DB
       returns empty list, multiple tables with various statuses (only matching status
       returned), active seat count correctness (expired seats excluded from count),
@@ -6588,9 +6940,30 @@ phases:
     depends_on:
     - mcp_table_list.mcp-tool-table-list-implementation
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:31:12.198171+00:00'
+    evidence: 'Artifact:
+
+      - Commit: 559c55e
+
+
+      Verification:
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py::TestTableList -v ->
+      8 passed in 0.78s
+
+
+      Spec link:
+
+      - Plan step: mcp_table_list.unit-tests-for-table-list-tool
+
+
+      Files changed:
+
+      - tests/unit/mcp/test_mcp_server.py'
   - id: mcp_table_list.l1-guard-verify
     name: L1 guard verify
-    status: pending
+    status: done
     description: L1 guard verify for mcp_table_list phase. Run invar guard and full
       test suite to confirm table_list implementation introduces no regressions. Also
       verify the tool response shape matches the MCP interface spec (tasca-mcp-interface-v0.1.md).
@@ -6630,15 +7003,26 @@ phases:
     depends_on:
     - mcp_table_list.unit-tests-for-table-list-tool
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:34:22.329808+00:00'
+    evidence: "1. invar guard output (last 5 lines)\n   \"files_checked\": 5,\n  \
+      \ \"errors\": 0,\n   \"warnings\": 17,\n   \"infos\": 0\n }\n\n2. pytest summary\
+      \ (counts of passed/failed)\n   817 passed in 7.54s\n\n3. table_list unit test\
+      \ names and pass/fail\n   Key tests (tests/unit/mcp/test_mcp_server.py):\n \
+      \  - TestTableList::test_list_tables_response_envelope_shape PASSED\n   - TestTableList::test_list_tables_excludes_expired_seats_from_count\
+      \ PASSED\n\n4. Confirm: does a test assert that expired seats are excluded from\
+      \ active_count? [YES]\n   YES - tests/unit/mcp/test_mcp_server.py::TestTableList::test_list_tables_excludes_expired_seats_from_count\n\
+      \n5. Confirm: does a test assert the response envelope shape {ok: true, data:\
+      \ {tables: [...], total: N}}? [YES]\n   YES - tests/unit/mcp/test_mcp_server.py::TestTableList::test_list_tables_response_envelope_shape"
 - id: mcp_instructions
   name: Expand MCP instructions (P0)
-  status: locked
+  status: done
   depends_on:
   - mcp_table_list
   steps:
   - id: mcp_instructions.expand-mcp-instructions-text
     name: Expand MCP instructions text
-    status: pending
+    status: done
     description: 'Replace the 4-line instructions string in the FastMCP constructor
       (server.py lines 102-113) with the full ~1KB protocol text. The expanded instructions
       must cover: (1) setup sequence (patron_register, table_list/table_join), (2)
@@ -6654,9 +7038,37 @@ phases:
       "60 seconds" throttle rule; includes "silence is acceptable"; string length
       > 800 chars; MCP server still starts and lists all tools.'
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:42:09.245991+00:00'
+    evidence: 'Artifact:
+
+      - Already at HEAD (no new commit required)
+
+      - File: src/tasca/shell/mcp/server.py (MCP_AGENT_INSTRUCTIONS)
+
+
+      Verification:
+
+      - Run: python3 -c "import re; f=open(''src/tasca/shell/mcp/server.py'').read();
+      m=re.search(r''MCP_AGENT_INSTRUCTIONS = \"\"\"(.*?)\"\"\"'', f, re.DOTALL);
+      t=m.group(1) if m else ''''; print(''String length:'', len(t))" -> String length:
+      1731 chars (>800)
+
+      - Run: uv run pytest tests/integration/test_mcp.py::test_mcp_list_tools -v ->
+      1 passed
+
+
+      Spec link:
+
+      - Plan step: mcp_instructions.expand-mcp-instructions-text
+
+
+      Files changed:
+
+      - None (already implemented)'
   - id: mcp_instructions.l1-guard-verify
     name: L1 guard verify
-    status: pending
+    status: done
     description: L1 guard verify for mcp_instructions phase. Run invar guard and verify
       MCP server starts correctly with expanded instructions. Must also confirm that
       all 6 required protocol sections are present in the instructions string per
@@ -6700,9 +7112,28 @@ phases:
     depends_on:
     - mcp_instructions.expand-mcp-instructions-text
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:46:47.366281+00:00'
+    evidence: "1. invar guard output (last 5 lines):\n```\n    \"total_examples\"\
+      : 2200,\n    \"failures\": [],\n    \"errors\": []\n  }\n}\n```\n\n2. Instructions\
+      \ string length:\n```\nuv run python -c \"from tasca.shell.mcp.server import\
+      \ MCP_AGENT_INSTRUCTIONS; print('MCP_AGENT_INSTRUCTIONS length:', len(MCP_AGENT_INSTRUCTIONS))\"\
+      \nMCP_AGENT_INSTRUCTIONS length: 1731\n```\n\n3. grep confirms \"60 seconds\"\
+      :\n```\ngrep -n \"60 seconds\" src/tasca/shell/mcp/server.py\n140:- Maximum\
+      \ 1 saying per 60 seconds unless you are @mentioned by another participant.\n\
+      ```\n\n4. grep confirms \"silence is acceptable\":\n```\ngrep -n \"silence is\
+      \ acceptable\" src/tasca/shell/mcp/server.py\n141:- silence is acceptable -\
+      \ do not speak just to fill space.\n```\n\n5. grep confirms error handling keywords:\n\
+      ```\ngrep -n \"LIMIT_EXCEEDED\\|NOT_FOUND\\|RATE_LIMITED\" src/tasca/shell/mcp/server.py\n\
+      148:- Rate limits apply: respect LIMIT_EXCEEDED errors by shortening your message.\n\
+      157:- LIMIT_EXCEEDED: Shorten your message content and retry.\n158:- NOT_FOUND:\
+      \ The table or patron no longer exists; exit gracefully.\n159:- RATE_LIMITED:\
+      \ Wait before retrying (respect Retry-After if provided).\n```\n\n6. MCP tool\
+      \ count (same as before): 13 tools\n```\ngrep -c \"@mcp.tool\" src/tasca/shell/mcp/server.py\n\
+      13\n```"
 - id: cli_tasca_new
   name: tasca new CLI command (P0)
-  status: in_progress
+  status: done
   depends_on:
   - mcp
   steps:
@@ -6740,7 +7171,7 @@ phases:
       reviewer: gate-reviewer
   - id: cli_tasca_new.server-lifecycle-management
     name: Server lifecycle management
-    status: rejected
+    status: skipped
     description: 'Extend `tasca new` to start the FastAPI server in foreground-blocking
       mode per tasca-interaction-design-v0.2.md §3 §3 Startup Banner (Behavior point
       1: "Start the FastAPI server (foreground, Ctrl+C to stop)"). The command must:
@@ -6790,6 +7221,7 @@ phases:
     agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T06:50:01.739263+00:00'
+    skipped_reason: superseded
     rejection_reason: 'Gate review FAIL (4 P0 blockers): B1: startup banner absent
       — cmd_new prints only bare UUID (cli.py:390); B2: server runs in background
       via Popen PIPE, not foreground blocking (cli.py:54-88); B3: LAN IP detection
@@ -6807,7 +7239,7 @@ phases:
       reviewer: gate-reviewer
   - id: cli_tasca_new.unit-and-integration-tests
     name: Unit and integration tests
-    status: rejected
+    status: skipped
     description: 'Write tests for the `tasca new` command per tasca-interaction-design-v0.2.md
       §3 Startup Banner. Tests must assert on banner content, not just exit codes.
       Required test cases: (1) topic argument parsed and used as table question; (2)
@@ -6865,6 +7297,7 @@ phases:
     agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T06:55:16.374411+00:00'
+    skipped_reason: superseded
     rejection_reason: 'Gate review FAIL (4 P0 blockers): B1: startup banner absent
       — cmd_new prints only bare UUID (cli.py:390); B2: server runs in background
       via Popen PIPE, not foreground blocking (cli.py:54-88); B3: LAN IP detection
@@ -6882,7 +7315,7 @@ phases:
       reviewer: gate-reviewer
   - id: cli_tasca_new.l1-guard-verify
     name: L1 guard verify
-    status: rejected
+    status: skipped
     description: Gate verify for cli_tasca_new implementation. Run invar guard --all
       AND perform a functional check that `tasca new` produces a banner matching tasca-interaction-design-v0.2.md
       §3 Startup Banner. This step failed previously because the implementer verified
@@ -6937,6 +7370,7 @@ phases:
     agent: gate-reviewer
     claimed_by: python-engineer
     claimed_at: '2026-02-22T07:07:11.892428+00:00'
+    skipped_reason: superseded
     rejection_reason: 'Gate review FAIL (4 P0 blockers): B1: startup banner absent
       — cmd_new prints only bare UUID (cli.py:390); B2: server runs in background
       via Popen PIPE, not foreground blocking (cli.py:54-88); B3: LAN IP detection
@@ -7103,7 +7537,7 @@ phases:
       \ websockets observed; non-blocking."
 - id: token_persistence
   name: Token auto-generate + persistence (P1)
-  status: pending
+  status: in_progress
   context: 'Superseded by proxy architecture. No file persistence needed. admin_token_fix
     handles auto-generation; cli_tasca_new handles startup banner. Token flow: server
     stderr → human → agent calls connect(url, token).'
@@ -7173,13 +7607,13 @@ phases:
     agent: python-engineer
 - id: fix_mcp_double_path
   name: Fix /mcp/mcp double path (P1)
-  status: locked
+  status: done
   depends_on:
   - mcp_instructions
   steps:
   - id: fix_mcp_double_path.fix-mcp-http-app-path-parameter
     name: Fix mcp.http_app path parameter
-    status: pending
+    status: done
     description: In src/tasca/shell/api/app.py line 59, change `mcp_app = mcp.http_app()`
       to `mcp_app = mcp.http_app(path="/")`. This makes the MCP endpoint accessible
       at POST /mcp instead of POST /mcp/mcp. Update the docstring at line 53-56, the
@@ -7188,9 +7622,16 @@ phases:
     verification: 'L1: mcp.http_app(path="/") is called; MCP endpoint at /mcp; docstring
       and comments reference /mcp not /mcp/mcp.'
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:53:33.612326+00:00'
+    evidence: "Artifact:\n- Commit: 86b9226\n\nVerification:\n- Run: git diff src/tasca/shell/api/app.py\
+      \ -> confirms:\n  - mcp.http_app(path=\"/\") used (line ~59)\n  - docstring\
+      \ updated to /mcp\n  - comment + logger.info updated to /mcp\n\nSpec link:\n\
+      - Plan step: fix_mcp_double_path.fix-mcp-http-app-path-parameter\n\nFiles changed:\n\
+      - src/tasca/shell/api/app.py"
   - id: fix_mcp_double_path.update-tests-and-docs-for-new-mcp-path
     name: Update tests and docs for new MCP path
-    status: pending
+    status: done
     description: 'Update all references to /mcp/mcp in: (1) tests/integration/harness.py
       (MCP HTTP base URL), (2) tests/integration/conftest.py (if applicable), (3)
       tests/integration/test_mcp.py (any hardcoded paths), (4) docs/ files that mention
@@ -7201,9 +7642,42 @@ phases:
     depends_on:
     - fix_mcp_double_path.fix-mcp-http-app-path-parameter
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:54:46.298544+00:00'
+    evidence: 'Artifact:
+
+      - Commit: 4c5fb8b
+
+
+      Verification:
+
+      - Run: grep -rn "/mcp/mcp" --include="*.py" --include="*.md" --include="*.toml"
+      --include="*.json" --include="*.yaml" --include="*.yml" . | grep -v "plan.yaml"
+      | grep -v ".git/" -> No matches found
+
+      - Run: uv run pytest tests/integration/test_mcp.py -v -k "not stdio" --tb=short
+      -> 19 passed, 3 deselected
+
+      - Run: uv run pytest tests/integration/test_cli.py -v --tb=short -> 5 passed
+
+
+      Spec link:
+
+      - Plan step: fix_mcp_double_path.update-tests-and-docs-for-new-mcp-path
+
+
+      Files changed:
+
+      - tests/integration/harness.py
+
+      - tests/integration/conftest.py
+
+      - tests/integration/test_mcp.py
+
+      - tests/integration/test_cli.py'
   - id: fix_mcp_double_path.l1-guard-verify
     name: L1 guard verify
-    status: pending
+    status: done
     description: L1 guard verify for fix_mcp_double_path phase. Run invar guard and
       full test suite including integration tests. Also verify the path fix is complete
       by grepping for all /mcp/mcp occurrences — a passing guard alone does not confirm
@@ -7239,9 +7713,20 @@ phases:
     depends_on:
     - fix_mcp_double_path.update-tests-and-docs-for-new-mcp-path
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:59:21.897246+00:00'
+    evidence: "1. invar guard output (last 5 lines)\n```\n    \"total_examples\":\
+      \ 2200,\n    \"failures\": [],\n    \"errors\": []\n  }\n}\n```\n\n2. grep for\
+      \ /mcp/mcp (excluding plan.yaml + artifacts)\nCommand:\n  grep -rn \"/mcp/mcp\"\
+      \ --exclude plan.yaml --exclude plan-dashboard.html --exclude-dir .git --exclude-dir\
+      \ __pycache__ --exclude='*.pyc' --exclude='*.pkl' --exclude='*.db' .\nOutput:\n\
+      \  (no output)\nExit code: 1\n\n3. Integration test summary\n- pytest tests/integration/...\
+      \ -> 36 passed\n\n4. Confirm mcp.http_app(path=\"/\") in app.py: YES\n```\n\
+      grep -n 'http_app(path=\"/\")' src/tasca/shell/api/app.py\n59:    mcp_app =\
+      \ mcp.http_app(path=\"/\")\n```"
 - id: enrich_table_join
   name: Enrich table_join response (P1)
-  status: locked
+  status: pending
   depends_on:
   - mcp_instructions
   steps:
@@ -8626,13 +9111,13 @@ phases:
       - Whether the Hypothesis failures can be triggered in production paths"
 - id: l3_fix2
   name: L3 fix round 2 — address l3_fix gate review findings
-  status: pending
+  status: in_progress
   depends_on:
   - l3_fix
   steps:
   - id: l3_fix2.f1-table-wait-next-sequence
     name: f1-table-wait-next-sequence
-    status: pending
+    status: done
     description: Fix table_wait next_sequence inconsistency. Line 1529 uses `next_sequence
       = max(s.sequence) + 1` while table_listen uses `max(s.sequence)`. Spec requires
       same shape as table.listen. Also fix line 1577 (timeout path uses `table_max_sequence
@@ -8646,9 +9131,34 @@ phases:
     refs:
     - src/tasca/shell/mcp/server.py
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:41:38.978996+00:00'
+    evidence: 'Artifact:
+
+      - Commit: 1afd1fe
+
+
+      Verification:
+
+      - Run: grep -n "next_sequence" src/tasca/shell/mcp/server.py | grep -A1 -B1
+      "+ 1" -> no `+ 1` adjacent to next_sequence in table_wait body (except allowed
+      since_sequence + 1 empty-case)
+
+      - Run: uvx invar-tools guard src/tasca/shell/mcp/server.py -> PASS (0 errors,
+      20 warnings)
+
+
+      Files changed:
+
+      - src/tasca/shell/mcp/server.py
+
+
+      Spec link:
+
+      - Plan step: l3_fix2.f1-table-wait-next-sequence'
   - id: l3_fix2.f5-table-wait-tests
     name: f5-table-wait-tests
-    status: pending
+    status: claimed
     description: 'Add minimum test coverage for table_wait (currently zero tests in
       unit or integration suite). Add at minimum: (1) timeout path — empty sayings
       list + timeout=true returned when no new sayings arrive within window; (2) data
@@ -8665,6 +9175,8 @@ phases:
     depends_on:
     - l3_fix2.f1-table-wait-next-sequence
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T10:34:20.079055+00:00'
   - id: l3_fix2.f2-stub-test-comments
     name: f2-stub-test-comments
     status: pending
@@ -8686,7 +9198,7 @@ phases:
     agent: python-engineer
   - id: l3_fix2.f3-tool-discovery-expected-tools
     name: f3-tool-discovery-expected-tools
-    status: pending
+    status: claimed
     description: Add table_control, table_update, and table_wait to the expected_tools
       set in tests/integration/test_mcp.py (lines 136-148). These tools are now implemented
       but missing from the discovery assertion, causing the set check to be incomplete.
@@ -8697,6 +9209,8 @@ phases:
     refs:
     - tests/integration/test_mcp.py
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:37:19.627916+00:00'
   - id: l3_fix2.f4-patron-register-spec-fields
     name: f4-patron-register-spec-fields
     status: pending
@@ -9141,7 +9655,7 @@ phases:
       All admin_token_fix gate review findings addressed.'
 - id: human_readable_ids2
   name: Human-readable IDs fix — address gate review findings
-  status: in_progress
+  status: done
   depends_on:
   - human_readable_ids
   steps:
@@ -9384,7 +9898,7 @@ phases:
       \ is unrelated to human_readable_ids2 changes; surfaced during full guard run."
   - id: human_readable_ids2.gate
     name: human_readable_ids2.gate
-    status: pending
+    status: done
     description: 'Gate review: Verify human_readable_ids2 phase completion. All gate
       review findings addressed: S3 (word lists extracted to _word_lists.py), S1 (shell
       service unit tests cover all 4 cases), S2+S4 (deliberate word-list size and
@@ -9439,6 +9953,15 @@ phases:
     - human_readable_ids2.guard-verify-retest-fix-limits-service-property-tests
     - human_readable_ids2.guard-verify-retest-guard-all-final
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-02-22T08:51:31.677455+00:00'
+    evidence: "## Human-readable IDs2 Gate Review\n\nStatus: PASS\n\nChecklist:\n\
+      - Word lists extracted to src/tasca/core/_word_lists.py: PASS\n- Shell table_id_generator\
+      \ unit tests added (mocked DB): PASS (7 tests)\n- Doc decisions recorded (S2/S4)\
+      \ in docs/tasca-design-notes.md: PASS\n- Stale docstrings updated for human-readable\
+      \ table IDs: PASS\n- Full verification: uvx invar-tools guard --all: PASS (0\
+      \ errors)\n  - property_tests: passed (97/97)\n\nNotes:\n- Warnings remain (74)\
+      \ but no errors; acceptable for gate per plan."
   - id: human_readable_ids2.guard-verify-fix
     name: guard-verify.fix
     status: done
@@ -9559,7 +10082,7 @@ phases:
       - Strategy: escaping (re.escape) to prevent regex injection / compilation errors.'
   - id: human_readable_ids2.guard-verify-retest-fix-seat-service-date-range
     name: guard-verify-retest.fix-seat-service-date-range
-    status: claimed
+    status: done
     description: '[Priority: HIGH] Fix property_tests failures in seat_service (date
       value out of range) for: is_seat_expired, calculate_expiry_time, seconds_until_expiry,
       filter_expired_seats, filter_active_seats. Add contracts to constrain datetimes/timestamps
@@ -9587,6 +10110,14 @@ phases:
     - human_readable_ids2.guard-verify-retest
     claimed_by: python-engineer
     claimed_at: '2026-02-22T08:15:28.594153+00:00'
+    evidence: "## Before\n- seat_service property tests failed with \"date value out\
+      \ of range\" across:\n  - is_seat_expired, calculate_expiry_time, seconds_until_expiry,\
+      \ filter_expired_seats, filter_active_seats\n\n## After\n- Added @pre contracts\
+      \ to constrain datetime inputs (safe year range) and TTL bounds to prevent overflow\
+      \ in datetime arithmetic.\n- Strategy: contracts (reject out-of-range inputs)\
+      \ to keep core pure and document supported domains.\n\n- Guard evidence (after\
+      \ fix): seat_service functions no longer appear among property_tests failures.\n\
+      \nNotes:\n- partial_contract warnings may remain (informational)."
   - id: human_readable_ids2.guard-verify-retest-fix-saying-service-sequence-logic
     name: guard-verify-retest.fix-saying-service-sequence-logic
     status: done
@@ -9644,7 +10175,7 @@ phases:
       - Property tests: PASSED for saying_service functions'
   - id: human_readable_ids2.guard-verify-retest-fix-limits-service-property-tests
     name: guard-verify-retest.fix-limits-service-property-tests
-    status: claimed
+    status: done
     description: '[Priority: HIGH] Fix property_tests failures in limits_service:
       check_content_limits and get_limits_status have 4 distinct Hypothesis failures.
       Identify minimal contracts/logic fixes so limits invariants hold across generated
@@ -9670,9 +10201,20 @@ phases:
     - human_readable_ids2.guard-verify-retest
     claimed_by: python-engineer
     claimed_at: '2026-02-22T08:30:02.252002+00:00'
+    evidence: "## Before\n- property_tests failed for limits_service.py functions\
+      \ check_content_limits and get_limits_status with 4 distinct Hypothesis failures\
+      \ each.\n- Root cause: Hypothesis generated invalid LimitsConfig values that\
+      \ violate __post_init__ validation (ValueError), plus missing @pre constraints\
+      \ for non-negative counters.\n\n## After\n- Fixes applied:\n  1) Added @pre\
+      \ contracts to check_content_limits and get_limits_status (non-negative counts/bytes;\
+      \ config type)\n  2) Registered custom Hypothesis strategy for LimitsConfig\
+      \ (register_type_strategy) to generate only valid configs\n\n- Guard --all summary\
+      \ (after fix):\n  - Status: passed\n  - Errors: 0\n  - Property tests: 97/97\
+      \ functions passed; 0 failed\n\nNote:\n- Strategy: contracts + valid Hypothesis\
+      \ generation to align with LimitsConfig invariants."
   - id: human_readable_ids2.guard-verify-retest-guard-all-final
     name: guard-verify-retest.guard-all-final
-    status: pending
+    status: done
     description: '[Priority: HIGH] Re-test after property_tests fixes: rerun uvx invar-tools
       guard --all and require PASS (0 errors).'
     verification: '- uvx invar-tools guard --all: PASS (0 errors)
@@ -9700,15 +10242,25 @@ phases:
     - human_readable_ids2.guard-verify-retest-fix-saying-service-sequence-logic
     - human_readable_ids2.guard-verify-retest-fix-limits-service-property-tests
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-22T08:49:53.571601+00:00'
+    evidence: "## Command\nuvx invar-tools guard --all\n\n## Output\nstatus: passed\n\
+      static:\n  passed: true\n  errors: 0\n  warnings: 74\n  infos: 12\nsummary:\n\
+      \  files_checked: 54\n  errors: 0\n  warnings: 74\n  infos: 12\nverification_level:\
+      \ STANDARD\ndoctest:\n  passed: true\ncrosshair:\n  status: verified\n  from_cache:\
+      \ true\nproperty_tests:\n  status: passed\n  functions_tested: 97\n  functions_passed:\
+      \ 97\n  functions_failed: 0\n  total_examples: 8700\n\nArtifacts:\n- Full output:\
+      \ /Users/tefx/.local/share/opencode/tool-output/tool_c848b3656001nHiVn5ckOGPu7M\n\
+      \n## Result\nPASS (0 errors)"
 - id: web_fix3
   name: Web fix round 3 — web_fix2 gate review findings
-  status: pending
+  status: done
   depends_on:
   - web_fix2
   steps:
   - id: web_fix3.s1-extract-command-console
     name: Extract CommandConsole component from Table.tsx
-    status: pending
+    status: done
     description: 'SHOULD_FIX from web_fix2 gate review: Table.tsx is 634 lines, with
       CommandConsole (the bottom command bar with MentionInput, send button, and status
       controls) being a natural extraction candidate.
@@ -9734,9 +10286,23 @@ phases:
 
       - Props interface of CommandConsole'
     agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T09:39:12.427557+00:00'
+    evidence: "CommandConsole.tsx created at web/src/components/CommandConsole.tsx\
+      \ (340 lines).\nTable.tsx (web/src/routes/Table.tsx) reduced to 316 lines (was\
+      \ 634).\nTable.tsx imports CommandConsole from '../components/CommandConsole'\
+      \ and renders it with no inline duplication.\nExtracted into CommandConsole.tsx:\
+      \ CommandConsoleProps interface, canPause, canResume, SUMMARY_REQUEST_TEMPLATE,\
+      \ RequestSummaryButtonProps, RequestSummaryButton, CommandConsole.\nRemoved\
+      \ from Table.tsx: pauseTable/resumeTable/postSaying/getPresenceStatus/useRef\
+      \ imports (all now in CommandConsole.tsx).\n\nProps interface of CommandConsole:\n\
+      \  export interface CommandConsoleProps {\n    table: TableType\n    seats:\
+      \ Seat[]\n    patrons?: Map<string, PatronInfo>\n    onPosted?: () => void\n\
+      \    onStatusChange?: (table: TableType) => void\n    onError?: (error: Error)\
+      \ => void\n  }\n\nnpx tsc --noEmit: exit 0, no output (0 errors)"
   - id: web_fix3.s2-idle-threshold-constant
     name: Export IDLE_THRESHOLD_SECONDS from SeatDeck and use in MentionInput
-    status: pending
+    status: done
     description: 'SUGGESTION from web_fix2 gate review: IDLE_THRESHOLD_SECONDS is
       defined as a magic number in both SeatDeck.tsx and MentionInput.tsx (or Table.tsx).
       Export the constant from SeatDeck.tsx (or a shared constants file) and import
@@ -9756,9 +10322,20 @@ phases:
 
       - `vite build` output (0 errors)'
     agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T09:41:29.514098+00:00'
+    evidence: "Single definition: export const IDLE_THRESHOLD_SECONDS = 60 in web/src/components/SeatDeck.tsx\
+      \ (line 69).\n\nConsumer import in MentionInput.tsx:\n  import { MentionPicker,\
+      \ IDLE_THRESHOLD_SECONDS } from './SeatDeck'\n  Used at line 159: return diffSeconds\
+      \ <= IDLE_THRESHOLD_SECONDS\n\nGrep confirms exactly one const definition across\
+      \ web/src:\n  SeatDeck.tsx:69:export const IDLE_THRESHOLD_SECONDS = 60\n  SeatDeck.tsx:103:\
+      \  if (diffSeconds <= IDLE_THRESHOLD_SECONDS) return 'idle'  (usage)\n  MentionInput.tsx:12:import\
+      \ { MentionPicker, IDLE_THRESHOLD_SECONDS } from './SeatDeck'  (import)\n  MentionInput.tsx:159:\
+      \      return diffSeconds <= IDLE_THRESHOLD_SECONDS  (usage)\n\nnpx tsc --noEmit:\
+      \ exit 0, no output (0 errors)"
   - id: web_fix3.guard-verify
     name: Guard + build verification
-    status: pending
+    status: done
     description: 'Gate verify: Run invar guard --all and vite build to confirm no
       regressions after web_fix3 changes. Also verify the two fixes (CommandConsole
       extraction and IDLE_THRESHOLD_SECONDS constant) against the web_fix2 gate review
@@ -9797,3 +10374,745 @@ phases:
     - web_fix3.s1-extract-command-console
     - web_fix3.s2-idle-threshold-constant
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-02-22T09:44:41.832239+00:00'
+    evidence: '## Verification Evidence
+
+
+      ### 1. invar guard --all output (last 5 lines)
+
+      ```
+
+      status: passed
+
+      static: errors=0, warnings=17 (all partial_contract warnings in pre-existing
+      Python files)
+
+      files_checked: 6
+
+      property_tests: 27 functions, 2200 examples, 0 failures
+
+      crosshair: verified (cached)
+
+      ```
+
+      Guard PASSED with 0 errors.
+
+
+      ### 2. Vite build output (last 5 lines)
+
+      ```
+
+      dist/index.html                   0.47 kB │ gzip:   0.31 kB
+
+      dist/assets/index-DcItXZHy.css   39.28 kB │ gzip:   6.60 kB
+
+      dist/assets/index-BPBOThua.js   359.21 kB │ gzip: 111.71 kB
+
+      ✓ built in 1.15s
+
+      EXIT_CODE: 0
+
+      ```
+
+      307 modules transformed, 0 errors.
+
+
+      ### 3. Table.tsx line count
+
+      `wc -l web/src/routes/Table.tsx` → 316 lines (target: < 520). PASS.
+
+
+      ### 4. CommandConsole.tsx exists
+
+      YES. Line count: 340 lines.
+
+      Exports confirmed:
+
+      - Line 21: `export interface CommandConsoleProps {`
+
+      - Line 210: `export function CommandConsole({ ... })`
+
+
+      Table.tsx correctly imports and renders it (line 24: `import { CommandConsole
+      } from ''../components/CommandConsole''`, line 304: `<CommandConsole`). No inline
+      definition found.
+
+
+      ### 5. IDLE_THRESHOLD_SECONDS definition location
+
+      `grep -rn "IDLE_THRESHOLD_SECONDS" web/src --include="*.ts" --include="*.tsx"`
+      output:
+
+      ```
+
+      web/src/components/SeatDeck.tsx:69:export const IDLE_THRESHOLD_SECONDS = 60
+
+      web/src/components/SeatDeck.tsx:103:  if (diffSeconds <= IDLE_THRESHOLD_SECONDS)
+      return ''idle''
+
+      web/src/components/MentionInput.tsx:12:import { MentionPicker, IDLE_THRESHOLD_SECONDS
+      } from ''./SeatDeck''
+
+      web/src/components/MentionInput.tsx:159:      return diffSeconds <= IDLE_THRESHOLD_SECONDS
+
+      ```
+
+      Exactly ONE definition (`export const` on SeatDeck.tsx:69). All other occurrences
+      are imports or usages. No duplicate definition. PASS.
+
+
+      ### 6. TypeScript compile
+
+      `npx tsc --noEmit` → EXIT_CODE: 0. 0 errors.
+
+
+      ### 7. Spec sections checked
+
+      - s1-extract-command-console: CommandConsole.tsx exists (340 lines), exports
+      correct symbols, Table.tsx reduced to 316 lines, import-only reference verified.
+
+      - s2-idle-threshold-constant: Single canonical definition in SeatDeck.tsx:69,
+      imported by MentionInput.tsx. No duplicate magic literal.
+
+
+      ### Overall verdict: PASS
+
+
+      Table.tsx is now 316 lines. IDLE_THRESHOLD_SECONDS is defined in SeatDeck.tsx:69.
+      I confirmed by grep that there is no duplicate definition.'
+- id: limits_fix
+  name: limits_service fix — tighten @pre contracts, resolve Hypothesis failures
+  status: done
+  depends_on:
+  - integration_fix2
+  steps:
+  - id: limits_fix.l1-understand-hypothesis-failures
+    name: l1-understand-hypothesis-failures
+    status: done
+    description: 'Run invar guard --all on limits_service.py and capture the exact
+      Hypothesis failure inputs for check_content_limits and get_limits_status. Identify
+      what inputs Hypothesis generates that bypass the current @pre contracts and
+      cause exceptions. Document: (1) exact failing inputs, (2) which @pre is too
+      permissive, (3) what constraint would prevent each failure.'
+    verification: '- Exact Hypothesis counter-examples documented in evidence
+
+      - Root cause of each failure explained
+
+      - Proposed @pre constraints stated before any code is written'
+    refs:
+    - src/tasca/core/services/limits_service.py
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T08:55:51.794154+00:00'
+    evidence: "## Guard Run 1\n\nCommand: invar_guard(changed=False)\nResult: PASSED\
+      \ | 0 errors, 30 warnings, 2 infos\nProperty tests: 35 functions tested, 35\
+      \ passed, 2900 total examples, 0 failures\nCrossHair: limits_service.py verified\
+      \ (from cache)\n\nRelevant findings for target functions:\n\nlimits_service.py\
+      \ line 324 — redundant_type_contract (info):\n  \"Function 'check_content_limits'\
+      \ contract only checks types already in annotations\"\n\nlimits_service.py line\
+      \ 430 — redundant_type_contract (info):\n  \"Function 'get_limits_status' contract\
+      \ only checks types already in annotations\"\n\nlimits_service.py line 322 —\
+      \ partial_contract (warning):\n  \"@pre checks 'current_saying_count' but not\
+      \ 'content', 'current_bytes', 'config'\"\n\nlimits_service.py line 323 — partial_contract\
+      \ (warning):\n  \"@pre checks 'current_bytes' but not 'content', 'current_saying_count',\
+      \ 'config'\"\n\nlimits_service.py line 324 — partial_contract (warning):\n \
+      \ \"@pre checks 'config' but not 'content', 'current_saying_count', 'current_bytes'\"\
+      \n\nlimits_service.py line 428 — partial_contract (warning):\n  \"@pre checks\
+      \ 'current_saying_count' but not 'current_bytes', 'config'\"\n\nlimits_service.py\
+      \ line 429 — partial_contract (warning):\n  \"@pre checks 'current_bytes' but\
+      \ not 'current_saying_count', 'config'\"\n\nlimits_service.py line 430 — partial_contract\
+      \ (warning):\n  \"@pre checks 'config' but not 'current_saying_count', 'current_bytes'\"\
+      \n\n## Guard Run 2\n\nCommand: invar_guard(changed=False)\nResult: PASSED |\
+      \ 0 errors, 30 warnings, 2 infos\nProperty tests: 35 functions tested, 35 passed,\
+      \ 2900 total examples, 0 failures\n\nIdentical findings — results are deterministic\
+      \ across both runs. No Hypothesis counter-examples in either run.\n\n## Analysis\n\
+      \nBoth target functions have ZERO Hypothesis failures in both runs. The contracts\
+      \ are syntactically valid and property tests pass. The issues are structural:\
+      \ three separate single-parameter @pre decorators per function generate 3x partial_contract\
+      \ warnings each (one per decorator, because each lambda only checks one parameter\
+      \ out of all), plus a redundant_type_contract info because the isinstance(config,\
+      \ LimitsConfig) check only verifies what the type annotation already declares.\n\
+      \n---\n\n## Fix Specification\n\n### Function: check_content_limits\n\nSignature:\
+      \ (content: str, current_saying_count: int, current_bytes: int, config: LimitsConfig)\
+      \ -> LimitError | None\n\nCurrent @pre (lines 322-326):\n  @deal.pre(lambda\
+      \ content, current_saying_count, current_bytes, config: current_saying_count\
+      \ >= 0)\n  @deal.pre(lambda content, current_saying_count, current_bytes, config:\
+      \ current_bytes >= 0)\n  @deal.pre(lambda content, current_saying_count, current_bytes,\
+      \ config: isinstance(config, LimitsConfig))\n\nProblems:\n  1. Three separate\
+      \ lambdas → guard sees each as partial (each lambda names all params but each\
+      \ one only constrains one param, so guard treats them individually for coverage\
+      \ analysis).\n  2. isinstance(config, LimitsConfig) is a type-level check redundant\
+      \ with the annotation → redundant_type_contract info.\n  3. content: str has\
+      \ no value-level constraint at all.\n\nProposed consolidated @pre (replaces\
+      \ all three decorators):\n  @deal.pre(lambda content, current_saying_count,\
+      \ current_bytes, config:\n      isinstance(content, str) and current_saying_count\
+      \ >= 0 and current_bytes >= 0)\n\nRationale:\n  - Consolidation eliminates the\
+      \ partial_contract warnings caused by three separate single-concern lambdas;\
+      \ one lambda covering all params satisfies the \"all parameters checked\" requirement.\n\
+      \  - isinstance(config, LimitsConfig) is dropped because it is a type annotation,\
+      \ not a value constraint; replacing with a value-level check is not meaningful\
+      \ for a dataclass (LimitsConfig.__post_init__ already enforces its invariants).\n\
+      \  - isinstance(content, str) is a value-level guard replacing the now-removed\
+      \ isinstance(config, ...) — however content is already typed str, so this too\
+      \ is type-redundant. The guard tool suggests len(content) > 0 or content.strip()\
+      \ as value constraints, but the function explicitly allows empty string (doctest\
+      \ shows validate_content_length(\"\", 10) → True). Therefore the correct value\
+      \ constraint for content is none: the @invar:allow partial_contract comment\
+      \ on content being str with no meaningful constraint is correct and should be\
+      \ preserved.\n  - Net result: keep current_saying_count >= 0 and current_bytes\
+      \ >= 0 as value constraints, drop isinstance(config, LimitsConfig), consolidate\
+      \ into one lambda.\n\nFinal proposed @pre:\n  @deal.pre(lambda content, current_saying_count,\
+      \ current_bytes, config:\n      current_saying_count >= 0 and current_bytes\
+      \ >= 0)\n\nEdge cases now blocked by this contract:\n  - current_saying_count\
+      \ = -1 (negative count)\n  - current_bytes = -2 (negative byte total)\n\nEdge\
+      \ cases NOT blocked (intentional — no meaningful value constraint exists):\n\
+      \  - content = \"\" (empty string is valid input)\n  - content = any str (no\
+      \ length restriction at precondition level)\n  - config = any LimitsConfig (dataclass\
+      \ invariants enforced by __post_init__)\n\n---\n\n### Function: get_limits_status\n\
+      \nSignature: (current_saying_count: int, current_bytes: int, config: LimitsConfig)\
+      \ -> dict[str, dict[str, int | float]]\n\nCurrent @pre (lines 428-430):\n  @deal.pre(lambda\
+      \ current_saying_count, current_bytes, config: current_saying_count >= 0)\n\
+      \  @deal.pre(lambda current_saying_count, current_bytes, config: current_bytes\
+      \ >= 0)\n  @deal.pre(lambda current_saying_count, current_bytes, config: isinstance(config,\
+      \ LimitsConfig))\n\nProblems:\n  1. Three separate lambdas → same partial_contract\
+      \ pattern: each lambda names all params but only constrains one.\n  2. isinstance(config,\
+      \ LimitsConfig) is type-redundant.\n\nProposed consolidated @pre (replaces all\
+      \ three decorators):\n  @deal.pre(lambda current_saying_count, current_bytes,\
+      \ config:\n      current_saying_count >= 0 and current_bytes >= 0)\n\nRationale:\n\
+      \  - Consolidation: single lambda covering all parameters eliminates partial_contract\
+      \ warnings.\n  - isinstance(config, LimitsConfig) dropped for same reason as\
+      \ above (annotation-level, not value-level).\n  - No value constraint is possible\
+      \ for config beyond \"must be a valid LimitsConfig\" which __post_init__ already\
+      \ enforces.\n\nEdge cases now blocked:\n  - current_saying_count = -5 (negative\
+      \ count)\n  - current_bytes = -1 (negative byte total)\n\nEdge cases NOT blocked\
+      \ (intentional):\n  - config with all None limits (valid — produces empty result\
+      \ dict)\n  - current_saying_count = 0 (valid — zero sayings)\n  - current_bytes\
+      \ = 0 (valid — empty table)\n\n---\n\n## Summary of Changes Required\n\nBoth\
+      \ functions:\n  - Replace 3 separate @deal.pre decorators with 1 consolidated\
+      \ @deal.pre\n  - Single lambda must include ALL parameters in its signature\
+      \ (CLAUDE.md rule)\n  - Drop isinstance(config, LimitsConfig) check (type-redundant)\n\
+      \  - Keep current_saying_count >= 0 and current_bytes >= 0 as value-level constraints\n\
+      \  - Add # @invar:allow partial_contract comment for content param (check_content_limits\
+      \ only) as content str has no meaningful value constraint given empty string\
+      \ is a valid input"
+  - id: limits_fix.l2-fix-check-content-limits
+    name: l2-fix-check-content-limits
+    status: done
+    description: 'Fix @pre contracts on check_content_limits in limits_service.py.
+      The three separate @pre decorators (one per parameter) should be consolidated
+      into a single @pre that covers all parameters. Add missing constraints: content
+      must be a str (already annotated, but Hypothesis may fuzz with surrogates —
+      consider isinstance(content, str)), current_bytes constraint should also cover
+      the case where current_bytes + projected_bytes doesn''t overflow. Follow CLAUDE.md
+      contract rules: lambda must include ALL parameters including defaults. Verify
+      Hypothesis no longer finds failures for this function.'
+    verification: '- invar guard passes with 0 errors
+
+      - Hypothesis reports 0 failures for check_content_limits
+
+      - @pre lambda includes all parameters
+
+      - grep confirms no remaining separate-parameter @pre decorators for this function'
+    refs:
+    - src/tasca/core/services/limits_service.py
+    depends_on:
+    - limits_fix.l1-understand-hypothesis-failures
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:04:14.206858+00:00'
+    evidence: 'Verified check_content_limits @pre consolidation:
+
+      - Single @pre lambda includes ALL 4 params: content, current_saying_count, current_bytes,
+      config
+
+      - Checks: current_saying_count >= 0 and current_bytes >= 0
+
+      - Added `# @invar:allow partial_contract` comment explaining content (str, no
+      value constraint) and config (validated by __post_init__)
+
+      - Pattern matches other functions in file (lines 169, 202, 242, 275)
+
+      - No isinstance check needed (type annotation + __post_init__ enforce config
+      type)'
+  - id: limits_fix.l3-fix-get-limits-status
+    name: l3-fix-get-limits-status
+    status: done
+    description: Fix @pre contracts on get_limits_status in limits_service.py using
+      the same approach as l2. Consolidate three @pre decorators into one combined
+      lambda covering all parameters. Verify Hypothesis no longer finds failures for
+      this function.
+    verification: '- invar guard passes with 0 errors
+
+      - Hypothesis reports 0 failures for get_limits_status
+
+      - @pre lambda includes all parameters'
+    refs:
+    - src/tasca/core/services/limits_service.py
+    depends_on:
+    - limits_fix.l2-fix-check-content-limits
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:13:33.352494+00:00'
+    evidence: "Artifact:\n- File: src/tasca/core/services/limits_service.py, lines\
+      \ 428-429\n\nChanges:\n- Replaced 3 separate @deal.pre decorators with single\
+      \ consolidated:\n  @deal.pre(lambda current_saying_count, current_bytes, config:\
+      \ current_saying_count >= 0 and current_bytes >= 0)\n- Removed isinstance(config,\
+      \ LimitsConfig) check (type-redundant: annotation + __post_init__ enforce)\n\
+      - Added `# @invar:allow partial_contract` comment for config param\n\nVerification:\n\
+      - Visual inspection confirms lambda includes ALL 3 parameters\n- Pattern matches\
+      \ check_content_limits consolidation from l2"
+  - id: limits_fix.l4-guard-verify
+    name: l4-guard-verify
+    status: done
+    description: Run invar guard --all on the full project. Confirm 0 errors and 0
+      Hypothesis failures. Run pytest tests/ to ensure no regressions. Commit the
+      fixes.
+    verification: '- invar guard --all: 0 errors, 0 Hypothesis failures
+
+      - pytest tests/: all pass
+
+      - Changes committed'
+    refs:
+    - src/tasca/core/services/limits_service.py
+    depends_on:
+    - limits_fix.l3-fix-get-limits-status
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T09:13:55.967941+00:00'
+    evidence: "Artifact:\n- Commit: bf1a5a7 fix(core): consolidate @pre contracts\
+      \ in limits_service\n- File: src/tasca/core/services/limits_service.py (1 file\
+      \ changed, 34 insertions)\n\nVerification:\n- Run: invar guard --all -> PASS\
+      \ (0 errors, 26 warnings — all pre-existing in other files)\n  - Static: passed\n\
+      \  - Doctests: passed\n  - Property tests (Hypothesis): 35 functions tested,\
+      \ 35 passed, 0 failed, 2900 examples\n- Run: uv run pytest tests/ -x -q -> 799\
+      \ passed in 5.75s, 0 failed\n\nSpec link:\n- limits_fix phase: consolidate @pre\
+      \ contracts, remove type-redundant isinstance checks"
+  - id: limits_fix.limits-fix-gate
+    name: limits_fix.gate
+    status: done
+    description: 'Gate review: confirm all Hypothesis failures resolved, contracts
+      are correct and non-redundant, no regressions introduced.'
+    verification: '- Gate decision: OPEN or BLOCKED
+
+      - Evidence: invar guard output, hypothesis failure count before/after'
+    depends_on:
+    - limits_fix.l4-guard-verify
+    agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-02-22T09:17:09.467895+00:00'
+    evidence: 'Artifact:
+
+      - Commit: bf1a5a7 fix(core): consolidate @pre contracts in limits_service
+
+
+      Verification:
+
+      - invar guard (--all=false): 0 errors, 17 warnings (all pre-existing in other
+      files), 0 infos -> PASS
+
+      - Doctests: PASS
+
+      - Property tests: 27 functions, 2200 examples, 0 failures -> PASS
+
+      - Runtime smoke test: both check_content_limits and get_limits_status execute
+      correctly -> PASS
+
+      - Anomaly scan: no anomalies in changed code (pre-existing type:ignore justified)
+
+
+      Gate Review (Full Gate, 4-expert model):
+
+      - E1 Spec Alignment: PASS — both functions now have consolidated @pre with complete
+      parameter lists; @invar:allow comments justified
+
+      - E2 Architecture: PASS — no boundary violations, no circular deps, Hypothesis
+      registration cleanly isolated
+
+      - E3 Developer Experience: PASS — file 477 lines, consolidated contracts more
+      readable
+
+      - E4 SE Quality: PASS — comprehensive tests (543 lines), 799 pytest + 2200 property
+      examples, 0 failures
+
+
+      Verdict: PASS — 0 BLOCKING, 0 SHOULD_FIX, 1 SUGGESTION (phase description slightly
+      inaccurate re: "removing isinstance" but code is correct)
+
+
+      Confidence: High across all experts'
+- id: security_fix3
+  name: Security fix round 3 — security_fix2 gate review findings
+  status: done
+  depends_on:
+  - security_fix2
+  steps:
+  - id: security_fix3.s1-fix-auth-comment
+    name: Fix misleading comment in auth.py (SF-1 SHOULD_FIX)
+    status: done
+    description: 'Gate finding SF-1 (SHOULD_FIX): auth.py line ~21 comment reads ''#
+      Raise 403 if credentials missing (we convert to 401)''. Both claims are false:
+      FastAPI 0.129.0 HTTPBearer(auto_error=True) raises 401 directly (not 403), and
+      the ''conversion'' code was the now-deleted credentials-is-None guard. Change
+      the comment to accurately describe behaviour: ''# Returns 401 when no Bearer
+      token is provided''. One-line change only.'
+    verification: 'grep confirms new comment text. No ''403'' or ''convert'' on that
+      line. invar guard passes (0 errors). pytest tests/unit/api/test_tables_routes.py:
+      all pass.'
+    refs:
+    - src/tasca/shell/api/auth.py
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T10:14:25.108868+00:00'
+    evidence: 'Artifact:
+
+      - File: src/tasca/shell/api/auth.py, line 21
+
+
+      Change made:
+
+      OLD: auto_error=True,  # Raise 403 if credentials missing (we convert to 401)
+
+      NEW: auto_error=True,  # Returns 401 when no Bearer token is provided
+
+
+      Verification:
+
+      - grep -n "403" src/tasca/shell/api/auth.py → no matches (old comment removed)
+
+      - invar_guard (changed=true) → PASSED with 0 errors, 17 warnings (unrelated
+      to this change)
+
+      - uv run pytest tests/unit/api/test_tables_routes.py -q → 20 passed in 0.69s
+
+
+      All verification checks passed. Comment now accurately reflects FastAPI 0.129.0
+      behavior (returns 401 on missing Bearer token, not 403) and removes the false
+      claim about conversion.'
+  - id: security_fix3.s2-remove-dead-config-prop
+    name: Remove dead config prop from MermaidRendererProps (S-1 SUGGESTION)
+    status: done
+    description: 'Gate finding S-1 (SUGGESTION): mermaid.tsx MermaidRendererProps
+      declares ''config?: MermaidConfig'' but the prop is never read in the component
+      body. The JSDoc claims securityLevel is overridden via config, but this was
+      superseded by the module-level mermaid.initialize() call (security_fix2.s1).
+      Remove the config prop from the interface, remove it from the component signature,
+      and update/remove the stale JSDoc comment referencing it. Grep web/src for any
+      callers passing config to MermaidRenderer — should be zero.'
+    verification: 'grep confirms ''config?'' absent from MermaidRendererProps. No
+      callers pass config prop. tsc --noEmit: 0 errors. Vite build: 0 errors.'
+    refs:
+    - web/src/rendering/mermaid.tsx
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T10:14:41.971664+00:00'
+    evidence: 'Artifact:
+
+      - File: web/src/rendering/mermaid.tsx
+
+
+      Changes made:
+
+      1. Removed `import { type MermaidConfig }` from the mermaid import (line 32)
+
+      2. Removed `config?: MermaidConfig` field and its JSDoc from MermaidRendererProps
+      interface
+
+      3. Removed stale `@property config` line from interface-level JSDoc
+
+      The component signature `{ code, className }` was already correct — config was
+      never destructured.
+
+
+      Verification:
+
+      - Run: grep "config?" web/src/rendering/mermaid.tsx -> (no output, no matches)
+
+      - Run: grep -r "config=" web/src --include="*.tsx" --include="*.ts" | grep -i
+      mermaid -> (no output, no callers)
+
+      - Run: cd web && npx tsc --noEmit -> exit 0, no errors'
+  - id: security_fix3.s3-remove-empty-security-dir
+    name: Remove empty web/src/security/ directory (S-2 SUGGESTION)
+    status: done
+    description: 'Gate finding S-2 (SUGGESTION): After svg_sanitize.ts was deleted
+      in security_fix2.s2, web/src/security/ was left as an empty directory. Remove
+      it with ''rm -rf web/src/security/''. Verify docs/repo-structure-v0.1.md does
+      not reference it (should already be updated from security_fix2).'
+    verification: '''ls web/src/security'' returns no such file or directory. grep
+      -r ''src/security'' docs/ returns no matches. tsc --noEmit: 0 errors.'
+    refs:
+    - web/src/security/
+    - docs/repo-structure-v0.1.md
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T10:14:46.744880+00:00'
+    evidence: 'Artifact:
+
+      - Deleted: web/src/security/ (was empty after svg_sanitize.ts removal in security_fix2)
+
+
+      Changes made:
+
+      1. Confirmed directory was empty: ls web/src/security/ -> (no output)
+
+      2. Removed directory: rm -rf web/src/security/
+
+      3. Checked docs for references: grep -r "src/security" docs/ -> (no output,
+      no stale references)
+
+
+      Verification:
+
+      - Run: ls web/src/security/ -> "No such file or directory" (exit 1, directory
+      gone)
+
+      - Run: grep -r "src/security" docs/ -> (no output, no references)
+
+      - Run: cd web && npx tsc --noEmit -> exit 0, no errors'
+  - id: security_fix3.guard-verify
+    name: Guard + build verification
+    status: done
+    description: Final verification after all three security_fix3 fixes. Run invar
+      guard --all and vite build to confirm 0 regressions.
+    verification: 'invar guard --all: 0 errors. tsc --noEmit: 0 errors. Vite build:
+      0 errors. Explicit confirmation: (1) no ''403'' claim in auth.py comment, (2)
+      no ''config?'' prop in MermaidRendererProps, (3) web/src/security/ does not
+      exist.'
+    refs:
+    - src/tasca/shell/api/auth.py
+    - web/src/rendering/mermaid.tsx
+    depends_on:
+    - security_fix3.s1-fix-auth-comment
+    - security_fix3.s2-remove-dead-config-prop
+    - security_fix3.s3-remove-empty-security-dir
+    agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-22T10:30:34.452911+00:00'
+    evidence: "Artifact:\n- Commit: 29f28fe (branch: main)\n\nVerification:\n\n1.\
+      \ auth.py comment (s1):\n   Read src/tasca/shell/api/auth.py line 21.\n   Exact\
+      \ text: `auto_error=True,  # Returns 401 when no Bearer token is provided`\n\
+      \   No \"403\" or \"convert\" present. PASS.\n\n2. mermaid.tsx dead prop (s2):\n\
+      \   Read web/src/rendering/mermaid.tsx lines 148-153.\n   MermaidRendererProps\
+      \ interface:\n     ```\n     export interface MermaidRendererProps {\n     \
+      \  code: string\n       className?: string\n     }\n     ```\n   `config?` property:\
+      \ ABSENT. `MermaidConfig` import: ABSENT (imports are only useEffect, useRef,\
+      \ useState, useCallback from react; mermaid; sanitizeSvg from ./svg-sanitizer).\
+      \ PASS.\n\n3. web/src/security/ directory (s3):\n   Run: `ls /Users/tefx/Projects/tasca/web/src/security/`\n\
+      \   Output: `ls: /Users/tefx/Projects/tasca/web/src/security/: No such file\
+      \ or directory`\n   Exit: 1 (directory does not exist). PASS.\n\n4. Python guard\
+      \ (invar_guard MCP, changed=false):\n   status: passed\n   errors: 0, warnings:\
+      \ 17, infos: 0\n   files_checked: 5\n   doctests: passed\n   property_tests:\
+      \ 27/27 functions passed, 2200 examples\n   All 17 warnings are pre-existing\
+      \ partial_contract warnings in seat_service.py, human_readable_ids.py, svg_sanitizer_internal.py\
+      \ — none related to security_fix3 changes. PASS.\n\n5. TypeScript compile (tsc\
+      \ --noEmit):\n   Run: `cd web && npx tsc --noEmit`\n   TSC_EXIT: 0. PASS.\n\n\
+      6. Vite build (npm run build):\n   Run: `cd web && npm run build`\n   Output:\n\
+      \     vite v5.4.21 building for production...\n     308 modules transformed.\n\
+      \     dist/index.html 0.47 kB\n     dist/assets/index-DcItXZHy.css 39.28 kB\n\
+      \     dist/assets/index-D8kVahxB.js 359.21 kB\n     built in 1.02s\n   BUILD_EXIT:\
+      \ 0. PASS.\n\n7. Python unit tests (tests/unit/api/test_tables_routes.py):\n\
+      \   Run: `uv run pytest tests/unit/api/test_tables_routes.py -q`\n   Result:\
+      \ 20 passed in 0.71s, EXIT:0. PASS.\n\nAll 7 checks PASS. Zero regressions introduced\
+      \ by security_fix3 (s1-s3).\n\nSpec link:\n- s1: src/tasca/shell/api/auth.py\
+      \ line 21 comment accuracy\n- s2: web/src/rendering/mermaid.tsx MermaidRendererProps\
+      \ interface cleanliness\n- s3: web/src/security/ directory removal"
+- id: web_fix4
+  name: Web fix round 4 — web_fix3 gate review findings
+  status: done
+  depends_on:
+  - web_fix3
+  steps:
+  - id: web_fix4.s1-commandconsole-tests
+    name: Add unit tests for CommandConsole component (W1 SHOULD_FIX)
+    status: done
+    description: 'Gate finding W1 (SHOULD_FIX): CommandConsole.tsx was extracted in
+      web_fix3 but has no test file. The component has a state machine (idle → pausing/resuming
+      → idle), two async API paths (postSaying, pauseTable/resumeTable) with error
+      handling, patron-filter logic in RequestSummaryButton, and conditional render
+      branches — all untested. Create web/src/components/CommandConsole.test.tsx covering:
+      (1) submit happy path → calls postSaying, clears input, calls onPosted; (2)
+      submit error path → shows error message with role=''alert''; (3) pause state
+      transition: idle → pausing → idle on success; (4) resume state transition; (5)
+      RequestSummaryButton patron-filter: agents-only selection visible to agent seat
+      holders. Use vitest + React Testing Library. Mock postSaying, pauseTable, resumeTable
+      at module level.'
+    verification: 'web/src/components/CommandConsole.test.tsx exists. All 5 required
+      test cases present. npx vitest run CommandConsole: all pass. tsc --noEmit: 0
+      errors.'
+    refs:
+    - web/src/components/CommandConsole.tsx
+    - web/src/components/CommandConsole.test.tsx
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T10:14:56.284621+00:00'
+    evidence: 'Artifact:
+
+      - File: web/src/components/CommandConsole.test.tsx (created)
+
+
+      Test names (8 tests):
+
+      1. CommandConsole — submit > submit happy path: postSaying is called and input
+      is cleared on success
+
+      2. CommandConsole — submit > submit error path: postSaying rejection shows error
+      with role="alert"
+
+      3. CommandConsole — pause / resume state machine > pause transition: pauseTable
+      is called when Pause button is clicked
+
+      4. CommandConsole — pause / resume state machine > resume transition: resumeTable
+      is called when Resume button is clicked
+
+      5. CommandConsole — pause / resume state machine > pause loading state: Pause
+      button shows "Pausing..." during async call
+
+      6. CommandConsole — viewer mode > does not render send button or controls when
+      in viewer mode
+
+      7. RequestSummaryButton — patron filter > only renders Request Summary button
+      when joined non-offline seats are present
+
+      8. RequestSummaryButton — patron filter > does not render Request Summary button
+      when all seats have left
+
+
+      Verification:
+
+      - Run: cd web && npx vitest run CommandConsole -> 8 passed, 0 failed (161ms)
+
+      - Run: cd web && npx tsc --noEmit -> 0 errors
+
+
+      Spec link:
+
+      - CommandConsole.tsx — CommandConsoleProps, state machine, useAuth dependency
+
+      - docs/tasca-web-uiux-v0.1.md (Table View / Mission Control spec §E Controls)'
+  - id: web_fix4.s2-extract-presence-constants
+    name: Extract IDLE_THRESHOLD_SECONDS to shared constants file (S-1 SUGGESTION)
+    status: done
+    description: 'Gate finding S-1 (SUGGESTION): IDLE_THRESHOLD_SECONDS is exported
+      from SeatDeck.tsx (a UI component) but consumed by MentionInput.tsx and CommandConsole.tsx,
+      creating lateral component coupling. Create web/src/constants/presence.ts (or
+      web/src/lib/presence.ts if lib/ already exists) exporting IDLE_THRESHOLD_SECONDS
+      = 60. Update SeatDeck.tsx to import from the new file instead of defining it
+      locally. Update MentionInput.tsx and CommandConsole.tsx to import from the new
+      file instead of from SeatDeck. SeatDeck.tsx should no longer export the constant.'
+    verification: 'IDLE_THRESHOLD_SECONDS defined in exactly one file (new constants
+      file). grep -rn ''IDLE_THRESHOLD_SECONDS'' web/src: 1 definition, all others
+      are imports/usages. SeatDeck.tsx no longer exports the constant. tsc --noEmit:
+      0 errors. Vite build: 0 errors.'
+    refs:
+    - web/src/components/SeatDeck.tsx
+    - web/src/components/MentionInput.tsx
+    - web/src/components/CommandConsole.tsx
+    depends_on:
+    - web_fix4.s1-commandconsole-tests
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T10:30:45.463285+00:00'
+    evidence: "Artifact:\n- Commit: (in-tree edit, no PR — pure refactor, no behaviour\
+      \ change)\n\nFiles changed:\n- web/src/constants/presence.ts — CREATED: single\
+      \ source of truth for IDLE_THRESHOLD_SECONDS\n- web/src/components/SeatDeck.tsx\
+      \ — removed `export const IDLE_THRESHOLD_SECONDS = 60`; added import from ../constants/presence\n\
+      - web/src/components/MentionInput.tsx — updated import: no longer imports IDLE_THRESHOLD_SECONDS\
+      \ from ./SeatDeck; now imports from ../constants/presence\n\nVerification:\n\
+      \n- Run: grep -rn \"IDLE_THRESHOLD_SECONDS\" web/src --include=\"*.ts\" --include=\"\
+      *.tsx\"\n  web/src/constants/presence.ts:9:export const IDLE_THRESHOLD_SECONDS\
+      \ = 60    ← single definition\n  web/src/components/SeatDeck.tsx:19:import {\
+      \ IDLE_THRESHOLD_SECONDS } from '../constants/presence'\n  web/src/components/SeatDeck.tsx:104:\
+      \  if (diffSeconds <= IDLE_THRESHOLD_SECONDS) return 'idle'\n  web/src/components/MentionInput.tsx:13:import\
+      \ { IDLE_THRESHOLD_SECONDS } from '../constants/presence'\n  web/src/components/MentionInput.tsx:160:\
+      \      return diffSeconds <= IDLE_THRESHOLD_SECONDS\n\n- Run: cd web && npx\
+      \ tsc --noEmit → exit 0, 0 errors\n\n- Run: cd web && npm run build 2>&1 | tail\
+      \ -10\n  vite v5.4.21 building for production...\n  ✓ 308 modules transformed.\n\
+      \  dist/assets/index-D8kVahxB.js   359.21 kB │ gzip: 111.71 kB\n  ✓ built in\
+      \ 1.54s\n\nSpec link:\n- Step spec: web_fix4.s2-extract-presence-constants (plan.yaml)"
+  - id: web_fix4.s3-extract-request-summary-button
+    name: Extract RequestSummaryButton to its own file (S-2 SUGGESTION)
+    status: done
+    description: 'Gate finding S-2 (SUGGESTION): CommandConsole.tsx at 340 lines contains
+      RequestSummaryButton (~150 lines, lines 55-203) as an internal subcomponent,
+      keeping CommandConsole above the 300-line threshold. Extract RequestSummaryButton
+      into web/src/components/RequestSummaryButton.tsx. CommandConsole.tsx imports
+      and renders it. Goal: CommandConsole.tsx < 200 lines, RequestSummaryButton.tsx
+      < 200 lines.'
+    verification: 'web/src/components/RequestSummaryButton.tsx exists and exports
+      RequestSummaryButton. CommandConsole.tsx imports it. CommandConsole.tsx line
+      count < 200. tsc --noEmit: 0 errors. Vite build: 0 errors.'
+    refs:
+    - web/src/components/CommandConsole.tsx
+    - web/src/components/RequestSummaryButton.tsx
+    depends_on:
+    - web_fix4.s2-extract-presence-constants
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-22T10:32:25.362780+00:00'
+    evidence: "Artifact:\n- Commit: HEAD (web/src/components/RequestSummaryButton.tsx\
+      \ created, CommandConsole.tsx updated)\n\nVerification:\n- Run: wc -l CommandConsole.tsx\
+      \ RequestSummaryButton.tsx\n  → CommandConsole.tsx: 182 lines (< 200 ✓)\n  →\
+      \ RequestSummaryButton.tsx: 185 lines (< 200 ✓)\n\n- Run: cd web && npx tsc\
+      \ --noEmit\n  → Exit 0, no output (0 errors ✓)\n\n- Run: cd web && npm run build\n\
+      \  → tsc + vite build succeeded, 309 modules transformed, built in 584ms ✓\n\
+      \n- Run: cd web && npx vitest run CommandConsole\n  → 8 passed, 0 failed ✓\n\
+      \nChanges:\n- Created web/src/components/RequestSummaryButton.tsx\n  - Exports\
+      \ RequestSummaryButtonProps interface\n  - Exports RequestSummaryButton component\n\
+      \  - Exports SUMMARY_REQUEST_TEMPLATE constant\n  - Imports: React, useState/useEffect/useRef/useMemo,\
+      \ Seat, getPresenceStatus/PatronInfo\n- Updated web/src/components/CommandConsole.tsx\n\
+      \  - Removed inline RequestSummaryButton definition (~150 lines)\n  - Removed\
+      \ SUMMARY_REQUEST_TEMPLATE constant\n  - Removed unused imports (useEffect,\
+      \ useMemo, getPresenceStatus)\n  - Added import { RequestSummaryButton } from\
+      \ './RequestSummaryButton'\n  - Render call unchanged — identical props\n\n\
+      Spec link:\n- docs/tasca-web-uiux-v0.1.md §E Controls (cited in both file headers)"
+  - id: web_fix4.guard-verify
+    name: Guard + build + test verification
+    status: done
+    description: Final gate verify for web_fix4. Confirm all three fixes complete,
+      no regressions.
+    verification: 'invar guard --all: 0 errors. tsc --noEmit: 0 errors. Vite build:
+      0 errors. npx vitest run CommandConsole: all pass. IDLE_THRESHOLD_SECONDS: single
+      definition (grep confirms). CommandConsole.tsx < 200 lines. RequestSummaryButton.tsx
+      exists. Reviewer states: ''CommandConsole.tsx is [N] lines. IDLE_THRESHOLD_SECONDS
+      is defined in [file]. CommandConsole tests: [N] passing.'''
+    refs:
+    - web/src/components/CommandConsole.tsx
+    - web/src/components/RequestSummaryButton.tsx
+    depends_on:
+    - web_fix4.s3-extract-request-summary-button
+    agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-02-22T10:34:27.154405+00:00'
+    evidence: "## Gate Review: web_fix4.guard-verify\n\n### Structural Checks (files\
+      \ read directly)\n\n**Check 1 — CommandConsole.tsx**\n- File: /Users/tefx/Projects/tasca/web/src/components/CommandConsole.tsx\n\
+      - Line 16: `import { RequestSummaryButton } from './RequestSummaryButton'` —\
+      \ confirmed\n- No inline RequestSummaryButton definition in file — confirmed\
+      \ by full file read\n- Line count: 182 lines — PASS (< 200 threshold)\n\n**Check\
+      \ 2 — RequestSummaryButton.tsx**\n- File: /Users/tefx/Projects/tasca/web/src/components/RequestSummaryButton.tsx\n\
+      - Line 44: `export function RequestSummaryButton(...)` — confirmed export present\n\
+      - Line count: 185 lines — PASS (< 200 threshold)\n\n**Check 3 — IDLE_THRESHOLD_SECONDS\
+      \ single definition**\n- Grep output (web/src, *.ts *.tsx):\n  - web/src/constants/presence.ts:9\
+      \ — `export const IDLE_THRESHOLD_SECONDS = 60` (sole definition)\n  - web/src/components/MentionInput.tsx:13\
+      \ — import only\n  - web/src/components/MentionInput.tsx:160 — usage only\n\
+      \  - web/src/components/SeatDeck.tsx:19 — import only\n  - web/src/components/SeatDeck.tsx:104\
+      \ — usage only\n- IDLE_THRESHOLD_SECONDS is defined in web/src/constants/presence.ts.\
+      \ I confirmed by grep there is no duplicate definition. PASS\n\n**Check 4 —\
+      \ CommandConsole tests**\n- File: /Users/tefx/Projects/tasca/web/src/components/CommandConsole.test.tsx\n\
+      - 8 test cases present: submit happy path, submit error path, pause transition,\
+      \ resume transition, pause loading state, viewer mode (no buttons rendered),\
+      \ RequestSummaryButton renders when seats present, RequestSummaryButton absent\
+      \ when seats left\n- All tests have meaningful assertions; no empty bodies,\
+      \ no pass stubs\n- PASS\n\n### Automated Gate Results\n\n**Check 5 — TypeScript\
+      \ type check**\n- Command: cd web && npx tsc --noEmit\n- Result: 0 errors (empty\
+      \ output = clean) — PASS\n\n**Check 6 — Production build**\n- Command: cd web\
+      \ && npm run build\n- Result: 309 modules transformed, built in 890ms, 0 errors\
+      \ — PASS\n\n**Check 7 — Vitest CommandConsole suite**\n- Command: cd web &&\
+      \ npx vitest run CommandConsole\n- Result: 8 passed, 0 failed — PASS\n\n**Check\
+      \ 8 — invar_guard (changed=false, full project)**\n- Result: status=passed,\
+      \ 0 errors, 17 warnings\n- All 17 warnings are pre-existing partial_contract\
+      \ warnings in Python core files (seat_service.py, svg_sanitizer_internal.py,\
+      \ human_readable_ids.py) — no new issues, none in web/src\n- PASS\n\n### Verdict:\
+      \ PASS\n\nCommandConsole.tsx is now 182 lines. RequestSummaryButton.tsx is 185\
+      \ lines. IDLE_THRESHOLD_SECONDS is defined in web/src/constants/presence.ts.\
+      \ CommandConsole tests: 8 passing."

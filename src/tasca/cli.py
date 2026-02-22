@@ -15,17 +15,192 @@ import atexit
 import json
 import os
 import signal
+import socket
+import sqlite3
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
 from tasca.config import settings
+from tasca.core.domain.table import Table, TableStatus, Version
+from tasca.core.schema import create_tables_table_ddl
+from tasca.shell.services.table_id_generator import generate_table_id
+from tasca.shell.storage.table_repo import create_table as repo_create_table
+from returns.result import Failure, Success
 
 # Track if we started the server (for cleanup)
 _started_server_process: subprocess.Popen[str] | None = None
+
+
+# @invar:allow shell_result: Helper function returns string for banner, not Result
+def get_lan_ip() -> str:
+    """Get the LAN IP address for remote access.
+
+    Returns the first non-loopback IPv4 address, or 'localhost' if none found.
+
+    Returns:
+        LAN IP address or 'localhost'.
+    """
+    try:
+        # Create a UDP socket to discover the LAN IP
+        # This doesn't actually send data, just discovers the interface
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            # Connect to a public DNS server (doesn't send data)
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        # Fallback to localhost if detection fails
+        return "localhost"
+
+
+# @invar:allow shell_result: Raises RuntimeError on failure, CLI-entry pattern
+def create_table_directly(
+    question: str,
+    context: str | None,
+    db_path: str,
+) -> dict[str, Any]:
+    """Create a table directly in the database without HTTP server.
+
+    Args:
+        question: The question or topic for discussion.
+        context: Optional context for the discussion.
+        db_path: Path to the SQLite database.
+
+    Returns:
+        Table data dictionary with id, question, context, status, etc.
+
+    Raises:
+        RuntimeError: If table creation fails.
+    """
+    # Ensure the database directory exists
+    import pathlib
+
+    db_file = pathlib.Path(db_path)
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(db_path)
+
+    try:
+        # Ensure tables exist
+        conn.execute(create_tables_table_ddl())
+
+        # Generate table ID
+        id_result = generate_table_id(conn)
+        if isinstance(id_result, Failure):
+            raise RuntimeError(f"Failed to generate table ID: {id_result.failure()}")
+
+        table_id = id_result.unwrap()
+
+        now = datetime.now(UTC)
+
+        table = Table(
+            id=table_id,
+            question=question,
+            context=context,
+            status=TableStatus.OPEN,
+            version=Version(1),
+            created_at=now,
+            updated_at=now,
+        )
+
+        create_result = repo_create_table(conn, table)
+        if isinstance(create_result, Failure):
+            raise RuntimeError(f"Failed to create table: {create_result.failure()}")
+
+        created = create_result.unwrap()
+
+        return {
+            "id": created.id,
+            "question": created.question,
+            "context": created.context,
+            "status": created.status.value,
+            "version": created.version,
+            "created_at": created.created_at.isoformat(),
+            "updated_at": created.updated_at.isoformat(),
+        }
+    finally:
+        conn.close()
+
+
+def print_startup_banner(
+    table_data: dict[str, Any],
+    admin_token: str,
+    db_path: str,
+    port: int,
+    token_from_env: bool,
+) -> None:
+    """Print the startup banner with all connection info.
+
+    Args:
+        table_data: Created table data.
+        admin_token: The admin token (generated or from env).
+        db_path: Database path.
+        port: Server port.
+        token_from_env: Whether token came from environment variable.
+    """
+    lan_ip = get_lan_ip()
+    table_id = table_data["id"]
+    question = table_data["question"]
+    status = table_data["status"].upper()
+
+    # Build STDIO MCP config JSON
+    stdio_config = {
+        "tasca": {
+            "command": "uv",
+            "args": ["--directory", "/path/to/tasca", "run", "tasca-mcp"],
+        }
+    }
+
+    # Build HTTP MCP config JSON with LAN IP
+    http_config = {
+        "mcpServers": {
+            "tasca": {
+                "url": f"http://{lan_ip}:{port}/mcp",
+            }
+        }
+    }
+
+    # Calculate box width based on content
+    version_str = f"TASCA v{settings.version}"
+    db_str = f"Database: {db_path}"
+    box_inner_width = max(len(version_str), len(db_str), 50)
+    box_width = box_inner_width + 4  # 2 for padding + 2 for borders
+
+    # Print banner
+    print()  # Leading newline for spacing
+    print(f"┌{'─' * box_width}┐")
+    print(f"│  {version_str:<{box_inner_width - 2}}  │")
+    print(f"│  {db_str:<{box_inner_width - 2}}  │")
+    print(f"└{'─' * box_width}┘")
+    print()
+    print(f'  Table: "{question}"')  # Note: no ANSI colors per spec
+    print(f"  ID:    {table_id}")
+    print(f"  Status: {status}")
+    print()
+    print(f"  Web UI:  http://localhost:{port}/table/{table_id}")
+    print(f"  MCP:     http://{lan_ip}:{port}/mcp")
+    print()
+    if token_from_env:
+        print("  Admin token: (from TASCA_ADMIN_TOKEN env)")
+    else:
+        print(f"  Admin token: {admin_token}")
+    print()
+    print("  For agents already configured with tasca MCP, tell them:")
+    print(f'    "Connect to http://{lan_ip}:{port}/mcp with token {admin_token}"')
+    print()
+    print("  First-time agent setup (paste into MCP config):")
+    print(f"  {json.dumps(stdio_config, separators=(',', ':'))}")
+    print()
+    print("  HTTP MCP config (for remote agents):")
+    print(f"  {json.dumps(http_config, separators=(',', ':'))}")
+    print()
+    print("  Ctrl+C to stop. Logs below.")
+    print("  ─────────────────────────────────────────────")
+    print()  # Trailing newline before server logs
 
 
 # @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
@@ -331,9 +506,15 @@ def create_table_via_mcp(
 
 
 # @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
-# @shell_complexity: 8 branches for server lifecycle and table creation
+# @shell_orchestration: Start server in foreground, create table directly, print banner
 def cmd_new(args: argparse.Namespace) -> int:
     """Execute the 'new' subcommand.
+
+    Behavior per spec:
+    1. Create table directly in database
+    2. Print startup banner with connection info
+    3. Start HTTP server in foreground (blocking mode)
+    4. Ctrl+C to stop
 
     Args:
         args: Parsed command-line arguments.
@@ -343,55 +524,66 @@ def cmd_new(args: argparse.Namespace) -> int:
     """
     question = args.question
     context = args.context
-    use_mcp = args.mcp
-    no_start = args.no_start
 
-    if use_mcp:
-        result = create_table_via_mcp(question, context)
-    else:
-        # Server lifecycle management for REST API
-        # Determine host and port for binding (server) and connection (client)
-        host = args.host or settings.api_host
-        port = args.port or settings.api_port
+    # Get settings
+    host = args.host or settings.api_host
+    port = args.port or settings.api_port
+    db_path = settings.db_path
 
-        # HTTP client connects to localhost, not 0.0.0.0
-        # 0.0.0.0 is for binding to all interfaces, but clients connect via localhost/127.0.0.1
-        client_host = "localhost" if host in ("0.0.0.0", "") else host
-        base_url = args.url or f"http://{client_host}:{port}"
-
-        if not no_start:
-            # Check if server is already running
-            if is_server_running(base_url):
-                pass  # Server already running, proceed
-            else:
-                # Start server in background
-                print(f"Starting Tasca server on {host}:{port}...", file=sys.stderr)
-                start_server_background(host, port)
-
-                # Wait for server to be ready
-                print("Waiting for server to be ready...", file=sys.stderr)
-                if not wait_for_server_ready(base_url, timeout=30.0):
-                    print("Error: Server did not become ready in time", file=sys.stderr)
-                    return 1
-
-        # Use admin token from args, or from settings
-        admin_token = args.token or settings.admin_token
-        result = create_table_via_rest(question, context, base_url, admin_token)
-
-    # Output the table ID (the primary return value)
-    # MCP response has nested structure: {"ok": true, "data": {"id": ...}}
-    # REST API returns the table directly: {"id": ...}
-    if "data" in result and isinstance(result.get("data"), dict):
-        table_id = result["data"].get("id")
-    else:
-        table_id = result.get("id")
-
-    if table_id:
-        print(table_id)
-        return 0
-    else:
-        print("Error: No table ID in response", file=sys.stderr)
+    # Step 1: Create table directly in database
+    try:
+        table_data = create_table_directly(question, context, db_path)
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
         return 1
+    except Exception as e:
+        print(f"Error creating table: {e}", file=sys.stderr)
+        return 1
+
+    # Determine admin token: use env var if set, otherwise auto-generate
+    if settings.admin_token_from_env:
+        admin_token = settings.admin_token
+    else:
+        # Auto-generate tk_-prefixed token
+        import secrets
+
+        admin_token = f"tk_{secrets.token_hex(16)}"
+
+    # Step 2: Print startup banner
+    print_startup_banner(
+        table_data=table_data,
+        admin_token=admin_token,
+        db_path=db_path,
+        port=port,
+        token_from_env=settings.admin_token_from_env,
+    )
+
+    # Step 3: Start HTTP server in foreground (blocking mode)
+    # Per spec: "Start the FastAPI server (foreground, Ctrl+C to stop)"
+    import uvicorn
+    from tasca.shell.api.app import create_app
+
+    # Set the admin token in settings for the server to use
+    # We need to update settings since we may have generated a new token
+    if not settings.admin_token_from_env:
+        # Update the settings object with our generated token
+        object.__setattr__(settings, "admin_token", admin_token)
+
+    app = create_app()
+
+    # Run server in foreground (blocks until Ctrl+C)
+    try:
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+        )
+    except KeyboardInterrupt:
+        # Clean shutdown on Ctrl+C
+        print("\nTasca server stopped.", file=sys.stderr)
+        return 0
+
+    return 0
 
 
 # @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
@@ -414,8 +606,8 @@ def main(argv: list[str] | None = None) -> int:
     # 'new' subcommand
     new_parser = subparsers.add_parser(
         "new",
-        help="Create a new discussion table",
-        description="Create a new discussion table and return its ID.",
+        help="Create a new discussion table and start server",
+        description="Create a new discussion table, print startup banner, and start the HTTP server in foreground.",
     )
     new_parser.add_argument(
         "question",
@@ -426,26 +618,6 @@ def main(argv: list[str] | None = None) -> int:
         "--context",
         help="Optional context for the discussion",
         default=None,
-    )
-    new_parser.add_argument(
-        "--mcp",
-        action="store_true",
-        help="Use MCP stdio transport instead of REST API",
-    )
-    new_parser.add_argument(
-        "-u",
-        "--url",
-        help="Base URL of the Tasca REST API (default: http://localhost:8000)",
-    )
-    new_parser.add_argument(
-        "-t",
-        "--token",
-        help="Admin token for authentication (default: from TASCA_ADMIN_TOKEN env)",
-    )
-    new_parser.add_argument(
-        "--no-start",
-        action="store_true",
-        help="Do not auto-start server if not running (fail instead)",
     )
     new_parser.add_argument(
         "--host",

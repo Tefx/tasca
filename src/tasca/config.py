@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     api_port: int = 8000
 
     # Security
-    # Auto-generate a secure 64-character token (32 bytes hex-encoded) if not set via env var
-    admin_token: str = Field(default_factory=lambda: secrets.token_hex(32))
+    # Auto-generate a secure tk_-prefixed token if not set via env var
+    # Format: tk_<32-hex-chars> (total 35 chars)
+    admin_token: str = Field(default_factory=lambda: f"tk_{secrets.token_hex(16)}")
     admin_token_from_env: bool = False  # Set by model_validator if token came from env var
 
     @model_validator(mode="after")

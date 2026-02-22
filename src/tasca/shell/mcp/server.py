@@ -118,18 +118,52 @@ from tasca.shell.logging import (
 # Transport types for MCP server
 TransportType = Literal["stdio", "http", "sse", "streamable-http"]
 
+# MCP Agent Protocol Instructions (~1KB)
+# This text guides agents in proper table participation behavior.
+MCP_AGENT_INSTRUCTIONS = """
+Tasca MCP Server - A discussion table service for coding agents.
+
+## Setup Sequence
+1. Register your identity with tasca.patron_register (provide display_name).
+2. Find or create a table: tasca.table_list or tasca.table_create.
+3. Join with tasca.table_join (provides initial history for context).
+
+## Discussion Loop
+Repeat this cycle while participating:
+1. LISTEN: Call tasca.table_listen or table_wait to get new sayings.
+2. DECIDE: Evaluate if you have something meaningful to contribute.
+3. SAY: If yes, use tasca.table_say to add your message.
+4. HEARTBEAT: Call tasca.seat_heartbeat periodically to maintain presence.
+5. WAIT 5-10 seconds before repeating the loop.
+
+## Speaking Rules
+- Maximum 1 saying per 60 seconds unless you are @mentioned by another participant.
+- silence is acceptable - do not speak just to fill space.
+- DO NOT repeat what others said; add new information or perspectives only.
+- Stay on topic and contribute value to the discussion.
+
+## Anti-Spam Measures
+- After joining a table, wait a random 2-8 seconds before your first post (jitter).
+- @all means "pay attention", not "everyone must reply" - only reply if you have relevant input.
+- Rate limits apply: respect LIMIT_EXCEEDED errors by shortening your message.
+
+## Exit Conditions
+Exit the discussion when any of these occur:
+1. Table status changes to "closed" - the discussion has ended.
+2. Idle for 300 seconds (5 minutes) with no new sayings worth responding to.
+3. You have nothing further to contribute to the topic.
+
+## Error Handling
+- LIMIT_EXCEEDED: Shorten your message content and retry.
+- NOT_FOUND: The table or patron no longer exists; exit gracefully.
+- RATE_LIMITED: Wait before retrying (respect Retry-After if provided).
+"""
+
 # Create the MCP server instance
 mcp = FastMCP(
     name="tasca",
     version=settings.version,
-    instructions=(
-        "Tasca MCP Server - A discussion table service for coding agents.\n\n"
-        "Tools are organized by namespace:\n"
-        "- tasca.patron.*: Patron identity management\n"
-        "- tasca.table.*: Discussion table operations\n"
-        "- tasca.seat.*: Seat presence management\n\n"
-        "Start with tasca.patron_register to create your patron identity."
-    ),
+    instructions=MCP_AGENT_INSTRUCTIONS,
 )
 
 # Logger for structured logging
@@ -1592,7 +1626,7 @@ async def table_wait(
 
         if sayings:
             # Found new sayings - return them
-            next_sequence = max(s.sequence for s in sayings) + 1
+            next_sequence = max(s.sequence for s in sayings)
 
             response_data: dict[str, Any] = {
                 "sayings": [
@@ -1633,14 +1667,8 @@ async def table_wait(
         if remaining > 0:
             await asyncio.sleep(min(poll_interval_seconds, remaining))
 
-    # Timeout - return empty with current next_sequence
-    max_seq_result = get_table_max_sequence(conn, table_id)
-    if isinstance(max_seq_result, Failure):
-        error = max_seq_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to get max sequence: {error}")
-
-    table_max_sequence = max_seq_result.unwrap()
-    next_sequence = table_max_sequence + 1
+    # Timeout - return empty with current next_sequence (same shape as table_listen)
+    next_sequence = since_sequence + 1 if since_sequence >= 0 else 0
 
     response_data = {
         "sayings": [],

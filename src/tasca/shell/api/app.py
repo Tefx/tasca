@@ -50,13 +50,13 @@ def create_app() -> FastAPI:
     """Create and configure the FastAPI application.
 
     The MCP server is mounted at /mcp using the HTTP transport (Streamable HTTP).
-    MCP tools are available via JSON-RPC at POST /mcp/mcp.
+    MCP tools are available via JSON-RPC at POST /mcp.
 
-    Development MCP base URL: http://localhost:8000/mcp/mcp
+    Development MCP base URL: http://localhost:8000/mcp
     For stdio transport, use the tasca-mcp command directly.
     """
     # Get MCP HTTP app first - we need its lifespan
-    mcp_app = mcp.http_app()
+    mcp_app = mcp.http_app(path="/")
 
     # Create FastAPI app with MCP's lifespan (required for Streamable HTTP protocol)
     app = FastAPI(
@@ -102,9 +102,9 @@ def create_app() -> FastAPI:
     )
 
     # Mount MCP server at /mcp
-    # MCP HTTP transport endpoint: POST /mcp/mcp (JSON-RPC)
-    # The mcp_app has an internal route at /mcp, so the full path is /mcp/mcp
+    # MCP HTTP transport endpoint: POST /mcp (JSON-RPC)
+    # The mcp_app uses path="/", so the full endpoint is /mcp
     app.mount("/mcp", mcp_app)
-    logger.info("MCP server mounted at /mcp (endpoint: POST /mcp/mcp)")
+    logger.info("MCP server mounted at /mcp (endpoint: POST /mcp)")
 
     return app

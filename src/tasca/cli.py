@@ -181,7 +181,7 @@ def print_startup_banner(
     print(f"  ID:    {table_id}")
     print(f"  Status: {status}")
     print()
-    print(f"  Web UI:  http://localhost:{port}/table/{table_id}")
+    print(f"  Web UI:  http://localhost:{port}/tables/{table_id}")
     print(f"  MCP:     http://{lan_ip}:{port}/mcp")
     print()
     if token_from_env:

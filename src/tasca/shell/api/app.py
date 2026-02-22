@@ -6,12 +6,14 @@ The app serves both REST API routes and MCP server endpoints.
 """
 
 import logging
+from pathlib import Path
 from typing import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from starlette.responses import FileResponse, JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from tasca.config import settings
@@ -214,5 +216,18 @@ def create_app() -> FastAPI:
     # Auth middleware is applied via MCPBearerAuthMiddleware wrapper
     app.mount("/mcp", mcp_app_with_auth)
     logger.info("MCP server mounted at /mcp (endpoint: POST /mcp)")
+
+    # Serve the React SPA from web/dist (if built).
+    # /assets → static files; everything else → index.html (React Router).
+    _web_dist = Path(__file__).parents[4] / "web" / "dist"
+    if _web_dist.is_dir():
+        app.mount("/assets", StaticFiles(directory=_web_dist / "assets"), name="web-assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_spa(full_path: str) -> FileResponse:  # @invar:allow shell_result: SPA fallback
+            candidate = _web_dist / full_path
+            if candidate.is_file():
+                return FileResponse(candidate)
+            return FileResponse(_web_dist / "index.html")
 
     return app

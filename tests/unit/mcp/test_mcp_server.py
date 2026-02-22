@@ -20,12 +20,14 @@ from tasca.shell.mcp.server import (
     patron_register,
     seat_heartbeat,
     seat_list,
+    table_control,
     table_create,
     table_get,
     table_join,
     table_list,
     table_listen,
     table_say,
+    table_update,
     table_wait,
 )
 from tasca.shell.storage.database import apply_schema
@@ -436,6 +438,91 @@ class TestTableJoin:
         assert data["seat"]["state"] == "joined"
         assert "expires_at" in data["seat"]
 
+    def test_join_initial_sayings_empty_table(self) -> None:
+        """Join table with no sayings returns empty initial_sayings."""
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Empty table question")
+        table_id = table_result["data"]["id"]
+
+        result = table_join(table_id=table_id, patron_id=patron_id)
+
+        assert result["ok"] is True
+        initial = result["data"]["initial_sayings"]
+        assert initial["sayings"] == []
+        assert initial["next_sequence"] == 0
+        assert initial["has_more"] is False
+
+    def test_join_initial_sayings_populated_table(self) -> None:
+        """Join table with existing sayings returns them in sequence order."""
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Populated table")
+        table_id = table_result["data"]["id"]
+
+        # Add 3 sayings
+        for i in range(3):
+            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker")
+
+        result = table_join(table_id=table_id, patron_id=patron_id)
+
+        assert result["ok"] is True
+        initial = result["data"]["initial_sayings"]
+        sayings = initial["sayings"]
+        assert len(sayings) == 3
+        # Verify sequence order (ascending)
+        sequences = [s["sequence"] for s in sayings]
+        assert sequences == sorted(sequences)
+
+    def test_join_initial_sayings_next_sequence_correctness(self) -> None:
+        """next_sequence equals max(sequence) + 1 when sayings exist."""
+        table_result = table_create(question="Sequence test table")
+        table_id = table_result["data"]["id"]
+
+        # Add 4 sayings (sequences 0..3)
+        for i in range(4):
+            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker")
+
+        result = table_join(table_id=table_id)
+
+        assert result["ok"] is True
+        initial = result["data"]["initial_sayings"]
+        max_seq = max(s["sequence"] for s in initial["sayings"])
+        assert initial["next_sequence"] == max_seq + 1
+
+    def test_join_initial_sayings_has_more_true(self) -> None:
+        """has_more is True when more sayings exist beyond the history limit."""
+        table_result = table_create(question="has_more table")
+        table_id = table_result["data"]["id"]
+
+        # Add 12 sayings — exceeds DEFAULT_HISTORY_LIMIT of 10
+        for i in range(12):
+            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker")
+
+        result = table_join(table_id=table_id)
+
+        assert result["ok"] is True
+        initial = result["data"]["initial_sayings"]
+        assert len(initial["sayings"]) == 10  # capped at limit
+        assert initial["has_more"] is True
+
+    def test_join_backward_compat_table_and_seat_fields(self) -> None:
+        """Response still contains table and seat fields alongside initial_sayings."""
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Backward compat question")
+        table_id = table_result["data"]["id"]
+
+        result = table_join(table_id=table_id, patron_id=patron_id)
+
+        assert result["ok"] is True
+        data = result["data"]
+        assert "table" in data
+        assert "seat" in data
+        assert "initial_sayings" in data
+        assert data["table"]["id"] == table_id
+        assert data["seat"]["patron_id"] == patron_id
+
 
 class TestTableSay:
     """Tests for table_say MCP tool."""
@@ -789,10 +876,10 @@ class TestErrorEnvelopes:
         Success: {"ok": True, "data": {...}}
         Error:   {"ok": False, "error": {"code": "ERROR_CODE", "message": "..."}}
 
-    Required error codes (spec):
+    Error codes (spec):
         - NOT_FOUND: Resource not found
-        - TABLE_CLOSED: Operation on closed table (NOT YET IMPLEMENTED)
-        - VERSION_CONFLICT: Optimistic locking conflict (NOT YET IMPLEMENTED)
+        - OPERATION_NOT_ALLOWED: Invalid state transition or operation on closed/paused table
+        - VERSION_CONFLICT: Optimistic locking conflict (via table_update)
         - AMBIGUOUS_MENTION: Multiple matches for @mention (NOT YET IMPLEMENTED)
         - VALIDATION_ERROR: Input validation failure (NOT YET IMPLEMENTED)
     """
@@ -1012,59 +1099,104 @@ class TestNotImplementedErrorCodes:
     These tests document the expected behavior once the features are implemented.
     They will FAIL until the corresponding features are added to the MCP server.
 
+    Implemented error codes:
+        - OPERATION_NOT_ALLOWED: Closed/paused table operations (via table_control)
+        - VERSION_CONFLICT: Optimistic concurrency conflict (via table_update)
+
+    NOT YET implemented:
+        - AMBIGUOUS_MENTION: Mention resolution in table_say
+        - VALIDATION_ERROR: Input validation
+
     See: API routes in src/tasca/shell/api/routes/ for HTTP implementations
     that DO handle these error codes.
     """
 
-    def test_table_closed_error_not_implemented(self) -> None:
-        """TABLE_CLOSED error is NOT YET implemented in MCP tools.
+    def test_table_closed_error(self) -> None:
+        """OPERATION_NOT_ALLOWED is returned for operations on closed table.
 
-        Expected behavior (once implemented):
-        - table_say on closed table should return:
-          {"ok": false, "error": {"code": "TABLE_CLOSED", "message": "..."}}
-        - table_join on closed table should return:
-          {"ok": false, "error": {"code": "TABLE_CLOSED", "message": "..."}}
+        When table_control closes a table:
+        - table_say should return OPERATION_NOT_ALLOWED
+        - table_join should return OPERATION_NOT_ALLOWED
 
-        Current behavior: Operations succeed even on closed tables.
-        See: src/tasca/core/table_state_machine.py::can_say, can_join
+        Note: The error code is OPERATION_NOT_ALLOWED (not TABLE_CLOSED) per spec.
+        See: src/tasca/shell/mcp/server.py table_say guard at line ~960
         """
         # Create a table
         table_result = table_create(question="Test table")
         table_id = table_result["data"]["id"]
 
-        # Note: Current MCP tools don't have table_update to close the table
-        # This test documents the gap - TABLE_CLOSED is NOT YET implemented
+        # Register a patron for the tests
+        patron_result = patron_register(name=unique_name("TestAgent"))
+        patron_id = patron_result["data"]["id"]
 
-        # Once table_update MCP tool is added:
-        # 1. Close the table via table_update
-        # 2. Try table_say - should return TABLE_CLOSED error
-        # 3. Try table_join - should return TABLE_CLOSED error
+        # Close the table via table_control
+        close_result = table_control(
+            table_id=table_id,
+            action="close",
+            speaker_name="TestAgent",
+            patron_id=patron_id,
+        )
+        assert close_result["ok"] is True
+        assert close_result["data"]["table_status"] == "closed"
 
-        # For now, just verify the table was created successfully
-        assert table_result["ok"] is True
-        assert table_result["data"]["status"] == "open"
+        # table_say on closed table should return OPERATION_NOT_ALLOWED
+        say_result = table_say(
+            table_id=table_id,
+            content="This should fail",
+            speaker_name="TestAgent",
+            patron_id=patron_id,
+        )
+        assert say_result["ok"] is False
+        assert say_result["error"]["code"] == "OPERATION_NOT_ALLOWED"
+        assert "closed" in say_result["error"]["message"].lower()
 
-    def test_version_conflict_error_not_implemented(self) -> None:
-        """VERSION_CONFLICT error is NOT YET implemented in MCP tools.
+        # table_join on closed table should return OPERATION_NOT_ALLOWED
+        join_result = table_join(table_id=table_id, patron_id=patron_id)
+        assert join_result["ok"] is False
+        assert join_result["error"]["code"] == "OPERATION_NOT_ALLOWED"
 
-        Expected behavior (once implemented):
-        - table_update with stale version should return:
-          {"ok": false, "error": {
-            "code": "VERSION_CONFLICT",
-            "message": "...",
-            "details": {"current_version": N, "expected_version": M}
-          }}
+    def test_version_conflict_error(self) -> None:
+        """VERSION_CONFLICT error is returned for stale version in table_update.
 
-        Current behavior: No table_update MCP tool exists.
-        See: src/tasca/shell/storage/table_repo.py::VersionConflictError
-        See: src/tasca/shell/api/routes/tables.py for HTTP implementation
+        When table_update is called with a stale expected_version:
+        - Should return VERSION_CONFLICT with current version details
         """
-        # Currently no table_update MCP tool
-        # This test documents the gap
-
+        # Create a table
         table_result = table_create(question="Test table")
-        assert table_result["data"]["version"] == 1
-        # Once table_update is added, this should test version conflict
+        table_id = table_result["data"]["id"]
+        current_version = table_result["data"]["version"]
+
+        # Register a patron for the tests
+        patron_result = patron_register(name=unique_name("TestAgent"))
+        patron_id = patron_result["data"]["id"]
+
+        # First update with correct version - should succeed
+        first_update = table_update(
+            table_id=table_id,
+            expected_version=current_version,
+            patch={"question": "Updated question"},
+            speaker_name="TestAgent",
+            patron_id=patron_id,
+        )
+        assert first_update["ok"] is True
+        assert first_update["data"]["table"]["version"] == current_version + 1
+
+        # Second update with stale version - should fail with VERSION_CONFLICT
+        stale_update = table_update(
+            table_id=table_id,
+            expected_version=current_version,  # Stale! Current is current_version + 1
+            patch={"question": "Another update"},
+            speaker_name="TestAgent",
+            patron_id=patron_id,
+        )
+        assert stale_update["ok"] is False
+        assert stale_update["error"]["code"] == "VERSION_CONFLICT"
+        # Verify error details contain version info
+        details = stale_update["error"]["details"]
+        assert "expected_version" in details
+        assert "actual_version" in details
+        assert details["expected_version"] == current_version
+        assert details["actual_version"] == current_version + 1
 
     def test_ambiguous_mention_error_not_implemented(self) -> None:
         """AMBIGUOUS_MENTION error is NOT YET implemented in MCP tools.

@@ -360,17 +360,21 @@ def check_content_limits(
     """
     # Check content length
     if not validate_content_length(content, config.max_content_length):
+        content_limit = config.max_content_length
+        assert content_limit is not None
         return LimitError(
             kind=LimitKind.CONTENT,
-            limit=config.max_content_length,  # type: ignore[arg-type]
+            limit=content_limit,
             actual=len(content),
         )
 
     # Check history count (room for one more)
     if not validate_history_count(current_saying_count, config.max_sayings_per_table):
+        history_limit = config.max_sayings_per_table
+        assert history_limit is not None
         return LimitError(
             kind=LimitKind.HISTORY,
-            limit=config.max_sayings_per_table,  # type: ignore[arg-type]
+            limit=history_limit,
             actual=current_saying_count,
         )
 
@@ -388,9 +392,11 @@ def check_content_limits(
     # Check mentions
     if not validate_mentions(content, config.max_mentions_per_saying):
         mentions = _MENTION_PATTERN.findall(content)
+        mentions_limit = config.max_mentions_per_saying
+        assert mentions_limit is not None
         return LimitError(
             kind=LimitKind.MENTIONS,
-            limit=config.max_mentions_per_saying,  # type: ignore[arg-type]
+            limit=mentions_limit,
             actual=len(mentions),
         )
 

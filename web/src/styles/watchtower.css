@@ -417,6 +417,10 @@
 
 /* Cell: Invite code */
 .wt-cell-code {
+  white-space: nowrap;
+}
+
+.wt-cell-code-inner {
   display: flex;
   align-items: center;
   gap: 0.5rem;

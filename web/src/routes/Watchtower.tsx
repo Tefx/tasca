@@ -56,9 +56,9 @@ function formatTime(iso: string): string {
   })
 }
 
-/** Get the first 8 characters of an ID as a placeholder invite code. */
+/** Return the full table ID as the invite code. */
 function shortCode(id: string): string {
-  return id.slice(0, 8)
+  return id
 }
 
 // =============================================================================
@@ -482,8 +482,10 @@ function TableList({ tables, onRowClick, onRowKeyDown }: TableListProps) {
             <td className="wt-cell-muted">&mdash;</td>
             <td className="wt-cell-time">{formatTime(table.updated_at)}</td>
             <td className="wt-cell-code">
-              <code className="wt-invite-code">{shortCode(table.id)}</code>
-              <CopyButton text={shortCode(table.id)} />
+              <div className="wt-cell-code-inner">
+                <code className="wt-invite-code">{shortCode(table.id)}</code>
+                <CopyButton text={shortCode(table.id)} />
+              </div>
             </td>
           </tr>
         ))}

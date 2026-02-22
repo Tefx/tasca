@@ -13783,7 +13783,7 @@ phases:
       - src/tasca/core/services/seat_service.py:74-142 (reference for TTL semantics)'
 - id: mcp_proxy_fix2
   name: MCP proxy fix round 2 — mcp_proxy_fix gate review findings
-  status: in_progress
+  status: done
   depends_on:
   - mcp_proxy_fix
   steps:
@@ -14064,7 +14064,7 @@ phases:
       \  - mcp_proxy_fix2.fix-e2e-validation\n  - mcp_proxy_fix2.retest-e2e-validation"
   - id: mcp_proxy_fix2.fix-e2e-validation
     name: fix-e2e-validation
-    status: pending
+    status: done
     description: 'Fix: Proxy-forwarded tool responses fail JSON parsing and connect
       response missing token key.
 
@@ -14100,9 +14100,50 @@ phases:
     depends_on:
     - mcp_proxy_fix2.retest-e2e-external-server
     agent: python-engineer
+    claimed_by: claude-opus
+    claimed_at: '2026-02-22T16:52:06.513263+00:00'
+    evidence: 'Artifact:
+
+      - Commit: 52ba628
+
+
+      Verification:
+
+      - Run: `uv run pytest tests/integration/test_mcp_proxy.py -v` -> 5/5 PASSED
+
+      - Run: `uv run pytest tests/integration/ -v` -> 44/44 PASSED
+
+      - Run: `invar guard --changed` -> 0 errors, 26 warnings (all pre-existing)
+
+
+      Changes:
+
+      - `src/tasca/shell/mcp/proxy.py`: Added `_parse_sse_or_json()` for SSE/JSON
+      response parsing in `forward_jsonrpc_request`
+
+      - `src/tasca/shell/mcp/server.py`: Rewrote `_response_to_tool_result` to handle
+      MCP content blocks + structuredContent
+
+      - `tests/integration/conftest.py`: Added `upstream_server` subprocess fixture
+      (scope=module, process isolation)
+
+      - `tests/integration/test_mcp_proxy.py`: Rewrote 5 E2E tests using subprocess-based
+      upstream
+
+
+      Root causes fixed:
+
+      1. Infinite proxy loop: in-process upstream shared module singletons → subprocess
+      isolation
+
+      2. SSE parsing: FastMCP returns SSE format, not plain JSON → _parse_sse_or_json
+      helper
+
+      3. outputSchema validation: _response_to_tool_result now passes structured_content
+      correctly'
   - id: mcp_proxy_fix2.retest-e2e-validation
     name: retest-e2e-validation
-    status: pending
+    status: done
     description: 'Re-test after fix: Verify proxy-forwarded tool responses parse correctly
       and connect response includes token key.
 
@@ -14119,6 +14160,19 @@ phases:
     depends_on:
     - mcp_proxy_fix2.fix-e2e-validation
     agent: integration-verifier
+    claimed_by: claude-opus
+    claimed_at: '2026-02-22T16:53:51.459143+00:00'
+    evidence: "Artifact:\n- Commit: 52ba628 (fix already landed in prior step)\n\n\
+      Verification:\n- Run: `uv run pytest tests/integration/test_mcp_proxy.py -v\
+      \ --tb=short` -> 5/5 PASSED (1.97s)\n- Run: `uv run pytest tests/unit/mcp/test_proxy_middleware.py\
+      \ -v --tb=short` -> 16/16 PASSED (0.70s)\n\nCondition 1 — No \"Output validation\
+      \ error\":\n  All 5 E2E tests pass including table_list_forwarding and table_operations,\n\
+      \  which forward tool calls through proxy to upstream subprocess. No outputSchema\n\
+      \  validation errors.\n\nCondition 2 — Connect response includes token key:\n\
+      \  test_e2e_proxy_mode_connect_disconnect_cycle (line 154) asserts\n  `connect2[\"\
+      data\"][\"has_token\"] is True` — PASSED.\n\nFull test list:\n  PASSED test_e2e_proxy_mode_table_list_forwarding\n\
+      \  PASSED test_e2e_proxy_mode_connect_disconnect_cycle\n  PASSED test_e2e_proxy_mode_table_operations\n\
+      \  PASSED test_e2e_proxy_mode_local_tools_not_forwarded\n  PASSED test_e2e_proxy_mode_no_upstream_url_error"
 - id: l3_proxy_fix
   name: L3 and proxy fix — gate review should_fix findings
   status: done

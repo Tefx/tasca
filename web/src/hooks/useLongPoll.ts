@@ -49,6 +49,33 @@ const BACKOFF_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000]
 /** Number of consecutive errors before status transitions to 'offline'. */
 const OFFLINE_THRESHOLD = 3
 
+/**
+ * Granularity of each backoff sleep slice.
+ * The total backoff delay is split into slices so we can abort early
+ * when the component unmounts mid-sleep.
+ */
+const BACKOFF_SLICE_MS = 500
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Sleep for `totalMs`, but in slices of BACKOFF_SLICE_MS so the caller
+ * can be aborted quickly. Returns early if signal fires mid-sleep.
+ */
+async function slicedDelay(totalMs: number, signal: AbortSignal): Promise<void> {
+  let remaining = totalMs
+  while (remaining > 0 && !signal.aborted) {
+    const slice = Math.min(remaining, BACKOFF_SLICE_MS)
+    await new Promise<void>((resolve) => {
+      const t = setTimeout(resolve, slice)
+      signal.addEventListener('abort', () => { clearTimeout(t); resolve() }, { once: true })
+    })
+    remaining -= slice
+  }
+}
+
 // =============================================================================
 // Hook
 // =============================================================================
@@ -181,14 +208,8 @@ export function useSayingsStream(
             console.log('[stream] backoff:', delayMs, 'ms (error #', errorCount, ')')
           }
 
-          // Wait before retrying. If aborted during wait, exit cleanly.
-          await new Promise<void>((resolve) => {
-            const t = setTimeout(resolve, delayMs)
-            signal.addEventListener('abort', () => {
-              clearTimeout(t)
-              resolve()
-            })
-          })
+          // Wait before retrying, in small slices so abort is responsive.
+          await slicedDelay(delayMs, signal)
         }
       }
     }
@@ -221,13 +242,7 @@ export function useSayingsStream(
         console.log('[stream] initial load backoff:', delayMs, 'ms')
       }
 
-      await new Promise<void>((resolve) => {
-        const t = setTimeout(resolve, delayMs)
-        abortSignal.addEventListener('abort', () => {
-          clearTimeout(t)
-          resolve()
-        })
-      })
+      await slicedDelay(delayMs, abortSignal)
 
       if (!abortSignal.aborted) {
         await retry()

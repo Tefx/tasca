@@ -173,7 +173,7 @@ def print_startup_banner(
     print(f"  Status: {status}")
     print()
     print(f"  Web UI:  http://localhost:{port}/tables/{table_id}")
-    print(f"  MCP:     http://{lan_ip}:{port}/mcp")
+    print(f"  MCP:     http://{lan_ip}:{port}/mcp/")
     print()
     if token_from_env:
         print("  Admin token: (from TASCA_ADMIN_TOKEN env)")
@@ -182,7 +182,7 @@ def print_startup_banner(
     print()
     print("  ── Paste to agent ──────────────────────────────────────────")
     print(f'  Connect to the Tasca discussion table "{question}".')
-    print(f"  1. connect(url=\"http://{lan_ip}:{port}/mcp\", token=\"{admin_token}\")")
+    print(f"  1. connect(url=\"http://{lan_ip}:{port}/mcp/\", token=\"{admin_token}\")")
     print(f"  2. table_get(table_id=\"{table_id}\")")
     print("  ────────────────────────────────────────────────────────────")
     print()

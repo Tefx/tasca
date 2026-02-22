@@ -62,14 +62,13 @@ def main() -> None:
 
     print(f"Tasca v{settings.version} | {settings.db_path}")
     print()
-    print(f"  MCP:     http://{lan_ip}:{port}/mcp")
+    print(f"  MCP:     http://{lan_ip}:{port}/mcp/")
     print(f"  Web UI:  http://localhost:{port}/")
     print(f"  Token:   {token}")
     print()
     print("  ── Paste to agent ──────────────────────────────────────────")
     print(f'  Tasca MCP server is running.')
-    print(f"  1. connect(url=\"http://{lan_ip}:{port}/mcp\", token=\"{token}\")")
-    print(f"  2. table_list()")
+    print(f"  connect(url=\"http://{lan_ip}:{port}/mcp/\", token=\"{token}\")")
     print("  ────────────────────────────────────────────────────────────")
     print()
 

@@ -16,6 +16,8 @@ Canonical Policy Source:
 import re
 from typing import Final
 
+import deal
+
 # =============================================================================
 # Constants - Allowlists
 # =============================================================================
@@ -129,6 +131,8 @@ ATTR_PATTERN: Final[re.Pattern[str]] = re.compile(
 ELEMENT_PATTERN: Final[re.Pattern[str]] = re.compile(r"<(/?)(\w+)([^>]*?)(/?)>", re.DOTALL)
 
 
+@deal.pre(lambda svg_content: svg_content is not None)
+@deal.post(lambda result: isinstance(result, str))
 def remove_doctype(svg_content: str) -> str:
     """Remove DOCTYPE declarations which can contain malicious entity definitions.
 
@@ -140,10 +144,20 @@ def remove_doctype(svg_content: str) -> str:
 
     Returns:
         SVG string with DOCTYPE removed.
+
+    Examples:
+        >>> result = remove_doctype('<svg><!DOCTYPE svg PUBLIC "x"><rect/></svg>')
+        >>> '<!DOCTYPE' not in result
+        True
+        >>> result = remove_doctype('<svg><rect/></svg>')
+        >>> '<rect' in result
+        True
     """
     return DOCTYPE_PATTERN.sub("", svg_content)
 
 
+@deal.pre(lambda value: value is not None)
+@deal.post(lambda result: isinstance(result, bool))
 def is_external_url(value: str) -> bool:
     """Check if a value is an external URL (dangerous).
 
@@ -152,6 +166,16 @@ def is_external_url(value: str) -> bool:
 
     Returns:
         True if the value is an external URL.
+
+    Examples:
+        >>> is_external_url("https://evil.com")
+        True
+        >>> is_external_url("http://example.com")
+        True
+        >>> is_external_url("#internal-ref")
+        False
+        >>> is_external_url("")
+        False
     """
     if not value or not isinstance(value, str):
         return False
@@ -168,6 +192,10 @@ def is_external_url(value: str) -> bool:
     return False
 
 
+@deal.pre(lambda content, tag_name, start_pos: content is not None)
+@deal.pre(lambda content, tag_name, start_pos: tag_name is not None and len(tag_name) > 0)
+@deal.pre(lambda content, tag_name, start_pos: isinstance(start_pos, int) and start_pos >= 0)
+@deal.post(lambda result: result is None or hasattr(result, "group"))
 def find_closing_tag(content: str, tag_name: str, start_pos: int) -> re.Match[str] | None:
     """Find the matching closing tag for an opening tag.
 
@@ -180,6 +208,12 @@ def find_closing_tag(content: str, tag_name: str, start_pos: int) -> re.Match[st
 
     Returns:
         Match object for closing tag or None.
+
+    Examples:
+        >>> find_closing_tag("<svg><rect/></svg>", "svg", 5) is not None
+        True
+        >>> find_closing_tag("<svg><rect/></svg>", "rect", 0) is None
+        True
     """
     depth = 1
     pos = start_pos

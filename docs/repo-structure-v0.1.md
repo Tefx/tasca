@@ -84,8 +84,7 @@ tasca/
 │       │   ├── markdown.tsx
 │       │   ├── mermaid.tsx
 │       │   └── math.tsx
-│       ├── security/
-│       │   └── svg_sanitize.ts
+│       ├── security/               # (stub svg_sanitize.ts removed — see svg-sanitizer.ts in rendering/)
 │       └── styles/
 │           └── ...
 ├── tests/

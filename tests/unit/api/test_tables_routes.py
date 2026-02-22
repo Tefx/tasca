@@ -234,7 +234,7 @@ class TestUpdateTable:
             "/tables/some-id?expected_version=1",
             json={"question": "Updated?", "context": None, "status": "open"},
         )
-        assert response.status_code in [401, 404]  # 401 if auth required, 404 if not
+        assert response.status_code == 401
 
     def test_update_table_not_found(self, admin_client: TestClient) -> None:
         """Update non-existent table returns 404."""

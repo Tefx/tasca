@@ -3,13 +3,17 @@
  *
  * SECURITY: This module implements defense-in-depth for Mermaid diagrams:
  *
- * 1. **Input sanitization**: Init directives (`%%{init: ...}%%`) are stripped
+ * 1. **Mermaid initialization**: `mermaid.initialize({ securityLevel: 'strict' })`
+ *    is called at module load time to prevent click/href handler evaluation
+ * 2. **Input sanitization**: Init directives (`%%{init: ...}%%`) are stripped
  *    to prevent configuration injection attacks
- * 2. **Output sanitization**: SVG output is passed through `sanitizeSvg()`
+ * 3. **Output sanitization**: SVG output is passed through `sanitizeSvg()`
  *    to remove dangerous elements and attributes
  *
  * ## Security Measures (ADR-001, ADR-002)
  *
+ * - **Strict security level**: `mermaid.initialize({ securityLevel: 'strict' })`
+ *   called at module load — not relying on library defaults
  * - **Init directives stripped**: `%%{init: ...}%%` directives are removed
  *   to prevent configuration injection attacks (e.g., XSS, SSRF)
  * - **Additional directives**: `%%{initialize: ...}%%` also stripped (alias)
@@ -27,6 +31,25 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mermaid, { type MermaidConfig } from 'mermaid'
 import { sanitizeSvg } from './svg-sanitizer'
+
+// =============================================================================
+// Security initialization (ADR-001: mandatory secure defaults)
+// =============================================================================
+
+/**
+ * Initialize Mermaid with strict security settings.
+ *
+ * SECURITY: `securityLevel: 'strict'` prevents Mermaid from evaluating
+ * click/href handlers and other interactive features that could be abused
+ * for XSS. This call is required — do not rely on library defaults.
+ *
+ * `startOnLoad: false` prevents Mermaid from auto-scanning the DOM on
+ * import, which could process unsanitized content before our sanitization
+ * pipeline runs.
+ *
+ * References: ADR-001 (mandatory security guardrails)
+ */
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' })
 
 // =============================================================================
 // Constants
@@ -142,9 +165,10 @@ type RenderState = 'idle' | 'rendering' | 'success' | 'error'
  *
  * SECURITY: This component implements a multi-layer defense:
  *
- * 1. **Input sanitization**: Init directives are stripped from the code
+ * 1. **Mermaid initialization**: `securityLevel: 'strict'` enforced via
+ *    `mermaid.initialize()` at module load time (see top of file)
+ * 2. **Input sanitization**: Init directives are stripped from the code
  *    before rendering (see `stripMermaidInitDirectives`)
- * 2. **Mermaid config**: `securityLevel: 'strict'` is enforced
  * 3. **Output sanitization**: SVG output is passed through `sanitizeSvg()`
  *    before being injected into the DOM
  *
@@ -199,9 +223,8 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps): JSX.
       // Generate unique ID for this diagram
       const diagramId = generateDiagramId()
 
-      // SECURITY LAYER 2: Mermaid configuration with strict security
-      // Note: We don't call mermaid.initialize() here to avoid global state pollution
-      // Instead, we use the default secure settings
+      // SECURITY LAYER 2: mermaid.initialize({ securityLevel: 'strict' }) is called
+      // at module load time (see top of file). All renders in this session use strict mode.
 
       // SECURITY LAYER 3: Render the diagram
       const { svg: rawSvg } = await mermaid.render(diagramId, sanitizedCode)

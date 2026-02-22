@@ -55,14 +55,6 @@ async def verify_admin_token(
         >>> # Authorization: "Bearer wrong-token"
         >>> # Raises HTTPException(401, "Invalid or missing token")
     """
-    # HTTPBearer with auto_error=True raises 403 for missing credentials,
-    # but we want 401 for consistency. Handle the edge case here.
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing token",
-        )
-
     # Validate token using constant-time comparison (never log or print the token value)
     if not hmac.compare_digest(credentials.credentials, settings.admin_token):
         raise HTTPException(

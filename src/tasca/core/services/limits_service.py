@@ -70,6 +70,33 @@ class LimitsConfig:
             raise ValueError("max_mentions_per_saying must be non-negative")
 
 
+# Register Hypothesis strategy for LimitsConfig (for property-based testing)
+# This ensures Hypothesis generates valid configs (positive integers for limits,
+# non-negative for mentions) rather than arbitrary integers that would fail __post_init__
+# @invar:allow missing_contract: Module-level initialization function, not a core operation
+def _register_hypothesis_strategies() -> None:
+    """Register custom Hypothesis strategies for this module's types."""
+    try:
+        from hypothesis import strategies as st
+        from hypothesis.strategies import SearchStrategy, register_type_strategy
+
+        # Strategy for valid LimitsConfig: positive integers for limits, non-negative for mentions
+        limits_config_strategy: SearchStrategy[LimitsConfig] = st.builds(
+            LimitsConfig,
+            max_sayings_per_table=st.one_of(st.none(), st.integers(min_value=1)),
+            max_content_length=st.one_of(st.none(), st.integers(min_value=1)),
+            max_bytes_per_table=st.one_of(st.none(), st.integers(min_value=1)),
+            max_mentions_per_saying=st.one_of(st.none(), st.integers(min_value=0)),
+        )
+        register_type_strategy(LimitsConfig, limits_config_strategy)
+    except ImportError:
+        # Hypothesis not installed, skip strategy registration
+        pass
+
+
+_register_hypothesis_strategies()
+
+
 @deal.post(lambda result: isinstance(result, LimitsConfig))
 def settings_to_limits_config(settings: "Settings") -> LimitsConfig:
     """Convert application Settings to LimitsConfig.
@@ -292,6 +319,11 @@ def validate_mentions(content: str, max_mentions: int | None) -> bool:
 # =============================================================================
 
 
+# @invar:allow partial_contract: content (str) has no value constraint; config validated by __post_init__
+@deal.pre(
+    lambda content, current_saying_count, current_bytes, config:
+        current_saying_count >= 0 and current_bytes >= 0
+)
 @deal.post(lambda result: result is None or isinstance(result, LimitError))
 def check_content_limits(
     content: str,
@@ -393,6 +425,8 @@ def compute_content_bytes(content: str) -> int:
     return len(content.encode("utf-8"))
 
 
+# @invar:allow partial_contract: config validated by LimitsConfig.__post_init__
+@deal.pre(lambda current_saying_count, current_bytes, config: current_saying_count >= 0 and current_bytes >= 0)
 @deal.post(lambda result: isinstance(result, dict))
 def get_limits_status(
     current_saying_count: int,

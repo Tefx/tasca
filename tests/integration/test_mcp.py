@@ -47,13 +47,19 @@ def _parse_sse_response(text: str) -> dict:
 # =============================================================================
 
 
-def test_mcp_initialize(mcp_test_client) -> None:
-    """Test MCP initialize request.
+def test_mcp_auth_no_token_returns_401(mcp_test_client) -> None:
+    """Test MCP HTTP endpoint returns 401 when no Bearer token is provided.
 
-    Scenario: MCP Protocol Initialization
-    Verifies that the MCP server responds to initialize request
-    with server capabilities and protocol version.
+    Scenario: Unauthenticated MCP Request
+    When admin_token is configured, requests without Authorization header
+    should return 401 Unauthorized.
     """
+    from tasca.config import settings
+
+    # Skip test if no admin_token configured (auth would be bypassed)
+    if not settings.admin_token:
+        pytest.skip("admin_token not configured, auth is bypassed")
+
     response = mcp_test_client.post(
         "/mcp",
         json={
@@ -70,6 +76,119 @@ def test_mcp_initialize(mcp_test_client) -> None:
             },
         },
         headers={"Accept": "application/json, text/event-stream"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing or invalid Authorization header"
+
+
+def test_mcp_auth_invalid_token_returns_401(mcp_test_client) -> None:
+    """Test MCP HTTP endpoint returns 401 when invalid Bearer token is provided.
+
+    Scenario: Invalid Bearer Token
+    Requests with wrong Bearer token should return 401 Unauthorized.
+    """
+    from tasca.config import settings
+
+    # Skip test if no admin_token configured (auth would be bypassed)
+    if not settings.admin_token:
+        pytest.skip("admin_token not configured, auth is bypassed")
+
+    response = mcp_test_client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "tasca-test-client",
+                    "version": "0.1.0",
+                },
+            },
+        },
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Authorization": "Bearer invalid-wrong-token",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid or missing token"
+
+
+def test_mcp_auth_valid_token_succeeds(mcp_test_client) -> None:
+    """Test MCP HTTP endpoint succeeds with valid Bearer token.
+
+    Scenario: Valid Bearer Token
+    Requests with correct Bearer token should proceed to MCP handler
+    and return valid MCP JSON-RPC response.
+    """
+    from tasca.config import settings
+
+    # Skip test if no admin_token configured
+    if not settings.admin_token:
+        pytest.skip("admin_token not configured")
+
+    response = mcp_test_client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "tasca-test-client",
+                    "version": "0.1.0",
+                },
+            },
+        },
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {settings.admin_token}",
+        },
+    )
+
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    assert "result" in data
+    assert "protocolVersion" in data["result"]
+
+
+def test_mcp_initialize(mcp_test_client) -> None:
+    """Test MCP initialize request.
+
+    Scenario: MCP Protocol Initialization
+    Verifies that the MCP server responds to initialize request
+    with server capabilities and protocol version.
+    """
+    from tasca.config import settings
+
+    # Build headers with optional auth
+    headers = {"Accept": "application/json, text/event-stream"}
+    if settings.admin_token:
+        headers["Authorization"] = f"Bearer {settings.admin_token}"
+
+    response = mcp_test_client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "tasca-test-client",
+                    "version": "0.1.0",
+                },
+            },
+        },
+        headers=headers,
     )
 
     assert response.status_code == 200

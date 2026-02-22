@@ -5,12 +5,15 @@ This module creates and configures the FastAPI application instance.
 The app serves both REST API routes and MCP server endpoints.
 """
 
+import hmac
 import logging
 from typing import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from tasca.config import settings
 from tasca.shell.api.routes import export, health, patrons, sayings, seats, tables
@@ -18,6 +21,89 @@ from tasca.shell.api.routes import search
 from tasca.shell.mcp import mcp
 
 logger = logging.getLogger(__name__)
+
+
+class MCPBearerAuthMiddleware:
+    """Middleware to validate Bearer token for MCP HTTP endpoint.
+
+    Validates Authorization: Bearer <token> against settings.admin_token.
+    If admin_token is None or empty, authentication is bypassed (allow through).
+
+    This middleware wraps the MCP HTTP app and only applies to /mcp requests.
+    STDIO transport is unaffected.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        """Initialize the middleware with the ASGI app to wrap.
+
+        Args:
+            app: The ASGI application to wrap.
+        """
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Process the ASGI request.
+
+        For HTTP requests to MCP endpoint:
+        - Extract Authorization header
+        - Validate Bearer token against settings.admin_token
+        - Return 401 if token is missing or invalid (when admin_token is set)
+        - Allow through if admin_token is None/empty
+
+        Args:
+            scope: ASGI scope dictionary.
+            receive: ASGI receive callable.
+            send: ASGI send callable.
+        """
+        # Only authenticate HTTP requests
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Get authorization header
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(b"authorization", b"").decode("utf-8")
+
+        # If admin_token is None or empty, allow through
+        if not settings.admin_token:
+            await self.app(scope, receive, send)
+            return
+
+        # Validate Bearer token
+        if not auth_header.startswith("Bearer "):
+            await self._send_401(scope, send, "Missing or invalid Authorization header")
+            return
+
+        token = auth_header[7:]  # Remove "Bearer " prefix
+
+        # Use constant-time comparison to prevent timing attacks
+        if not hmac.compare_digest(token, settings.admin_token):
+            await self._send_401(scope, send, "Invalid or missing token")
+            return
+
+        # Token is valid, proceed to app
+        await self.app(scope, receive, send)
+
+    async def _send_401(self, scope: Scope, send: Send, detail: str) -> None:
+        """Send a 401 Unauthorized JSON response.
+
+        Args:
+            scope: ASGI scope dictionary.
+            send: ASGI send callable.
+            detail: Error detail message.
+        """
+        from starlette.responses import JSONResponse
+
+        response = JSONResponse(
+            status_code=401,
+            content={"detail": detail},
+        )
+
+        # Create a minimal receive callable for the response
+        async def receive_empty() -> dict:
+            return {"type": "http.request", "body": b""}
+
+        await response(scope, receive_empty, send)
 
 
 class CSPMiddleware(BaseHTTPMiddleware):
@@ -54,9 +140,18 @@ def create_app() -> FastAPI:
 
     Development MCP base URL: http://localhost:8000/mcp
     For stdio transport, use the tasca-mcp command directly.
+
+    Authentication:
+    - MCP HTTP endpoint requires Bearer token if admin_token is configured.
+    - If admin_token is None/empty, authentication is bypassed.
+    - STDIO transport (tasca-mcp command) is unaffected by HTTP auth.
     """
     # Get MCP HTTP app first - we need its lifespan
     mcp_app = mcp.http_app(path="/")
+
+    # Wrap MCP app with Bearer auth middleware
+    # This applies authentication to all /mcp requests
+    mcp_app_with_auth = MCPBearerAuthMiddleware(mcp_app)
 
     # Create FastAPI app with MCP's lifespan (required for Streamable HTTP protocol)
     app = FastAPI(
@@ -104,7 +199,8 @@ def create_app() -> FastAPI:
     # Mount MCP server at /mcp
     # MCP HTTP transport endpoint: POST /mcp (JSON-RPC)
     # The mcp_app uses path="/", so the full endpoint is /mcp
-    app.mount("/mcp", mcp_app)
+    # Auth middleware is applied via MCPBearerAuthMiddleware wrapper
+    app.mount("/mcp", mcp_app_with_auth)
     logger.info("MCP server mounted at /mcp (endpoint: POST /mcp)")
 
     return app

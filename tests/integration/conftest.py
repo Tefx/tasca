@@ -247,12 +247,23 @@ def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, No
     Sends the MCP initialize request and extracts the session ID so that
     individual test functions do not need to repeat the boilerplate.
 
+    Includes Bearer token authentication if admin_token is configured.
+
     Args:
         mcp_test_client: Starlette TestClient with proper lifespan handling.
 
     Yields:
         MCPSession containing the client, initialized headers, and session_id.
     """
+    from tasca.config import settings
+
+    # Build headers with optional auth
+    headers: dict[str, str] = {"Accept": "application/json, text/event-stream"}
+
+    # Add Bearer token if admin_token is configured
+    if settings.admin_token:
+        headers["Authorization"] = f"Bearer {settings.admin_token}"
+
     init_response = mcp_test_client.post(
         "/mcp",
         json={
@@ -268,12 +279,11 @@ def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, No
                 },
             },
         },
-        headers={"Accept": "application/json, text/event-stream"},
+        headers=headers,
     )
     assert init_response.status_code == 200
 
     session_id: str | None = init_response.headers.get("mcp-session-id")
-    headers: dict[str, str] = {"Accept": "application/json, text/event-stream"}
     if session_id:
         headers["mcp-session-id"] = session_id
 

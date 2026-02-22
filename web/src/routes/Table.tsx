@@ -43,11 +43,17 @@ type LoadState =
 // Hooks
 // =============================================================================
 
+/** Poll interval for background seat refresh (ms). */
+const SEAT_POLL_INTERVAL_MS = 8_000
+
 /**
  * Fetch the static parts of the table page: table metadata and seats.
  *
  * Sayings are intentionally excluded — they are handled by useSayingsStream
  * which subscribes to the long-poll endpoint for real-time updates.
+ *
+ * Seats are refreshed silently every SEAT_POLL_INTERVAL_MS so new
+ * participants become visible without a manual reload.
  */
 function useStaticTableData(tableId: string | undefined) {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -83,6 +89,31 @@ function useStaticTableData(tableId: string | undefined) {
   useEffect(() => {
     fetchAll()
   }, [fetchAll])
+
+  // Background seat refresh — silently update who's at the table
+  useEffect(() => {
+    if (!tableId) return
+    const poll = async () => {
+      try {
+        const seatsResponse = await listSeats(tableId)
+        setState((prev) => {
+          if (prev.status !== 'loaded') return prev
+          return {
+            ...prev,
+            data: {
+              ...prev.data,
+              seats: seatsResponse.seats,
+              activeCount: seatsResponse.active_count,
+            },
+          }
+        })
+      } catch {
+        // Ignore poll errors — stale seat list is acceptable
+      }
+    }
+    const id = setInterval(poll, SEAT_POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [tableId])
 
   return { state, refetch: fetchAll }
 }

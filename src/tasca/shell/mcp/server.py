@@ -573,8 +573,8 @@ def table_join(
     table_id: str | None = None,
     patron_id: str | None = None,
     invite_code: str | None = None,
-    history_limit: int = DEFAULT_HISTORY_LIMIT,
-    history_max_bytes: int = DEFAULT_HISTORY_MAX_BYTES,
+    history_limit: int | None = DEFAULT_HISTORY_LIMIT,
+    history_max_bytes: int | None = DEFAULT_HISTORY_MAX_BYTES,
 ) -> dict[str, Any]:
     """Join a discussion table by creating a seat.
 
@@ -665,9 +665,11 @@ def table_join(
         return error_response("DATABASE_ERROR", f"Failed to get table sequence: {error}")
     sequence_latest = max_seq_result.unwrap()
 
-    # Get initial history window
+    # Get initial history window (apply defaults if agent passed null)
+    effective_limit = history_limit if history_limit is not None else DEFAULT_HISTORY_LIMIT
+    effective_max_bytes = history_max_bytes if history_max_bytes is not None else DEFAULT_HISTORY_MAX_BYTES
     history_result = get_recent_sayings(
-        conn, resolved_table_id, limit=history_limit, max_bytes=history_max_bytes
+        conn, resolved_table_id, limit=effective_limit, max_bytes=effective_max_bytes
     )
     if isinstance(history_result, Failure):
         error = history_result.failure()
@@ -1629,6 +1631,12 @@ async def table_wait(
 
     Blocks until new sayings are available or timeout. Returns same shape
     as table_listen. Empty sayings on timeout is a valid response.
+
+    Anti-deadlock: When timeout fires and sayings is empty, check whether
+    other participants are present (seats in the table). If peers are present
+    but nobody has spoken yet, post a brief greeting with table_say rather
+    than looping into another wait — otherwise two silent agents will
+    deadlock waiting for each other to speak first.
 
     Args:
         table_id: UUID of the table.

@@ -73,7 +73,7 @@ interface UseTablesResult {
 }
 
 /** Poll interval for background table list refresh (ms). */
-const POLL_INTERVAL_MS = 15_000
+const POLL_INTERVAL_MS = 5_000
 
 function useTables(): UseTablesResult {
   const [tables, setTables] = useState<Table[]>([])

@@ -1910,6 +1910,10 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
     This is a proxy-control tool that NEVER forwards to a remote server.
     It always runs locally to manage the upstream configuration.
 
+    Authentication note: Bearer token auth is required for MCP HTTP requests
+    when admin_token is configured. OPTIONS/CORS preflight requests are exempt
+    from Bearer auth and are always allowed through without a token.
+
     Args:
         url: The upstream server URL. If None, switches to local mode.
         token: Optional authentication token for upstream server.

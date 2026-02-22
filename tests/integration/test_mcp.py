@@ -51,15 +51,9 @@ def test_mcp_auth_no_token_returns_401(mcp_test_client) -> None:
     """Test MCP HTTP endpoint returns 401 when no Bearer token is provided.
 
     Scenario: Unauthenticated MCP Request
-    When admin_token is configured, requests without Authorization header
-    should return 401 Unauthorized.
+    admin_token is always set via fixture_admin_token, so requests without
+    an Authorization header must return 401 Unauthorized.
     """
-    from tasca.config import settings
-
-    # Skip test if no admin_token configured (auth would be bypassed)
-    if not settings.admin_token:
-        pytest.skip("admin_token not configured, auth is bypassed")
-
     response = mcp_test_client.post(
         "/mcp",
         json={
@@ -86,14 +80,9 @@ def test_mcp_auth_invalid_token_returns_401(mcp_test_client) -> None:
     """Test MCP HTTP endpoint returns 401 when invalid Bearer token is provided.
 
     Scenario: Invalid Bearer Token
-    Requests with wrong Bearer token should return 401 Unauthorized.
+    admin_token is always set via fixture_admin_token, so requests with a
+    wrong Bearer token must return 401 Unauthorized.
     """
-    from tasca.config import settings
-
-    # Skip test if no admin_token configured (auth would be bypassed)
-    if not settings.admin_token:
-        pytest.skip("admin_token not configured, auth is bypassed")
-
     response = mcp_test_client.post(
         "/mcp",
         json={
@@ -123,14 +112,10 @@ def test_mcp_auth_valid_token_succeeds(mcp_test_client) -> None:
     """Test MCP HTTP endpoint succeeds with valid Bearer token.
 
     Scenario: Valid Bearer Token
-    Requests with correct Bearer token should proceed to MCP handler
-    and return valid MCP JSON-RPC response.
+    Requests with the fixture Bearer token must proceed to the MCP handler
+    and return a valid MCP JSON-RPC response.
     """
-    from tasca.config import settings
-
-    # Skip test if no admin_token configured
-    if not settings.admin_token:
-        pytest.skip("admin_token not configured")
+    from tests.integration.conftest import TEST_ADMIN_TOKEN
 
     response = mcp_test_client.post(
         "/mcp",
@@ -149,7 +134,7 @@ def test_mcp_auth_valid_token_succeeds(mcp_test_client) -> None:
         },
         headers={
             "Accept": "application/json, text/event-stream",
-            "Authorization": f"Bearer {settings.admin_token}",
+            "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
         },
     )
 
@@ -166,12 +151,13 @@ def test_mcp_initialize(mcp_test_client) -> None:
     Verifies that the MCP server responds to initialize request
     with server capabilities and protocol version.
     """
-    from tasca.config import settings
+    from tests.integration.conftest import TEST_ADMIN_TOKEN
 
-    # Build headers with optional auth
-    headers = {"Accept": "application/json, text/event-stream"}
-    if settings.admin_token:
-        headers["Authorization"] = f"Bearer {settings.admin_token}"
+    # admin_token is always set via fixture_admin_token, so auth header is required.
+    headers = {
+        "Accept": "application/json, text/event-stream",
+        "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+    }
 
     response = mcp_test_client.post(
         "/mcp",

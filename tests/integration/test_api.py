@@ -15,14 +15,15 @@ from typing import Any
 import httpx
 import pytest
 
+# Use the fixture token that fixture_admin_token (conftest.py) always patches settings to.
+# We cannot capture _settings.admin_token at module import time because the autouse
+# fixture runs after module collection; the token seen here would be stale by test time.
+from tests.integration.conftest import TEST_ADMIN_TOKEN as _ADMIN_TOKEN
+
 try:
-    from tasca.config import settings as _settings
     from tasca.shell.api.app import create_app as _create_app
 
     _fastapi_app = _create_app()
-    # Read the admin token from the shared settings singleton that the app uses.
-    # This avoids hardcoding a token that must match what the auth middleware validates.
-    _ADMIN_TOKEN: str = _settings.admin_token
 except Exception as _e:
     pytest.skip(f"Could not import ASGI app: {_e}", allow_module_level=True)
 

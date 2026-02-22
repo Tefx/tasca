@@ -35,6 +35,10 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
     from starlette.testclient import TestClient
 
+# Known test token injected via fixture — never changes per test run.
+# This value is used in auth tests to guarantee auth is always enforced.
+TEST_ADMIN_TOKEN = "test-admin-token-fixture"
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -93,6 +97,22 @@ def request_timeout() -> int:
         Timeout in seconds (default: 30)
     """
     return REQUEST_TIMEOUT
+
+
+@pytest.fixture(autouse=True)
+def fixture_admin_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force a known admin_token value for every integration test.
+
+    This fixture is autouse so it applies to every test in this package
+    without requiring explicit use. It patches the module-level settings
+    singleton so that both the app middleware and test code see the same
+    known token value.
+
+    Scope: function (default) — resets after every test, no leakage.
+    """
+    import tasca.config as config_module
+
+    monkeypatch.setattr(config_module.settings, "admin_token", TEST_ADMIN_TOKEN)
 
 
 # =============================================================================
@@ -255,14 +275,11 @@ def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, No
     Yields:
         MCPSession containing the client, initialized headers, and session_id.
     """
-    from tasca.config import settings
-
-    # Build headers with optional auth
-    headers: dict[str, str] = {"Accept": "application/json, text/event-stream"}
-
-    # Add Bearer token if admin_token is configured
-    if settings.admin_token:
-        headers["Authorization"] = f"Bearer {settings.admin_token}"
+    # Build headers with auth — admin_token is always set via fixture_admin_token.
+    headers: dict[str, str] = {
+        "Accept": "application/json, text/event-stream",
+        "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+    }
 
     init_response = mcp_test_client.post(
         "/mcp",

@@ -5,7 +5,6 @@ This module creates and configures the FastAPI application instance.
 The app serves both REST API routes and MCP server endpoints.
 """
 
-import hmac
 import logging
 from typing import Awaitable, Callable
 
@@ -13,9 +12,10 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from tasca.config import settings
+from tasca.shell.api.auth import _validate_bearer_token
 from tasca.shell.api.routes import export, health, patrons, sayings, seats, tables
 from tasca.shell.api.routes import search
 from tasca.shell.mcp import mcp
@@ -85,7 +85,7 @@ class MCPBearerAuthMiddleware:
         token = auth_header[7:]  # Remove "Bearer " prefix
 
         # Use constant-time comparison to prevent timing attacks
-        if not hmac.compare_digest(token, settings.admin_token):
+        if not _validate_bearer_token(token, settings.admin_token):
             await self._send_401(scope, send, "Invalid or missing token")
             return
 
@@ -108,7 +108,7 @@ class MCPBearerAuthMiddleware:
         )
 
         # Create a minimal receive callable for the response
-        async def receive_empty() -> dict:
+        async def receive_empty() -> Message:
             return {"type": "http.request", "body": b""}
 
         await response(scope, receive_empty, send)

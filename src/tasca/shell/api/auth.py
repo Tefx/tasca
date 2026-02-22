@@ -12,6 +12,33 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from tasca.config import settings
 
+# @invar:allow shell_result: Pure predicate — returns bool, not Result; callers own error handling
+# @invar:allow shell_pure_logic: Co-located with verify_admin_token for cohesion; no I/O but tightly coupled to auth.py
+def _validate_bearer_token(token: str, expected: str) -> bool:
+    """Compare a Bearer token against the expected value using constant-time comparison.
+
+    Uses ``hmac.compare_digest`` to prevent timing attacks. Both arguments must
+    be non-empty strings; callers are responsible for checking whether auth is
+    required before invoking this helper.
+
+    Args:
+        token: The token extracted from the Authorization header.
+        expected: The expected (configured) token value.
+
+    Returns:
+        True if the token matches the expected value, False otherwise.
+
+    Examples:
+        >>> _validate_bearer_token("secret", "secret")
+        True
+        >>> _validate_bearer_token("wrong", "secret")
+        False
+        >>> _validate_bearer_token("", "secret")
+        False
+    """
+    return hmac.compare_digest(token, expected)
+
+
 # OpenAPI security scheme for Bearer token authentication
 # Registered in OpenAPI schema with scheme_name "bearerAuth"
 # This makes the security requirement visible in /docs and /openapi.json
@@ -56,7 +83,7 @@ async def verify_admin_token(
         >>> # Raises HTTPException(401, "Invalid or missing token")
     """
     # Validate token using constant-time comparison (never log or print the token value)
-    if not hmac.compare_digest(credentials.credentials, settings.admin_token):
+    if not _validate_bearer_token(credentials.credentials, settings.admin_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing token",

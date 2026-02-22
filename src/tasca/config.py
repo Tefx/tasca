@@ -4,6 +4,10 @@ Application configuration using pydantic-settings.
 Environment variables can be used to override defaults.
 """
 
+import os
+import secrets
+
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,7 +34,14 @@ class Settings(BaseSettings):
     api_port: int = 8000
 
     # Security
-    admin_token: str | None = None
+    # Auto-generate a secure 64-character token (32 bytes hex-encoded) if not set via env var
+    admin_token: str = Field(default_factory=lambda: secrets.token_hex(32))
+
+    @computed_field
+    @property
+    def admin_token_from_env(self) -> bool:
+        """Check if admin_token was provided via TASCA_ADMIN_TOKEN environment variable."""
+        return "TASCA_ADMIN_TOKEN" in os.environ
 
     # CORS
     cors_origins: list[str] = []  # Empty = CORS disabled; ["*"] = allow all (no credentials)

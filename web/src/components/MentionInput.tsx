@@ -8,7 +8,7 @@
  * Design source: docs/tasca-web-uiux-v0.1.md (Seat Deck - Mention targeting)
  */
 
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { MentionPicker } from './SeatDeck'
 import type { PatronInfo } from './SeatDeck'
 import type { Seat } from '../api/sayings'
@@ -16,6 +16,12 @@ import type { Seat } from '../api/sayings'
 // =============================================================================
 // Types
 // =============================================================================
+
+/** Ref handle for MentionInput - allows parent to focus the textarea. */
+export interface MentionInputRef {
+  /** Focus the textarea and optionally set cursor position. */
+  focus: (cursorPosition?: number) => void
+}
 
 export interface MentionInputProps {
   /** Current input value */
@@ -109,23 +115,38 @@ function getPickerPosition(
 // Main Component
 // =============================================================================
 
-export function MentionInput({
-  value,
-  onChange,
-  placeholder = 'Say something…',
-  seats,
-  patrons,
-  disabled = false,
-  className = '',
-  onSubmit,
-  onMentionInsert,
-}: MentionInputProps) {
+export const MentionInput = forwardRef<MentionInputRef, MentionInputProps>(function MentionInput(
+  {
+    value,
+    onChange,
+    placeholder = 'Say something…',
+    seats,
+    patrons,
+    disabled = false,
+    className = '',
+    onSubmit,
+    onMentionInsert,
+  },
+  ref
+) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Mention picker state
   const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null)
   const [pickerPosition, setPickerPosition] = useState({ top: 0, left: 0 })
+
+  // Expose focus method to parent via ref
+  useImperativeHandle(ref, () => ({
+    focus: (cursorPosition?: number) => {
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        if (cursorPosition !== undefined) {
+          textareaRef.current.setSelectionRange(cursorPosition, cursorPosition)
+        }
+      }
+    },
+  }), [])
 
   // Filter active seats for mention picker
   const activeSeats = useMemo(() => {
@@ -307,7 +328,7 @@ export function MentionInput({
       )}
     </div>
   )
-}
+})
 
 // =============================================================================
 // Mention Error Component

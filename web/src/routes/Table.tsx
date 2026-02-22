@@ -21,7 +21,7 @@ import { Stream } from '../components/Stream'
 import { SeatDeck, type PatronInfo, getPresenceStatus } from '../components/SeatDeck'
 import { ModeIndicator } from '../components/ModeIndicator'
 import { TableControls } from '../components/TableControls'
-import { MentionInput } from '../components/MentionInput'
+import { MentionInput, type MentionInputRef } from '../components/MentionInput'
 import { useAuth } from '../auth/AuthContext'
 import '../styles/table.css'
 
@@ -323,6 +323,7 @@ function CommandConsole({ table, seats, patrons, onPosted, onStatusChange, onErr
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [controlState, setControlState] = useState<'idle' | 'pausing' | 'resuming'>('idle')
+  const mentionInputRef = useRef<MentionInputRef>(null)
   
   const isAdmin = mode === 'admin' && hasToken
   const isOperating = controlState !== 'idle'
@@ -374,14 +375,8 @@ function CommandConsole({ table, seats, patrons, onPosted, onStatusChange, onErr
 
   const handleInsertSummaryRequest = useCallback((text: string) => {
     setValue(text)
-    // Focus the input after inserting
-    // The MentionInput has the prefix label, so focus the textarea inside
-    const textarea = document.querySelector('.mc-console-input textarea') as HTMLTextAreaElement
-    if (textarea) {
-      textarea.focus()
-      // Move cursor to end
-      textarea.setSelectionRange(text.length, text.length)
-    }
+    // Focus the input after inserting using the ref
+    mentionInputRef.current?.focus(text.length)
   }, [])
 
   return (
@@ -393,6 +388,7 @@ function CommandConsole({ table, seats, patrons, onPosted, onStatusChange, onErr
       )}
       <div className="mc-console-row">
         <MentionInput
+          ref={mentionInputRef}
           value={value}
           onChange={setValue}
           seats={seats}
@@ -630,7 +626,7 @@ export function Table() {
             onError={handleError}
           />
         </div>
-        <SeatDeck seats={seats} activeCount={activeCount} />
+        <SeatDeck seats={seats} activeCount={activeCount} patrons={patronsMap} />
       </div>
     </div>
   )

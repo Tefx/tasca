@@ -7,7 +7,6 @@ Endpoints for table management operations.
 from __future__ import annotations
 
 import sqlite3
-import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +16,10 @@ from returns.result import Failure, Success
 from tasca.core.domain.table import Table, TableCreate, TableId, TableStatus, TableUpdate, Version
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
+from tasca.shell.services.table_id_generator import (
+    TableIdGenerationError,
+    generate_table_id,
+)
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     create_table,
@@ -72,7 +75,16 @@ async def create_table_endpoint(
         HTTPException: 500 if database operation fails.
     """
     now = datetime.now(UTC)
-    table_id = TableId(str(uuid.uuid4()))
+    table_id_result = generate_table_id(conn)
+
+    if isinstance(table_id_result, Failure):
+        error = table_id_result.failure()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate table ID: {error}",
+        )
+
+    table_id = table_id_result.unwrap()
 
     table = Table(
         id=table_id,
@@ -94,10 +106,10 @@ async def create_table_endpoint(
         )
 
     table = result.unwrap()
-    
+
     # Log table creation
     log_table_create(logger, table.id, "rest:admin")
-    
+
     return table
 
 
@@ -238,10 +250,10 @@ async def update_table_endpoint(
         )
 
     table = result.unwrap()
-    
+
     # Log table update
     log_table_update(logger, table.id, table.version, "rest:admin")
-    
+
     return table
 
 
@@ -289,5 +301,5 @@ async def delete_table_endpoint(
 
     # Log table deletion
     log_table_delete(logger, table_id, "rest:admin")
-    
+
     return DeleteResponse(status="deleted", table_id=table_id)

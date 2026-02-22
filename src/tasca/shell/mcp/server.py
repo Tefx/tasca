@@ -91,6 +91,10 @@ from tasca.shell.storage.seat_repo import (
     heartbeat_seat as repo_heartbeat_seat,
     heartbeat_seat_by_patron,
 )
+from tasca.shell.services.table_id_generator import (
+    TableIdGenerationError,
+    generate_table_id,
+)
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     VersionConflictError,
@@ -458,7 +462,13 @@ def table_create(
             return success_response(cached_response["data"])
 
     now = datetime.now(UTC)
-    table_id = TableId(str(uuid.uuid4()))
+    table_id_result = generate_table_id(conn)
+
+    if isinstance(table_id_result, Failure):
+        error = table_id_result.failure()
+        return error_response("DATABASE_ERROR", f"Failed to generate table ID: {error}")
+
+    table_id = table_id_result.unwrap()
 
     table = Table(
         id=table_id,

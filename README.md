@@ -65,10 +65,27 @@ For development, you can run the MCP server with HTTP transport:
 # Run MCP server with HTTP transport
 uv run python -c "from tasca.shell.mcp import mcp; mcp.run(transport='http')"
 
-# MCP base URL: http://localhost:8000/mcp
+# MCP endpoint: http://localhost:8000/mcp
 ```
 
 **Note**: The HTTP transport uses Streamable HTTP with session management. For most MCP clients, the STDIO transport is recommended.
+
+### Authentication
+
+When `TASCA_ADMIN_TOKEN` is set, the MCP HTTP endpoint requires Bearer token authentication:
+
+```bash
+# Set admin token
+export TASCA_ADMIN_TOKEN=your-secret-token
+
+# Example API call with authentication
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-token" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0"}}}'
+```
+
+If no `TASCA_ADMIN_TOKEN` is set, authentication is bypassed (not recommended for production).
 
 ## MCP Tools
 

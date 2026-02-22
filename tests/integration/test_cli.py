@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from tests.integration.conftest import TEST_ADMIN_TOKEN
+
 if TYPE_CHECKING:
     from starlette.testclient import TestClient
 
@@ -75,13 +77,19 @@ class TestIntegrationCreateTableViaRest:
                     "clientInfo": {"name": "cli-test", "version": "0.1.0"},
                 },
             },
-            headers={"Accept": "application/json, text/event-stream"},
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+            },
         )
         assert init_response.status_code == 200
 
         # Get session ID for subsequent requests
         session_id = init_response.headers.get("mcp-session-id")
-        headers = {"Accept": "application/json, text/event-stream"}
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+        }
         if session_id:
             headers["mcp-session-id"] = session_id
 
@@ -145,13 +153,19 @@ class TestIntegrationCreateTableViaRest:
                     "clientInfo": {"name": "cli-test", "version": "0.1.0"},
                 },
             },
-            headers={"Accept": "application/json, text/event-stream"},
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+            },
         )
         assert init_response.status_code == 200
 
         # Get session ID for subsequent requests
         session_id = init_response.headers.get("mcp-session-id")
-        headers = {"Accept": "application/json, text/event-stream"}
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+        }
         if session_id:
             headers["mcp-session-id"] = session_id
 
@@ -246,13 +260,19 @@ class TestIntegrationCreateTableViaMCP:
         init_response = mcp_test_client.post(
             "/mcp",
             json=init_request,
-            headers={"Accept": "application/json, text/event-stream"},
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+            },
         )
         assert init_response.status_code == 200
 
         # Get session ID for subsequent requests
         session_id = init_response.headers.get("mcp-session-id")
-        headers = {"Accept": "application/json, text/event-stream"}
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+        }
         if session_id:
             headers["mcp-session-id"] = session_id
 
@@ -316,13 +336,19 @@ class TestIntegrationCreateTableViaMCP:
                     "clientInfo": {"name": "tasca-cli", "version": "1.0.0"},
                 },
             },
-            headers={"Accept": "application/json, text/event-stream"},
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+            },
         )
         assert init_response.status_code == 200
 
         # Get session ID for subsequent requests
         session_id = init_response.headers.get("mcp-session-id")
-        headers = {"Accept": "application/json, text/event-stream"}
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+        }
         if session_id:
             headers["mcp-session-id"] = session_id
 
@@ -372,13 +398,19 @@ class TestIntegrationCreateTableViaMCP:
                     "clientInfo": {"name": "tasca-cli", "version": "1.0.0"},
                 },
             },
-            headers={"Accept": "application/json, text/event-stream"},
+            headers={
+                "Accept": "application/json, text/event-stream",
+                "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+            },
         )
         assert init_response.status_code == 200
 
         # Get session ID for subsequent requests
         session_id = init_response.headers.get("mcp-session-id")
-        headers = {"Accept": "application/json, text/event-stream"}
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+        }
         if session_id:
             headers["mcp-session-id"] = session_id
 

@@ -472,7 +472,7 @@ class TestTableJoin:
         assert result["ok"] is True
         initial = result["data"]["initial_sayings"]
         assert initial["sayings"] == []
-        assert initial["next_sequence"] == 0
+        assert initial["next_sequence"] == -1
         assert initial["has_more"] is False
 
     def test_join_initial_sayings_populated_table(self) -> None:
@@ -497,7 +497,12 @@ class TestTableJoin:
         assert sequences == sorted(sequences)
 
     def test_join_initial_sayings_next_sequence_correctness(self) -> None:
-        """next_sequence equals max(sequence) + 1 when sayings exist."""
+        """next_sequence equals max(sequence) when sayings exist.
+
+        Convention matches table_listen since_sequence semantics:
+        table_listen returns sayings with sequence > since_sequence.
+        So passing next_sequence as since_sequence yields no duplicates and no gaps.
+        """
         table_result = table_create(question="Sequence test table")
         table_id = table_result["data"]["id"]
 
@@ -510,7 +515,7 @@ class TestTableJoin:
         assert result["ok"] is True
         initial = result["data"]["initial_sayings"]
         max_seq = max(s["sequence"] for s in initial["sayings"])
-        assert initial["next_sequence"] == max_seq + 1
+        assert initial["next_sequence"] == max_seq
 
     def test_join_initial_sayings_has_more_true(self) -> None:
         """has_more is True when more sayings exist beyond the history limit."""
@@ -527,6 +532,22 @@ class TestTableJoin:
         initial = result["data"]["initial_sayings"]
         assert len(initial["sayings"]) == 10  # capped at limit
         assert initial["has_more"] is True
+
+    def test_join_initial_sayings_has_more_false_populated(self) -> None:
+        """has_more is False when sayings fit within the history limit."""
+        table_result = table_create(question="Under limit table")
+        table_id = table_result["data"]["id"]
+
+        # Add 3 sayings — well under DEFAULT_HISTORY_LIMIT of 10
+        for i in range(3):
+            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker")
+
+        result = table_join(table_id=table_id)
+
+        assert result["ok"] is True
+        initial = result["data"]["initial_sayings"]
+        assert len(initial["sayings"]) > 0
+        assert initial["has_more"] is False
 
     def test_join_backward_compat_table_and_seat_fields(self) -> None:
         """Response still contains table and seat fields alongside initial_sayings."""

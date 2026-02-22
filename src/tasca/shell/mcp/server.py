@@ -595,7 +595,7 @@ def table_join(
                 "history_sequence": 2,
                 "initial_sayings": {
                     "sayings": [...],
-                    "next_sequence": 5,
+                    "next_sequence": 4,
                     "has_more": true
                 },
                 "seat": {
@@ -609,6 +609,11 @@ def table_join(
                 }
             }
         }
+
+    Note on next_sequence in initial_sayings:
+        Pass next_sequence as since_sequence to table_listen.
+        table_listen returns sayings with sequence > since_sequence.
+        Equals max(sequence) of returned sayings, or -1 if no sayings exist.
 
     Error codes:
         - INVALID_REQUEST: Neither table_id nor invite_code provided
@@ -662,10 +667,11 @@ def table_join(
     history_sayings, history_sequence, has_more_history = history_result.unwrap()
 
     # Compute next_sequence from history
+    # Convention: matches table_listen since_sequence (WHERE sequence > since_sequence)
     if history_sayings:
-        next_sequence = max(s.sequence for s in history_sayings) + 1
+        next_sequence = max(s.sequence for s in history_sayings)
     else:
-        next_sequence = 0
+        next_sequence = -1
 
     # Create seat if patron_id provided (optional - allows human join without seat)
     seat_data = None
@@ -1990,7 +1996,7 @@ def connection_status() -> dict[str, Any]:
         True
 
         >>> # Remote mode status (after connect)
-        >>> connect(url="http://api.example.com")
+        >>> _ = connect(url="http://api.example.com")
         >>> result = connection_status()
         >>> result["data"]["mode"]
         'remote'

@@ -8,9 +8,14 @@ local mode (default) and remote upstream mode.
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+import httpx
+
+from tasca.shell.mcp.responses import error_response
 
 if TYPE_CHECKING:
     pass
@@ -202,3 +207,78 @@ def switch_to_local() -> None:
         False
     """
     _config.switch_to_local()
+
+
+# @invar:allow shell_result: MCP response envelopes return primitives, not Result[T, E]
+async def forward_jsonrpc_request(
+    config: UpstreamConfig, method: str, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Send a JSON-RPC request to the upstream MCP endpoint via httpx.
+
+    Args:
+        config: UpstreamConfig containing the target URL and auth token.
+        method: JSON-RPC method name to call.
+        params: Parameters for the JSON-RPC method.
+
+    Returns:
+        Parsed JSON response dict on success, or error_response envelope on failure.
+
+    Examples:
+        >>> # Success case (requires actual upstream)
+        >>> # result = await forward_jsonrpc_request(config, "tools/list", {})
+        >>> # result["ok"]  # True on success
+    """
+    if not config.url:
+        return error_response("UPSTREAM_UNREACHABLE", "No upstream URL configured")
+
+    # Build JSON-RPC request envelope
+    request_id = str(uuid.uuid4())
+    payload = {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "method": method,
+        "params": params,
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if config.token:
+        headers["Authorization"] = f"Bearer {config.token}"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(config.url, json=payload, headers=headers)
+
+            # Check for authentication failures
+            if response.status_code in (401, 403):
+                return error_response(
+                    "UPSTREAM_AUTH_FAILED",
+                    f"Authentication failed with status {response.status_code}",
+                    {"status_code": response.status_code},
+                )
+
+            # Check for other HTTP errors
+            if response.status_code >= 400:
+                return error_response(
+                    "UPSTREAM_ERROR",
+                    f"Upstream returned status {response.status_code}",
+                    {"status_code": response.status_code},
+                )
+
+            # Parse and return JSON response
+            # Type ignore: httpx.Response.json() returns Any, but MCP endpoints return dict
+            return response.json()  # type: ignore[no-any-return]
+
+        except httpx.ConnectError as e:
+            return error_response(
+                "UPSTREAM_UNREACHABLE",
+                f"Cannot connect to upstream at {config.url}",
+                {"error": str(e)},
+            )
+        except httpx.TimeoutException as e:
+            return error_response(
+                "UPSTREAM_TIMEOUT",
+                f"Request to upstream timed out",
+                {"timeout_seconds": 30.0, "error": str(e)},
+            )

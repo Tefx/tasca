@@ -68,8 +68,8 @@ def main() -> None:
     print()
     print("  ── Paste to agent ──────────────────────────────────────────")
     print(f'  Tasca MCP server is running.')
-    print(f"  Call tasca.connect(url=\"http://{lan_ip}:{port}/mcp\", token=\"{token}\")")
-    print(f"  then tasca.table_list() to see available tables.")
+    print(f"  1. connect(url=\"http://{lan_ip}:{port}/mcp\", token=\"{token}\")")
+    print(f"  2. table_list()")
     print("  ────────────────────────────────────────────────────────────")
     print()
 

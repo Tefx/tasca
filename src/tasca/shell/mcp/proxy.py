@@ -197,6 +197,22 @@ class UpstreamConfig:
         """
         return {"url": self.url, "token": self.token}
 
+    def safe_dict(self) -> dict[str, str | None | bool]:
+        """Export config for safe logging (token redacted).
+
+        Returns a dictionary suitable for logging that does not expose
+        the authentication token.
+
+        Examples:
+            >>> UpstreamConfig().safe_dict()
+            {'url': None, 'has_token': False}
+            >>> UpstreamConfig(url="http://api.example.com").safe_dict()
+            {'url': 'http://api.example.com', 'has_token': False}
+            >>> UpstreamConfig(url="http://api.example.com", token="secret").safe_dict()
+            {'url': 'http://api.example.com', 'has_token': True}
+        """
+        return {"url": self.url, "has_token": self.token is not None}
+
     @classmethod
     def from_dict(cls, data: dict[str, str | None]) -> UpstreamConfig:
         """Create config from dictionary.
@@ -248,6 +264,7 @@ def _load_config_from_file() -> Result[dict[str, str | None], ProxyConfigError]:
         logger.warning("Config file %s exists but contains invalid JSON: %s", config_path, e)
         return Failure(ProxyConfigError(f"Invalid JSON: {e}"))
     except OSError as e:
+        logger.warning("Config file %s exists but cannot be read: %s", config_path, e)
         return Failure(ProxyConfigError(f"Cannot read file: {e}"))
 
 

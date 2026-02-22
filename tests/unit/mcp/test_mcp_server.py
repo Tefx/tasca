@@ -1816,7 +1816,7 @@ class TestConnect:
             assert result["data"]["token"] == "secret-token"
 
             # Verify global config was updated
-            config = get_upstream_config()
+            config = get_upstream_config().unwrap()
             assert config.is_remote is True
             assert config.url == "http://api.example.com"
         finally:
@@ -1836,7 +1836,7 @@ class TestConnect:
             assert result["data"]["url"] == "http://api.example.com"
             assert result["data"]["token"] is None
 
-            config = get_upstream_config()
+            config = get_upstream_config().unwrap()
             assert config.is_remote is True
             assert config.token is None
         finally:
@@ -1850,7 +1850,7 @@ class TestConnect:
         try:
             # First switch to remote
             switch_to_remote("http://api.example.com", "token")
-            assert get_upstream_config().is_remote is True
+            assert get_upstream_config().unwrap().is_remote is True
 
             # Now switch back to local
             result = connect()
@@ -1860,7 +1860,7 @@ class TestConnect:
             assert result["data"]["url"] is None
             assert result["data"]["token"] is None
 
-            config = get_upstream_config()
+            config = get_upstream_config().unwrap()
             assert config.is_remote is False
             assert config.url is None
             assert config.token is None
@@ -1875,7 +1875,7 @@ class TestConnect:
         try:
             # First switch to remote
             switch_to_remote("http://api.example.com")
-            assert get_upstream_config().is_remote is True
+            assert get_upstream_config().unwrap().is_remote is True
 
             # Explicit None URL switches to local
             result = connect(url=None)
@@ -1883,7 +1883,7 @@ class TestConnect:
             assert result["ok"] is True
             assert result["data"]["mode"] == "local"
 
-            config = get_upstream_config()
+            config = get_upstream_config().unwrap()
             assert config.is_remote is False
         finally:
             switch_to_local()

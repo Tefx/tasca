@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from returns.result import Failure, Result, Success
+
 from tasca.shell.mcp.responses import error_response
 
 if TYPE_CHECKING:
@@ -136,23 +138,38 @@ class UpstreamConfig:
         return cls(url=data.get("url"), token=data.get("token"))
 
 
-def _load_config_from_file() -> dict[str, str | None] | None:
+class ProxyConfigError(Exception):
+    """Error loading proxy configuration."""
+
+    def __init__(self, message: str, path: str = ".tasca/upstream.json") -> None:
+        self.path = path
+        super().__init__(f"{message}: {path}")
+
+
+def _load_config_from_file() -> Result[dict[str, str | None], ProxyConfigError]:
     """Load configuration from .tasca/upstream.json if it exists.
 
+    This is a Shell function that performs I/O (file reading).
+    Returns Result to handle file access errors explicitly.
+
     Returns:
-        Configuration dict or None if file doesn't exist.
+        Success with config dict (empty values if file doesn't exist).
+        Failure with ProxyConfigError if file exists but cannot be read/parsed.
     """
     config_path = Path(".tasca/upstream.json")
     if not config_path.exists():
-        return None
+        # File doesn't exist is not an error - return empty config
+        return Success({"url": None, "token": None})
     try:
         with open(config_path) as f:
             data = json.load(f)
             if isinstance(data, dict):
-                return {"url": data.get("url"), "token": data.get("token")}
-    except (json.JSONDecodeError, OSError):
-        pass
-    return None
+                return Success({"url": data.get("url"), "token": data.get("token")})
+            return Failure(ProxyConfigError("Invalid config format: expected dict"))
+    except json.JSONDecodeError as e:
+        return Failure(ProxyConfigError(f"Invalid JSON: {e}"))
+    except OSError as e:
+        return Failure(ProxyConfigError(f"Cannot read file: {e}"))
 
 
 # Module-level singleton instance
@@ -160,23 +177,31 @@ def _load_config_from_file() -> dict[str, str | None] | None:
 _config: UpstreamConfig = UpstreamConfig()
 
 # Load initial config from file if it exists
-_initial_data = _load_config_from_file()
-if _initial_data:
+_initial_result = _load_config_from_file()
+if isinstance(_initial_result, Success):
+    _initial_data = _initial_result.unwrap()
     _config = UpstreamConfig.from_dict(_initial_data)
 
 
-def get_upstream_config() -> UpstreamConfig:
+def get_upstream_config() -> Result[UpstreamConfig, ProxyConfigError]:
     """Get the global upstream configuration singleton.
 
+    This is a Shell function that retrieves configuration state.
+    Returns Result to allow callers to handle config loading errors.
+
     Returns:
-        The module-level UpstreamConfig instance.
+        Success with the UpstreamConfig instance.
+        Failure with ProxyConfigError if config could not be loaded.
 
     Examples:
-        >>> config = get_upstream_config()
+        >>> result = get_upstream_config()
+        >>> isinstance(result, Success)
+        True
+        >>> config = result.unwrap()
         >>> isinstance(config, UpstreamConfig)
         True
     """
-    return _config
+    return Success(_config)
 
 
 def switch_to_remote(url: str, token: str | None = None) -> None:
@@ -189,7 +214,7 @@ def switch_to_remote(url: str, token: str | None = None) -> None:
     Examples:
         >>> from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
         >>> switch_to_remote("http://api.example.com", "secret")
-        >>> get_upstream_config().is_remote
+        >>> get_upstream_config().unwrap().is_remote
         True
         >>> switch_to_local()  # Reset for other tests
     """
@@ -203,7 +228,7 @@ def switch_to_local() -> None:
         >>> from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
         >>> switch_to_remote("http://api.example.com")
         >>> switch_to_local()
-        >>> get_upstream_config().is_remote
+        >>> get_upstream_config().unwrap().is_remote
         False
     """
     _config.switch_to_local()

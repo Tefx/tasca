@@ -468,10 +468,12 @@ function TableList({ tables, onRowClick, onRowKeyDown }: TableListProps) {
             aria-label={`Table: ${table.question}`}
           >
             <td className="wt-cell-title">
-              <span className="wt-table-question">{table.question}</span>
-              {table.context && (
-                <span className="wt-table-context">{table.context}</span>
-              )}
+              <div className="wt-cell-title-inner">
+                <span className="wt-table-question">{table.question}</span>
+                {table.context && (
+                  <span className="wt-table-context">{table.context}</span>
+                )}
+              </div>
             </td>
             <td>
               <StatusPill status={table.status} />

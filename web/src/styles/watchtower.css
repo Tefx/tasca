@@ -379,10 +379,13 @@
 
 /* Cell: Title */
 .wt-cell-title {
+  max-width: 400px;
+}
+
+.wt-cell-title-inner {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
-  max-width: 400px;
 }
 
 .wt-table-question {

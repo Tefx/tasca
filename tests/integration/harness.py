@@ -633,33 +633,45 @@ class MCPHTTPHarness(MCPHarnessBase):
         async with MCPHTTPHarness() as harness:
             result = await harness.initialize()
             assert "result" in result
+
+    Example with auth:
+        async with MCPHTTPHarness(admin_token="secret") as harness:
+            result = await harness.initialize()
+            assert "result" in result
     """
 
     def __init__(
         self,
         base_url: str = MCP_BASE_URL,
         timeout: float = REQUEST_TIMEOUT,
+        admin_token: str | None = None,
     ) -> None:
         """Initialize MCP HTTP harness.
 
         Args:
             base_url: Base URL for the MCP endpoint
             timeout: Request timeout in seconds
+            admin_token: Optional Bearer token for authentication
         """
         super().__init__(timeout=timeout)
         self.base_url = base_url
+        self.admin_token = admin_token
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> "MCPHTTPHarness":
         """Enter async context and create HTTP client."""
         import httpx
 
+        headers: dict[str, str] = {
+            "Accept": "application/json, text/event-stream",
+        }
+        if self.admin_token:
+            headers["Authorization"] = f"Bearer {self.admin_token}"
+
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=httpx.Timeout(self.timeout),
-            headers={
-                "Accept": "application/json, text/event-stream",
-            },
+            headers=headers,
             follow_redirects=True,
         )
         return self
@@ -728,21 +740,29 @@ class MCPASGIHarness(MCPHarnessBase):
         async with MCPASGIHarness(app) as harness:
             result = await harness.initialize()
             assert "result" in result
+
+    Example with auth:
+        async with MCPASGIHarness(app, admin_token="secret") as harness:
+            result = await harness.initialize()
+            assert "result" in result
     """
 
     def __init__(
         self,
         app: "FastAPI",
         timeout: float = REQUEST_TIMEOUT,
+        admin_token: str | None = None,
     ) -> None:
         """Initialize MCP ASGI harness.
 
         Args:
             app: FastAPI application instance (from create_app())
             timeout: Request timeout in seconds
+            admin_token: Optional Bearer token for authentication
         """
         super().__init__(timeout=timeout)
         self.app = app
+        self.admin_token = admin_token
         self._client: "httpx.AsyncClient | None" = None
 
     async def __aenter__(self) -> "MCPASGIHarness":
@@ -751,14 +771,18 @@ class MCPASGIHarness(MCPHarnessBase):
 
         # ASGI transport for in-process testing
         # MCP endpoint is at /mcp
+        headers: dict[str, str] = {
+            "Accept": "application/json, text/event-stream",
+        }
+        if self.admin_token:
+            headers["Authorization"] = f"Bearer {self.admin_token}"
+
         transport = httpx.ASGITransport(app=self.app)
         self._client = httpx.AsyncClient(
             transport=transport,
             base_url="http://test/mcp",
             timeout=httpx.Timeout(self.timeout),
-            headers={
-                "Accept": "application/json, text/event-stream",
-            },
+            headers=headers,
             follow_redirects=True,
         )
         return self

@@ -577,6 +577,7 @@ def cmd_new(args: argparse.Namespace) -> int:
             app,
             host=host,
             port=port,
+            ws="wsproto",
         )
     except KeyboardInterrupt:
         # Clean shutdown on Ctrl+C

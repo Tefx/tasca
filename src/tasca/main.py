@@ -73,6 +73,7 @@ def main() -> None:
         app,
         host=settings.api_host,
         port=settings.api_port,
+        ws="wsproto",
     )
 
 

@@ -1137,16 +1137,16 @@ class TestPatronDeduplication:
 
 
 class TestNotImplementedErrorCodes:
-    """Document error codes that are NOT YET IMPLEMENTED in MCP tools.
+    """Tests for MCP tool error codes.
 
-    These tests document the expected behavior once the features are implemented.
-    They will FAIL until the corresponding features are added to the MCP server.
+    Some error codes are fully implemented and tested here; others are not yet
+    implemented in MCP tools and are documented as gaps for future work.
 
-    Implemented error codes:
+    Implemented error codes (tests verify behavior):
         - OPERATION_NOT_ALLOWED: Closed/paused table operations (via table_control)
         - VERSION_CONFLICT: Optimistic concurrency conflict (via table_update)
 
-    NOT YET implemented:
+    NOT YET implemented (tests document expected behavior):
         - AMBIGUOUS_MENTION: Mention resolution in table_say
         - VALIDATION_ERROR: Input validation
 

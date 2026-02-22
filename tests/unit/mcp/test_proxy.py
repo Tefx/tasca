@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from returns.result import Success
+
 from tasca.shell.mcp.proxy import (
     UpstreamConfig,
     forward_jsonrpc_request,
@@ -179,9 +181,14 @@ class TestGlobalConfigFunctions:
         # Reset to known state
         proxy_module._config = UpstreamConfig()
 
-        config1 = get_upstream_config()
-        config2 = get_upstream_config()
+        result1 = get_upstream_config()
+        result2 = get_upstream_config()
 
+        # Both should be Success with the same config
+        assert isinstance(result1, Success)
+        assert isinstance(result2, Success)
+        config1 = result1.unwrap()
+        config2 = result2.unwrap()
         assert config1 is config2
 
     def test_switch_to_remote_modifies_global(self) -> None:
@@ -191,7 +198,9 @@ class TestGlobalConfigFunctions:
         try:
             switch_to_remote("http://api.example.com", "secret")
 
-            config = get_upstream_config()
+            result = get_upstream_config()
+            assert isinstance(result, Success)
+            config = result.unwrap()
             assert config.url == "http://api.example.com"
             assert config.token == "secret"
             assert config.is_remote is True
@@ -206,7 +215,9 @@ class TestGlobalConfigFunctions:
             switch_to_remote("http://api.example.com", "secret")
             switch_to_local()
 
-            config = get_upstream_config()
+            result = get_upstream_config()
+            assert isinstance(result, Success)
+            config = result.unwrap()
             assert config.url is None
             assert config.token is None
             assert config.is_remote is False

@@ -74,6 +74,7 @@ from tasca.shell.logging import (
 )
 from tasca.shell.mcp.database import get_mcp_db
 from tasca.shell.mcp.proxy import (
+    ProxyConfigError,
     forward_jsonrpc_request,
     get_upstream_config,
     switch_to_local,
@@ -1948,7 +1949,12 @@ def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
         switch_to_local()
 
     # Get current config to return status
-    config = get_upstream_config()
+    config_result = get_upstream_config()
+    if isinstance(config_result, Failure):
+        err = config_result.failure()
+        return error_response("CONFIG_ERROR", str(err))
+
+    config = config_result.unwrap()
     mode = "remote" if config.is_remote else "local"
 
     return success_response(
@@ -2003,7 +2009,12 @@ def connection_status() -> dict[str, Any]:
         >>> result["data"]["url"]
         'http://api.example.com'
     """
-    config = get_upstream_config()
+    config_result = get_upstream_config()
+    if isinstance(config_result, Failure):
+        err = config_result.failure()
+        return error_response("CONFIG_ERROR", str(err))
+
+    config = config_result.unwrap()
     mode = "remote" if config.is_remote else "local"
 
     # Health check:
@@ -2057,7 +2068,12 @@ class ProxyMiddleware(Middleware):
         arguments = context.message.arguments or {}
 
         # Get upstream configuration (single attribute read for mode check)
-        upstream = get_upstream_config()
+        upstream_result = get_upstream_config()
+        if isinstance(upstream_result, Failure):
+            err = upstream_result.failure()
+            return self._response_to_tool_result(error_response("CONFIG_ERROR", str(err)))
+
+        upstream = upstream_result.unwrap()
 
         # Check if we should forward
         if upstream.is_remote and tool_name not in LOCAL_ONLY_TOOLS:

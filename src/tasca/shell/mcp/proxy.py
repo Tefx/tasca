@@ -146,6 +146,7 @@ class ProxyConfigError(Exception):
         super().__init__(f"{message}: {path}")
 
 
+# @shell_complexity: Config load must branch for missing file, invalid JSON, schema mismatch, and OS errors
 def _load_config_from_file() -> Result[dict[str, str | None], ProxyConfigError]:
     """Load configuration from .tasca/upstream.json if it exists.
 
@@ -234,6 +235,7 @@ def switch_to_local() -> None:
     _config.switch_to_local()
 
 
+# @shell_complexity: Upstream proxying requires distinct branches for auth, HTTP status mapping, and network failures
 # @invar:allow shell_result: MCP response envelopes return primitives, not Result[T, E]
 async def forward_jsonrpc_request(
     config: UpstreamConfig, method: str, params: dict[str, Any]

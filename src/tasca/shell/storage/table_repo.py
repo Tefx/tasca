@@ -14,6 +14,7 @@ from datetime import datetime
 from returns.result import Failure, Result, Success
 
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
+from tasca.core.services.seat_service import filter_active_seats
 from tasca.core.services.table_service import (
     VersionMismatchError,
     prepare_versioned_update,
@@ -282,6 +283,90 @@ def list_tables(conn: sqlite3.Connection) -> Result[list[Table], TableError]:
         return Success(tables)
     except sqlite3.Error as e:
         return Failure(TableDatabaseError(f"Failed to list tables: {e}"))
+
+
+def list_tables_with_seat_counts(
+    conn: sqlite3.Connection,
+    ttl_seconds: int,
+    now: datetime,
+) -> Result[list[dict], TableError]:
+    """List all open tables with active seat counts.
+
+    Queries all tables with status='open' and joins seats to compute
+    active_count per table (excluding expired seats based on TTL).
+
+    Args:
+        conn: Database connection.
+        ttl_seconds: Time-to-live in seconds for seat expiry calculation.
+        now: Current timestamp for expiry calculation.
+
+    Returns:
+        Success with list of dicts containing:
+            - id: Table ID
+            - question: Table question/topic
+            - context: Optional context
+            - status: Table status (will always be 'open')
+            - version: Version number for optimistic concurrency
+            - created_at: Creation timestamp (ISO format string)
+            - updated_at: Last update timestamp (ISO format string)
+            - active_count: Number of active (non-expired) seats
+
+    Example:
+        >>> import sqlite3
+        >>> from datetime import datetime
+        >>> conn = sqlite3.connect(":memory:")
+        >>> _ = create_tables_table(conn)  # Setup schema
+        >>> result = list_tables_with_seat_counts(conn, 300, datetime.now())
+        >>> isinstance(result, Success)
+        True
+        >>> result.unwrap()  # Empty list since no tables exist
+        []
+    """
+    from tasca.shell.storage.seat_repo import find_seats_by_table
+
+    try:
+        # Query only open tables
+        cursor = conn.execute(
+            """
+            SELECT id, question, context, status, version, created_at, updated_at
+            FROM tables
+            WHERE status = 'open'
+            ORDER BY created_at DESC
+            """
+        )
+        rows = cursor.fetchall()
+
+        result_tables: list[dict] = []
+        for row in rows:
+            table_id = row[0]
+
+            # Get seats for this table
+            seats_result = find_seats_by_table(conn, table_id)
+            if isinstance(seats_result, Failure):
+                return Failure(TableDatabaseError(f"Failed to get seats for table {table_id}"))
+
+            seats = seats_result.unwrap()
+
+            # Filter active seats using core logic
+            active_seats = filter_active_seats(seats, ttl_seconds, now)
+            active_count = len(active_seats)
+
+            result_tables.append(
+                {
+                    "id": table_id,
+                    "question": row[1],
+                    "context": row[2],
+                    "status": row[3],
+                    "version": row[4],
+                    "created_at": row[5],
+                    "updated_at": row[6],
+                    "active_count": active_count,
+                }
+            )
+
+        return Success(result_tables)
+    except sqlite3.Error as e:
+        return Failure(TableDatabaseError(f"Failed to list tables with seat counts: {e}"))
 
 
 def delete_table(conn: sqlite3.Connection, table_id: TableId) -> Result[None, TableError]:

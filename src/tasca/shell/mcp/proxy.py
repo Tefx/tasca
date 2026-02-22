@@ -34,7 +34,8 @@ def _validate_jsonrpc_response(data: Any, expected_id: str) -> dict[str, Any] | 
 
     Per JSON-RPC 2.0 spec, a valid response must have:
     - jsonrpc: "2.0" (string)
-    - id: same as request id (or null)
+    - id: same as request id (this implementation always sends UUID string ids,
+      so null id responses are always rejected as invalid)
     - Either result (any type) OR error (object with code, message)
 
     Args:

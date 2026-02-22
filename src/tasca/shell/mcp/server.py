@@ -668,8 +668,10 @@ def table_join(
 
     history_sayings, history_sequence, has_more_history = history_result.unwrap()
 
-    # Compute next_sequence from history
-    # Convention: matches table_listen since_sequence (WHERE sequence > since_sequence)
+    # Compute next_sequence from history.
+    # Convention: -1 means "no sayings yet" — client uses since_sequence=-1 to fetch all.
+    # Note: table_listen/table_wait use a different convention via _compute_next_sequence
+    # (empty → since_sequence+1, not -1) because they only return new sayings, not history.
     if history_sayings:
         next_sequence = max(s.sequence for s in history_sayings)
     else:
@@ -1132,7 +1134,7 @@ def table_say(
 #   length inflates line count but logic is 2 lines
 @deal.pre(lambda sayings, since_sequence: since_sequence >= -1)
 @deal.post(lambda result: result >= 0)
-def _compute_next_sequence(sayings: list, since_sequence: int) -> int:
+def _compute_next_sequence(sayings: list[Any], since_sequence: int) -> int:
     """Compute the next_sequence value to return in table_listen / table_wait responses.
 
     Uses the two-state convention:

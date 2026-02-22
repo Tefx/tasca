@@ -14023,7 +14023,7 @@ phases:
       - Run: uv run pytest --markers | rg e2e_external -> marker registered'
   - id: mcp_proxy_fix2.retest-e2e-external-server
     name: retest-e2e-external-server
-    status: claimed
+    status: done
     description: 'Re-test after fix: Verify E2E test infrastructure enables full regression
       testing. Run proxy E2E tests with external server setup (or verify documentation
       enables this).'
@@ -14049,6 +14049,78 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-02-22T15:08:48.591921+00:00'
+    evidence: "## Verification Report\n\nTester: integration-verifier (independent)\n\
+      Scope: E2E proxy tests with external server\nIndependence Level: L1\nTimestamp:\
+      \ 2026-02-22T15:09:53Z\n\nTest Execution:\n- Run: ./scripts/run-e2e-external-server.sh\
+      \ -v -> collected 6 tests from tests/integration/test_mcp_proxy.py; 4 failed,\
+      \ 2 passed, 0 skipped\n- Run: seam scan -> integration tests use no mocks\n\n\
+      Issues Found:\n- blocker: Output validation error (\"outputSchema defined but\
+      \ no structured output returned\") causing forwarding/table operation failures\
+      \ at tests/integration/test_mcp_proxy.py:188,296,399\n- should_fix: connect\
+      \ response missing token key (KeyError: 'token') at tests/integration/test_mcp_proxy.py:259\n\
+      \nCoverage Assessment:\n- E2E tests can now run: yes (execution path unblocked)\n\
+      - Documentation is complete: yes\n- Verdict: ISSUES_FOUND\n\nIssue detected\
+      \ handling:\n- Severity: blocker\n- Created remediation steps via vectl-planner:\n\
+      \  - mcp_proxy_fix2.fix-e2e-validation\n  - mcp_proxy_fix2.retest-e2e-validation"
+  - id: mcp_proxy_fix2.fix-e2e-validation
+    name: fix-e2e-validation
+    status: claimed
+    description: 'Fix: Proxy-forwarded tool responses fail JSON parsing and connect
+      response missing token key.
+
+
+      Issues to fix:
+
+      1. BLOCKER: Proxy-forwarded tool responses fail with "Output validation error:
+      outputSchema defined but no structured output returned" (tests/integration/test_mcp_proxy.py:188,296,399)
+
+      2. SHOULD_FIX: Connect response in remote mode missing ''token'' key (KeyError:
+      ''token'') (tests/integration/test_mcp_proxy.py:259)
+
+
+      Root cause investigation needed:
+
+      - Proxy forwarding path may not be properly handling MCP tool response format
+
+      - Connect endpoint response shaping may be missing required fields in remote
+      mode'
+    verification: 'Manual verification:
+
+      1. Review proxy response handling code paths
+
+      2. Verify MCP tool response format compliance
+
+      3. Check connect endpoint response includes all required fields
+
+      4. Local test: uv run pytest tests/integration/test_mcp_proxy.py -v -k "test_proxy"
+      --tb=short'
+    refs:
+    - tests/integration/test_mcp_proxy.py
+    - src/tasca/mcp_proxy.py
+    depends_on:
+    - mcp_proxy_fix2.retest-e2e-external-server
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-22T15:14:51.391383+00:00'
+  - id: mcp_proxy_fix2.retest-e2e-validation
+    name: retest-e2e-validation
+    status: pending
+    description: 'Re-test after fix: Verify proxy-forwarded tool responses parse correctly
+      and connect response includes token key.
+
+
+      Run E2E tests to verify:
+
+      1. Proxy-forwarded tool responses no longer fail with "Output validation error"
+
+      2. Connect response in remote mode includes required ''token'' key
+
+
+      Evidence: Full test output with pass/fail status for all proxy-related tests.'
+    verification: uv run pytest tests/integration/test_mcp_proxy.py -v -m e2e --tb=short
+    depends_on:
+    - mcp_proxy_fix2.fix-e2e-validation
+    agent: integration-verifier
 - id: l3_proxy_fix
   name: L3 and proxy fix — gate review should_fix findings
   status: done
@@ -14388,3 +14460,187 @@ phases:
       ### Gate Decision: OPEN
 
       All automated gates pass. No BLOCKING or SHOULD_FIX findings.'
+- id: tech_debt_fix
+  name: Technical debt fix — gate review unresolved suggestions
+  status: pending
+  depends_on:
+  - l3_proxy_fix
+  - mcp_hardening_fix
+  steps:
+  - id: tech_debt_fix.extract-test-mcp-helpers
+    name: extract-test-mcp-helpers
+    status: pending
+    description: Extract `_parse_mcp_response`, `_extract_tool_result`, and `call_tool`
+      closures that are copy-pasted 7 times (lines 584, 717, 835, 933, 1032, 1139,
+      1232) in `tests/integration/test_mcp.py` into module-level helper functions.
+      After extraction, all 7 copy-pasted blocks must be replaced with calls to the
+      shared helpers. No test logic must change.
+    verification: All existing integration tests still pass. `grep -n '_parse_mcp_response\|_extract_tool_result'
+      tests/integration/test_mcp.py` shows exactly one definition of each helper and
+      zero inline duplicates.
+    refs:
+    - tests/integration/test_mcp.py
+    agent: python-engineer
+  - id: tech_debt_fix.extract-test-mcp-helpers-verify
+    name: extract-test-mcp-helpers-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER, verify that the copy-paste extraction
+      in `tests/integration/test_mcp.py` is complete and correct.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not confirm it works.
+
+
+      Test for:
+
+      - Happy path: all integration tests execute without error
+
+      - Structural: `_parse_mcp_response`, `_extract_tool_result`, `call_tool` each
+      defined exactly once at module level
+
+      - Regression: no test was silently dropped or changed in behaviour
+
+      - Coverage: helper functions are actually called from each former copy-paste
+      site
+
+
+      Document ALL findings. Independence Level: L1'
+    verification: No duplicate SSE-parsing closures remain. Module-level helpers confirmed.
+      Integration test suite passes.
+    refs:
+    - tests/integration/test_mcp.py
+    depends_on:
+    - tech_debt_fix.extract-test-mcp-helpers
+    agent: integration-verifier
+  - id: tech_debt_fix.clarify-upstream-config-api
+    name: clarify-upstream-config-api
+    status: pending
+    description: "Resolve the ambiguous dual-serialization API on `UpstreamConfig`\
+      \ in `src/tasca/shell/mcp/proxy.py:195-223`.\n\n`to_dict()` returns `{\"token\"\
+      : \"***\"}` (redacted string). `safe_dict()` (or equivalent) returns `{\"has_token\"\
+      : bool}` (presence flag). Neither is currently called in production code.\n\n\
+      Choose ONE of:\n  A. Document the distinction: update both docstrings to state\
+      \ purpose, audience, and when to prefer each method.\n  B. Consolidate: make\
+      \ `to_dict()` private (rename to `_to_dict()`) or deprecate it, keeping only\
+      \ the shape that is actually needed.\n\nEither approach is acceptable; record\
+      \ the decision and rationale in a code comment."
+    verification: '`invar guard` passes. Either: both methods have docstrings explaining
+      their distinct purposes, OR only one serialization method is on the public surface.'
+    refs:
+    - src/tasca/shell/mcp/proxy.py
+    depends_on:
+    - tech_debt_fix.extract-test-mcp-helpers-verify
+    agent: python-engineer
+  - id: tech_debt_fix.add-proxy-middleware-config-error-test
+    name: add-proxy-middleware-config-error-test
+    status: pending
+    description: 'Add a test case to `tests/unit/mcp/test_proxy_middleware.py` that
+      exercises the `CONFIG_ERROR` error path in `ProxyMiddleware`.
+
+
+      The test must:
+
+      - Arrange the middleware to be in a config-error state (e.g. missing or invalid
+      upstream config)
+
+      - Call the relevant handler
+
+      - Assert the response status and body match the expected `CONFIG_ERROR` behaviour
+
+
+      No production code changes are expected; this is a test-only addition.'
+    verification: '`invar guard` passes. The new test is visible in the test file
+      and covers the `CONFIG_ERROR` branch. Running the test file in isolation exits
+      0.'
+    refs:
+    - tests/unit/mcp/test_proxy_middleware.py
+    - src/tasca/shell/mcp/proxy.py
+    depends_on:
+    - tech_debt_fix.clarify-upstream-config-api
+    agent: python-engineer
+  - id: tech_debt_fix.rename-validate-bearer-token
+    name: rename-validate-bearer-token
+    status: pending
+    description: "Resolve the cross-module private-symbol import in `src/tasca/shell/api/app.py:18`.\n\
+      \n`app.py` imports `_validate_bearer_token` from `auth.py` — a `_`-prefixed\
+      \ (module-private) symbol. Choose ONE fix:\n  A. Rename `_validate_bearer_token`\
+      \ to `validate_bearer_token` in `auth.py` and update all call sites (making\
+      \ it intentionally public).\n  B. Move `MCPBearerAuthMiddleware` into `auth.py`\
+      \ so the call remains within the module.\n\nPrefer option A unless it creates\
+      \ another architectural issue. Update all import sites and any tests that reference\
+      \ the old name."
+    verification: '`invar guard` passes. No `_validate_bearer_token` import exists
+      in `app.py`. The function (or its replacement) is accessible without violating
+      naming convention.'
+    refs:
+    - src/tasca/shell/api/app.py
+    - src/tasca/shell/api/auth.py
+    depends_on:
+    - tech_debt_fix.add-proxy-middleware-config-error-test
+    agent: python-engineer
+  - id: tech_debt_fix.add-doc-comments
+    name: add-doc-comments
+    status: pending
+    description: "Add three inline documentation comments across the codebase:\n\n\
+      1. **Sync-DB TODO** (`server.py`): At each polling call site inside `table_listen`\
+      \ and `table_wait` async loops, add:\n   `# TODO(async-db): sync DB call in\
+      \ async loop — acceptable for v1, consider asyncio DB driver in future`\n\n\
+      2. **CWD comment** (`_load_config_from_file` in the relevant shell file): At\
+      \ the line that opens `.tasca/upstream.json` (CWD-relative path), add:\n   `#\
+      \ Relative to CWD where tasca server is launched (project root)`\n\n3. **OPTIONS\
+      \ guard comment** (`src/tasca/shell/api/app.py:63-66`): At the OPTIONS preflight\
+      \ guard inside `MCPBearerAuthMiddleware`, add a brief inline comment explaining\
+      \ why the guard is kept despite the outer `scope[\"type\"] != \"http\"` check\
+      \ already excluding non-HTTP traffic.\n\nNo logic changes. Comments only."
+    verification: All three comments are present in the respective files. `invar guard`
+      passes with no new issues.
+    refs:
+    - src/tasca/shell/api/app.py
+    - src/tasca/shell/api/auth.py
+    - src/tasca/shell/mcp/server.py
+    depends_on:
+    - tech_debt_fix.rename-validate-bearer-token
+    agent: python-engineer
+  - id: tech_debt_fix.guard-verify
+    name: guard-verify
+    status: pending
+    description: 'Run `invar guard --all` to confirm the full project passes static
+      analysis, contract checks, and doctests after all tech-debt changes in this
+      phase.
+
+
+      Fix any issues before marking complete. Do not mark complete if guard exits
+      non-zero.'
+    verification: '`invar guard --all` exits 0. Output shows 0 errors. Warnings (if
+      any) are pre-existing and documented.'
+    depends_on:
+    - tech_debt_fix.add-doc-comments
+    agent: python-engineer
+  - id: tech_debt_fix.gate
+    name: gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the `tech_debt_fix`
+      phase meets the quality bar for closure.
+
+
+      YOU ARE THE QUALITY GATE. Your job is to BLOCK progress if quality is insufficient.
+
+
+      Review criteria:
+
+      1. Completeness: all 7 preceding steps completed with adequate evidence?
+
+      2. Evidence quality: specific, verifiable, not vague?
+
+      3. Known issues: all blockers resolved? Tech debt documented (not silently dropped)?
+
+      4. Cross-cutting: no regressions introduced? Guard passes clean?
+
+
+      Independence: you MUST NOT be the same agent as any implementation step in this
+      phase.'
+    verification: All phase steps completed with adequate evidence. Guard passes.
+      No unresolved blockers.
+    depends_on:
+    - tech_debt_fix.guard-verify
+    agent: gate-reviewer

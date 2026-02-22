@@ -1791,6 +1791,7 @@ class TestTableWait:
         assert table_snapshot["question"] == "Include table hit path test"
         assert "status" in table_snapshot
         assert "version" in table_snapshot
+        assert "context" in table_snapshot
         assert "created_at" in table_snapshot
         assert "updated_at" in table_snapshot
 

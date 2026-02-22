@@ -88,25 +88,41 @@ class TestPatronRegister:
 
         assert result["ok"] is True
         data = result["data"]
+        # Backward-compat fields
         assert "id" in data
         assert data["name"] == name
+        # Spec fields
+        assert "patron_id" in data
+        assert data["patron_id"] == data["id"]
+        assert "display_name" in data
+        assert data["display_name"] == name
         assert data["kind"] == "agent"
         assert data["is_new"] is True
         assert "created_at" in data
 
     def test_register_patron_default_kind(self) -> None:
         """Register patron with default kind."""
-        result = patron_register(name=unique_name())
+        name = unique_name()
+        result = patron_register(name=name)
 
         assert result["ok"] is True
-        assert result["data"]["kind"] == "agent"
+        data = result["data"]
+        assert data["kind"] == "agent"
+        # Spec fields present
+        assert data["display_name"] == name
+        assert data["patron_id"] == data["id"]
 
     def test_register_patron_human_kind(self) -> None:
         """Register patron with human kind."""
-        result = patron_register(name=unique_name("Human"), kind="human")
+        name = unique_name("Human")
+        result = patron_register(name=name, kind="human")
 
         assert result["ok"] is True
-        assert result["data"]["kind"] == "human"
+        data = result["data"]
+        assert data["kind"] == "human"
+        # Spec fields present
+        assert data["display_name"] == name
+        assert data["patron_id"] == data["id"]
 
     def test_register_patron_dedup_returns_existing(self) -> None:
         """Registering same name returns existing patron with is_new=False."""
@@ -117,6 +133,9 @@ class TestPatronRegister:
         data1 = result1["data"]
         assert data1["is_new"] is True
         first_id = data1["id"]
+        # Spec fields on first registration
+        assert data1["patron_id"] == first_id
+        assert data1["display_name"] == name
 
         # Second registration with same name
         result2 = patron_register(name=name)
@@ -124,6 +143,9 @@ class TestPatronRegister:
         data2 = result2["data"]
         assert data2["is_new"] is False
         assert data2["id"] == first_id
+        # Spec fields on dedup (should match original)
+        assert data2["patron_id"] == first_id
+        assert data2["display_name"] == name
 
 
 class TestPatronGet:

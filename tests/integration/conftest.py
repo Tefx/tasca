@@ -355,3 +355,42 @@ def sample_saying_data() -> dict:
         "speaker_kind": "agent",
         "saying_type": "text",
     }
+
+
+# =============================================================================
+# E2E External Server Fixtures
+# =============================================================================
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers",
+        "e2e_external: Tests that require an external server (set TASCA_USE_EXTERNAL_SERVER=1)",
+    )
+
+
+@pytest.fixture
+def external_server_config() -> dict[str, str | int]:
+    """Configuration for external server E2E tests.
+
+    Provides the MCP URL and timeout for tests that require an external server.
+    Tests using this fixture should be marked with @pytest.mark.e2e_external
+    and will be skipped if TASCA_USE_EXTERNAL_SERVER is not set.
+
+    Returns:
+        Dictionary with mcp_url, api_url, and timeout keys.
+
+    Example:
+        @pytest.mark.e2e_external
+        def test_something(external_server_config):
+            url = external_server_config["mcp_url"]
+            # ... test against external server
+    """
+    if not USE_EXTERNAL_SERVER:
+        pytest.skip("E2E test requires TASCA_USE_EXTERNAL_SERVER=1")
+    return {
+        "mcp_url": MCP_BASE_URL,
+        "api_url": API_BASE_URL,
+        "timeout": REQUEST_TIMEOUT,
+    }

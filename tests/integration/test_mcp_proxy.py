@@ -13,8 +13,31 @@ Test scenarios:
 4. Call connect(url=None) to switch back to local mode
 5. Verify local mode works correctly after disconnect
 
-Usage:
-    pytest tests/integration/test_mcp_proxy.py -v
+## Running E2E Tests
+
+These tests require an external server. See docs/e2e-testing.md for full details.
+
+Quick start:
+    # Option 1: Use helper script (recommended)
+    ./scripts/run-e2e-external-server.sh -v
+
+    # Option 2: Manual execution
+    # Terminal 1: Start server
+    uv run tasca
+
+    # Terminal 2: Run tests
+    TASCA_USE_EXTERNAL_SERVER=1 uv run pytest tests/integration/test_mcp_proxy.py -v
+
+    # Option 3: Custom server URL
+    TASCA_USE_EXTERNAL_SERVER=1 \
+    TASCA_TEST_MCP_URL=http://localhost:8000/mcp \
+    uv run pytest tests/integration/test_mcp_proxy.py -v
+
+## Environment Variables
+
+    TASCA_USE_EXTERNAL_SERVER=1   Required to run E2E tests (tests skip otherwise)
+    TASCA_TEST_MCP_URL            MCP endpoint URL (default: http://localhost:8000/mcp)
+    TASCA_TEST_TIMEOUT            Request timeout in seconds (default: 30)
 """
 
 from __future__ import annotations

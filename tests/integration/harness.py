@@ -113,6 +113,12 @@ pytest tests/integration/test_api.py
 
 # Run only MCP tests
 pytest tests/integration/test_mcp.py
+
+# Run E2E proxy tests (requires external server)
+# See docs/e2e-testing.md for full documentation
+./scripts/run-e2e-external-server.sh -v
+# Or manually:
+TASCA_USE_EXTERNAL_SERVER=1 pytest tests/integration/test_mcp_proxy.py -v
 ```
 
 ### Using the Harness Programmatically

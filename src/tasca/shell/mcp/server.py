@@ -30,7 +30,6 @@ from tasca.config import settings
 from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.seat import (
-    INTERNAL_STATE_TO_SPEC,
     SPEC_STATE_TO_INTERNAL,
     Seat,
     SeatId,
@@ -43,10 +42,8 @@ from tasca.core.services.limits_service import (
     settings_to_limits_config,
 )
 from tasca.core.services.mention_service import (
-    MentionsResult,
     PatronMatch,
     has_ambiguous_mentions,
-    parse_mentions,
     resolve_mentions,
 )
 from tasca.core.services.seat_service import (
@@ -65,10 +62,28 @@ from tasca.core.table_state_machine import (
     transition_to_open,
     transition_to_paused,
 )
+from tasca.shell.logging import (
+    get_logger,
+    log_dedup_hit,
+    log_say,
+    log_table_create,
+)
 from tasca.shell.mcp.database import get_mcp_db
+from tasca.shell.mcp.proxy import (
+    get_upstream_config,
+    switch_to_local,
+    switch_to_remote,
+)
 from tasca.shell.mcp.responses import error_response, success_response
 from tasca.shell.services.limited_saying_service import (
     append_saying_with_limits,
+)
+from tasca.shell.services.table_id_generator import (
+    generate_table_id,
+)
+from tasca.shell.storage.idempotency_repo import (
+    check_idempotency_key,
+    store_idempotency_key,
 )
 from tasca.shell.storage.patron_repo import (
     PatronNotFoundError,
@@ -79,21 +94,18 @@ from tasca.shell.storage.patron_repo import (
 )
 from tasca.shell.storage.saying_repo import (
     append_saying,
-    get_table_max_sequence,
     get_recent_sayings,
+    get_table_max_sequence,
     list_sayings_by_table,
 )
 from tasca.shell.storage.seat_repo import (
     SeatNotFoundError,
     create_seat,
     find_seats_by_table,
-    get_seat_by_patron,
-    heartbeat_seat as repo_heartbeat_seat,
     heartbeat_seat_by_patron,
 )
-from tasca.shell.services.table_id_generator import (
-    TableIdGenerationError,
-    generate_table_id,
+from tasca.shell.storage.seat_repo import (
+    heartbeat_seat as repo_heartbeat_seat,
 )
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
@@ -102,17 +114,6 @@ from tasca.shell.storage.table_repo import (
     get_table,
     list_tables_with_seat_counts,
     update_table,
-)
-from tasca.shell.storage.idempotency_repo import (
-    check_idempotency_key,
-    store_idempotency_key,
-    DEFAULT_IDEMPOTENCY_TTL_SECONDS,
-)
-from tasca.shell.logging import (
-    get_logger,
-    log_dedup_hit,
-    log_say,
-    log_table_create,
 )
 
 # Transport types for MCP server
@@ -1294,7 +1295,7 @@ def table_control(
     if is_terminal(current_table.status):
         return error_response(
             "OPERATION_NOT_ALLOWED",
-            f"Cannot perform control action on closed table. Closed is a terminal state.",
+            "Cannot perform control action on closed table. Closed is a terminal state.",
             {"table_status": current_table.status.value},
         )
 
@@ -1376,7 +1377,7 @@ def table_control(
         if isinstance(error, VersionConflictError):
             return error_response(
                 "VERSION_CONFLICT",
-                f"Table version conflict during control operation",
+                "Table version conflict during control operation",
                 {
                     "expected_version": error.expected_version,
                     "actual_version": error.current_version,
@@ -1873,6 +1874,74 @@ def seat_list(
                 for s in seats
             ],
             "active_count": active_count,
+        }
+    )
+
+
+# =============================================================================
+# Proxy Control Tools
+# =============================================================================
+
+
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+@mcp.tool
+def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
+    """Switch between local and remote MCP mode.
+
+    This tool controls proxy mode for the MCP server:
+    - When url is provided (non-None): switches to remote/proxy mode
+    - When url is None: switches to local mode
+
+    This is a proxy-control tool that NEVER forwards to a remote server.
+    It always runs locally to manage the upstream configuration.
+
+    Args:
+        url: The upstream server URL. If None, switches to local mode.
+        token: Optional authentication token for upstream server.
+            Only used when url is provided.
+
+    Returns:
+        Success envelope with current mode status:
+        {
+            "ok": true,
+            "data": {
+                "mode": "local" | "remote",
+                "url": "..." | null,
+                "token": "..." | null
+            }
+        }
+
+    Examples:
+        >>> # Switch to remote mode
+        >>> result = connect(url="http://api.example.com", token="secret")
+        >>> result["ok"]
+        True
+        >>> result["data"]["mode"]
+        'remote'
+
+        >>> # Switch to local mode
+        >>> result = connect()
+        >>> result["ok"]
+        True
+        >>> result["data"]["mode"]
+        'local'
+    """
+    if url is not None:
+        # Switch to remote mode
+        switch_to_remote(url, token)
+    else:
+        # Switch to local mode
+        switch_to_local()
+
+    # Get current config to return status
+    config = get_upstream_config()
+    mode = "remote" if config.is_remote else "local"
+
+    return success_response(
+        {
+            "mode": mode,
+            "url": config.url,
+            "token": config.token,
         }
     )
 

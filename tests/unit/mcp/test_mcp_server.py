@@ -1767,3 +1767,136 @@ class TestTableWait:
         # First saying (sequence 0) should NOT be in the results
         for saying in data["sayings"]:
             assert saying["sequence"] > 0
+
+
+# =============================================================================
+# Proxy Control Tool Tests
+# =============================================================================
+
+
+class TestConnect:
+    """Tests for connect MCP tool (proxy control).
+
+    The connect tool switches between local and remote mode.
+    It is a proxy-control tool that NEVER forwards to remote servers.
+    """
+
+    def test_connect_switches_to_remote_mode(self) -> None:
+        """connect(url=...) switches to remote mode and returns status."""
+        from tasca.shell.mcp.server import connect
+        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local
+
+        try:
+            result = connect(url="http://api.example.com", token="secret-token")
+
+            assert result["ok"] is True
+            assert result["data"]["mode"] == "remote"
+            assert result["data"]["url"] == "http://api.example.com"
+            assert result["data"]["token"] == "secret-token"
+
+            # Verify global config was updated
+            config = get_upstream_config()
+            assert config.is_remote is True
+            assert config.url == "http://api.example.com"
+        finally:
+            # Reset to local mode for other tests
+            switch_to_local()
+
+    def test_connect_switches_to_remote_without_token(self) -> None:
+        """connect(url=...) without token switches to remote mode."""
+        from tasca.shell.mcp.server import connect
+        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local
+
+        try:
+            result = connect(url="http://api.example.com")
+
+            assert result["ok"] is True
+            assert result["data"]["mode"] == "remote"
+            assert result["data"]["url"] == "http://api.example.com"
+            assert result["data"]["token"] is None
+
+            config = get_upstream_config()
+            assert config.is_remote is True
+            assert config.token is None
+        finally:
+            switch_to_local()
+
+    def test_connect_switches_to_local_mode(self) -> None:
+        """connect() or connect(url=None) switches to local mode."""
+        from tasca.shell.mcp.server import connect
+        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
+
+        try:
+            # First switch to remote
+            switch_to_remote("http://api.example.com", "token")
+            assert get_upstream_config().is_remote is True
+
+            # Now switch back to local
+            result = connect()
+
+            assert result["ok"] is True
+            assert result["data"]["mode"] == "local"
+            assert result["data"]["url"] is None
+            assert result["data"]["token"] is None
+
+            config = get_upstream_config()
+            assert config.is_remote is False
+            assert config.url is None
+            assert config.token is None
+        finally:
+            switch_to_local()
+
+    def test_connect_url_none_switches_to_local(self) -> None:
+        """connect(url=None) explicitly switches to local mode."""
+        from tasca.shell.mcp.server import connect
+        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
+
+        try:
+            # First switch to remote
+            switch_to_remote("http://api.example.com")
+            assert get_upstream_config().is_remote is True
+
+            # Explicit None URL switches to local
+            result = connect(url=None)
+
+            assert result["ok"] is True
+            assert result["data"]["mode"] == "local"
+
+            config = get_upstream_config()
+            assert config.is_remote is False
+        finally:
+            switch_to_local()
+
+    def test_connect_returns_current_config_status(self) -> None:
+        """connect returns the current config status after switching."""
+        from tasca.shell.mcp.server import connect
+        from tasca.shell.mcp.proxy import switch_to_local
+
+        try:
+            # Switch to local
+            result = connect()
+
+            assert result["ok"] is True
+            data = result["data"]
+            assert "mode" in data
+            assert "url" in data
+            assert "token" in data
+            assert data["mode"] in ("local", "remote")
+        finally:
+            switch_to_local()
+
+    def test_connect_idempotent_local_mode(self) -> None:
+        """Multiple connect() calls return local mode consistently."""
+        from tasca.shell.mcp.server import connect
+        from tasca.shell.mcp.proxy import switch_to_local
+
+        try:
+            result1 = connect()
+            result2 = connect()
+
+            assert result1["ok"] is True
+            assert result2["ok"] is True
+            assert result1["data"]["mode"] == "local"
+            assert result2["data"]["mode"] == "local"
+        finally:
+            switch_to_local()

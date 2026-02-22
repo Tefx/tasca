@@ -24,6 +24,36 @@ from tasca.shell.mcp.proxy import (
 )
 
 
+def _make_echo_post(extra_fields: dict | None = None) -> AsyncMock:
+    """Return an AsyncMock for httpx client.post that echoes the request id.
+
+    The JSON-RPC response id must match the request id sent in the POST body.
+    This helper builds a mock that captures the posted JSON and mirrors the id
+    back in the response, satisfying _validate_jsonrpc_response id-match check.
+
+    Args:
+        extra_fields: Additional top-level fields to include in the response
+            JSON (e.g. ``{"result": {...}}`` or ``{"error": {...}}``).
+            Defaults to ``{"result": {}}`` if not provided.
+    """
+    if extra_fields is None:
+        extra_fields = {"result": {}}
+
+    async def _post(*args: object, **kwargs: object) -> MagicMock:
+        body = kwargs.get("json", {})
+        request_id = body.get("id", "unknown")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            **extra_fields,
+        }
+        return mock_response
+
+    return AsyncMock(side_effect=_post)
+
+
 # =============================================================================
 # UpstreamConfig Tests
 # =============================================================================
@@ -141,11 +171,11 @@ class TestUpstreamConfigSerialization:
         assert result == {"url": None, "token": None}
 
     def test_to_dict_with_values(self) -> None:
-        """to_dict returns correct dict for configured upstream."""
+        """to_dict masks token in output for safe logging."""
         config = UpstreamConfig(url="http://api.example.com", token="secret")
         result = config.to_dict()
 
-        assert result == {"url": "http://api.example.com", "token": "secret"}
+        assert result == {"url": "http://api.example.com", "token": "***"}
 
     def test_from_dict_default(self) -> None:
         """from_dict creates correct config from empty dict."""
@@ -161,15 +191,17 @@ class TestUpstreamConfigSerialization:
         assert config.url == "http://api.example.com"
         assert config.token == "secret"
 
-    def test_roundtrip_serialization(self) -> None:
-        """to_dict -> from_dict roundtrip preserves data."""
+    def test_to_dict_masks_token_not_roundtrippable(self) -> None:
+        """to_dict masks token so it cannot be used for roundtrip serialization.
+
+        to_dict() is for safe logging only. Use self.token directly when the
+        real credential is needed.
+        """
         original = UpstreamConfig(url="http://api.example.com", token="secret")
         data = original.to_dict()
-        restored = UpstreamConfig.from_dict(data)
 
-        assert restored.url == original.url
-        assert restored.token == original.token
-        assert restored.is_remote == original.is_remote
+        assert data["token"] == "***"
+        assert data["url"] == original.url
 
 
 class TestGlobalConfigFunctions:
@@ -239,19 +271,11 @@ class TestForwardJsonrpcRequestSuccess:
         """forward_jsonrpc_request sends correct HTTP POST request."""
         config = UpstreamConfig(url="http://api.example.com/mcp", token="test-token")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "jsonrpc": "2.0",
-            "id": "server-id",
-            "result": {"ok": True, "data": {"items": []}},
-        }
-
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = _make_echo_post({"result": {"ok": True, "data": {"items": []}}})
             mock_client_class.return_value = mock_client
 
             result = await forward_jsonrpc_request(
@@ -281,15 +305,11 @@ class TestForwardJsonrpcRequestSuccess:
         """forward_jsonrpc_request works without token."""
         config = UpstreamConfig(url="http://api.example.com/mcp")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"jsonrpc": "2.0", "id": "test", "result": {}}
-
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = _make_echo_post()
             mock_client_class.return_value = mock_client
 
             result = await forward_jsonrpc_request(config, "tools/list", {})
@@ -426,15 +446,11 @@ class TestForwardJsonrpcRequestJsonRpc:
         """Request includes a valid UUID as JSON-RPC id."""
         config = UpstreamConfig(url="http://api.example.com")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"jsonrpc": "2.0", "id": "test", "result": {}}
-
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = _make_echo_post()
             mock_client_class.return_value = mock_client
 
             await forward_jsonrpc_request(config, "tools/call", {})
@@ -452,15 +468,11 @@ class TestForwardJsonrpcRequestJsonRpc:
         """Request uses JSON-RPC 2.0."""
         config = UpstreamConfig(url="http://api.example.com")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"jsonrpc": "2.0", "id": "test", "result": {}}
-
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = _make_echo_post()
             mock_client_class.return_value = mock_client
 
             await forward_jsonrpc_request(config, "tools/call", {})
@@ -473,15 +485,11 @@ class TestForwardJsonrpcRequestJsonRpc:
         """HTTP client uses 30 second timeout."""
         config = UpstreamConfig(url="http://api.example.com")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"jsonrpc": "2.0", "id": "test", "result": {}}
-
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = _make_echo_post()
             mock_client_class.return_value = mock_client
 
             await forward_jsonrpc_request(config, "tools/call", {})
@@ -572,6 +580,18 @@ class TestValidateJsonrpcResponse:
         result = _validate_jsonrpc_response({"jsonrpc": "2.0", "result": {}}, "test-id")
         assert result is not None
         assert result["field"] == "id"
+
+    def test_id_mismatch_fails(self) -> None:
+        """Response id not matching expected id fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {"jsonrpc": "2.0", "id": "wrong-id", "result": {}},
+            "expected-id",
+        )
+        assert result is not None
+        assert result["field"] == "id"
+        assert "does not match" in result["reason"]
 
     def test_missing_both_result_and_error_fails(self) -> None:
         """Missing both result and error fails validation."""
@@ -731,15 +751,20 @@ class TestForwardJsonrpcRequestInvalidResponse:
         """Response missing both result and error returns UPSTREAM_INVALID_RESPONSE error."""
         config = UpstreamConfig(url="http://api.example.com")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"jsonrpc": "2.0", "id": "test"}
+        # Echo the request id so id-match passes, then let result/error absence trigger the error.
+        async def _post_missing_payload(*args: object, **kwargs: object) -> MagicMock:
+            body = kwargs.get("json", {})
+            request_id = body.get("id", "unknown")
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"jsonrpc": "2.0", "id": request_id}
+            return mock_response
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = AsyncMock(side_effect=_post_missing_payload)
             mock_client_class.return_value = mock_client
 
             result = await forward_jsonrpc_request(config, "tools/call", {})
@@ -753,19 +778,13 @@ class TestForwardJsonrpcRequestInvalidResponse:
         """Response with malformed error object returns UPSTREAM_INVALID_RESPONSE error."""
         config = UpstreamConfig(url="http://api.example.com")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "jsonrpc": "2.0",
-            "id": "test",
-            "error": {"code": "not-an-int", "message": "error message"},
-        }
-
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = _make_echo_post(
+                {"error": {"code": "not-an-int", "message": "error message"}}
+            )
             mock_client_class.return_value = mock_client
 
             result = await forward_jsonrpc_request(config, "tools/call", {})
@@ -779,19 +798,11 @@ class TestForwardJsonrpcRequestInvalidResponse:
         """Valid JSON-RPC response passes through validation."""
         config = UpstreamConfig(url="http://api.example.com")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "jsonrpc": "2.0",
-            "id": "server-id",
-            "result": {"ok": True, "data": {"items": []}},
-        }
-
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = _make_echo_post({"result": {"ok": True, "data": {"items": []}}})
             mock_client_class.return_value = mock_client
 
             result = await forward_jsonrpc_request(config, "tools/call", {})
@@ -805,19 +816,13 @@ class TestForwardJsonrpcRequestInvalidResponse:
         """Valid JSON-RPC error response passes through validation."""
         config = UpstreamConfig(url="http://api.example.com")
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "jsonrpc": "2.0",
-            "id": "server-id",
-            "error": {"code": -32601, "message": "Method not found"},
-        }
-
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
             mock_client.__aexit__.return_value = None
-            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.post = _make_echo_post(
+                {"error": {"code": -32601, "message": "Method not found"}}
+            )
             mock_client_class.return_value = mock_client
 
             result = await forward_jsonrpc_request(config, "tools/call", {})

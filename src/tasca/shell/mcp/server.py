@@ -18,6 +18,7 @@ that can be serialized to JSON. Internal service calls use Result[T, E].
 from __future__ import annotations
 
 import asyncio
+import deal
 import json
 import time
 import uuid
@@ -1125,6 +1126,44 @@ def table_say(
     return success_response(response_data)
 
 
+# @invar:allow shell_pure_logic: Pure helper co-located with MCP tools for cohesion; avoids
+#   cross-module import for a single computation that is tightly coupled to table_listen/table_wait
+# @invar:allow entry_point_too_thick: Helper function, not a framework entry point; docstring
+#   length inflates line count but logic is 2 lines
+@deal.pre(lambda sayings, since_sequence: since_sequence >= -1)
+@deal.post(lambda result: result >= 0)
+def _compute_next_sequence(sayings: list, since_sequence: int) -> int:
+    """Compute the next_sequence value to return in table_listen / table_wait responses.
+
+    Uses the two-state convention:
+    - Non-empty sayings: next_sequence = max sequence seen (client polls for > this value).
+    - Empty sayings: next_sequence = since_sequence + 1 (or 0 if since_sequence < 0),
+      indicating no new data was available and the client should advance its cursor.
+
+    Args:
+        sayings: Current list of saying objects with a ``.sequence`` integer attribute.
+        since_sequence: Client's current sequence position.  Must be >= -1.
+
+    Returns:
+        max(s.sequence for s in sayings) when sayings is non-empty;
+        since_sequence + 1 when since_sequence >= 0 and sayings is empty;
+        0 when since_sequence < 0 and sayings is empty.
+
+    Examples:
+        >>> class S:
+        ...     def __init__(self, seq): self.sequence = seq
+        >>> _compute_next_sequence([S(3), S(7)], 0)
+        7
+        >>> _compute_next_sequence([], 5)
+        6
+        >>> _compute_next_sequence([], -1)
+        0
+    """
+    if sayings:
+        return max(s.sequence for s in sayings)
+    return since_sequence + 1 if since_sequence >= 0 else 0
+
+
 # @shell_complexity: 5 branches for table lookup + long-poll loop + timeout + backoff + error handling
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
@@ -1193,13 +1232,7 @@ def table_listen(
 
     sayings = result.unwrap()
 
-    # Compute next_sequence per spec:
-    # - Non-empty: next_sequence = max(sequence) of returned sayings
-    # - Empty: next_sequence = since_sequence + 1 (or 0 if since_sequence < 0)
-    if sayings:
-        next_sequence = max(s.sequence for s in sayings)
-    else:
-        next_sequence = since_sequence + 1 if since_sequence >= 0 else 0
+    next_sequence = _compute_next_sequence(sayings, since_sequence)
 
     return success_response(
         {
@@ -1642,7 +1675,7 @@ async def table_wait(
 
         if sayings:
             # Found new sayings - return them
-            next_sequence = max(s.sequence for s in sayings)
+            next_sequence = _compute_next_sequence(sayings, since_sequence)
 
             response_data: dict[str, Any] = {
                 "sayings": [
@@ -1684,7 +1717,7 @@ async def table_wait(
             await asyncio.sleep(min(poll_interval_seconds, remaining))
 
     # Timeout - return empty with current next_sequence (same shape as table_listen)
-    next_sequence = since_sequence + 1 if since_sequence >= 0 else 0
+    next_sequence = _compute_next_sequence([], since_sequence)
 
     response_data = {
         "sayings": [],

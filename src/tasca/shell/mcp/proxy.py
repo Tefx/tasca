@@ -53,6 +53,8 @@ def _validate_jsonrpc_response(data: Any, expected_id: str) -> dict[str, Any] | 
         {'field': 'jsonrpc', 'reason': 'missing required field'}
         >>> _validate_jsonrpc_response({"jsonrpc": "1.0", "id": "1", "result": {}}, "1")
         {'field': 'jsonrpc', 'reason': 'must be "2.0"'}
+        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "wrong", "result": {}}, "1")
+        {'field': 'id', 'reason': 'response id does not match request id'}
         >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1"}, "1")
         {'field': 'result/error', 'reason': 'must have exactly one of result or error'}
         >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "result": {}, "error": {}}, "1")
@@ -72,6 +74,10 @@ def _validate_jsonrpc_response(data: Any, expected_id: str) -> dict[str, Any] | 
     # Check id is present (can be null, but field must exist for responses)
     if "id" not in data:
         return {"field": "id", "reason": "missing required field"}
+
+    # Validate id matches the request id
+    if data["id"] != expected_id:
+        return {"field": "id", "reason": "response id does not match request id"}
 
     # Check that exactly one of result or error is present
     has_result = "result" in data
@@ -187,15 +193,18 @@ class UpstreamConfig:
         self.token = None
 
     def to_dict(self) -> dict[str, str | None]:
-        """Export config as dictionary.
+        """Export config as dictionary with token masked for safe logging.
+
+        WARNING: Do not log self.token directly. Use this method for
+        status/debug output only.
 
         Examples:
             >>> UpstreamConfig().to_dict()
             {'url': None, 'token': None}
             >>> UpstreamConfig(url="http://api.example.com", token="secret").to_dict()
-            {'url': 'http://api.example.com', 'token': 'secret'}
+            {'url': 'http://api.example.com', 'token': '***'}
         """
-        return {"url": self.url, "token": self.token}
+        return {"url": self.url, "token": "***" if self.token else None}
 
     def safe_dict(self) -> dict[str, str | None | bool]:
         """Export config for safe logging (token redacted).

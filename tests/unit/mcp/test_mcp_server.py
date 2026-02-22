@@ -1751,6 +1751,56 @@ class TestTableWait:
         assert data["table"]["question"] == "Test table for include_table"
 
     @pytest.mark.asyncio
+    async def test_table_wait_include_table_on_data_path(self) -> None:
+        """Data path with include_table=True includes table snapshot alongside sayings.
+
+        When sayings are present (hit path, timeout=False) and include_table=True,
+        the response must contain both the sayings list and a table snapshot with
+        the expected fields: id, question, context, status, version, created_at,
+        updated_at.
+        """
+        table_result = table_create(question="Include table hit path test")
+        table_id = table_result["data"]["id"]
+
+        # Add a saying so the hit path is triggered (sayings returned, timeout=False)
+        say_result = table_say(
+            table_id=table_id,
+            content="Saying triggering hit path",
+            speaker_name="Test Speaker",
+        )
+        assert say_result["ok"] is True
+
+        result = await table_wait(
+            table_id=table_id,
+            since_sequence=-1,
+            wait_ms=100,
+            include_table=True,
+        )
+
+        assert result["ok"] is True
+        data = result["data"]
+
+        # Hit path: timeout=False, sayings non-empty
+        assert data["timeout"] is False
+        assert len(data["sayings"]) >= 1
+
+        # include_table=True: table snapshot present
+        assert "table" in data
+        table_snapshot = data["table"]
+        assert table_snapshot["id"] == table_id
+        assert table_snapshot["question"] == "Include table hit path test"
+        assert "status" in table_snapshot
+        assert "version" in table_snapshot
+        assert "created_at" in table_snapshot
+        assert "updated_at" in table_snapshot
+
+        # Saying data also present
+        found = any(
+            s["content"] == "Saying triggering hit path" for s in data["sayings"]
+        )
+        assert found, "Expected saying content not found in wait response"
+
+    @pytest.mark.asyncio
     async def test_table_wait_caps_wait_ms(self) -> None:
         """Wait caps wait_ms at MAX_WAIT_MS (10000ms)."""
         table_result = table_create(question="Test table for wait cap")

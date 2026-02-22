@@ -2141,6 +2141,11 @@ class ProxyMiddleware(Middleware):
 # =============================================================================
 
 
+# Register proxy middleware at module load time so it's active for all transports
+# (HTTP via create_app(), STDIO via run_mcp_server, etc.)
+mcp.add_middleware(ProxyMiddleware())
+
+
 # @invar:allow shell_result: Entry point - no return value needed
 # @shell_orchestration: Server startup is orchestration, not business logic
 def run_mcp_server(transport: TransportType = "stdio") -> None:
@@ -2149,7 +2154,4 @@ def run_mcp_server(transport: TransportType = "stdio") -> None:
     Args:
         transport: Transport protocol ('stdio', 'http', 'sse').
     """
-    # Add proxy middleware for request forwarding
-    mcp.add_middleware(ProxyMiddleware())
-
     mcp.run(transport=transport)

@@ -7,6 +7,7 @@ handle JSON-RPC request forwarding.
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -488,3 +489,339 @@ class TestForwardJsonrpcRequestJsonRpc:
         # Verify timeout was passed to AsyncClient
         call_kwargs = mock_client_class.call_args[1]
         assert call_kwargs["timeout"] == 30.0
+
+
+class TestValidateJsonrpcResponse:
+    """Tests for _validate_jsonrpc_response validation function."""
+
+    def test_valid_success_response(self) -> None:
+        """Valid success response passes validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {"jsonrpc": "2.0", "id": "test-id", "result": {"data": "ok"}},
+            "test-id",
+        )
+        assert result is None
+
+    def test_valid_error_response(self) -> None:
+        """Valid error response passes validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {
+                "jsonrpc": "2.0",
+                "id": "test-id",
+                "error": {"code": -32600, "message": "Invalid Request"},
+            },
+            "test-id",
+        )
+        assert result is None
+
+    def test_error_with_data_field(self) -> None:
+        """Error response with optional data field passes validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {
+                "jsonrpc": "2.0",
+                "id": "test-id",
+                "error": {
+                    "code": -32601,
+                    "message": "Method not found",
+                    "data": {"method": "unknown"},
+                },
+            },
+            "test-id",
+        )
+        assert result is None
+
+    def test_non_dict_response_fails(self) -> None:
+        """Non-dict response fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response("not a dict", "test-id")
+        assert result is not None
+        assert result["field"] == "root"
+        assert "dict" in result["reason"]
+
+    def test_missing_jsonrpc_fails(self) -> None:
+        """Missing jsonrpc field fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response({"id": "test-id", "result": {}}, "test-id")
+        assert result is not None
+        assert result["field"] == "jsonrpc"
+
+    def test_wrong_jsonrpc_version_fails(self) -> None:
+        """Wrong jsonrpc version fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {"jsonrpc": "1.0", "id": "test-id", "result": {}},
+            "test-id",
+        )
+        assert result is not None
+        assert result["field"] == "jsonrpc"
+        assert "2.0" in result["reason"]
+
+    def test_missing_id_fails(self) -> None:
+        """Missing id field fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response({"jsonrpc": "2.0", "result": {}}, "test-id")
+        assert result is not None
+        assert result["field"] == "id"
+
+    def test_missing_both_result_and_error_fails(self) -> None:
+        """Missing both result and error fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "test-id"}, "test-id")
+        assert result is not None
+        assert result["field"] == "result/error"
+
+    def test_both_result_and_error_fails(self) -> None:
+        """Having both result and error fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {
+                "jsonrpc": "2.0",
+                "id": "test-id",
+                "result": {},
+                "error": {"code": -1, "message": "err"},
+            },
+            "test-id",
+        )
+        assert result is not None
+        assert result["field"] == "result/error"
+        assert "exactly one" in result["reason"]
+
+    def test_error_not_dict_fails(self) -> None:
+        """Error not being a dict fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {"jsonrpc": "2.0", "id": "test-id", "error": "string error"},
+            "test-id",
+        )
+        assert result is not None
+        assert result["field"] == "error"
+
+    def test_error_missing_code_fails(self) -> None:
+        """Error missing code field fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {"jsonrpc": "2.0", "id": "test-id", "error": {"message": "error without code"}},
+            "test-id",
+        )
+        assert result is not None
+        assert "code" in result["reason"]
+
+    def test_error_missing_message_fails(self) -> None:
+        """Error missing message field fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {"jsonrpc": "2.0", "id": "test-id", "error": {"code": -1}},
+            "test-id",
+        )
+        assert result is not None
+        assert "message" in result["reason"]
+
+    def test_error_code_not_int_fails(self) -> None:
+        """Error code not being an integer fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {"jsonrpc": "2.0", "id": "test-id", "error": {"code": "-1", "message": "err"}},
+            "test-id",
+        )
+        assert result is not None
+        assert result["field"] == "error.code"
+
+    def test_error_message_not_str_fails(self) -> None:
+        """Error message not being a string fails validation."""
+        from tasca.shell.mcp.proxy import _validate_jsonrpc_response
+
+        result = _validate_jsonrpc_response(
+            {"jsonrpc": "2.0", "id": "test-id", "error": {"code": -1, "message": 123}},
+            "test-id",
+        )
+        assert result is not None
+        assert result["field"] == "error.message"
+
+
+class TestForwardJsonrpcRequestInvalidResponse:
+    """Tests for invalid upstream response handling in forward_jsonrpc_request."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_json_returns_error(self) -> None:
+        """Invalid JSON from upstream returns UPSTREAM_INVALID_RESPONSE error."""
+        config = UpstreamConfig(url="http://api.example.com")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = json.JSONDecodeError("Expecting value", "doc", 0)
+        mock_response.text = "not valid json"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            result = await forward_jsonrpc_request(config, "tools/call", {})
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
+        assert "invalid JSON" in result["error"]["message"]
+        assert "raw_preview" in result["error"]["details"]
+
+    @pytest.mark.asyncio
+    async def test_non_dict_response_returns_error(self) -> None:
+        """Non-dict JSON response returns UPSTREAM_INVALID_RESPONSE error."""
+        config = UpstreamConfig(url="http://api.example.com")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ["not", "a", "dict"]
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            result = await forward_jsonrpc_request(config, "tools/call", {})
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
+        assert "JSON-RPC shape" in result["error"]["message"]
+        assert result["error"]["details"]["field"] == "root"
+
+    @pytest.mark.asyncio
+    async def test_missing_jsonrpc_field_returns_error(self) -> None:
+        """Response missing jsonrpc field returns UPSTREAM_INVALID_RESPONSE error."""
+        config = UpstreamConfig(url="http://api.example.com")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"id": "test", "result": {}}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            result = await forward_jsonrpc_request(config, "tools/call", {})
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
+        assert result["error"]["details"]["field"] == "jsonrpc"
+
+    @pytest.mark.asyncio
+    async def test_missing_result_and_error_returns_error(self) -> None:
+        """Response missing both result and error returns UPSTREAM_INVALID_RESPONSE error."""
+        config = UpstreamConfig(url="http://api.example.com")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"jsonrpc": "2.0", "id": "test"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            result = await forward_jsonrpc_request(config, "tools/call", {})
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
+        assert "result/error" in result["error"]["details"]["field"]
+
+    @pytest.mark.asyncio
+    async def test_malformed_error_object_returns_error(self) -> None:
+        """Response with malformed error object returns UPSTREAM_INVALID_RESPONSE error."""
+        config = UpstreamConfig(url="http://api.example.com")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "jsonrpc": "2.0",
+            "id": "test",
+            "error": {"code": "not-an-int", "message": "error message"},
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            result = await forward_jsonrpc_request(config, "tools/call", {})
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
+        assert "error.code" in result["error"]["details"]["field"]
+
+    @pytest.mark.asyncio
+    async def test_valid_jsonrpc_response_passes_through(self) -> None:
+        """Valid JSON-RPC response passes through validation."""
+        config = UpstreamConfig(url="http://api.example.com")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "jsonrpc": "2.0",
+            "id": "server-id",
+            "result": {"ok": True, "data": {"items": []}},
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            result = await forward_jsonrpc_request(config, "tools/call", {})
+
+        # Should pass through unchanged
+        assert result["jsonrpc"] == "2.0"
+        assert result["result"]["ok"] is True
+
+    @pytest.mark.asyncio
+    async def test_valid_jsonrpc_error_response_passes_through(self) -> None:
+        """Valid JSON-RPC error response passes through validation."""
+        config = UpstreamConfig(url="http://api.example.com")
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "jsonrpc": "2.0",
+            "id": "server-id",
+            "error": {"code": -32601, "message": "Method not found"},
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            result = await forward_jsonrpc_request(config, "tools/call", {})
+
+        # Should pass through unchanged
+        assert result["jsonrpc"] == "2.0"
+        assert result["error"]["code"] == -32601

@@ -8,8 +8,9 @@ local mode (default) and remote upstream mode.
 from __future__ import annotations
 
 import json
+import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -21,6 +22,81 @@ from tasca.shell.mcp.responses import error_response
 
 if TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
+
+
+# @invar:allow shell_result: Validation helper returns optional error dict, not Result
+# @shell_complexity: Multiple validation branches for JSON-RPC spec compliance
+# @shell_orchestration: Pure validation logic used by forward_jsonrpc_request
+def _validate_jsonrpc_response(data: Any, expected_id: str) -> dict[str, Any] | None:
+    """Validate JSON-RPC 2.0 response shape.
+
+    Per JSON-RPC 2.0 spec, a valid response must have:
+    - jsonrpc: "2.0" (string)
+    - id: same as request id (or null)
+    - Either result (any type) OR error (object with code, message)
+
+    Args:
+        data: Parsed JSON data to validate.
+        expected_id: The request ID to match against.
+
+    Returns:
+        None if valid, or a dict with 'field' and 'reason' keys describing the error.
+
+    Examples:
+        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "result": {}}, "1")
+        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "error": {"code": -1, "message": "err"}}, "1")
+        >>> _validate_jsonrpc_response("not a dict", "1")
+        {'field': 'root', 'reason': 'response must be a dict'}
+        >>> _validate_jsonrpc_response({}, "1")
+        {'field': 'jsonrpc', 'reason': 'missing required field'}
+        >>> _validate_jsonrpc_response({"jsonrpc": "1.0", "id": "1", "result": {}}, "1")
+        {'field': 'jsonrpc', 'reason': 'must be "2.0"'}
+        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1"}, "1")
+        {'field': 'result/error', 'reason': 'must have exactly one of result or error'}
+        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "result": {}, "error": {}}, "1")
+        {'field': 'result/error', 'reason': 'must have exactly one of result or error'}
+        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "error": {"code": -1}}, "1")
+        {'field': 'error.message', 'reason': 'error must have code (int) and message (str)'}
+    """
+    if not isinstance(data, dict):
+        return {"field": "root", "reason": "response must be a dict"}
+
+    # Check jsonrpc version
+    if "jsonrpc" not in data:
+        return {"field": "jsonrpc", "reason": "missing required field"}
+    if data["jsonrpc"] != "2.0":
+        return {"field": "jsonrpc", "reason": 'must be "2.0"'}
+
+    # Check id is present (can be null, but field must exist for responses)
+    if "id" not in data:
+        return {"field": "id", "reason": "missing required field"}
+
+    # Check that exactly one of result or error is present
+    has_result = "result" in data
+    has_error = "error" in data
+    if not has_result and not has_error:
+        return {"field": "result/error", "reason": "must have exactly one of result or error"}
+    if has_result and has_error:
+        return {"field": "result/error", "reason": "must have exactly one of result or error"}
+
+    # If error is present, validate its structure
+    if has_error:
+        error = data["error"]
+        if not isinstance(error, dict):
+            return {"field": "error", "reason": "error must be a dict"}
+        if "code" not in error or "message" not in error:
+            return {
+                "field": "error.message",
+                "reason": "error must have code (int) and message (str)",
+            }
+        if not isinstance(error["code"], int):
+            return {"field": "error.code", "reason": "error code must be an integer"}
+        if not isinstance(error["message"], str):
+            return {"field": "error.message", "reason": "error message must be a string"}
+
+    return None
 
 
 @dataclass
@@ -160,6 +236,7 @@ def _load_config_from_file() -> Result[dict[str, str | None], ProxyConfigError]:
     config_path = Path(".tasca/upstream.json")
     if not config_path.exists():
         # File doesn't exist is not an error - return empty config
+        logger.debug("Config file %s not found; using defaults", config_path)
         return Success({"url": None, "token": None})
     try:
         with open(config_path) as f:
@@ -168,6 +245,7 @@ def _load_config_from_file() -> Result[dict[str, str | None], ProxyConfigError]:
                 return Success({"url": data.get("url"), "token": data.get("token")})
             return Failure(ProxyConfigError("Invalid config format: expected dict"))
     except json.JSONDecodeError as e:
+        logger.warning("Config file %s exists but contains invalid JSON: %s", config_path, e)
         return Failure(ProxyConfigError(f"Invalid JSON: {e}"))
     except OSError as e:
         return Failure(ProxyConfigError(f"Cannot read file: {e}"))
@@ -273,6 +351,8 @@ async def forward_jsonrpc_request(
     if config.token:
         headers["Authorization"] = f"Bearer {config.token}"
 
+    # timeout: 30s default; for table_wait (10s internal cap), upstream may respond in ~10s
+    # Consider per-tool timeout in future versions
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(config.url, json=payload, headers=headers)
@@ -293,9 +373,30 @@ async def forward_jsonrpc_request(
                     {"status_code": response.status_code},
                 )
 
-            # Parse and return JSON response
-            # Type ignore: httpx.Response.json() returns Any, but MCP endpoints return dict
-            return response.json()  # type: ignore[no-any-return]
+            # Parse and validate JSON response
+            try:
+                data = response.json()
+            except json.JSONDecodeError as e:
+                return error_response(
+                    "UPSTREAM_INVALID_RESPONSE",
+                    "Upstream returned invalid JSON",
+                    {
+                        "error": str(e),
+                        "raw_preview": response.text[:200] if response.text else None,
+                    },
+                )
+
+            # Validate JSON-RPC 2.0 response shape
+            validation_error = _validate_jsonrpc_response(data, request_id)
+            if validation_error is not None:
+                return error_response(
+                    "UPSTREAM_INVALID_RESPONSE",
+                    f"Upstream response has invalid JSON-RPC shape: {validation_error['reason']}",
+                    {"field": validation_error["field"], "response_preview": str(data)[:200]},
+                )
+
+            # Type ignore: Validated as dict above, MCP endpoints return dict
+            return data  # type: ignore[no-any-return]
 
         except httpx.ConnectError as e:
             return error_response(
@@ -306,6 +407,6 @@ async def forward_jsonrpc_request(
         except httpx.TimeoutException as e:
             return error_response(
                 "UPSTREAM_TIMEOUT",
-                f"Request to upstream timed out",
+                "Request to upstream timed out",
                 {"timeout_seconds": 30.0, "error": str(e)},
             )

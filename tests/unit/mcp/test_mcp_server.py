@@ -23,6 +23,7 @@ from tasca.shell.mcp.server import (
     table_create,
     table_get,
     table_join,
+    table_list,
     table_listen,
     table_say,
 )
@@ -202,6 +203,91 @@ class TestTableGet:
         assert result["ok"] is True
         assert result["data"]["id"] == table_id
         assert result["data"]["question"] == "Test question"
+
+
+class TestTableList:
+    """Tests for table_list MCP tool."""
+
+    def test_list_tables_empty(self) -> None:
+        """List tables when none exist returns empty list."""
+        result = table_list()
+
+        assert result["ok"] is True
+        assert result["data"]["tables"] == []
+        assert result["data"]["total"] == 0
+
+    def test_list_tables_returns_open_tables(self) -> None:
+        """List tables returns only open tables with seat counts."""
+        # Create some tables
+        result1 = table_create(question="First table")
+        result2 = table_create(question="Second table")
+
+        # List open tables
+        result = table_list(status="open")
+
+        assert result["ok"] is True
+        tables = result["data"]["tables"]
+        assert len(tables) == 2
+        assert result["data"]["total"] == 2
+
+        # Check each table has required fields
+        for table in tables:
+            assert "id" in table
+            assert "question" in table
+            assert "status" in table
+            assert table["status"] == "open"
+            assert "active_count" in table
+            assert isinstance(table["active_count"], int)
+
+    def test_list_tables_default_status_open(self) -> None:
+        """List tables defaults to 'open' status."""
+        result = table_list()  # Default status='open'
+
+        assert result["ok"] is True
+        assert "tables" in result["data"]
+
+    def test_list_tables_invalid_status(self) -> None:
+        """List tables with unsupported status returns error."""
+        result = table_list(status="closed")
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "INVALID_REQUEST"
+        assert "open" in result["error"]["message"].lower()
+
+    def test_list_tables_with_active_seats(self) -> None:
+        """List tables includes active seat counts."""
+        # Create patron and table
+        patron_result = patron_register(name=unique_name())
+        patron_id = patron_result["data"]["id"]
+        table_result = table_create(question="Table with seats")
+        table_id = table_result["data"]["id"]
+
+        # Join the table (creates a seat)
+        table_join(table_id=table_id, patron_id=patron_id)
+
+        # List tables
+        result = table_list()
+
+        assert result["ok"] is True
+        tables = result["data"]["tables"]
+
+        # Find our table
+        our_table = next((t for t in tables if t["id"] == table_id), None)
+        assert our_table is not None
+        assert our_table["active_count"] >= 1
+
+    def test_list_tables_response_envelope_shape(self) -> None:
+        """List tables returns correct response envelope shape."""
+        table_create(question="Shape test table")
+
+        result = table_list()
+
+        assert result["ok"] is True
+        assert "data" in result
+        assert "tables" in result["data"]
+        assert "total" in result["data"]
+        assert isinstance(result["data"]["tables"], list)
+        assert isinstance(result["data"]["total"], int)
 
 
 class TestTableJoin:

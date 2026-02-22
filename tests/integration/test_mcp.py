@@ -117,6 +117,7 @@ def test_mcp_list_tools(mcp_session: "MCPSession") -> None:
             "table_create",
             "table_join",
             "table_get",
+            "table_list",
             "table_say",
             "table_listen",
             "table_control",
@@ -450,7 +451,9 @@ async def test_mcp_stdio_tool_call() -> None:
         )
 
         # Either result or error is acceptable
-        assert "result" in response or "error" in response  # smoke-test: intentionally tests error response; STDIO transport test verifies only that the process responds, not that the tool succeeds (table_get with a non-existent ID may return an error)
+        assert (
+            "result" in response or "error" in response
+        )  # smoke-test: intentionally tests error response; STDIO transport test verifies only that the process responds, not that the tool succeeds (table_get with a non-existent ID may return an error)
 
 
 # =============================================================================

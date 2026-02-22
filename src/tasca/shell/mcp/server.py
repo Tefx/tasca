@@ -100,6 +100,7 @@ from tasca.shell.storage.table_repo import (
     VersionConflictError,
     create_table,
     get_table,
+    list_tables_with_seat_counts,
     update_table,
 )
 from tasca.shell.storage.idempotency_repo import (
@@ -748,6 +749,71 @@ def table_get(table_id: str) -> dict[str, Any]:
             "version": table.version,
             "created_at": table.created_at.isoformat(),
             "updated_at": table.updated_at.isoformat(),
+        }
+    )
+
+
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+@mcp.tool
+def table_list(status: str = "open") -> dict[str, Any]:
+    """List discussion tables with active seat counts.
+
+    Returns tables matching the status filter with their active seat counts.
+    Currently only 'open' status is supported.
+
+    Args:
+        status: Filter by table status. Only 'open' is currently supported.
+            Defaults to 'open'.
+
+    Returns:
+        Success envelope with tables list and total count:
+        {
+            "ok": true,
+            "data": {
+                "tables": [
+                    {
+                        "id": "uuid-string",
+                        "question": "What should we discuss?",
+                        "context": null,
+                        "status": "open",
+                        "version": 1,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-01T00:00:00Z",
+                        "active_count": 2
+                    }
+                ],
+                "total": 1
+            }
+        }
+
+    Error codes:
+        - INVALID_REQUEST: Invalid status filter value
+        - DATABASE_ERROR: Failed to list tables
+    """
+    # Currently only 'open' status is supported
+    if status != "open":
+        return error_response(
+            "INVALID_REQUEST",
+            f"Invalid status filter: '{status}'. Currently only 'open' status is supported.",
+            {"status": status, "supported": ["open"]},
+        )
+
+    conn = next(get_mcp_db())
+    now = datetime.now(UTC)
+    ttl = DEFAULT_SEAT_TTL_SECONDS
+
+    result = list_tables_with_seat_counts(conn, ttl, now)
+
+    if isinstance(result, Failure):
+        error = result.failure()
+        return error_response("DATABASE_ERROR", f"Failed to list tables: {error}")
+
+    tables = result.unwrap()
+
+    return success_response(
+        {
+            "tables": tables,
+            "total": len(tables),
         }
     )
 

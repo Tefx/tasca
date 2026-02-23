@@ -28,7 +28,10 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Verify web dist exists
+        run: ls -la src/tasca/web/dist/
+
       - name: Build Python package
-        run: pip install build && python -m build
+        run: pip install build && python -m build --wheel
 
       - uses: pypa/gh-action-pypi-publish@release/v1

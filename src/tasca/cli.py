@@ -580,6 +580,15 @@ def cmd_new(args: argparse.Namespace) -> int:
 
 # @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
 # @shell_orchestration: Argument parsing and command dispatch is orchestration, not business logic
+# @invar:allow shell_result: CLI command, delegates to MCP server entry point
+def cmd_mcp(_args: argparse.Namespace) -> int:
+    """Start the MCP stdio server."""
+    from tasca.shell.mcp.server import run_mcp_server
+
+    run_mcp_server()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the Tasca CLI.
 
@@ -621,6 +630,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Port to bind when starting server (default: from TASCA_API_PORT)",
     )
     new_parser.set_defaults(func=cmd_new)
+
+    # 'mcp' subcommand
+    mcp_parser = subparsers.add_parser(
+        "mcp",
+        help="Start the MCP stdio server",
+        description="Start the MCP server using stdio transport (for agent integration).",
+    )
+    mcp_parser.set_defaults(func=cmd_mcp)
 
     args = parser.parse_args(argv)
 

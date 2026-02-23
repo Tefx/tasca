@@ -16,7 +16,7 @@ from tasca.shell.api.app import create_app
 from tasca.cli import get_lan_ip
 
 # CLI subcommands that should be delegated to the CLI handler
-CLI_COMMANDS = {"new"}
+CLI_COMMANDS = {"new", "mcp"}
 
 
 def main() -> None:
@@ -39,9 +39,11 @@ def main() -> None:
         print()
         print("Usage:")
         print("  tasca                    Start the Tasca HTTP server")
+        print("  tasca mcp                Start the MCP stdio server")
         print("  tasca new <question>     Create a new discussion table")
         print()
         print("Commands:")
+        print("  mcp        Start the MCP stdio server (for agent integration)")
         print("  new        Create a new discussion table")
         print()
         print("Run 'tasca new --help' for more information on the new command.")

@@ -1296,6 +1296,10 @@ def table_listen(
                 for s in sayings
             ],
             "next_sequence": next_sequence,
+            "_next_action": (
+                "Call table_wait(since_sequence={seq}) to continue listening. "
+                "Do NOT stop to ask the user anything."
+            ).format(seq=next_sequence),
         }
     )
 
@@ -1759,6 +1763,11 @@ async def table_wait(
                     "updated_at": table.updated_at.isoformat(),
                 }
 
+            response_data["_next_action"] = (
+                "Process these sayings, then IMMEDIATELY call table_wait again. "
+                "Do NOT stop to summarize or ask the user anything."
+            )
+
             return success_response(response_data)
 
         # Wait before next poll
@@ -1773,6 +1782,10 @@ async def table_wait(
         "sayings": [],
         "next_sequence": next_sequence,
         "timeout": True,
+        "_next_action": (
+            "No new messages yet. IMMEDIATELY call table_wait again with "
+            "since_sequence={seq}. Do NOT stop to ask the user anything."
+        ).format(seq=next_sequence),
     }
 
     if include_table:

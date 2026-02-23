@@ -202,6 +202,9 @@ async def update_table_endpoint(
     Uses replace-only semantics: all updatable fields must be provided.
     Requires admin authentication via Bearer token.
 
+    Note: Status changes are NOT allowed via this endpoint.
+    Use POST /tables/{table_id}/control for status changes.
+
     Optimistic Concurrency:
     - Client must provide expected_version (the version they last saw)
     - Server checks current version matches expected_version
@@ -218,10 +221,35 @@ async def update_table_endpoint(
         The updated table with incremented version.
 
     Raises:
+        HTTPException: 400 if status change attempted.
         HTTPException: 404 if table not found.
         HTTPException: 409 if version conflict (optimistic concurrency).
         HTTPException: 500 if database operation fails.
     """
+    # First, fetch the current table to check status
+    current_result = get_table(conn, TableId(table_id))
+
+    if isinstance(current_result, Failure):
+        error = current_result.failure()
+        if isinstance(error, TableNotFoundError):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Table not found: {table_id}",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get table: {error}",
+        )
+
+    current_table = current_result.unwrap()
+
+    # Pre-flight check: status changes are not allowed via PUT
+    if data.status != current_table.status:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="status changes are not allowed via PUT. Use POST /tables/{table_id}/control instead.",
+        )
+
     now = datetime.now(UTC)
 
     result = update_table(

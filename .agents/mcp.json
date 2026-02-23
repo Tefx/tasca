@@ -4,6 +4,11 @@
       "type": "stdio",
       "command": "uv",
       "args": ["run", "invar", "mcp"]
+    },
+    "tasca": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["tasca", "mcp"]
     }
   }
 }

@@ -14862,3 +14862,511 @@ phases:
 
 
       invar_guard --all: status=passed, errors=0, warnings=25 (all pre-existing)'
+- id: close_notify_fix
+  name: UI table closure notifies agents via CONTROL saying
+  status: in_progress
+  depends_on:
+  - tech_debt_fix
+  steps:
+  - id: close_notify_fix.restrict-put-status
+    name: restrict-put-status
+    status: claimed
+    description: 'Restrict `PUT /tables/{table_id}` from accepting `status` field
+      changes.
+
+
+      In `src/tasca/shell/api/routes/tables.py`, update the `update_table_endpoint`
+      handler:
+
+
+      1. Add a pre-flight check: if the incoming `TableUpdate.status` differs from
+      the current table''s status, return HTTP 400 with a clear error message: `"status
+      changes are not allowed via PUT. Use POST /tables/{table_id}/control instead."`
+      This prevents the UI (and any client) from silently bypassing the CONTROL saying
+      mechanism.
+
+
+      2. Fetch the current table first (using `get_table`) so the comparison is possible.
+
+
+      3. The function must still return 404 if the table does not exist (before the
+      status check).
+
+
+      Contract rule: `@pre`/`@post` decorators are not used on FastAPI route handlers
+      — those belong in `core/`. The check here is a shell-layer guard. Return `Result[T,
+      E]` patterns are not required for the endpoint itself (FastAPI raises HTTPException).
+
+
+      After this change, `PUT /tables/{id}` only updates `question` and `context`;
+      `status` must match the current value or a 400 is returned.
+
+
+      Refs: `src/tasca/shell/api/routes/tables.py`, `src/tasca/shell/storage/table_repo.py`'
+    verification: HTTP PUT with a `status` field that differs from the current table
+      status returns 400 with a message referencing the control endpoint. HTTP PUT
+      with the same status (or no status change) still updates question/context and
+      returns 200. `invar guard src/tasca/shell/api/routes/tables.py` passes with
+      0 errors.
+    evidence_template: '- Commands run: invar guard src/tasca/shell/api/routes/tables.py
+
+      - Output: (paste guard output)
+
+      - Change summary: (describe the pre-flight check added and where)
+
+      - Test confirmation: (describe manual or unit test run showing 400 on status
+      change, 200 on metadata-only change)'
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-23T13:21:21.236440+00:00'
+  - id: close_notify_fix.control-endpoint
+    name: control-endpoint
+    status: pending
+    description: 'Add `POST /tables/{table_id}/control` REST endpoint to `src/tasca/shell/api/routes/tables.py`.
+
+
+      This endpoint mirrors the semantics of the MCP `table_control` tool:
+
+      1. Accepts a JSON body with fields: `action` (str: "pause" | "resume" | "close"),
+      `speaker_name` (str), `reason` (str | None).
+
+      2. Requires admin authentication via `verify_admin_token` (same as PUT).
+
+      3. Fetches current table, validates state transition using `table_state_machine`
+      functions (`can_transition_to_closed`, `can_transition_to_paused`, `can_transition_to_open`,
+      `transition_to_closed`, `transition_to_paused`, `transition_to_open`).
+
+      4. Appends a CONTROL saying using `append_saying` from `table_repo` with content
+      `"**CONTROL: {action.upper()}**"` (optionally appending reason), speaker kind
+      HUMAN (since this is a human-initiated UI action).
+
+      5. Updates table status via `update_table`.
+
+      6. Returns JSON: `{"ok": true, "data": {"table_status": "<new_status>", "control_saying_sequence":
+      <int>}}`.
+
+
+      Error cases:
+
+      - 404 if table not found
+
+      - 400 if action is not one of "pause", "resume", "close"
+
+      - 409 if state transition is invalid (e.g. close on already-closed table) —
+      use 409 with detail explaining the allowed states
+
+      - 500 on database error
+
+
+      Add a Pydantic request model `TableControlRequest(BaseModel)` with fields `action`,
+      `speaker_name`, `reason`.
+
+
+      Import `append_saying` from `table_repo` (it is already exported). Import state
+      machine functions from `tasca.core.table_state_machine`. Import `Speaker`, `SpeakerKind`,
+      `PatronId` from the domain.
+
+
+      Refs: `src/tasca/shell/api/routes/tables.py`, `src/tasca/core/table_state_machine.py`,
+      `src/tasca/shell/storage/table_repo.py`, `src/tasca/shell/mcp/server.py` (reference
+      for the CONTROL saying pattern at lines 1561–1573)'
+    verification: POST /tables/{id}/control with action=close creates a CONTROL saying
+      (visible via GET sayings) and updates table status to closed. POST with invalid
+      action returns 400. POST on already-closed table returns 409. `invar guard src/tasca/shell/api/routes/tables.py`
+      passes with 0 errors.
+    evidence_template: '- Commands run: invar guard src/tasca/shell/api/routes/tables.py
+
+      - Output: (paste guard output)
+
+      - New endpoint summary: method, path, request model fields, response shape
+
+      - CONTROL saying confirmed: (describe how you verified the saying is appended
+      in the DB)
+
+      - Error path coverage: 400 invalid action tested, 409 closed-table tested'
+    depends_on:
+    - close_notify_fix.restrict-put-status
+    agent: python-engineer
+  - id: close_notify_fix.backend-unit-tests
+    name: backend-unit-tests
+    status: pending
+    description: 'Add unit tests for the two backend changes in `tests/unit/api/test_tables_routes.py`.
+
+
+      Follow the existing test pattern in that file (FastAPI TestClient + in-memory
+      SQLite via `apply_schema`).
+
+
+      Tests to add:
+
+
+      **Group A — PUT status restriction:**
+
+      - `test_put_with_status_change_returns_400`: PUT with `status="closed"` on an
+      open table returns 400 with error message containing "control".
+
+      - `test_put_without_status_change_updates_metadata`: PUT with the same status
+      as current returns 200 and updates question/context.
+
+      - `test_put_status_change_closed_to_open_returns_400`: PUT attempting to change
+      a closed table to open returns 400 (cannot bypass terminal state).
+
+
+      **Group B — POST /control endpoint:**
+
+      - `test_control_close_creates_control_saying_and_updates_status`: POST /tables/{id}/control
+      with `{"action": "close", "speaker_name": "Alice"}` returns 200 with `{"ok":
+      true, "data": {"table_status": "closed", "control_saying_sequence": <int>}}`.
+      Verify a saying with content starting `"**CONTROL: CLOSE**"` exists in the DB.
+
+      - `test_control_invalid_action_returns_400`: POST with `{"action": "destroy",
+      "speaker_name": "Alice"}` returns 400.
+
+      - `test_control_close_on_closed_table_returns_409`: POST close on an already-closed
+      table returns 409.
+
+      - `test_control_pause_then_resume`: POST pause on open table succeeds; POST
+      resume on paused table succeeds.
+
+      - `test_control_requires_admin_auth`: POST without Bearer token returns 401.
+
+
+      No production code changes. Test-only additions.
+
+
+      Refs: `tests/unit/api/test_tables_routes.py`, `src/tasca/shell/api/routes/tables.py`'
+    verification: All new tests pass. `invar guard tests/unit/api/test_tables_routes.py`
+      exits 0 with 0 errors. `pytest tests/unit/api/test_tables_routes.py -v` shows
+      all new test cases as PASSED.
+    evidence_template: '- Commands run: pytest tests/unit/api/test_tables_routes.py
+      -v
+
+      - Output: (paste test run output, showing new test names and PASSED/FAILED)
+
+      - Commands run: invar guard tests/unit/api/test_tables_routes.py
+
+      - Output: (paste guard output)
+
+      - CONTROL saying DB assertion: (confirm test asserts on the appended saying
+      content)'
+    depends_on:
+    - close_notify_fix.control-endpoint
+    agent: python-engineer
+  - id: close_notify_fix.guard-verify-backend
+    name: guard-verify-backend
+    status: pending
+    description: 'Run `invar guard` across all backend files changed in this phase
+      to confirm zero errors before frontend work begins.
+
+
+      Files to check:
+
+      - `src/tasca/shell/api/routes/tables.py`
+
+      - `src/tasca/core/table_state_machine.py` (verify no regressions from import
+      changes)
+
+      - `tests/unit/api/test_tables_routes.py`
+
+
+      Fix any issues before marking complete. Do not mark complete if guard exits
+      non-zero.
+
+
+      This step is the backend quality gate and the dependency barrier before frontend
+      migration begins.'
+    verification: '`invar guard src/tasca/shell/api/routes/tables.py src/tasca/core/table_state_machine.py
+      tests/unit/api/test_tables_routes.py` exits 0 with 0 errors. Any warnings documented
+      as pre-existing.'
+    evidence_template: '- Commands run: invar guard src/tasca/shell/api/routes/tables.py
+      src/tasca/core/table_state_machine.py tests/unit/api/test_tables_routes.py
+
+      - Output: (paste full guard output)
+
+      - Error count: 0
+
+      - Warning count and disposition: (pre-existing or new)'
+    depends_on:
+    - close_notify_fix.backend-unit-tests
+    agent: python-engineer
+  - id: close_notify_fix.frontend-migrate-close
+    name: frontend-migrate-close
+    status: pending
+    description: "Migrate `closeTable()` in `web/src/api/tables.ts` to call the new\
+      \ `POST /tables/{id}/control` REST endpoint instead of `updateTable()`.\n\n\
+      Changes required:\n\n1. In `web/src/api/tables.ts`:\n   - Add a new exported\
+      \ function `controlTable(tableId: string, action: \"pause\" | \"resume\" | \"\
+      close\", speakerName: string, reason?: string): Promise<ControlResponse>`.\n\
+      \   - Add a `ControlResponse` interface: `{ ok: boolean; data: { table_status:\
+      \ TableStatus; control_saying_sequence: number } }`.\n   - Rewrite `closeTable(table:\
+      \ Table): Promise<Table>` to call `controlTable(table.id, \"close\", \"human\"\
+      )` and return the updated table by fetching it via `getTable(table.id)` after\
+      \ the control call succeeds.\n     - Note: the control endpoint returns `{ ok,\
+      \ data }` not a `Table` — so `closeTable` must fetch the updated table after.\
+      \ This preserves the existing call signature so `TableControls.tsx` requires\
+      \ no changes.\n   - Do NOT change `pauseTable()` or `resumeTable()` in this\
+      \ step (leave them using `updateTable` for now — they are handled separately\
+      \ via `POST /tables/{id}/control` only when the PUT restriction goes live, but\
+      \ for now their status change continues via PUT with same-status short-circuit).\
+      \ \n     - Correction: since `restrict-put-status` already blocks status changes\
+      \ via PUT, `pauseTable` and `resumeTable` must ALSO be migrated. Rewrite them\
+      \ similarly: `pauseTable` calls `controlTable(table.id, \"pause\", \"human\"\
+      )` then fetches the updated table. `resumeTable` calls `controlTable(table.id,\
+      \ \"resume\", \"human\")` then fetches.\n   - The existing `updateTable()` function\
+      \ remains but is now only used for metadata updates (question/context).\n\n\
+      2. `web/src/components/TableControls.tsx` — no changes required if `closeTable`\
+      \ preserves its `(table: Table) => Promise<Table>` signature.\n\nTypeScript:\
+      \ ensure no `any` or type assertion escapes are introduced. The `ControlResponse`\
+      \ type must be used correctly.\n\nRefs: `web/src/api/tables.ts`, `web/src/components/TableControls.tsx`"
+    verification: '`npm run typecheck` (or `npx tsc --noEmit`) exits 0 in the web
+      directory. `closeTable`, `pauseTable`, `resumeTable` all call the `/control`
+      endpoint. The `updateTable` function no longer receives `status` in any of these
+      three callers. `web/src/api/tables.ts` grep for `updateTable(` shows zero calls
+      from `closeTable`, `pauseTable`, `resumeTable`.'
+    evidence_template: '- Commands run: (TypeScript type-check command used)
+
+      - Output: (paste tsc or typecheck output)
+
+      - Grep evidence: grep for updateTable( in tables.ts showing no status-changing
+      callers remain
+
+      - New controlTable function: (paste signature)
+
+      - New ControlResponse interface: (paste type definition)
+
+      - pauseTable/resumeTable/closeTable: (confirm each now calls controlTable)'
+    depends_on:
+    - close_notify_fix.guard-verify-backend
+    agent: frontend-engineer
+  - id: close_notify_fix.frontend-verify
+    name: frontend-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (integration-verifier), verify that the
+      frontend migration in `web/src/api/tables.ts` is complete and correct.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+
+      - Happy path: `closeTable`, `pauseTable`, `resumeTable` each call `controlTable`
+      (not `updateTable`) — confirm by reading the source
+
+      - Structural: `ControlResponse` interface is defined and used (not `any`)
+
+      - Regression: `updateTable` is still exported and callable for metadata-only
+      updates; no callsite in `TableControls.tsx` was broken
+
+      - Edge case: `closeTable` correctly fetches the updated table after the control
+      call (returning a `Table`, not a `ControlResponse`)
+
+      - TypeScript: no new `any` or unsafe casts introduced
+
+
+      Read `web/src/api/tables.ts` and `web/src/components/TableControls.tsx` directly.
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+
+      Independence Level: L1'
+    verification: All three table control functions (`closeTable`, `pauseTable`, `resumeTable`)
+      confirmed to call `controlTable`. `updateTable` no longer receives status. `ControlResponse`
+      typed correctly. No `any` escapes. TypeScript type-check passes.
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: frontend closeTable migration
+
+      **Independence Level**: L1
+
+
+      ### Test Execution
+
+      - Files read: web/src/api/tables.ts, web/src/components/TableControls.tsx
+
+      - TypeScript check command: (paste)
+
+      - Output: (paste)
+
+
+      ### Issues Found
+
+
+      | Severity | Description | Location | Reproduction |
+
+      |----------|-------------|----------|--------------|
+
+      | (none found or list issues) | | | |
+
+
+      ### Coverage Assessment
+
+      - closeTable calls controlTable: yes/no
+
+      - pauseTable calls controlTable: yes/no
+
+      - resumeTable calls controlTable: yes/no
+
+      - updateTable status-free: yes/no
+
+      - ControlResponse typed (not any): yes/no
+
+      - TableControls.tsx unbroken: yes/no
+
+
+      ### Verdict
+
+      - [ ] PASS: No issues found
+
+      - [ ] ISSUES_FOUND: See table above
+
+      - [ ] INCOMPLETE: (reason)
+
+
+      **Confidence**: high/medium/low'
+    depends_on:
+    - close_notify_fix.frontend-migrate-close
+    agent: integration-verifier
+  - id: close_notify_fix.guard-verify-final
+    name: guard-verify-final
+    status: pending
+    description: 'Run `invar guard --all` across the entire project after all implementation
+      steps complete. All changes from this phase must result in zero errors.
+
+
+      This step is the final integration check before gate review. If any errors are
+      found, fix them before marking complete.
+
+
+      Do not mark complete if guard exits non-zero.'
+    verification: '`invar guard --all` exits 0. Output shows 0 errors. Any warnings
+      are pre-existing and documented (compare against the tech_debt_fix phase baseline
+      of 25 pre-existing warnings).'
+    evidence_template: '- Commands run: invar guard --all
+
+      - Output: (paste full guard output)
+
+      - Error count: 0
+
+      - Warning count: (number) — pre-existing baseline was 25 warnings from tech_debt_fix
+
+      - New warnings (if any): (list and justify)'
+    depends_on:
+    - close_notify_fix.frontend-verify
+    agent: python-engineer
+  - id: close_notify_fix.gate
+    name: gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the `close_notify_fix`
+      phase meets the quality bar for closure.
+
+
+      YOU ARE THE QUALITY GATE. Your job is to BLOCK progress if quality is insufficient,
+      not to rubber-stamp completion.
+
+
+      Review criteria:
+
+      1. Completeness: All 7 preceding steps completed with adequate evidence?
+
+      2. Evidence quality: Specific, verifiable (commands + outputs), not vague?
+
+      3. Bug resolution: Does the fix actually close the notification gap? Is there
+      evidence that a CONTROL saying is now appended when the UI closes a table?
+
+      4. PUT restriction: Is there evidence that PUT with a status change returns
+      400?
+
+      5. Frontend migration: All three table control functions (close/pause/resume)
+      migrated to the control endpoint?
+
+      6. Guard clean: `invar guard --all` passes with 0 errors?
+
+      7. No regressions: Existing tests unaffected?
+
+
+      Finding issues during gate review is VALUABLE. It prevents defects from propagating.
+
+
+      Independence: You MUST NOT be the same agent as any implementation step in this
+      phase (not python-engineer, not frontend-engineer, not integration-verifier).'
+    verification: 'All 7 phase steps completed with adequate evidence. Bug fix confirmed:
+      CONTROL saying appended on UI-initiated close. PUT restriction confirmed: 400
+      on status change. Guard passes. No regressions.'
+    evidence_template: '## Gate Review Report
+
+
+      **Reviewer**: gate-reviewer (independent of phase implementation)
+
+      **Phase**: close_notify_fix
+
+      **Timestamp**: (ISO 8601)
+
+
+      ### Step-by-Step Review
+
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      |---------|--------|-----------------|----------|
+
+      | restrict-put-status | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | (notes)
+      |
+
+      | control-endpoint | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | (notes)
+      |
+
+      | backend-unit-tests | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | (notes)
+      |
+
+      | guard-verify-backend | ✅/⚠️/❌ | excellent/adequate/insufficient/missing |
+      (notes) |
+
+      | frontend-migrate-close | ✅/⚠️/❌ | excellent/adequate/insufficient/missing
+      | (notes) |
+
+      | frontend-verify | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | (notes)
+      |
+
+      | guard-verify-final | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | (notes)
+      |
+
+
+      ### Issues Identified
+
+
+      | Severity | Description | Related Step | Blocking? |
+
+      |----------|-------------|-------------|-----------|
+
+      | (none or list) | | | |
+
+
+      ### Phase Assessment
+
+      - All steps completed: ✅/❌
+
+      - Evidence quality acceptable: ✅/❌
+
+      - Bug fix confirmed (CONTROL saying present after UI close): ✅/❌
+
+      - PUT restriction confirmed (400 on status change): ✅/❌
+
+      - Frontend fully migrated: ✅/❌
+
+      - Guard clean: ✅/❌
+
+
+      ### Gate Decision
+
+      - [ ] OPEN: Phase passes gate
+
+      - [ ] BLOCKED: Issues must be resolved before proceeding'
+    depends_on:
+    - close_notify_fix.guard-verify-final
+    agent: gate-reviewer

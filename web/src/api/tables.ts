@@ -36,7 +36,7 @@ export interface Table {
 /** Data for updating a table (full replace semantics). */
 export interface TableUpdate {
   question: string
-  context: string | null
+  context?: string | null
   status: TableStatus
 }
 

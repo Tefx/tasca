@@ -525,3 +525,181 @@ class TestTablesObservability:
         assert log_data["event"] == "table_deleted"
         assert log_data["table_id"] == table_id
         assert log_data["speaker"] == "rest:admin"
+
+
+# =============================================================================
+# POST /tables/{table_id}/control - Control Tests
+# =============================================================================
+
+
+class TestControlTable:
+    """Tests for POST /tables/{table_id}/control endpoint."""
+
+    def test_control_requires_auth(self, client: TestClient) -> None:
+        """Control endpoint requires admin authentication."""
+        response = client.post(
+            "/tables/some-id/control",
+            json={"action": "close", "speaker_name": "Admin"},
+        )
+        assert response.status_code == 401
+
+    def test_control_invalid_action(self, admin_client: TestClient) -> None:
+        """Invalid action returns 400."""
+        # Create a table first
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Try invalid action
+        response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "invalid_action", "speaker_name": "Admin"},
+        )
+        assert response.status_code == 400
+        assert "invalid action" in response.json()["detail"].lower()
+
+    def test_control_close_updates_status_and_creates_saying(
+        self, admin_client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Close action updates table status and creates CONTROL saying."""
+        # Create a table
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Close the table
+        response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "close", "speaker_name": "Admin", "reason": "Completed"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["table_status"] == "closed"
+        assert isinstance(data["control_saying_sequence"], int)
+
+        # Verify table status is closed
+        get_response = admin_client.get(f"/tables/{table_id}")
+        assert get_response.json()["status"] == "closed"
+
+        # Verify CONTROL saying exists via direct DB query
+        cursor = test_db.execute(
+            "SELECT content, speaker_kind, speaker_name FROM sayings WHERE table_id = ?",
+            (table_id,),
+        )
+        rows = cursor.fetchall()
+        assert len(rows) == 1
+        assert "**CONTROL: CLOSE**" in rows[0][0]
+        assert "Completed" in rows[0][0]
+        assert rows[0][1] == "human"  # speaker_kind
+        assert rows[0][2] == "Admin"  # speaker_name
+
+    def test_control_close_already_closed_returns_409(self, admin_client: TestClient) -> None:
+        """Closing an already closed table returns 409."""
+        # Create a table and close it
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+
+        admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "close", "speaker_name": "Admin"},
+        )
+
+        # Try to close again
+        response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "close", "speaker_name": "Admin"},
+        )
+        assert response.status_code == 409
+        assert "cannot close" in response.json()["detail"].lower()
+
+    def test_control_pause_from_open(self, admin_client: TestClient) -> None:
+        """Pause action from open state succeeds."""
+        # Create a table
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Pause the table
+        response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "pause", "speaker_name": "Admin"},
+        )
+        assert response.status_code == 200
+        assert response.json()["table_status"] == "paused"
+
+    def test_control_resume_from_paused(self, admin_client: TestClient) -> None:
+        """Resume action from paused state succeeds."""
+        # Create a table and pause it
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+
+        admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "pause", "speaker_name": "Admin"},
+        )
+
+        # Resume the table
+        response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "resume", "speaker_name": "Admin"},
+        )
+        assert response.status_code == 200
+        assert response.json()["table_status"] == "open"
+
+    def test_control_resume_from_open_returns_409(self, admin_client: TestClient) -> None:
+        """Resume action from open state returns 409."""
+        # Create a table (starts as open)
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Try to resume (table is already open)
+        response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "resume", "speaker_name": "Admin"},
+        )
+        assert response.status_code == 409
+        assert "cannot resume" in response.json()["detail"].lower()
+
+    def test_control_pause_from_closed_returns_409(self, admin_client: TestClient) -> None:
+        """Pause action from closed state returns 409."""
+        # Create a table and close it
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+
+        admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "close", "speaker_name": "Admin"},
+        )
+
+        # Try to pause
+        response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "pause", "speaker_name": "Admin"},
+        )
+        assert response.status_code == 409
+
+    def test_control_table_not_found(self, admin_client: TestClient) -> None:
+        """Control on non-existent table returns 404."""
+        response = admin_client.post(
+            "/tables/nonexistent-id/control",
+            json={"action": "close", "speaker_name": "Admin"},
+        )
+        assert response.status_code == 404

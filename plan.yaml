@@ -17221,13 +17221,13 @@ phases:
       issues are robustness improvements, not current blockers.'
 - id: post-notify-hardening
   name: Post-notify hardening — address review findings
-  status: in_progress
+  status: done
   depends_on:
   - post-close-notify-review2
   steps:
   - id: fix-context-put-semantics
     name: Fix PUT context semantics footgun
-    status: pending
+    status: done
     description: 'SHOULD_FIX: Align/document PUT full-replace semantics for optional
       `context` field.
 
@@ -17249,9 +17249,25 @@ phases:
     verification: Manual verification that PUT behavior is clearly defined and documented.
       Check that callers cannot accidentally clear context.
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-23T17:06:08.237530+00:00'
+    evidence: "## Evidence: fix-context-put-semantics\n\n### Commit\n802b178 fix(api):\
+      \ make context required in TableUpdate to prevent accidental clearing\n\n###\
+      \ Changes\n- `src/tasca/core/domain/table.py`: TableUpdate.context changed from\
+      \ Optional[str] with None default to required `str | None` (Field with `...`\
+      \ sentinel). Added clear docstring explaining replace-only semantics.\n- `src/tasca/shell/api/routes/tables.py`:\
+      \ Updated route handler to match new required field.\n- `src/tasca/shell/api/routes/tables_control.py`:\
+      \ Updated control route handler.\n- `web/src/api/tables.ts`: Updated frontend\
+      \ TableUpdate interface to match (context: string | null, not optional).\n-\
+      \ `tests/unit/api/test_tables_routes.py`: Added 3 tests:\n  - test_update_table_context_required:\
+      \ omitting context returns 422\n  - test_update_table_explicit_null_clears_context:\
+      \ explicit null clears\n  - test_update_table_keeps_context_with_string: explicit\
+      \ string updates\n\n### Verification\nSemantics are now clear and enforced:\
+      \ context field is required on PUT. Omitting it returns 422, explicit null clears,\
+      \ string value updates. Documented in docstring."
   - id: fix-version-conflict-detection
     name: Fix version conflict detection - structured error
-    status: pending
+    status: done
     description: 'SHOULD_FIX: Replace string-matching version conflict detection with
       structured error type.
 
@@ -17273,9 +17289,58 @@ phases:
     verification: Verify that version conflict detection uses structured error types,
       not string matching. Check HTTP 409 response is correctly returned.
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-23T17:12:53.857519+00:00'
+    evidence: '## Evidence: fix-version-conflict-detection
+
+
+      ### Artifact
+
+      Already implemented in prior work. Structured error types exist and are in use.
+
+
+      ### Verification
+
+      - Run: uv run pytest -q tests/unit/api/test_tables_routes.py -k control -v --tb=short
+      -> 11 passed, 25 deselected in 0.38s
+
+      - Run: uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short
+      -> 12 passed in 0.12s
+
+
+      ### Structured Error Types (already in place)
+
+      1. `ControlVersionConflictError` defined in `src/tasca/shell/storage/control_repo.py:38`
+      with `to_json()` method
+
+      2. `VersionConflictError` defined in `src/tasca/shell/storage/table_repo.py:42`
+      with `to_json()` method
+
+      3. `tables_control.py:176` uses `isinstance(error, ControlVersionConflictError)`
+      - no string matching
+
+      4. `tables.py:282` uses `isinstance(error, VersionConflictError)` - no string
+      matching
+
+      5. Both map to HTTP 409 Conflict with `error.to_json()` for structured response
+
+      6. `test_control_version_conflict_returns_structured_error` test validates the
+      full flow
+
+
+      ### String-matching grep
+
+      Searched routes directory for string-matching patterns on version conflict:
+      zero matches found.
+
+
+      ### Gaps/Notes
+
+      None - the structured error handling was implemented in prior phases and is
+      fully operational.'
   - id: fix-rollback-hardening
     name: Fix rollback hardening for non-sqlite exceptions
-    status: claimed
+    status: done
     description: 'SHOULD_FIX: Add catch-all rollback protection for all post-BEGIN
       exception paths.
 
@@ -17299,9 +17364,35 @@ phases:
     agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-23T16:39:50.015248+00:00'
+    evidence: 'Artifact:
+
+      - PR: acabfff
+
+
+      Verification:
+
+      - Run: uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short
+      -> PASS (12 passed)
+
+      - Run: uvx invar-tools guard src/tasca/shell/storage/control_repo.py -> PASS
+      (0 errors, 0 warnings)
+
+
+      Implementation summary:
+
+      - Added catch-all `except Exception:` after transaction begin path that performs
+      `conn.rollback()` then re-raises, guaranteeing rollback for non-sqlite exceptions.
+
+      - Added test `test_non_sqlite_exception_rolls_back` to verify rollback occurs,
+      exception is preserved, state remains unchanged, and connection remains usable.
+
+
+      Spec link:
+
+      - post-notify-hardening/fix-rollback-hardening'
   - id: fix-mcp-integration-assertions
     name: Fix MCP integration assertions - tighten determinism
-    status: pending
+    status: done
     description: 'SUGGESTION: Tighten `/mcp` integration test assertions to be more
       deterministic.
 
@@ -17323,9 +17414,62 @@ phases:
     verification: Review test file to verify assertions are specific and deterministic.
       Run tests to confirm they still pass.
     agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-23T16:57:16.980988+00:00'
+    evidence: '## Evidence: fix-mcp-integration-assertions
+
+
+      ### Artifact
+
+      Commit: 40f1d17 fix(test): tighten MCP integration test assertions for determinism
+
+
+      ### Changes
+
+      File: `tests/integration/test_api.py` - `test_mcp_endpoint_mounted`
+
+
+      Before (permissive):
+
+      - Used ASGIRESTHarness (no lifespan events, no auth)
+
+      - Assertion: `assert response.status_code in [200, 307, 400, 500]` (accepted
+      errors)
+
+      - Async test that got 307 redirect because ASGIRESTHarness doesn''t trigger
+      lifespan
+
+
+      After (deterministic):
+
+      - Uses `mcp_test_client` fixture (Starlette TestClient with proper lifespan
+      handling)
+
+      - Includes Bearer auth header (`Authorization: Bearer {token}`)
+
+      - Assertion: `assert response.status_code == 200` (exact match)
+
+      - Assertion: `assert "text/event-stream" in response.headers.get("content-type",
+      "")` (verifies SSE response)
+
+      - Sync test (matching mcp_test_client fixture type)
+
+
+      ### Verification
+
+      - Run: uv run pytest -q tests/integration/test_api.py -v --tb=short -> 9 passed
+      in 0.60s
+
+      - Specifically: test_mcp_endpoint_mounted PASSED with exact 200 assertion
+
+
+      ### Gaps/Notes
+
+      Comprehensive MCP tests already exist in test_mcp.py. This test serves as a
+      minimal mount verification in the API test suite.'
   - id: retest-context-put-semantics
     name: Re-test PUT context semantics fix
-    status: pending
+    status: done
     description: "Re-test: Verify PUT context semantics fix is correct and behavior\
       \ is clear.\n\n**Independence Level**: L1\n\n**Scope**: \n- Verify PUT behavior\
       \ with omitted context vs explicit null\n- Check documentation/comments explain\
@@ -17344,9 +17488,68 @@ phases:
     depends_on:
     - fix-context-put-semantics
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-23T17:12:54.373726+00:00'
+    evidence: '## Evidence: retest-context-put-semantics
+
+
+      ### Verification Commands
+
+      - Run: uv run pytest -q tests/unit/api/test_tables_routes.py -v --tb=short ->
+      36 passed in 0.42s
+
+
+      ### Code Review
+
+
+      **TableUpdate semantics** (`src/tasca/core/domain/table.py:48-63`):
+
+      - `context: str | None = Field(...)` - required field with no default (sentinel
+      `...`)
+
+      - Docstring clearly documents: "Replace-only semantics: all fields are required
+      and replace existing values."
+
+      - Docstring explains: "Omitting context is NOT allowed (prevents accidental
+      clearing)"
+
+      - Explicit null allowed to clear context intentionally
+
+
+      **Route handler** (`src/tasca/shell/api/routes/tables.py`):
+
+      - PUT endpoint receives `TableUpdate` body (Pydantic validates required fields)
+
+      - Omitting `context` returns 422 (Pydantic validation error)
+
+      - Explicit null clears context
+
+      - String value updates context
+
+
+      **Frontend interface** (`web/src/api/tables.ts:44-48`):
+
+      - `context: string | null` (not optional) - matches backend semantics
+
+      - Docstring: "Omitting context is NOT allowed (prevents accidental clearing)"
+
+
+      **Test coverage** (3 new tests in `tests/unit/api/test_tables_routes.py`):
+
+      - `test_update_table_context_required`: omitting context returns 422 PASSED
+
+      - `test_update_table_explicit_null_clears_context`: explicit null clears PASSED
+
+      - `test_update_table_keeps_context_with_string`: string updates PASSED
+
+
+      ### Gaps/Notes
+
+      None. Semantics are clear, documented, and enforced at all layers (backend,
+      frontend, tests).'
   - id: retest-version-conflict-detection
     name: Re-test version conflict detection fix
-    status: pending
+    status: done
     description: 'Re-test: Verify version conflict detection uses structured errors.
 
 
@@ -17381,9 +17584,69 @@ phases:
     depends_on:
     - fix-version-conflict-detection
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-23T17:17:25.010306+00:00'
+    evidence: '## Evidence: retest-version-conflict-detection
+
+
+      ### Verification Commands
+
+      - Run: uv run pytest -q tests/unit/api/test_tables_routes.py -k control -v --tb=short
+      -> 11 passed, 25 deselected in 0.28s
+
+      - Run: uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short
+      -> 12 passed in 0.11s
+
+
+      ### Code Review
+
+
+      **Structured error type** (`src/tasca/shell/storage/control_repo.py:38`):
+
+      - `ControlVersionConflictError(ControlError)` with `table_id`, `expected_version`
+      attributes
+
+      - `to_json()` method returns structured dict: `{"error": "version_conflict",
+      "table_id": ..., "expected_version": ..., "message": ...}`
+
+
+      **API layer mapping** (`src/tasca/shell/api/routes/tables_control.py:174-180`):
+
+      - `isinstance(error, ControlVersionConflictError)` - structured type check,
+      NO string matching
+
+      - Maps to HTTP 409 Conflict with `error.to_json()` response body
+
+
+      **Also in tables.py** (`src/tasca/shell/api/routes/tables.py:282`):
+
+      - `isinstance(error, VersionConflictError)` - same pattern, NO string matching
+
+      - Maps to HTTP 409 Conflict
+
+
+      **Test coverage**:
+
+      - `test_control_version_conflict_returns_structured_error`: Explicitly verifies
+      isinstance check, not string matching. Verifies to_json() structure.
+
+      - `test_version_conflict_returns_failure` (storage layer): Verifies Failure
+      wraps ControlVersionConflictError
+
+
+      ### String-matching grep
+
+      Searched all routes for string-matching patterns: zero matches found. All version
+      conflict detection uses isinstance() on typed error classes.
+
+
+      ### Gaps/Notes
+
+      None. Structured error handling is fully implemented and tested at both storage
+      and API layers.'
   - id: retest-rollback-hardening
     name: Re-test rollback hardening fix
-    status: pending
+    status: done
     description: 'Re-test: Verify rollback hardening covers all exception paths.
 
 
@@ -17418,9 +17681,32 @@ phases:
     depends_on:
     - fix-rollback-hardening
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-23T16:57:50.777800+00:00'
+    evidence: 'Artifact:
+
+      - PR: N/A
+
+
+      Verification:
+
+      - Code-read: `src/tasca/shell/storage/control_repo.py` has rollback coverage
+      for all post-BEGIN exception paths (IntegrityError, sqlite3.Error, and catch-all
+      Exception with rollback + re-raise).
+
+      - Run: uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short
+      -> PASS (12 passed)
+
+      - Run: uvx invar-tools guard src/tasca/shell/storage/control_repo.py -> PASS
+      (0 errors, 0 warnings; 1 info non-blocking)
+
+
+      Spec link:
+
+      - post-notify-hardening/retest-rollback-hardening'
   - id: retest-mcp-integration-assertions
     name: Re-test MCP integration assertions fix
-    status: pending
+    status: done
     description: 'Re-test: Verify MCP integration test assertions are tightened.
 
 
@@ -17451,9 +17737,77 @@ phases:
     depends_on:
     - fix-mcp-integration-assertions
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-23T17:17:24.555681+00:00'
+    evidence: '## Evidence: retest-mcp-integration-assertions
+
+
+      ### Artifact
+
+      Commit: 40f1d17 fix(test): tighten MCP integration test assertions for determinism
+
+
+      ### Verification Commands
+
+      - Run: uv run pytest -q tests/integration/test_api.py -v --tb=short -> 9 passed
+      in 0.74s
+
+      - Specifically: test_mcp_endpoint_mounted PASSED
+
+
+      ### Code Review of tightened assertions
+
+
+      **Before** (permissive):
+
+      ```python
+
+      assert response.status_code in [200, 307, 400, 500]
+
+      ```
+
+      - Used ASGIRESTHarness (no lifespan, no auth)
+
+      - Accepted error codes 400 and 500 which could mask regressions
+
+
+      **After** (deterministic):
+
+      ```python
+
+      assert response.status_code == 200
+
+      assert "text/event-stream" in response.headers.get("content-type", "")
+
+      ```
+
+      - Uses mcp_test_client fixture (Starlette TestClient with proper lifespan)
+
+      - Includes Bearer auth header
+
+      - Asserts exact 200 status code
+
+      - Asserts SSE content-type for MCP transport verification
+
+      - Sync test matching fixture type
+
+
+      ### Response shape verification
+
+      - Status code: exactly 200 (not a range)
+
+      - Content-Type: text/event-stream (MCP SSE transport)
+
+      - These assertions are specific and will catch regressions (wrong status, wrong
+      content type)
+
+
+      ### Gaps/Notes
+
+      None. Assertions are now deterministic and specific.'
   - id: post-notify-hardening.gate-review-post-notify-hardening
     name: Gate review — post-notify-hardening
-    status: pending
+    status: done
     description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the post-notify-hardening
       phase meets the quality bar.
 
@@ -17503,3 +17857,94 @@ phases:
     - retest-rollback-hardening
     - retest-mcp-integration-assertions
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-02-23T17:18:10.488338+00:00'
+    evidence: '## Gate Review: post-notify-hardening
+
+
+      ### Review Posture: INDEPENDENT CHECKPOINT (adversarial/skeptical)
+
+
+      ### Step Evidence Summary
+
+
+      | Step | Status | Evidence Quality |
+
+      |------|--------|-----------------|
+
+      | fix-context-put-semantics | PASS | Commit 802b178. Required context field,
+      3 new tests, frontend alignment. |
+
+      | fix-version-conflict-detection | PASS | Already implemented. ControlVersionConflictError
+      + VersionConflictError with isinstance() checks, no string matching. |
+
+      | fix-rollback-hardening | PASS | Commit acabfff. Catch-all rollback for non-sqlite
+      exceptions. |
+
+      | fix-mcp-integration-assertions | PASS | Commit 40f1d17. Tightened from permissive
+      (200/307/400/500) to exact 200 + SSE content-type. |
+
+      | retest-context-put-semantics | PASS | 36/36 tests pass. Code review confirms
+      semantics at all 3 layers. |
+
+      | retest-version-conflict-detection | PASS | 11/11 control tests + 12/12 storage
+      tests pass. No string matching found. |
+
+      | retest-rollback-hardening | PASS | Previously verified. |
+
+      | retest-mcp-integration-assertions | PASS | 9/9 integration tests pass. Assertions
+      are now deterministic. |
+
+
+      ### Cross-Cutting Review
+
+
+      **Code Quality:**
+
+      - Structured error types follow project pattern (typed exceptions with to_json())
+
+      - Route handlers use isinstance() dispatch, not string matching
+
+      - Test names are descriptive and follow project conventions
+
+      - Docstrings present and accurate
+
+
+      **Test Coverage:**
+
+      - 82 relevant tests all pass (0 failures)
+
+      - New tests cover edge cases (omitted context, explicit null, version conflict)
+
+      - Integration tests use proper fixtures (mcp_test_client with lifespan)
+
+
+      **Documentation:**
+
+      - TableUpdate docstring clearly explains required field semantics
+
+      - Frontend interface matches backend with inline documentation
+
+      - Error response structure documented via to_json() methods
+
+
+      ### Adversarial Findings
+
+
+      **Pre-existing issues (NOT introduced by this phase):**
+
+      - 34 pre-existing test failures in unrelated modules (test_proxy.py, test_cli.py,
+      test_sayings_routes.py)
+
+      - test_list_sayings_empty_table: next_sequence returns -1 instead of expected
+      0
+
+
+      **This phase introduced NO new failures.**
+
+
+      ### Verdict: PASS
+
+
+      All 4 fix steps executed with proper evidence. All 4 retest steps passed with
+      independent verification. No unresolved blockers. No regressions detected.'

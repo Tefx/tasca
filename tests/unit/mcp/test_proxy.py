@@ -42,13 +42,15 @@ def _make_echo_post(extra_fields: dict | None = None) -> AsyncMock:
     async def _post(*args: object, **kwargs: object) -> MagicMock:
         body = kwargs.get("json", {})
         request_id = body.get("id", "unknown")
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        response_dict = {
             "jsonrpc": "2.0",
             "id": request_id,
             **extra_fields,
         }
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = json.dumps(response_dict)
+        mock_response.json.return_value = response_dict
         return mock_response
 
     return AsyncMock(side_effect=_post)
@@ -708,6 +710,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
+        mock_response.text = json.dumps(["not", "a", "dict"])
         mock_response.json.return_value = ["not", "a", "dict"]
 
         with patch("httpx.AsyncClient") as mock_client_class:
@@ -731,6 +734,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
+        mock_response.text = json.dumps({"id": "test", "result": {}})
         mock_response.json.return_value = {"id": "test", "result": {}}
 
         with patch("httpx.AsyncClient") as mock_client_class:
@@ -755,9 +759,11 @@ class TestForwardJsonrpcRequestInvalidResponse:
         async def _post_missing_payload(*args: object, **kwargs: object) -> MagicMock:
             body = kwargs.get("json", {})
             request_id = body.get("id", "unknown")
+            response_dict = {"jsonrpc": "2.0", "id": request_id}
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = {"jsonrpc": "2.0", "id": request_id}
+            mock_response.text = json.dumps(response_dict)
+            mock_response.json.return_value = response_dict
             return mock_response
 
         with patch("httpx.AsyncClient") as mock_client_class:

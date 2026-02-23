@@ -187,8 +187,19 @@ def print_startup_banner(
     print(f'  2. table_get(table_id="{table_id}")')
     print("  ────────────────────────────────────────────────────────────")
     print()
+    # Build HTTP MCP config JSON
+    http_config = {
+        "mcpServers": {
+            "tasca": {
+                "url": f"http://{lan_ip}:{port}/mcp",
+                "headers": {"Authorization": f"Bearer {admin_token}"},
+            }
+        }
+    }
+
     print("  First-time agent setup (paste into MCP config):")
-    print(f"  {json.dumps(stdio_config, separators=(',', ':'))}")
+    print(f"  STDIO:  {json.dumps(stdio_config, separators=(',', ':'))}")
+    print(f"  Remote: {json.dumps(http_config, separators=(',', ':'))}")
     print()
     print("  Ctrl+C to stop. Logs below.")
     print("  ─────────────────────────────────────────────")

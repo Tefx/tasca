@@ -443,6 +443,7 @@ class TestCmdNew:
             context="Consider performance",
             host=None,
             port=None,
+            verbose=False,
         )
 
         with patch("tasca.cli.create_table_directly") as mock_create:
@@ -472,6 +473,7 @@ class TestCmdNew:
             context=None,
             host=None,
             port=None,
+            verbose=False,
         )
 
         with patch("tasca.cli.create_table_directly") as mock_create:
@@ -505,6 +507,7 @@ class TestCmdNew:
             context=None,
             host=None,
             port=None,
+            verbose=False,
         )
 
         with patch("tasca.cli.create_table_directly") as mock_create:
@@ -528,6 +531,7 @@ class TestCmdNew:
             context=None,
             host="127.0.0.1",
             port=3000,
+            verbose=False,
         )
 
         with patch("tasca.cli.create_table_directly") as mock_create:

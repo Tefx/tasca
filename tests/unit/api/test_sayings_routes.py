@@ -230,12 +230,12 @@ class TestListSayings:
     """Tests for GET /tables/{table_id}/sayings endpoint."""
 
     def test_list_sayings_empty_table(self, client: TestClient, test_table: str) -> None:
-        """List sayings on empty table returns empty list with next_sequence=0."""
+        """List sayings on empty table returns empty list with next_sequence=-1."""
         response = client.get(f"/tables/{test_table}/sayings")
         assert response.status_code == 200
         data = response.json()
         assert data["sayings"] == []
-        assert data["next_sequence"] == 0
+        assert data["next_sequence"] == -1
 
     def test_list_sayings_returns_sayings(self, admin_client: TestClient, test_table: str) -> None:
         """List returns sayings ordered by sequence."""
@@ -253,8 +253,8 @@ class TestListSayings:
         # Verify ordering by sequence
         sequences = [s["sequence"] for s in data["sayings"]]
         assert sequences == [0, 1, 2]
-        # next_sequence should be max + 1
-        assert data["next_sequence"] == 3
+        # next_sequence = max(sequence) = 2
+        assert data["next_sequence"] == 2
 
     def test_list_sayings_since_sequence(self, admin_client: TestClient, test_table: str) -> None:
         """List with since_sequence returns only newer sayings."""
@@ -272,7 +272,7 @@ class TestListSayings:
         assert len(data["sayings"]) == 2
         assert data["sayings"][0]["sequence"] == 3
         assert data["sayings"][1]["sequence"] == 4
-        assert data["next_sequence"] == 5
+        assert data["next_sequence"] == 4
 
     def test_list_sayings_since_sequence_empty_result(
         self, admin_client: TestClient, test_table: str
@@ -290,8 +290,8 @@ class TestListSayings:
         assert response.status_code == 200
         data = response.json()
         assert data["sayings"] == []
-        # next_sequence should still be 3 (max + 1)
-        assert data["next_sequence"] == 3
+        # next_sequence = table_max_sequence = 2
+        assert data["next_sequence"] == 2
 
     def test_list_sayings_limit(self, admin_client: TestClient, test_table: str) -> None:
         """List with limit returns at most that many sayings."""
@@ -332,7 +332,7 @@ class TestWaitForSayings:
         assert response.status_code == 200
         data = response.json()
         assert data["sayings"] == []
-        assert data["next_sequence"] == 0
+        assert data["next_sequence"] == -1
         assert data["timeout"] is True
 
     def test_wait_returns_existing_saying(self, admin_client: TestClient, test_table: str) -> None:
@@ -353,7 +353,7 @@ class TestWaitForSayings:
         data = response.json()
         assert len(data["sayings"]) == 1
         assert data["timeout"] is False
-        assert data["next_sequence"] == 1
+        assert data["next_sequence"] == 0
 
     def test_wait_with_since_sequence(self, admin_client: TestClient, test_table: str) -> None:
         """Wait with since_sequence filters to newer sayings."""
@@ -397,7 +397,7 @@ class TestWaitForSayings:
         data = response.json()
         assert data["sayings"] == []
         assert data["timeout"] is True
-        assert data["next_sequence"] == 1
+        assert data["next_sequence"] == 0
 
     def test_wait_table_not_found(self, client: TestClient) -> None:
         """Wait on non-existent table returns 404."""
@@ -432,7 +432,7 @@ class TestSayingsFlow:
         assert list_response.status_code == 200
         list_data = list_response.json()
         assert len(list_data["sayings"]) == 1
-        assert list_data["next_sequence"] == 1
+        assert list_data["next_sequence"] == 0
 
         # 3. Wait for sayings - use since_sequence=-1 to include existing saying
         wait_response = admin_client.get(
@@ -462,7 +462,7 @@ class TestSayingsFlow:
         list_data2 = list_response2.json()
         assert len(list_data2["sayings"]) == 1
         assert list_data2["sayings"][0]["sequence"] == 1
-        assert list_data2["next_sequence"] == 2
+        assert list_data2["next_sequence"] == 1
 
     def test_multiple_speakers(
         self, admin_client: TestClient, test_table: str, test_patron: str

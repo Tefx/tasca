@@ -10,8 +10,10 @@ import sqlite3
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Generator
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from returns.result import Success
 
 from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
@@ -601,7 +603,7 @@ class TestTableSay:
         assert data["sequence"] == 0  # First saying
         assert data["content"] == "Hello, world!"
         assert data["speaker"]["name"] == "Test Speaker"
-        assert data["speaker"]["kind"] == "human"  # No patron_id = human
+        assert data["speaker"]["kind"] == "agent"  # Default speaker_kind is "agent"
 
     def test_say_with_patron(self) -> None:
         """Say with patron creates agent speaker."""
@@ -644,7 +646,7 @@ class TestTableListen:
 
         assert result["ok"] is True
         assert result["data"]["sayings"] == []
-        assert result["data"]["next_sequence"] == 0
+        assert result["data"]["next_sequence"] == -1
 
     def test_listen_with_sayings(self) -> None:
         """Listen returns sayings and correct next_sequence (spec: max sequence, not max+1)."""
@@ -749,7 +751,7 @@ class TestTableListen:
         result = table_listen(table_id=table_id, since_sequence=-1)
         assert result["ok"] is True
         assert result["data"]["sayings"] == []
-        assert result["data"]["next_sequence"] == 0
+        assert result["data"]["next_sequence"] == -1
 
         # Add a saying
         table_say(table_id=table_id, content="First", speaker_name="A")
@@ -758,8 +760,8 @@ class TestTableListen:
         result2 = table_listen(table_id=table_id, since_sequence=10)
         assert result2["ok"] is True
         assert result2["data"]["sayings"] == []
-        # Since no sayings returned, next_sequence = since_sequence + 1 = 11
-        assert result2["data"]["next_sequence"] == 11
+        # Since no sayings returned, next_sequence = since_sequence (last-seen semantics)
+        assert result2["data"]["next_sequence"] == 10
 
 
 # =============================================================================
@@ -1684,8 +1686,8 @@ class TestTableWait:
         assert data["sayings"] == []
         assert data["timeout"] is True
         assert "next_sequence" in data
-        # next_sequence should be 0 for empty table with since_sequence=-1
-        assert data["next_sequence"] == 0
+        # next_sequence should be -1 for empty table (spec: max sequence or -1 if empty)
+        assert data["next_sequence"] == -1
 
     @pytest.mark.asyncio
     async def test_table_wait_returns_sayings_when_present(self) -> None:
@@ -1853,13 +1855,23 @@ class TestConnect:
     It is a proxy-control tool that NEVER forwards to remote servers.
     """
 
-    def test_connect_switches_to_remote_mode(self) -> None:
+    @pytest.mark.asyncio
+    async def test_connect_switches_to_remote_mode(self) -> None:
         """connect(url=...) switches to remote mode and returns status."""
         from tasca.shell.mcp.server import connect
-        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local
+        from tasca.shell.mcp.proxy import UpstreamConfig, get_upstream_config, switch_to_local, switch_to_remote
 
         try:
-            result = connect(url="http://api.example.com", token="secret-token")
+            # Mock session init to avoid real HTTP call
+            mock_config = UpstreamConfig(url="http://api.example.com")
+            mock_config.switch_to_remote("http://api.example.com", "secret-token")
+            with patch(
+                "tasca.shell.mcp.server.switch_to_remote_with_session",
+                new=AsyncMock(return_value=Success(mock_config)),
+            ):
+                # Also set the real global state so get_upstream_config works
+                switch_to_remote("http://api.example.com", "secret-token")
+                result = await connect(url="http://api.example.com", token="secret-token")
 
             assert result["ok"] is True
             assert result["data"]["mode"] == "remote"
@@ -1875,13 +1887,14 @@ class TestConnect:
             # Reset to local mode for other tests
             switch_to_local()
 
-    def test_connect_switches_to_remote_without_token(self) -> None:
+    @pytest.mark.asyncio
+    async def test_connect_switches_to_remote_without_token(self) -> None:
         """connect(url=...) without token switches to remote mode."""
         from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local
 
         try:
-            result = connect(url="http://api.example.com")
+            result = await connect(url="http://api.example.com")
 
             assert result["ok"] is True
             assert result["data"]["mode"] == "remote"
@@ -1895,7 +1908,8 @@ class TestConnect:
         finally:
             switch_to_local()
 
-    def test_connect_switches_to_local_mode(self) -> None:
+    @pytest.mark.asyncio
+    async def test_connect_switches_to_local_mode(self) -> None:
         """connect() or connect(url=None) switches to local mode."""
         from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
@@ -1906,7 +1920,7 @@ class TestConnect:
             assert get_upstream_config().unwrap().is_remote is True
 
             # Now switch back to local
-            result = connect()
+            result = await connect()
 
             assert result["ok"] is True
             assert result["data"]["mode"] == "local"
@@ -1921,7 +1935,8 @@ class TestConnect:
         finally:
             switch_to_local()
 
-    def test_connect_url_none_switches_to_local(self) -> None:
+    @pytest.mark.asyncio
+    async def test_connect_url_none_switches_to_local(self) -> None:
         """connect(url=None) explicitly switches to local mode."""
         from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
@@ -1932,7 +1947,7 @@ class TestConnect:
             assert get_upstream_config().unwrap().is_remote is True
 
             # Explicit None URL switches to local
-            result = connect(url=None)
+            result = await connect(url=None)
 
             assert result["ok"] is True
             assert result["data"]["mode"] == "local"
@@ -1942,14 +1957,15 @@ class TestConnect:
         finally:
             switch_to_local()
 
-    def test_connect_returns_current_config_status(self) -> None:
+    @pytest.mark.asyncio
+    async def test_connect_returns_current_config_status(self) -> None:
         """connect returns the current config status after switching."""
         from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import switch_to_local
 
         try:
             # Switch to local
-            result = connect()
+            result = await connect()
 
             assert result["ok"] is True
             data = result["data"]
@@ -1961,14 +1977,15 @@ class TestConnect:
         finally:
             switch_to_local()
 
-    def test_connect_idempotent_local_mode(self) -> None:
+    @pytest.mark.asyncio
+    async def test_connect_idempotent_local_mode(self) -> None:
         """Multiple connect() calls return local mode consistently."""
         from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import switch_to_local
 
         try:
-            result1 = connect()
-            result2 = connect()
+            result1 = await connect()
+            result2 = await connect()
 
             assert result1["ok"] is True
             assert result2["ok"] is True
@@ -2086,7 +2103,8 @@ class TestConnectionStatus:
         finally:
             switch_to_local()
 
-    def test_connection_status_after_disconnect(self) -> None:
+    @pytest.mark.asyncio
+    async def test_connection_status_after_disconnect(self) -> None:
         """connection_status returns local mode after switching from remote to local."""
         from tasca.shell.mcp.server import connection_status, connect
         from tasca.shell.mcp.proxy import switch_to_remote, switch_to_local
@@ -2096,7 +2114,7 @@ class TestConnectionStatus:
             switch_to_remote("http://api.example.com")
 
             # Switch to local via connect()
-            connect()
+            await connect()
 
             result = connection_status()
 

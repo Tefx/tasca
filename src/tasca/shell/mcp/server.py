@@ -29,7 +29,7 @@ from fastmcp import FastMCP
 from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
 from fastmcp.tools.tool import ToolResult
 from mcp.types import TextContent
-from returns.result import Failure
+from returns.result import Failure, Success
 
 from tasca.config import settings
 from tasca.core.domain.patron import Patron, PatronId
@@ -1076,20 +1076,29 @@ def table_say(
     """
     conn = next(get_mcp_db())
 
-    # Backward compatibility: if speaker_kind is default "agent" but patron_id is not provided,
-    # treat as human (matching old behavior where patron_id=None meant human).
-    # If speaker_kind is explicitly "human" or "agent", validate per spec constraints.
+    # Auto-register patron if agent calls table_say without patron_id.
+    # This prevents agents that skip patron_register from appearing as "human".
     actual_speaker_kind = speaker_kind
-    if speaker_kind == "agent" and patron_id is None and speaker_name is not None:
-        # Old API: speaker_name provided but no patron_id → treat as human
-        actual_speaker_kind = "human"
-    elif speaker_kind == "agent" and patron_id is None:
-        # Default speaker_kind="agent" but no patron_id → treat as human
-        actual_speaker_kind = "human"
+    if speaker_kind == "agent" and patron_id is None:
+        auto_name = speaker_name or "Anonymous Agent"
+        # Reuse existing patron if name matches, otherwise create new
+        existing_result = find_patron_by_name(conn, auto_name)
+        if isinstance(existing_result, Success) and existing_result.unwrap() is not None:
+            patron_id = existing_result.unwrap().id
+        else:
+            new_id = PatronId(str(uuid.uuid4()))
+            now = datetime.now(UTC)
+            patron = Patron(
+                id=new_id, name=auto_name, kind="agent",
+                alias=None, meta=None, created_at=now,
+            )
+            create_result = create_patron(conn, patron)
+            if isinstance(create_result, Success):
+                patron_id = create_result.unwrap().id
+            else:
+                patron_id = new_id  # Use the generated ID even if store failed
 
-    # Validate speaker_kind + patron_id constraints per spec
-    # If speaker_kind == "agent", patron_id is REQUIRED
-    # If speaker_kind == "human", patron_id MUST be omitted or null
+    # Validate speaker_kind + patron_id constraints
     if actual_speaker_kind == "agent":
         if patron_id is None:
             return error_response(
@@ -1097,7 +1106,7 @@ def table_say(
                 "patron_id is required when speaker_kind is 'agent'",
                 {"speaker_kind": actual_speaker_kind},
             )
-    else:  # actual_speaker_kind == "human"
+    elif actual_speaker_kind == "human":
         if patron_id is not None:
             return error_response(
                 "INVALID_REQUEST",

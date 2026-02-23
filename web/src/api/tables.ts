@@ -37,6 +37,7 @@ export interface Table {
 export interface TableUpdate {
   question: string
   context: string | null
+  status: TableStatus
 }
 
 /** Response model for table control operations. Mirrors backend ControlResponse (flat). */

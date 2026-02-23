@@ -343,31 +343,36 @@ async def test_422_on_invalid_input() -> None:
 # =============================================================================
 
 
-@pytest.mark.asyncio
-async def test_mcp_endpoint_mounted() -> None:
+def test_mcp_endpoint_mounted(mcp_test_client: Any) -> None:
     """Test that MCP endpoint is mounted at /mcp.
 
     Scenario: MCP Endpoint Mount
-    Verifies that the MCP endpoint is accessible and responds to POST.
-    Note: MCP uses Streamable HTTP transport, so we need to handle the session.
-    """
-    async with ASGIRESTHarness() as harness:
-        # MCP uses POST for JSON-RPC
-        response = await harness.client.post(
-            "/mcp",
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "test", "version": "0.1.0"},
-                },
-            },
-        )
+    Verifies that the MCP endpoint is accessible and responds to POST
+    with a valid JSON-RPC response. Uses mcp_test_client (Starlette
+    TestClient with lifespan) and Bearer auth for deterministic assertions.
 
-        # MCP should respond (200 for success, 307 for redirect, 400 for bad request, etc.)
-        # Note: FastMCP Streamable HTTP transport may return different status codes
-        # 307 means redirect to /mcp (trailing slash handling)
-        assert response.status_code in [200, 307, 400, 500]
+    Note: Comprehensive MCP tests live in test_mcp.py. This test only
+    verifies the endpoint is mounted and reachable.
+    """
+    headers = {
+        "Accept": "application/json, text/event-stream",
+        "Authorization": f"Bearer {_ADMIN_TOKEN}",
+    }
+    response = mcp_test_client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "0.1.0"},
+            },
+        },
+        headers=headers,
+    )
+
+    # MCP endpoint must respond 200 with SSE content when properly authenticated
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")

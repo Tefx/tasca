@@ -76,6 +76,8 @@ class SayingExport(BaseModel):
 # =============================================================================
 
 
+@deal.pre(lambda table, sayings, exported_at: table is not None)
+@deal.pre(lambda table, sayings, exported_at: sayings is not None)
 @deal.pre(lambda table, sayings, exported_at: exported_at is not None and len(exported_at) > 0)
 @deal.post(lambda result: isinstance(result, str))
 @deal.post(lambda result: len(result) > 0)
@@ -187,6 +189,7 @@ def generate_jsonl(table: Table, sayings: list[Saying], exported_at: str) -> str
 
 
 @deal.pre(lambda table, sayings: table is not None)
+@deal.pre(lambda table, sayings: sayings is not None)
 @deal.post(lambda result: isinstance(result, str))
 @deal.post(lambda result: len(result) > 0)
 @deal.ensure(lambda table, sayings, result: table.question in result)

@@ -15,8 +15,8 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from returns.result import Failure
 
 from tasca.core.domain.table import TableId
@@ -34,6 +34,34 @@ router = APIRouter()
 # =============================================================================
 # Helper Functions (Shell Layer - I/O Only)
 # =============================================================================
+
+
+# @invar:allow shell_result: Returns FastAPI Response, not Result
+# @invar:allow shell_pure_logic: Response builder for HTTP layer
+def _build_export_response(
+    content: str,
+    filename: str,
+    download: bool = False,
+) -> Response:
+    """Build export response with optional download header.
+
+    Args:
+        content: The exported content string.
+        filename: Filename for download (without extension).
+        download: If True, add Content-Disposition attachment header.
+
+    Returns:
+        Response with appropriate headers.
+    """
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers=headers if headers else None,
+    )
 
 
 # @invar:allow shell_result: Helper raises HTTPException directly (no Result needed)
@@ -89,11 +117,12 @@ def _fetch_table_and_sayings(
 
 
 # @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
-@router.get("/jsonl", response_class=PlainTextResponse)
+@router.get("/jsonl")
 async def export_jsonl_endpoint(
     table_id: str,
+    download: bool = Query(default=False, description="Return as downloadable file"),
     conn: sqlite3.Connection = Depends(get_db),
-) -> str:
+) -> Response:
     """Export a table in JSONL format.
 
     JSONL format:
@@ -103,10 +132,11 @@ async def export_jsonl_endpoint(
 
     Args:
         table_id: The table identifier.
+        download: If True, add Content-Disposition attachment header.
         conn: Database connection (injected via dependency).
 
     Returns:
-        JSONL string with export data.
+        JSONL response with export data.
 
     Raises:
         HTTPException: 404 if table not found.
@@ -114,15 +144,17 @@ async def export_jsonl_endpoint(
     """
     table, sayings = _fetch_table_and_sayings(conn, table_id)
     exported_at = datetime.now(timezone.utc).isoformat()
-    return generate_jsonl(table, sayings, exported_at)
+    content = generate_jsonl(table, sayings, exported_at)
+    return _build_export_response(content, f"{table_id}.jsonl", download)
 
 
 # @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
-@router.get("/markdown", response_class=PlainTextResponse)
+@router.get("/markdown")
 async def export_markdown_endpoint(
     table_id: str,
+    download: bool = Query(default=False, description="Return as downloadable file"),
     conn: sqlite3.Connection = Depends(get_db),
-) -> str:
+) -> Response:
     """Export a table in Markdown format.
 
     Markdown format:
@@ -133,14 +165,16 @@ async def export_markdown_endpoint(
 
     Args:
         table_id: The table identifier.
+        download: If True, add Content-Disposition attachment header.
         conn: Database connection (injected via dependency).
 
     Returns:
-        Markdown string with table content.
+        Markdown response with table content.
 
     Raises:
         HTTPException: 404 if table not found.
         HTTPException: 500 if database operation fails.
     """
     table, sayings = _fetch_table_and_sayings(conn, table_id)
-    return generate_markdown(table, sayings)
+    content = generate_markdown(table, sayings)
+    return _build_export_response(content, f"{table_id}.md", download)

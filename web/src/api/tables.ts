@@ -37,7 +37,15 @@ export interface Table {
 export interface TableUpdate {
   question: string
   context: string | null
-  status: TableStatus
+}
+
+/** Response model for table control operations. */
+export interface ControlResponse {
+  ok: boolean
+  data: {
+    table_status: TableStatus
+    control_saying_sequence: number
+  }
 }
 
 /** Version conflict error from optimistic concurrency. */
@@ -141,17 +149,37 @@ export async function updateTable(
 }
 
 /**
+ * Control table lifecycle state via control endpoint.
+ *
+ * @param tableId - The table ID to control
+ * @param action - Lifecycle action
+ * @param speakerName - Actor display name
+ * @param reason - Optional reason for audit trail
+ */
+export function controlTable(
+  tableId: string,
+  action: 'pause' | 'resume' | 'close',
+  speakerName: string,
+  reason?: string
+): Promise<ControlResponse> {
+  return apiClient<ControlResponse>(`/tables/${tableId}/control`, {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      speaker_name: speakerName,
+      reason,
+    }),
+  })
+}
+
+/**
  * Pause a table (prevents new joins, allows sayings).
  *
  * @param table - Current table state
  * @returns Updated table
  */
 export function pauseTable(table: Table): Promise<Table> {
-  return updateTable(table.id, {
-    question: table.question,
-    context: table.context,
-    status: 'paused',
-  }, table.version)
+  return controlTable(table.id, 'pause', 'human').then(() => getTable(table.id))
 }
 
 /**
@@ -161,11 +189,7 @@ export function pauseTable(table: Table): Promise<Table> {
  * @returns Updated table
  */
 export function resumeTable(table: Table): Promise<Table> {
-  return updateTable(table.id, {
-    question: table.question,
-    context: table.context,
-    status: 'open',
-  }, table.version)
+  return controlTable(table.id, 'resume', 'human').then(() => getTable(table.id))
 }
 
 /**
@@ -175,9 +199,5 @@ export function resumeTable(table: Table): Promise<Table> {
  * @returns Updated table
  */
 export function closeTable(table: Table): Promise<Table> {
-  return updateTable(table.id, {
-    question: table.question,
-    context: table.context,
-    status: 'closed',
-  }, table.version)
+  return controlTable(table.id, 'close', 'human').then(() => getTable(table.id))
 }

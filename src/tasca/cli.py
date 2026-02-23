@@ -1,3 +1,4 @@
+# @invar:allow file_size: CLI commands consolidated in single file for argparse subparser cohesion
 """
 Tasca CLI - Command-line interface for Tasca operations.
 
@@ -26,11 +27,17 @@ from typing import Any
 import httpx
 
 from tasca.config import settings
-from tasca.core.domain.table import Table, TableStatus, Version
+from tasca.core.domain.table import Table, TableId, TableStatus, Version
+from tasca.core.export_service import generate_jsonl, generate_markdown
 from tasca.core.schema import create_tables_table_ddl
 from tasca.shell.services.table_id_generator import generate_table_id
 from tasca.shell.skills_cli import cmd_skills_install, cmd_skills_list, cmd_skills_show
-from tasca.shell.storage.table_repo import create_table as repo_create_table
+from tasca.shell.storage.saying_repo import list_sayings_by_table
+from tasca.shell.storage.table_repo import (
+    create_table as repo_create_table,
+    get_table,
+    TableNotFoundError,
+)
 from returns.result import Failure, Success
 
 # Track if we started the server (for cleanup)
@@ -611,6 +618,80 @@ def cmd_version(_args: argparse.Namespace) -> int:
 
 
 # @invar:allow shell_result: CLI entry point, returns exit code int
+# @shell_complexity: 4 branches for error handling (table not found, DB error, write error)
+def cmd_export(args: argparse.Namespace) -> int:
+    """Execute the 'export' subcommand.
+
+    Exports a table and its sayings to a file or stdout.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    table_id = args.table_id
+    output_format = args.format
+    output_file = args.output
+
+    # Get database path from settings (same pattern as cmd_new)
+    db_path = settings.db_path
+
+    # Open DB directly
+    conn = sqlite3.connect(db_path)
+
+    try:
+        # Fetch table
+        table_result = get_table(conn, TableId(table_id))
+        if isinstance(table_result, Failure):
+            error = table_result.failure()
+            if isinstance(error, TableNotFoundError):
+                print(f"Error: Table not found: {table_id}", file=sys.stderr)
+            else:
+                print(f"Error: Failed to fetch table: {error}", file=sys.stderr)
+            return 1
+
+        table = table_result.unwrap()
+
+        # Fetch all sayings (since_sequence=-1, no limit)
+        sayings_result = list_sayings_by_table(conn, table_id, since_sequence=-1, limit=1_000_000)
+        if isinstance(sayings_result, Failure):
+            print(f"Error: Failed to fetch sayings: {sayings_result.failure()}", file=sys.stderr)
+            return 1
+
+        sayings = sayings_result.unwrap()
+
+        # Generate export content
+        if output_format == "jsonl":
+            from datetime import UTC, datetime
+
+            exported_at = datetime.now(UTC).isoformat()
+            content = generate_jsonl(table, sayings, exported_at)
+        else:
+            # Default: markdown
+            content = generate_markdown(table, sayings)
+
+        # Write output
+        if output_file:
+            import pathlib
+
+            path = pathlib.Path(output_file)
+            # Ensure parent directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        else:
+            print(content)
+
+        return 0
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
+
+
+# @invar:allow shell_result: CLI entry point, returns exit code int
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the Tasca CLI.
 
@@ -672,6 +753,31 @@ def main(argv: list[str] | None = None) -> int:
         "version",
         help="Show Tasca version",
     ).set_defaults(func=cmd_version)
+
+    # 'export' subcommand
+    export_parser = subparsers.add_parser(
+        "export",
+        help="Export a table and its sayings",
+        description="Export a table and its sayings to a file or stdout.",
+    )
+    export_parser.add_argument(
+        "table_id",
+        help="ID of the table to export",
+    )
+    export_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["md", "jsonl"],
+        default="md",
+        help="Export format: md (markdown) or jsonl (default: md)",
+    )
+    export_parser.add_argument(
+        "-o",
+        "--output",
+        help="Output file path (default: stdout)",
+        default=None,
+    )
+    export_parser.set_defaults(func=cmd_export)
 
     # 'skills' subcommand group
     _skills_parser = subparsers.add_parser(

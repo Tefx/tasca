@@ -590,6 +590,13 @@ def cmd_mcp(_args: argparse.Namespace) -> int:
     return 0
 
 
+# @invar:allow shell_result: CLI command, prints version string
+def cmd_version(_args: argparse.Namespace) -> int:
+    """Print the Tasca version."""
+    print(f"tasca {settings.version}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the Tasca CLI.
 
@@ -646,6 +653,13 @@ def main(argv: list[str] | None = None) -> int:
         description="Start the MCP server using stdio transport (for agent integration).",
     )
     mcp_parser.set_defaults(func=cmd_mcp)
+
+    # 'version' subcommand
+    version_parser = subparsers.add_parser(
+        "version",
+        help="Show Tasca version",
+    )
+    version_parser.set_defaults(func=cmd_version)
 
     args = parser.parse_args(argv)
 

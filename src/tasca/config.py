@@ -5,6 +5,7 @@ Environment variables can be used to override defaults.
 """
 
 import secrets
+from importlib.metadata import version as _pkg_version
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    version: str = "0.1.0"
+    version: str = Field(default_factory=lambda: _pkg_version("tasca"))
     debug: bool = False
     environment: str = "development"  # "development" or "production"
 

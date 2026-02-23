@@ -16,7 +16,7 @@ from tasca.shell.api.app import create_app
 from tasca.cli import get_lan_ip
 
 # CLI subcommands that should be delegated to the CLI handler
-CLI_COMMANDS = {"new", "mcp"}
+CLI_COMMANDS = {"new", "mcp", "version"}
 
 
 def main() -> None:

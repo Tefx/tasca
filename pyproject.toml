@@ -55,6 +55,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/tasca"]
 artifacts = ["src/tasca/web/dist/**"]
+include = ["src/tasca/**/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

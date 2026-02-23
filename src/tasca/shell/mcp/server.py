@@ -41,6 +41,7 @@ from tasca.core.domain.seat import (
     SeatState,
 )
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
+from tasca.core.export_service import generate_jsonl, generate_markdown
 from tasca.core.services.limits_service import (
     LimitError,
     LimitsConfig,
@@ -782,7 +783,9 @@ def table_join(
 
     # Get initial history window (apply defaults if agent passed null)
     effective_limit = history_limit if history_limit is not None else DEFAULT_HISTORY_LIMIT
-    effective_max_bytes = history_max_bytes if history_max_bytes is not None else DEFAULT_HISTORY_MAX_BYTES
+    effective_max_bytes = (
+        history_max_bytes if history_max_bytes is not None else DEFAULT_HISTORY_MAX_BYTES
+    )
     history_result = get_recent_sayings(
         conn, resolved_table_id, limit=effective_limit, max_bytes=effective_max_bytes
     )
@@ -1012,6 +1015,81 @@ def table_list(status: Literal["open"] = "open") -> dict[str, Any]:
     )
 
 
+# @shell_complexity: 5 branches for table lookup + sayings fetch + format validation + error paths
+# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+@mcp.tool
+def table_export(
+    table_id: str,
+    format: Literal["markdown", "jsonl"] = "markdown",
+) -> dict[str, Any]:
+    """Export a table and its sayings to a formatted string.
+
+    Exports the table metadata and all sayings in the specified format.
+    Use this to generate shareable snapshots of discussions.
+
+    Args:
+        table_id: UUID of the table to export.
+        format: Export format - "markdown" (default) or "jsonl".
+
+    Returns:
+        Success envelope with exported content:
+        {
+            "ok": true,
+            "data": {
+                "content": "...",
+                "format": "markdown",
+                "table_id": "uuid-string"
+            }
+        }
+
+    Error codes:
+        - NOT_FOUND: Table not found
+        - INVALID_REQUEST: Unknown format
+        - DATABASE_ERROR: Failed to query table or sayings
+    """
+    conn = next(get_mcp_db())
+
+    # Verify table exists and fetch it
+    table_result = get_table(conn, TableId(table_id))
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+
+    table = table_result.unwrap()
+
+    # Fetch all sayings for this table (since_sequence=-1 gets all)
+    sayings_result = list_sayings_by_table(conn, table_id, since_sequence=-1, limit=10000)
+    if isinstance(sayings_result, Failure):
+        error = sayings_result.failure()
+        return error_response("DATABASE_ERROR", f"Failed to list sayings: {error}")
+
+    sayings = sayings_result.unwrap()
+
+    # Generate export content based on format
+    if format == "markdown":
+        content = generate_markdown(table, sayings)
+    elif format == "jsonl":
+        exported_at = datetime.now(UTC).isoformat()
+        content = generate_jsonl(table, sayings, exported_at)
+    else:
+        # This shouldn't happen due to Literal type, but handle defensively
+        return error_response(
+            "INVALID_REQUEST",
+            f"Unknown format: {format}. Supported formats: markdown, jsonl",
+            {"format": format, "supported": ["markdown", "jsonl"]},
+        )
+
+    return success_response(
+        {
+            "content": content,
+            "format": format,
+            "table_id": table_id,
+        }
+    )
+
+
 # @shell_complexity: 12 branches for table lookup + can_say guard + limits enforcement + dedup + mention resolution + validation + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
@@ -1089,8 +1167,12 @@ def table_say(
             new_id = PatronId(str(uuid.uuid4()))
             now = datetime.now(UTC)
             patron = Patron(
-                id=new_id, name=auto_name, kind="agent",
-                alias=None, meta=None, created_at=now,
+                id=new_id,
+                name=auto_name,
+                kind="agent",
+                alias=None,
+                meta=None,
+                created_at=now,
             )
             create_result = create_patron(conn, patron)
             if isinstance(create_result, Success):
@@ -1605,13 +1687,11 @@ def table_control(
     # Context-dependent next action based on control operation
     if new_status == TableStatus.OPEN:
         next_action = (
-            "Table resumed. IMMEDIATELY call tasca.table_wait. "
-            "Your response = tool_call, not text."
+            "Table resumed. IMMEDIATELY call tasca.table_wait. Your response = tool_call, not text."
         )
     else:
         next_action = (
-            f"Table is now {new_status.value}. "
-            "Call tasca.table_leave, then report to the user."
+            f"Table is now {new_status.value}. Call tasca.table_leave, then report to the user."
         )
 
     response_data = {

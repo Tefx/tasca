@@ -780,6 +780,15 @@ def table_join(
                 "has_more": has_more_history,
             },
             **({"seat": seat_data} if seat_data is not None else {}),
+            "_next_action": (
+                "LOOP autonomously until exit condition — do NOT ask the user for next steps. "
+                "1. table_wait(since_sequence=initial_sayings.next_sequence) "
+                "2. if new sayings → decide, table_say if relevant "
+                "3. seat_heartbeat every ~60 s "
+                "4. repeat from 1. "
+                "Stop ONLY when: human says stop, all agree topic closed, table closed, "
+                "or 30 consecutive empty waits with nothing to add."
+            ),
         }
     )
 
@@ -1161,14 +1170,18 @@ def table_say(
 # @invar:allow entry_point_too_thick: Helper function, not a framework entry point; docstring
 #   length inflates line count but logic is 2 lines
 @deal.pre(lambda sayings, since_sequence: since_sequence >= -1)
-@deal.post(lambda result: result >= 0)
+@deal.post(lambda result: result >= -1)
 def _compute_next_sequence(sayings: list[Any], since_sequence: int) -> int:
     """Compute the next_sequence value to return in table_listen / table_wait responses.
 
-    Uses the two-state convention:
+    Uses last-seen semantics throughout:
     - Non-empty sayings: next_sequence = max sequence seen (client polls for > this value).
-    - Empty sayings: next_sequence = since_sequence + 1 (or 0 if since_sequence < 0),
-      indicating no new data was available and the client should advance its cursor.
+    - Empty sayings: next_sequence = since_sequence unchanged — client polls again with
+      the same cursor, which correctly catches the next arriving message.
+
+    The client always does: since_sequence = next_sequence (pass-through).
+    The server always queries: sequence > since_sequence.
+    These two invariants together ensure no message is ever skipped.
 
     Args:
         sayings: Current list of saying objects with a ``.sequence`` integer attribute.
@@ -1176,8 +1189,7 @@ def _compute_next_sequence(sayings: list[Any], since_sequence: int) -> int:
 
     Returns:
         max(s.sequence for s in sayings) when sayings is non-empty;
-        since_sequence + 1 when since_sequence >= 0 and sayings is empty;
-        0 when since_sequence < 0 and sayings is empty.
+        since_sequence unchanged when sayings is empty.
 
     Examples:
         >>> class S:
@@ -1185,13 +1197,13 @@ def _compute_next_sequence(sayings: list[Any], since_sequence: int) -> int:
         >>> _compute_next_sequence([S(3), S(7)], 0)
         7
         >>> _compute_next_sequence([], 5)
-        6
+        5
         >>> _compute_next_sequence([], -1)
-        0
+        -1
     """
     if sayings:
         return max(s.sequence for s in sayings)
-    return since_sequence + 1 if since_sequence >= 0 else 0
+    return since_sequence
 
 
 # @shell_complexity: 5 branches for table lookup + long-poll loop + timeout + backoff + error handling
@@ -1239,9 +1251,9 @@ def table_listen(
         >>> # Client uses next_sequence=3 as since_sequence for next call
         >>> # Server returns sayings with sequence > 3, avoiding duplicates
 
-        >>> # Empty case: next_sequence indicates where to poll next
-        >>> # since_sequence=-1, no sayings -> next_sequence=0
-        >>> # since_sequence=5, no sayings -> next_sequence=6 (no new data)
+        >>> # Empty case: next_sequence is unchanged (last-seen semantics)
+        >>> # since_sequence=-1, no sayings -> next_sequence=-1 (poll again for all)
+        >>> # since_sequence=5, no sayings -> next_sequence=5 (poll again, catches seq 6)
     """
     conn = next(get_mcp_db())
 

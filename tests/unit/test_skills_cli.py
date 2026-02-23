@@ -6,6 +6,9 @@ Tests cover: list, show, and install commands via cli.main().
 
 from __future__ import annotations
 
+import os
+import pathlib
+
 import pytest
 
 import tasca.cli as cli
@@ -67,7 +70,7 @@ def test_skills_install_requires_target() -> None:
     assert exc_info.value.code == 2
 
 
-def test_skills_install_copies_skill_to_target(tmp_path: pytest.TempPathFactory) -> None:
+def test_skills_install_copies_skill_to_target(tmp_path: pathlib.Path) -> None:
     """skills install --target <path> copies SKILL.md and returns 0."""
     result = cli.main(["skills", "install", "--target", str(tmp_path), "tasca-moderation"])
     assert result == 0
@@ -76,7 +79,19 @@ def test_skills_install_copies_skill_to_target(tmp_path: pytest.TempPathFactory)
     assert dest.stat().st_size > 0
 
 
-def test_skills_install_unknown_skill_returns_nonzero(tmp_path: pytest.TempPathFactory) -> None:
+def test_skills_install_unknown_skill_returns_nonzero(tmp_path: pathlib.Path) -> None:
     """skills install with nonexistent skill name returns non-zero exit code."""
     result = cli.main(["skills", "install", "--target", str(tmp_path), "nonexistent-skill"])
     assert result != 0
+
+
+def test_skills_install_write_error_returns_nonzero(tmp_path: pathlib.Path) -> None:
+    """skills install returns non-zero when target directory is not writable."""
+    readonly = tmp_path / "readonly"
+    readonly.mkdir()
+    os.chmod(readonly, 0o444)
+    try:
+        result = cli.main(["skills", "install", "--target", str(readonly), "tasca-moderation"])
+        assert result != 0
+    finally:
+        os.chmod(readonly, 0o755)

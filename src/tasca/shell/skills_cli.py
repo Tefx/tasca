@@ -8,6 +8,8 @@ All file access uses importlib.resources — no hardcoded paths.
 from __future__ import annotations
 
 import argparse
+import importlib.resources
+import pathlib
 import sys
 
 
@@ -24,8 +26,6 @@ def cmd_skills_list(_args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success).
     """
-    import importlib.resources
-
     skills_pkg = importlib.resources.files("tasca.skills")
     for entry in skills_pkg.iterdir():
         try:
@@ -50,8 +50,6 @@ def cmd_skills_show(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success, 1 if skill not found).
     """
-    import importlib.resources
-
     try:
         skill_md = importlib.resources.files("tasca.skills") / args.name / "SKILL.md"
         content = skill_md.read_text(encoding="utf-8")
@@ -76,9 +74,6 @@ def cmd_skills_install(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success, 1 on error).
     """
-    import importlib.resources
-    import pathlib
-
     try:
         skill_md = importlib.resources.files("tasca.skills") / args.name / "SKILL.md"
         content = skill_md.read_text(encoding="utf-8")

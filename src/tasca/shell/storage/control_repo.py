@@ -190,4 +190,6 @@ def atomic_control_table(
             return Failure(ControlError(f"Integrity error: {e}"))
 
     except sqlite3.Error as e:
+        # Ensure rollback on any outer error (e.g., BEGIN IMMEDIATE failure)
+        conn.rollback()
         return Failure(ControlError(f"Database error: {e}"))

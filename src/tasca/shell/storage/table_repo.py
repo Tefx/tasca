@@ -432,7 +432,8 @@ def create_tables_table(conn: sqlite3.Connection) -> Result[None, TableError]:
                 status TEXT NOT NULL DEFAULT 'open',
                 version INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                creator_patron_id TEXT
             )
         """)
         conn.commit()

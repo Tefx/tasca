@@ -244,7 +244,7 @@ class TestUpdateTable:
         assert "not found" in response.json()["detail"].lower()
 
     def test_update_table_success(self, admin_client: TestClient) -> None:
-        """Update table with correct version succeeds."""
+        """Update table with correct version succeeds (same status)."""
         # Create a table
         create_response = admin_client.post(
             "/tables",
@@ -252,21 +252,44 @@ class TestUpdateTable:
         )
         table_id = create_response.json()["id"]
 
-        # Update the table
+        # Update the table (keeping same status "open")
         response = admin_client.put(
             f"/tables/{table_id}?expected_version=1",
             json={
                 "question": "Updated question?",
                 "context": "Updated context",
-                "status": "paused",
+                "status": "open",  # Same status as created
             },
         )
         assert response.status_code == 200
         data = response.json()
         assert data["question"] == "Updated question?"
         assert data["context"] == "Updated context"
-        assert data["status"] == "paused"
+        assert data["status"] == "open"
         assert data["version"] == 2
+
+    def test_update_table_status_change_rejected(self, admin_client: TestClient) -> None:
+        """Update with different status returns 400 Bad Request."""
+        # Create a table (status is "open")
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Original question?", "context": "Original context"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Try to change status to "paused"
+        response = admin_client.put(
+            f"/tables/{table_id}?expected_version=1",
+            json={
+                "question": "Updated question?",
+                "context": "Updated context",
+                "status": "paused",  # Different status
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "status changes are not allowed" in detail.lower()
+        assert "POST /tables/{table_id}/control" in detail
 
     def test_update_table_version_conflict(self, admin_client: TestClient) -> None:
         """Update with wrong version returns 409 Conflict."""
@@ -354,7 +377,7 @@ class TestTableFlow:
     """End-to-end flow tests for table operations."""
 
     def test_create_get_update_delete_flow(self, admin_client: TestClient) -> None:
-        """Full CRUD flow for a table."""
+        """Full CRUD flow for a table (status changes via control endpoint only)."""
         # Create
         create_response = admin_client.post(
             "/tables",
@@ -368,30 +391,30 @@ class TestTableFlow:
         assert get_response.status_code == 200
         assert get_response.json()["question"] == "Initial question?"
 
-        # Update
+        # Update (keeping same status "open")
         update_response = admin_client.put(
             f"/tables/{table_id}?expected_version=1",
             json={
                 "question": "Updated question?",
                 "context": "Updated context",
-                "status": "paused",
+                "status": "open",  # Same status
             },
         )
         assert update_response.status_code == 200
         assert update_response.json()["version"] == 2
 
-        # Update again with new version
+        # Update again with new version (still same status)
         update_response2 = admin_client.put(
             f"/tables/{table_id}?expected_version=2",
             json={
                 "question": "Final question?",
                 "context": None,
-                "status": "closed",
+                "status": "open",  # Same status
             },
         )
         assert update_response2.status_code == 200
         assert update_response2.json()["version"] == 3
-        assert update_response2.json()["status"] == "closed"
+        assert update_response2.json()["status"] == "open"
 
         # Delete
         delete_response = admin_client.delete(f"/tables/{table_id}")

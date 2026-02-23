@@ -219,7 +219,7 @@ def create_app() -> FastAPI:
 
     # Serve the React SPA from web/dist (if built).
     # /assets → static files; everything else → index.html (React Router).
-    _web_dist = Path(__file__).parents[4] / "web" / "dist"
+    _web_dist = Path(__file__).parents[2] / "web" / "dist"
     if _web_dist.is_dir():
         app.mount("/assets", StaticFiles(directory=_web_dist / "assets"), name="web-assets")
 

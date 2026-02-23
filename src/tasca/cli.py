@@ -663,11 +663,12 @@ def main(argv: list[str] | None = None) -> int:
     ).set_defaults(func=cmd_version)
 
     # 'skills' subcommand group
-    skills_sub = subparsers.add_parser(
+    _skills_parser = subparsers.add_parser(
         "skills",
         help="Manage bundled agent skills",
         description="List, show, and install bundled agent skills.",
-    ).add_subparsers(dest="skills_command", help="Skills commands")
+    )
+    skills_sub = _skills_parser.add_subparsers(dest="skills_command", help="Skills commands")
 
     # skills list
     skills_sub.add_parser("list", help="List bundled skills").set_defaults(func=cmd_skills_list)
@@ -689,7 +690,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
     if args.command == "skills" and not hasattr(args, "func"):
-        parser.parse_args(["skills", "--help"])
+        _skills_parser.print_help()
         return 1
     return args.func(args)
 

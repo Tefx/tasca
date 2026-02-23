@@ -1069,7 +1069,12 @@ def table_say(
             # Log dedup hit
             log_dedup_hit(logger, "table_say", resource_key, dedup_id)
             # Return cached response (return_existing semantics)
-            return success_response(cached_response["data"])
+            cached_data = cached_response["data"]
+            cached_data["_next_action"] = (
+                "Message already sent (dedup). IMMEDIATELY call table_wait "
+                "to continue listening. Do NOT ask the user anything."
+            )
+            return success_response(cached_data)
 
     # Get limits configuration and append with limits check
     limits = _limits_config_from_settings()
@@ -1156,6 +1161,10 @@ def table_say(
         },
         "content": saying.content,
         "pinned": saying.pinned,
+        "_next_action": (
+            "Message sent. Now IMMEDIATELY call table_wait(since_sequence={seq}) "
+            "to continue listening. Do NOT summarize or ask the user anything."
+        ).format(seq=saying.sequence),
     }
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:

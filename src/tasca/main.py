@@ -33,6 +33,10 @@ def main() -> None:
 
         sys.exit(cli_main(argv))
 
+    # Parse flags for server mode
+    verbose = "-v" in argv or "--verbose" in argv
+    argv = [a for a in argv if a not in ("-v", "--verbose")]
+
     # Handle --help for main command (server start)
     if argv and argv[0] in ("--help", "-h"):
         print("Tasca - A discussion table service for coding agents")
@@ -53,6 +57,9 @@ def main() -> None:
         print("  TASCA_API_PORT    Port to bind (default: 8000)")
         print("  TASCA_DB_PATH     Database path (default: ./data/tasca.db)")
         print("  TASCA_ADMIN_TOKEN Admin token for API auth (auto-generated if not set)")
+        print()
+        print("Options:")
+        print("  -v, --verbose     Show per-request access logs")
         sys.exit(0)
 
     # Start the server (default behavior when no command)
@@ -79,6 +86,7 @@ def main() -> None:
         host=settings.api_host,
         port=port,
         ws="wsproto",
+        access_log=verbose,
     )
 
 

@@ -569,6 +569,7 @@ def cmd_new(args: argparse.Namespace) -> int:
             host=host,
             port=port,
             ws="wsproto",
+            access_log=args.verbose,
         )
     except KeyboardInterrupt:
         # Clean shutdown on Ctrl+C
@@ -628,6 +629,13 @@ def main(argv: list[str] | None = None) -> int:
         "--port",
         type=int,
         help="Port to bind when starting server (default: from TASCA_API_PORT)",
+    )
+    new_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="Show per-request access logs",
     )
     new_parser.set_defaults(func=cmd_new)
 

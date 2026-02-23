@@ -240,6 +240,7 @@ def list_sayings_by_table(
         return Failure(SayingError(f"Database error: {e}"))
 
 
+# @shell_complexity: 5 branches for count query + row iteration + byte limit check + empty result + has_more detection
 def get_recent_sayings(
     conn: sqlite3.Connection,
     table_id: str,

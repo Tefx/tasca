@@ -182,8 +182,8 @@ def print_startup_banner(
     print()
     print("  ── Paste to agent ──────────────────────────────────────────")
     print(f'  Connect to the Tasca discussion table "{question}".')
-    print(f"  1. connect(url=\"http://{lan_ip}:{port}/mcp/\", token=\"{admin_token}\")")
-    print(f"  2. table_get(table_id=\"{table_id}\")")
+    print(f'  1. connect(url="http://{lan_ip}:{port}/mcp/", token="{admin_token}")')
+    print(f'  2. table_get(table_id="{table_id}")')
     print("  ────────────────────────────────────────────────────────────")
     print()
     print("  First-time agent setup (paste into MCP config):")
@@ -498,6 +498,7 @@ def create_table_via_mcp(
 
 # @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
 # @shell_orchestration: Start server in foreground, create table directly, print banner
+# @shell_complexity: 5 branches for table creation error handling, token selection, and server startup
 def cmd_new(args: argparse.Namespace) -> int:
     """Execute the 'new' subcommand.
 
@@ -597,6 +598,7 @@ def cmd_version(_args: argparse.Namespace) -> int:
     return 0
 
 
+# @invar:allow shell_result: CLI entry point, returns exit code int
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the Tasca CLI.
 

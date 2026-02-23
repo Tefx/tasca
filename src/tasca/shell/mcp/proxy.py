@@ -42,7 +42,11 @@ MCP_CLIENT_NAME = "tasca-proxy"
 MCP_CLIENT_VERSION = "0.1.0"
 
 
-def _parse_sse_or_json(text: str) -> Any:  # @invar:allow shell_result: Pure parsing helper, not a shell operation
+# @invar:allow shell_result: Pure parsing helper, not a shell operation
+# @shell_complexity: 4 branches for SSE format detection + JSON fallback + multi-line parsing
+def _parse_sse_or_json(
+    text: str,
+) -> Any:
     """Parse response body that may be SSE or plain JSON.
 
     FastMCP's Streamable HTTP transport returns SSE format:

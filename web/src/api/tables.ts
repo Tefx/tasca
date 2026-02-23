@@ -39,13 +39,10 @@ export interface TableUpdate {
   context: string | null
 }
 
-/** Response model for table control operations. */
+/** Response model for table control operations. Mirrors backend ControlResponse (flat). */
 export interface ControlResponse {
-  ok: boolean
-  data: {
-    table_status: TableStatus
-    control_saying_sequence: number
-  }
+  table_status: TableStatus
+  control_saying_sequence: number
 }
 
 /** Version conflict error from optimistic concurrency. */

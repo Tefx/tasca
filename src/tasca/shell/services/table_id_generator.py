@@ -57,6 +57,7 @@ def _check_id_exists(conn: sqlite3.Connection, table_id: str) -> Result[bool, st
     return Success(True)
 
 
+# @shell_complexity: 5 branches for initial ID check + loop retries + collision handling
 def generate_table_id(conn: sqlite3.Connection) -> Result[TableId, TableIdGenerationError]:
     """Generate a unique human-readable table ID.
 

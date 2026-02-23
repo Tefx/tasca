@@ -200,6 +200,38 @@ mcp = FastMCP(
 # Logger for structured logging
 logger = get_logger(__name__)
 
+# Per-session loop state tracking.
+# MCP server runs per-agent (stdio) or per-session (HTTP), so module-level state
+# is scoped to a single agent's session. Keyed by table_id.
+_loop_state: dict[str, dict[str, int]] = {}
+
+EXIT_EMPTY_WAITS_THRESHOLD = 30
+
+
+# @invar:allow shell_result: Pure in-memory state helper, not I/O
+# @invar:allow shell_pure_logic: Session state co-located with MCP tools
+def _get_loop_state(table_id: str) -> dict[str, int]:
+    """Get or initialize loop state for a table."""
+    if table_id not in _loop_state:
+        _loop_state[table_id] = {
+            "consecutive_empty_waits": 0,
+            "total_iterations": 0,
+        }
+    return _loop_state[table_id]
+
+
+# @invar:allow shell_result: Pure in-memory state helper, not I/O
+# @invar:allow shell_pure_logic: Session state co-located with MCP tools
+def _record_wait_result(table_id: str, *, got_sayings: bool) -> dict[str, int]:
+    """Update loop state after a wait/listen call. Returns the updated state."""
+    state = _get_loop_state(table_id)
+    state["total_iterations"] += 1
+    if got_sayings:
+        state["consecutive_empty_waits"] = 0
+    else:
+        state["consecutive_empty_waits"] += 1
+    return state
+
 
 # =============================================================================
 # Helper Functions
@@ -781,13 +813,14 @@ def table_join(
             },
             **({"seat": seat_data} if seat_data is not None else {}),
             "_next_action": (
-                "LOOP autonomously until exit condition — do NOT ask the user for next steps. "
+                "Start the discussion loop now. Do not address the user. "
                 "1. table_wait(since_sequence=initial_sayings.next_sequence) "
-                "2. if new sayings → decide, table_say if relevant "
-                "3. seat_heartbeat every ~60 s "
-                "4. repeat from 1. "
-                "Stop ONLY when: human says stop, all agree topic closed, table closed, "
-                "or 30 consecutive empty waits with nothing to add."
+                "2. Read new sayings, decide if you have something to add "
+                "3. table_say if relevant, skip if not "
+                "4. seat_heartbeat every ~60 s "
+                "5. Repeat from 1. "
+                "Exit when: human says stop, consensus reached, table closed, "
+                "or _loop_state.consecutive_empty_waits reaches 30 with nothing to add."
             ),
         }
     )
@@ -1071,8 +1104,8 @@ def table_say(
             # Return cached response (return_existing semantics)
             cached_data = cached_response["data"]
             cached_data["_next_action"] = (
-                "Message already sent (dedup). IMMEDIATELY call table_wait "
-                "to continue listening. Do NOT ask the user anything."
+                "Message already sent (dedup). Continue the loop: "
+                "call table_wait to keep listening. Do not address the user."
             )
             return success_response(cached_data)
 
@@ -1162,8 +1195,8 @@ def table_say(
         "content": saying.content,
         "pinned": saying.pinned,
         "_next_action": (
-            "Message sent. Now IMMEDIATELY call table_wait(since_sequence={seq}) "
-            "to continue listening. Do NOT summarize or ask the user anything."
+            "Message sent. Continue the loop: call table_wait(since_sequence={seq}). "
+            "Do not address the user."
         ).format(seq=saying.sequence),
     }
     # Store in idempotency cache if dedup_id provided
@@ -1306,8 +1339,8 @@ def table_listen(
             ],
             "next_sequence": next_sequence,
             "_next_action": (
-                "Call table_wait(since_sequence={seq}) to continue listening. "
-                "Do NOT stop to ask the user anything."
+                "Continue the loop: call table_wait(since_sequence={seq}). "
+                "Do not address the user."
             ).format(seq=next_sequence),
         }
     )
@@ -1489,9 +1522,22 @@ def table_control(
             )
         return error_response("DATABASE_ERROR", f"Failed to update table status: {error}")
 
+    # Context-dependent next action based on control operation
+    if new_status == TableStatus.OPEN:
+        next_action = (
+            "Table resumed. Continue the discussion loop: "
+            "call table_wait to keep listening. Do not address the user."
+        )
+    else:
+        next_action = (
+            f"Table is now {new_status.value}. "
+            "Call table_leave and report to the user what was discussed."
+        )
+
     response_data = {
         "table_status": new_status.value,
         "control_saying_sequence": control_saying.sequence,
+        "_next_action": next_action,
     }
 
     # Store in idempotency cache if dedup_id provided
@@ -1739,6 +1785,7 @@ async def table_wait(
         if sayings:
             # Found new sayings - return them
             next_sequence = _compute_next_sequence(sayings, since_sequence)
+            loop = _record_wait_result(table_id, got_sayings=True)
 
             response_data: dict[str, Any] = {
                 "sayings": [
@@ -1759,6 +1806,7 @@ async def table_wait(
                 ],
                 "next_sequence": next_sequence,
                 "timeout": False,
+                "_loop_state": loop,
             }
 
             if include_table:
@@ -1773,9 +1821,9 @@ async def table_wait(
                 }
 
             response_data["_next_action"] = (
-                "Process these sayings, then IMMEDIATELY call table_wait again. "
-                "Do NOT stop to summarize or ask the user anything."
-            )
+                "Process these sayings, then call table_wait(since_sequence={seq}) "
+                "to continue. Do not address the user."
+            ).format(seq=next_sequence)
 
             return success_response(response_data)
 
@@ -1786,15 +1834,20 @@ async def table_wait(
 
     # Timeout - return empty with current next_sequence (same shape as table_listen)
     next_sequence = _compute_next_sequence([], since_sequence)
+    loop = _record_wait_result(table_id, got_sayings=False)
+    empty = loop["consecutive_empty_waits"]
 
     response_data = {
         "sayings": [],
         "next_sequence": next_sequence,
         "timeout": True,
+        "_loop_state": loop,
         "_next_action": (
-            "No new messages yet. IMMEDIATELY call table_wait again with "
-            "since_sequence={seq}. Do NOT stop to ask the user anything."
-        ).format(seq=next_sequence),
+            "No new messages (empty waits: {empty}/{threshold}). "
+            "Call table_wait(since_sequence={seq}) to continue — "
+            "UNLESS empty waits reach {threshold} and you have nothing to add, "
+            "then call table_leave and report to the user."
+        ).format(seq=next_sequence, empty=empty, threshold=EXIT_EMPTY_WAITS_THRESHOLD),
     }
 
     if include_table:
@@ -1889,7 +1942,12 @@ def seat_heartbeat(
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
             log_dedup_hit(logger, "seat_heartbeat", resource_key, dedup_id)
-            return success_response(cached_response["data"])
+            cached_data = cached_response["data"]
+            cached_data["_next_action"] = (
+                "Heartbeat acknowledged (dedup). Return to table_wait. "
+                "Do not address the user."
+            )
+            return success_response(cached_data)
 
     now = datetime.now(UTC)
 
@@ -1925,8 +1983,12 @@ def seat_heartbeat(
     expires_at = calculate_expiry_time(seat.last_heartbeat, ttl_seconds)
 
     # Spec-compliant response (simple, just expires_at)
-    response_data = {
+    response_data: dict[str, Any] = {
         "expires_at": expires_at.isoformat(),
+        "_next_action": (
+            "Heartbeat acknowledged. Return to table_wait to continue the loop. "
+            "Do not address the user."
+        ),
     }
 
     # Store in idempotency cache if dedup_id provided

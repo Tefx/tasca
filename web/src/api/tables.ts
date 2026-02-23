@@ -33,10 +33,17 @@ export interface Table {
   updated_at: string
 }
 
-/** Data for updating a table (full replace semantics). */
+/** Data for updating a table (full replace semantics).
+ *
+ * All fields are REQUIRED - caller must provide all updatable fields.
+ * For context:
+ * - Provide string value to set/update context
+ * - Provide null to explicitly clear context
+ * - Omitting context is NOT allowed (prevents accidental clearing)
+ */
 export interface TableUpdate {
   question: string
-  context?: string | null
+  context: string | null
   status: TableStatus
 }
 

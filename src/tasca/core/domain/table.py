@@ -48,12 +48,17 @@ class TableCreate(BaseModel):
 class TableUpdate(BaseModel):
     """Data for updating a table (full replace).
 
-    Replace-only semantics: all provided fields replace the existing values.
-    This is NOT a partial patch - caller must provide all updatable fields.
+    Replace-only semantics: all fields are required and replace existing values.
+    This is NOT a partial patch - caller MUST provide all updatable fields.
+
+    For context field:
+    - Provide string value to set/update context
+    - Provide null to explicitly clear context
+    - Omitting context is NOT allowed (prevents accidental clearing)
     """
 
     question: str = Field(..., description="The question or topic for discussion")
-    context: str | None = Field(None, description="Optional context for the discussion")
+    context: str | None = Field(..., description="Context for the discussion (null to clear)")
     status: TableStatus = Field(..., description="The table status")
 
 

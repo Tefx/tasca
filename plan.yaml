@@ -15967,7 +15967,7 @@ phases:
       \ for get_lan_ip/main) are\n  outside scope of this phase."
 - id: close-notify-fix-gate-fix
   name: close_notify_fix_gate_fix
-  status: in_progress
+  status: done
   depends_on:
   - close_notify_fix
   steps:
@@ -16396,7 +16396,7 @@ phases:
       - close-notify-fix-gate-fix/tableupdate-context-optionality-retest'
   - id: close-notify-fix-gate-fix.gate-issues-fix
     name: gate-issues-fix
-    status: claimed
+    status: done
     description: "Fix blocker issues found in gate review:\n1. Test failures: `uv\
       \ run pytest -q` shows 62 failed, 857 passed, 22 errors\n2. Atomic rollback\
       \ safety gap in `src/tasca/shell/storage/control_repo.py`:\n   - Outer `except\
@@ -16415,9 +16415,44 @@ phases:
     agent: python-engineer
     claimed_by: python-engineer
     claimed_at: '2026-02-23T15:24:52.156000+00:00'
+    evidence: 'Artifact:
+
+      - PR: 1d133d5
+
+
+      Verification:
+
+      - Run: uv run pytest tests/unit/storage/test_table_repo.py tests/unit/test_table_version.py
+      tests/unit/api/test_tables_routes.py -q -> 70 passed in 0.44s
+
+      - Run: invar guard src/tasca/shell/storage -> passed (0 errors, 0 warnings)
+
+
+      Root cause and fix:
+
+      - Identified schema mismatch: `create_tables_table()` lacked `creator_patron_id`
+      column relative to migrations/domain; added missing column.
+
+
+      Rollback safety proof:
+
+      - Added `conn.rollback()` in outer `except sqlite3.Error` path in `src/tasca/shell/storage/control_repo.py`
+      (line reported by implementer: 195), ensuring rollback on all post-BEGIN error
+      paths.
+
+
+      Notes:
+
+      - Implementer reports 8 failing sayings_routes tests are pre-existing and unchanged
+      before/after this fix.
+
+
+      Spec link:
+
+      - close-notify-fix-gate-fix/gate-issues-fix'
   - id: close-notify-fix-gate-fix.gate-issues-retest
     name: gate-issues-retest
-    status: pending
+    status: done
     description: 'Re-test after gate issues fix:
 
       As an INDEPENDENT TESTER (integration-verifier), validate the fixes from a fresh
@@ -16478,6 +16513,378 @@ phases:
     depends_on:
     - close-notify-fix-gate-fix.gate-issues-fix
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-23T15:31:13.231449+00:00'
+    evidence: 'Artifact:
+
+      - PR: N/A
+
+
+      Verification:
+
+      - Run: uv run pytest -q tests/unit/test_control_repo.py -v --tb=short -> FAIL
+      (file not found, collected 0)
+
+      - Run: uv run pytest -q tests/unit/test_table_*.py -v --tb=short -> PASS (28
+      passed)
+
+      - Run: uv run pytest -q tests/integration/ -v --tb=short -> FAIL (11 failed,
+      22 errors), including MCP init status mismatches (`405 != 200`).
+
+      - Run: uv run pytest -q tests/unit/api/test_tables_routes.py -k control -v --tb=short
+      -> PASS (10 passed)
+
+      - Code-read: rollback now exists in outer sqlite error path (`src/tasca/shell/storage/control_repo.py`),
+      but verifier flagged unresolved global singleton connection leakage risk in
+      `src/tasca/shell/api/deps.py`.
+
+
+      Issue classification:
+
+      - blocker detected (verification step failed due missing required test target
+      and integration failures).
+
+
+      Remediation created:
+
+      - `close-notify-fix-gate-fix.gate-issues-retest-fix` (depends_on: `close-notify-fix-gate-fix.gate-issues-retest`)
+
+      - `close-notify-fix-gate-fix.gate-issues-retest-fix-retest` (depends_on: `close-notify-fix-gate-fix.gate-issues-retest-fix`)
+
+
+      Spec link:
+
+      - close-notify-fix-gate-fix/gate-issues-retest'
+  - id: close-notify-fix-gate-fix.gate-issues-retest-fix
+    name: gate-issues-retest-fix
+    status: done
+    description: 'Fix: Address three blocker issues from gate-issues-retest:
+
+
+      1. Missing Unit Tests: Create tests/unit/test_control_repo.py with focused tests
+      for ControlSaying creation, append_control_saying() atomicity (transaction commit/rollback),
+      and error path handling.
+
+
+      2. Integration Test Failures: Investigate MCP init status mismatch (405 != 200)
+      around tests/integration/conftest.py:301. Either fix or document as scoped non-regression.
+
+
+      3. Connection Leakage Risk: Address singleton _db_connection in src/tasca/shell/api/deps.py.
+      Consider connection-per-request pattern or explicit rollback in API layer.
+
+
+      Files: tests/unit/test_control_repo.py, tests/integration/conftest.py, src/tasca/shell/api/deps.py'
+    verification: 'Unit test file exists and passes: uv run pytest -q tests/unit/test_control_repo.py
+      -v --tb=short'
+    depends_on:
+    - close-notify-fix-gate-fix.gate-issues-retest
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-23T15:38:56.503415+00:00'
+    evidence: 'Artifact:
+
+      - PR: 71e70e9
+
+
+      Verification:
+
+      - Run: uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short
+      -> PASS (11 passed)
+
+      - Run: uv run invar-tools guard -> PASS (0 errors, 0 warnings)
+
+      - Run: uv run pytest -q tests/unit/storage/test_control_repo.py tests/integration/test_api.py
+      -v --tb=short -> 18 passed, 2 failed
+
+
+      Issue (2) resolution:
+
+      - Scoped as non-regression for this fix stream with evidence provided by implementer:
+      integration HTTP 405 failures are tied to MCP HTTP transport behavior, not control_repo
+      atomic logic, and integration tests were unchanged across compared commits.
+
+
+      Issue (3) mitigation:
+
+      - Implemented connection-per-request pattern in `src/tasca/shell/api/deps.py`
+      (reported lines 24-66), replacing global singleton `_db_connection` with explicit
+      per-request connection lifecycle and guaranteed cleanup.
+
+
+      Spec link:
+
+      - close-notify-fix-gate-fix/gate-issues-retest-fix'
+  - id: close-notify-fix-gate-fix.gate-issues-retest-fix-retest
+    name: gate-issues-retest-fix-retest
+    status: done
+    description: 'Re-test after gate-issues-retest-fix:
+
+
+      As an INDEPENDENT TESTER (integration-verifier), validate the fixes from a fresh
+      perspective.
+
+
+      Verify:
+
+      1. Unit test exists and passes: tests/unit/test_control_repo.py
+
+      2. Integration failures addressed OR documented with non-regression rationale
+
+      3. Connection leakage concern resolved with evidence
+
+
+      Evidence requirements:
+
+      - Commands executed with output
+
+      - Unit test results
+
+      - Integration test regression status
+
+      - Connection handling verification'
+    verification: 'Run verification commands:
+
+      1. uv run pytest -q tests/unit/test_control_repo.py -v --tb=short
+
+      2. uv run pytest -q tests/integration/ -v --tb=short (or explain scoped non-regression)
+
+      3. Code review for connection isolation pattern'
+    depends_on:
+    - close-notify-fix-gate-fix.gate-issues-retest-fix
+    agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-23T16:03:39.582316+00:00'
+    evidence: 'Artifact:
+
+      - PR: N/A
+
+
+      Verification:
+
+      - Run: uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short
+      -> PASS (11 passed)
+
+      - Run: uv run pytest -q tests/unit/api/test_tables_routes.py -k control -v --tb=short
+      -> PASS (10 passed)
+
+      - Run: uv run pytest -q tests/integration/test_api.py -v --tb=short -> FAIL
+      (2 failed, 7 passed)
+
+      - Run: invar guard src/tasca/shell/api/deps.py src/tasca/shell/storage/control_repo.py
+      -> `invar` CLI unavailable; fallback `uvx invar-tools guard` passed for both
+      files.
+
+      - Code-read: per-request connection lifecycle exists in `src/tasca/shell/api/deps.py`
+      and rollback paths exist in `src/tasca/shell/storage/control_repo.py`.
+
+
+      Detected blocker issues:
+
+      - `test_404_on_unknown_path`: expected 404 got 200
+
+      - `test_mcp_endpoint_mounted`: expected [200/307/400/500] got 405
+
+
+      Remediation created:
+
+      - `close-notify-fix-gate-fix.gate-issues-retest-fix-retest-fix` (depends_on
+      current step)
+
+      - `close-notify-fix-gate-fix.gate-issues-retest-fix-retest-retest` (depends_on
+      fix step)
+
+
+      Spec link:
+
+      - close-notify-fix-gate-fix/gate-issues-retest-fix-retest'
+  - id: close-notify-fix-gate-fix.gate-issues-retest-fix-retest-fix
+    name: gate-issues-retest-fix-retest-fix
+    status: done
+    description: 'Fix: API routing issues - 404 on unknown paths and MCP endpoint
+      mounting
+
+
+      Issue (blocker): Independent retest found integration failures:
+
+      - test_404_on_unknown_path: expected 404, got 200
+
+      - test_mcp_endpoint_mounted: expected [200/307/400/500], got 405
+
+
+      Likely causes:
+
+      - Catch-all route may be matching unknown paths incorrectly
+
+      - MCP endpoint may not be properly mounted or HTTP method handling is wrong
+
+
+      Files to investigate:
+
+      - API routing configuration
+
+      - MCP endpoint mounting logic
+
+      - Any middleware that might override status codes
+
+
+      Acceptance criteria:
+
+      - Unknown paths return 404 (not 200)
+
+      - MCP endpoint returns valid HTTP status (200/307/400/500, not 405)'
+    verification: 'Manual verification that:
+
+      1. API routing code correctly handles unknown paths (returns 404)
+
+      2. MCP endpoint is properly mounted with correct HTTP methods
+
+      3. Code changes are minimal and targeted to the specific issues'
+    depends_on:
+    - close-notify-fix-gate-fix.gate-issues-retest-fix-retest
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-23T16:09:00.335636+00:00'
+    evidence: 'Artifact:
+
+      - PR: c7e4fd8
+
+
+      Verification:
+
+      - Run: uv run pytest -q tests/integration/test_api.py -v --tb=short -> PASS
+      (9 passed)
+
+      - Run: uv run invar guard -> PASS (0 errors, 0 warnings)
+
+
+      Root cause + fix:
+
+      - Unknown-path 200 regression caused by SPA fallback route catching API-like
+      paths; fixed by making fallback return 404 for `api/`-prefixed paths.
+
+      - MCP mounted endpoint 405 on POST `/mcp` due to mount slash handling; added
+      explicit POST `/mcp` -> `/mcp/` redirect (307) to satisfy mounted endpoint behavior.
+
+
+      Spec link:
+
+      - close-notify-fix-gate-fix/gate-issues-retest-fix-retest-fix'
+  - id: close-notify-fix-gate-fix.gate-issues-retest-fix-retest-retest
+    name: gate-issues-retest-fix-retest-retest
+    status: done
+    description: 'Re-test after fix: API routing issues - 404 on unknown paths and
+      MCP endpoint mounting
+
+
+      As an INDEPENDENT TESTER (integration-verifier), re-run integration tests to
+      verify the fix addresses the issues found:
+
+      - test_404_on_unknown_path: should now return 404 (was 200)
+
+      - test_mcp_endpoint_mounted: should now return valid status 200/307/400/500
+      (was 405)
+
+
+      Independence Level: L1 (can read code/diff)
+
+
+      Expected outcome:
+
+      - All tests in test_api.py pass
+
+      - No regression in other tests'
+    verification: 'uv run pytest -q tests/integration/test_api.py -v --tb=short
+
+
+      Confirm:
+
+      1. test_404_on_unknown_path PASSES (expected 404)
+
+      2. test_mcp_endpoint_mounted PASSES (expected valid HTTP status)'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: tests/integration/test_api.py
+
+      **Independence Level**: L1
+
+      **Timestamp**: <ISO 8601>
+
+
+      ### Test Execution
+
+      ```bash
+
+      uv run pytest -q tests/integration/test_api.py -v --tb=short
+
+      ```
+
+
+      ### Results
+
+      - test_404_on_unknown_path: PASS/FAIL
+
+      - test_mcp_endpoint_mounted: PASS/FAIL
+
+
+      ### Issues Found
+
+      | Severity | Description | Location | Reproduction |
+
+      |----------|-------------|----------|--------------|
+
+      | ... | ... | ... | ... |
+
+
+      ### Verdict
+
+      - [ ] PASS: All integration tests pass
+
+      - [ ] ISSUES_FOUND: See table above'
+    depends_on:
+    - close-notify-fix-gate-fix.gate-issues-retest-fix-retest-fix
+    agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-02-23T16:22:07.505601+00:00'
+    evidence: '## Verification Report
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: tests/integration/test_api.py
+
+      **Independence Level**: L1
+
+      **Timestamp**: 2026-02-23T16:22:23Z
+
+
+      ### Test Execution
+
+      - Run: uv run pytest -q tests/integration/test_api.py -v --tb=short -> PASS
+      (9 passed in 0.59s)
+
+
+      ### Results
+
+      - test_404_on_unknown_path: PASS
+
+      - test_mcp_endpoint_mounted: PASS
+
+
+      ### Issues Found
+
+      | Severity | Description | Location | Reproduction |
+
+      |----------|-------------|----------|--------------|
+
+      | None | No issues detected in this checkpoint run | N/A | N/A |
+
+
+      ### Verdict
+
+      - PASS'
 - id: close_notify_fix_followup
   name: close_notify_fix followup — gate review SF-1/SF-2/SF-3 findings
   status: done
@@ -16746,3 +17153,353 @@ phases:
 
       0 BLOCKING, 0 SHOULD_FIX, 1 SUGGESTION (add TOCTTOU keyword for grep discoverability
       — non-blocking)'
+- id: post-close-notify-review2
+  name: post_close_notify_review2
+  status: done
+  depends_on:
+  - close-notify-fix-gate-fix
+  steps:
+  - id: systematic-gate-review
+    name: systematic-gate-review
+    status: done
+    description: Perform an independent, adversarial, systematic review of the close_notify
+      and follow-up fixes, including API routing behavior, control atomicity, contract
+      alignment, and integration expectations. Re-run key verification commands and
+      identify any blocker/should_fix/suggestion issues.
+    verification: Independent report includes command outputs for integration and
+      targeted unit checks, issue classification, and pass/fail verdict.
+    agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-02-23T16:26:20.214063+00:00'
+    evidence: '## Gate Review Report
+
+      **Reviewer**: gate-reviewer
+
+      **Scope**: post-close-notify systematic review
+
+      **Timestamp**: 2026-02-23T16:30:18Z
+
+
+      ### Command Results
+
+      - uvx invar-tools guard src/tasca/shell/api/deps.py -> PASS (0 errors, 0 warnings)
+
+      - uvx invar-tools guard src/tasca/shell/storage/control_repo.py -> PASS (0 errors,
+      0 warnings, 1 info)
+
+      - uvx invar-tools guard src/tasca/shell/api/routes/tables_control.py -> PASS
+      (0 errors, 0 warnings)
+
+      - uv run pytest -q tests/unit/api/test_tables_routes.py -k "control or put"
+      -v --tb=short -> PASS (13 passed)
+
+      - uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short ->
+      PASS (11 passed)
+
+      - uv run pytest -q tests/integration/test_api.py -v --tb=short -> PASS (9 passed)
+
+
+      ### Findings
+
+      - SHOULD_FIX: PUT full-replace semantics vs optional `context` can be a semantic
+      footgun (web/src/api/tables.ts, src/tasca/core/domain/table.py).
+
+      - SHOULD_FIX: Version conflict detection in control route relies on string matching
+      instead of structured error typing (src/tasca/shell/api/routes/tables_control.py).
+
+      - SHOULD_FIX: Add catch-all rollback guard for non-sqlite exceptions after BEGIN
+      path for stronger safety hardening (src/tasca/shell/storage/control_repo.py).
+
+      - SUGGESTION: Tighten integration MCP mount assertion; currently too permissive.
+
+
+      ### Verdict
+
+      - PASS
+
+      - Rationale: Required behaviors validated by independent command evidence; remaining
+      issues are robustness improvements, not current blockers.'
+- id: post-notify-hardening
+  name: Post-notify hardening — address review findings
+  status: in_progress
+  depends_on:
+  - post-close-notify-review2
+  steps:
+  - id: fix-context-put-semantics
+    name: Fix PUT context semantics footgun
+    status: pending
+    description: 'SHOULD_FIX: Align/document PUT full-replace semantics for optional
+      `context` field.
+
+
+      **Problem**: PUT with omitted `context` vs explicit `null` has ambiguous behavior
+      - callers may accidentally clear context.
+
+
+      **Files**: `web/src/api/tables.ts`, `src/tasca/core/domain/table.py`, `src/tasca/shell/api/routes/tables.py`
+
+
+      **Goal**: Ensure clear semantics - either:
+
+      1. Treat omitted `context` as "no change" (PATCH-like for that field), OR
+
+      2. Require explicit context on PUT, OR
+
+      3. Document the footgun clearly in API docs/comments'
+    verification: Manual verification that PUT behavior is clearly defined and documented.
+      Check that callers cannot accidentally clear context.
+    agent: python-engineer
+  - id: fix-version-conflict-detection
+    name: Fix version conflict detection - structured error
+    status: pending
+    description: 'SHOULD_FIX: Replace string-matching version conflict detection with
+      structured error type.
+
+
+      **Problem**: Control route uses string matching on error message to detect version
+      conflicts - fragile and error-prone.
+
+
+      **File**: `src/tasca/shell/api/routes/tables_control.py`
+
+
+      **Goal**:
+
+      1. Define structured error type/enum in storage layer for version conflicts
+
+      2. Propagate structured error through to API layer
+
+      3. Map to proper HTTP 409 Conflict response'
+    verification: Verify that version conflict detection uses structured error types,
+      not string matching. Check HTTP 409 response is correctly returned.
+    agent: python-engineer
+  - id: fix-rollback-hardening
+    name: Fix rollback hardening for non-sqlite exceptions
+    status: claimed
+    description: 'SHOULD_FIX: Add catch-all rollback protection for all post-BEGIN
+      exception paths.
+
+
+      **Problem**: Current rollback handling may miss non-sqlite exceptions that occur
+      after BEGIN, potentially leaving transactions open.
+
+
+      **File**: `src/tasca/shell/storage/control_repo.py`
+
+
+      **Goal**:
+
+      1. Add comprehensive exception handling after BEGIN
+
+      2. Guarantee rollback for ANY exception type
+
+      3. Ensure no transaction can be left orphaned'
+    verification: Manual code review to verify all post-BEGIN paths have guaranteed
+      rollback. Consider adding test case for non-sqlite exception path.
+    agent: python-engineer
+    claimed_by: python-engineer
+    claimed_at: '2026-02-23T16:39:50.015248+00:00'
+  - id: fix-mcp-integration-assertions
+    name: Fix MCP integration assertions - tighten determinism
+    status: pending
+    description: 'SUGGESTION: Tighten `/mcp` integration test assertions to be more
+      deterministic.
+
+
+      **Problem**: Integration test assertions for MCP mount behavior are too permissive
+      - may accept incorrect status codes or responses.
+
+
+      **File**: `tests/integration/test_api.py`
+
+
+      **Goal**:
+
+      1. Review MCP mount test assertions
+
+      2. Tighten to require exact expected status codes and response shapes
+
+      3. Avoid permissive patterns that could mask regressions'
+    verification: Review test file to verify assertions are specific and deterministic.
+      Run tests to confirm they still pass.
+    agent: python-engineer
+  - id: retest-context-put-semantics
+    name: Re-test PUT context semantics fix
+    status: pending
+    description: "Re-test: Verify PUT context semantics fix is correct and behavior\
+      \ is clear.\n\n**Independence Level**: L1\n\n**Scope**: \n- Verify PUT behavior\
+      \ with omitted context vs explicit null\n- Check documentation/comments explain\
+      \ the semantics\n- Ensure no accidental context clearing possible\n\n**Test**:\n\
+      - Run relevant unit tests: `tests/unit/api/test_tables_routes.py`\n- Manual\
+      \ code review of the three affected files"
+    verification: 'Commands:
+
+      ```
+
+      uv run pytest -q tests/unit/api/test_tables_routes.py -v --tb=short
+
+      ```
+
+      Verify all tests pass and behavior is documented.'
+    depends_on:
+    - fix-context-put-semantics
+    agent: integration-verifier
+  - id: retest-version-conflict-detection
+    name: Re-test version conflict detection fix
+    status: pending
+    description: 'Re-test: Verify version conflict detection uses structured errors.
+
+
+      **Independence Level**: L1
+
+
+      **Scope**:
+
+      - Verify structured error type/enum exists in storage layer
+
+      - Verify API layer maps to HTTP 409 correctly
+
+      - Confirm no string-matching remains in version conflict path
+
+
+      **Test**:
+
+      - Run control route tests: `tests/unit/api/test_tables_routes.py -k control`
+
+      - Run storage tests: `tests/unit/storage/test_control_repo.py`'
+    verification: 'Commands:
+
+      ```
+
+      uv run pytest -q tests/unit/api/test_tables_routes.py -k control -v --tb=short
+
+      uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short
+
+      ```
+
+      Verify structured error handling and HTTP 409 mapping.'
+    depends_on:
+    - fix-version-conflict-detection
+    agent: integration-verifier
+  - id: retest-rollback-hardening
+    name: Re-test rollback hardening fix
+    status: pending
+    description: 'Re-test: Verify rollback hardening covers all exception paths.
+
+
+      **Independence Level**: L1
+
+
+      **Scope**:
+
+      - Code review: verify catch-all rollback after BEGIN
+
+      - Verify no transaction can be left orphaned
+
+      - Check all exception types are handled
+
+
+      **Test**:
+
+      - Run storage tests: `tests/unit/storage/test_control_repo.py`
+
+      - Review exception handling paths in code'
+    verification: 'Commands:
+
+      ```
+
+      uv run pytest -q tests/unit/storage/test_control_repo.py -v --tb=short
+
+      uvx invar-tools guard src/tasca/shell/storage/control_repo.py
+
+      ```
+
+      Verify comprehensive rollback protection.'
+    depends_on:
+    - fix-rollback-hardening
+    agent: integration-verifier
+  - id: retest-mcp-integration-assertions
+    name: Re-test MCP integration assertions fix
+    status: pending
+    description: 'Re-test: Verify MCP integration test assertions are tightened.
+
+
+      **Independence Level**: L1
+
+
+      **Scope**:
+
+      - Review assertions in `tests/integration/test_api.py` for MCP paths
+
+      - Verify exact status codes required
+
+      - Verify response shape assertions are specific
+
+
+      **Test**:
+
+      - Run integration tests: `tests/integration/test_api.py`'
+    verification: 'Commands:
+
+      ```
+
+      uv run pytest -q tests/integration/test_api.py -v --tb=short
+
+      ```
+
+      Verify all tests pass with tighter assertions.'
+    depends_on:
+    - fix-mcp-integration-assertions
+    agent: integration-verifier
+  - id: post-notify-hardening.gate-review-post-notify-hardening
+    name: Gate review — post-notify-hardening
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the post-notify-hardening
+      phase meets the quality bar.
+
+
+      **You are the quality gate.** Your job is to BLOCK progress if quality is insufficient.
+
+
+      **Review criteria:**
+
+      1. All 4 fix steps executed with proper evidence
+
+      2. All 4 retest steps passed with independent verification
+
+      3. No unresolved blockers
+
+      4. Cross-cutting: code quality, test coverage, documentation
+
+
+      **Independence**: You MUST NOT be the same agent as any implementation step
+      in this phase.
+
+
+      **Issues tracked:**
+
+      - SF-1: PUT context semantics (medium priority)
+
+      - SF-2: Version conflict detection (medium priority)
+
+      - SF-3: Rollback hardening (medium priority)
+
+      - S-1: MCP integration assertions (low priority)'
+    verification: 'All retest steps completed with evidence:
+
+      - retest-context-put-semantics: PASS
+
+      - retest-version-conflict-detection: PASS
+
+      - retest-rollback-hardening: PASS
+
+      - retest-mcp-integration-assertions: PASS
+
+
+      No blocking issues remain.'
+    depends_on:
+    - retest-context-put-semantics
+    - retest-version-conflict-detection
+    - retest-rollback-hardening
+    - retest-mcp-integration-assertions
+    agent: gate-reviewer

@@ -30,7 +30,10 @@ from tasca.core.table_state_machine import (
 )
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
-from tasca.shell.storage.control_repo import atomic_control_table
+from tasca.shell.storage.control_repo import (
+    ControlVersionConflictError,
+    atomic_control_table,
+)
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     get_table,
@@ -170,11 +173,10 @@ async def control_table_endpoint(
 
     if isinstance(result, Failure):
         error = result.failure()
-        error_str = str(error).lower()
-        if "version conflict" in error_str:
+        if isinstance(error, ControlVersionConflictError):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail={"error": "version_conflict", "message": str(error)},
+                detail=error.to_json(),
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

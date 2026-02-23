@@ -205,6 +205,12 @@ async def update_table_endpoint(
     Uses replace-only semantics: all updatable fields must be provided.
     Requires admin authentication via Bearer token.
 
+    **Full Replace Semantics:**
+    - ALL fields are required (question, context, status)
+    - To clear context: provide `context: null`
+    - To keep context: provide the current context value
+    - Omitting a field will cause a 422 validation error
+
     Note: Status changes are NOT allowed via this endpoint.
     Use POST /tables/{table_id}/control for status changes.
 
@@ -215,7 +221,7 @@ async def update_table_endpoint(
 
     Args:
         table_id: The table identifier.
-        data: Full replacement data (question, context, status).
+        data: Full replacement data - ALL fields required.
         expected_version: Version the client expects (optimistic concurrency).
         _auth: Admin authentication (injected via dependency).
         conn: Database connection (injected via dependency).
@@ -227,6 +233,7 @@ async def update_table_endpoint(
         HTTPException: 400 if status change attempted.
         HTTPException: 404 if table not found.
         HTTPException: 409 if version conflict (optimistic concurrency).
+        HTTPException: 422 if required fields missing.
         HTTPException: 500 if database operation fails.
     """
     # First, fetch the current table to check status
@@ -336,4 +343,3 @@ async def delete_table_endpoint(
     log_table_delete(logger, table_id, "rest:admin")
 
     return DeleteResponse(status="deleted", table_id=table_id)
-

@@ -358,6 +358,82 @@ class TestUpdateTable:
         )
         assert response.status_code == 422  # Validation error
 
+    def test_update_table_context_required(self, admin_client: TestClient) -> None:
+        """Update requires context field - prevents accidental clearing.
+
+        This test verifies the fix for PUT context semantics:
+        - Omitting context should return 422 (validation error)
+        - This prevents accidental context clearing when caller forgets the field
+        """
+        # Create a table with context
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Original question?", "context": "Original context"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Try to update without context field (should fail)
+        response = admin_client.put(
+            f"/tables/{table_id}?expected_version=1",
+            json={
+                "question": "Updated question?",
+                # context omitted - should be rejected
+                "status": "open",
+            },
+        )
+        assert response.status_code == 422  # Validation error
+        detail = response.json()["detail"]
+        # Pydantic v2 validation error format
+        assert any("context" in str(err).lower() for err in detail)
+
+    def test_update_table_explicit_null_clears_context(self, admin_client: TestClient) -> None:
+        """Explicit null for context clears the context (full replace semantics)."""
+        # Create a table with context
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Original question?", "context": "Original context"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Update with explicit null to clear context
+        response = admin_client.put(
+            f"/tables/{table_id}?expected_version=1",
+            json={
+                "question": "Updated question?",
+                "context": None,  # Explicit null - should clear
+                "status": "open",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["question"] == "Updated question?"
+        assert data["context"] is None  # Context cleared
+        assert data["version"] == 2
+
+    def test_update_table_keeps_context_with_string(self, admin_client: TestClient) -> None:
+        """Explicit string value keeps/updates context (full replace semantics)."""
+        # Create a table with context
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Original question?", "context": "Original context"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Update with new context string
+        response = admin_client.put(
+            f"/tables/{table_id}?expected_version=1",
+            json={
+                "question": "Updated question?",
+                "context": "Updated context",  # Explicit string - updates
+                "status": "open",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["question"] == "Updated question?"
+        assert data["context"] == "Updated context"
+        assert data["version"] == 2
+
 
 # =============================================================================
 # DELETE /tables/{table_id} - Delete Tests
@@ -769,3 +845,74 @@ class TestControlTable:
             json={"action": "close", "speaker_name": "Admin"},
         )
         assert response.status_code == 404
+
+    def test_control_version_conflict_returns_structured_error(
+        self, test_db: sqlite3.Connection
+    ) -> None:
+        """Version conflict at storage layer returns structured error.
+
+        Tests the storage layer directly since the API refetches tables.
+        The typed error (ControlVersionConflictError) ensures the route layer
+        can detect conflicts via isinstance() instead of string matching.
+        """
+        from datetime import datetime
+
+        from returns.result import Failure
+
+        from tasca.core.domain.saying import Speaker, SpeakerKind
+        from tasca.core.domain.table import Table, TableId, TableStatus, Version
+        from tasca.shell.storage.control_repo import (
+            ControlVersionConflictError,
+            atomic_control_table,
+        )
+
+        # Create a table directly in DB
+        table_id = "test-table-id"
+        test_db.execute(
+            """
+            INSERT INTO tables (id, question, context, status, version, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (table_id, "Test?", None, "open", 1, "2024-01-01T12:00:00", "2024-01-01T12:00:00"),
+        )
+        test_db.commit()
+
+        # Simulate concurrent modification: update version in DB
+        test_db.execute("UPDATE tables SET version = 5 WHERE id = ?", (table_id,))
+        test_db.commit()
+
+        # Create a stale Table object (version=1, but DB has version=5)
+        stale_table = Table(
+            id=TableId(table_id),
+            question="Test?",
+            context=None,
+            status=TableStatus.OPEN,
+            version=Version(1),  # Stale - DB has version 5
+            created_at=datetime(2024, 1, 1, 12, 0, 0),
+            updated_at=datetime(2024, 1, 1, 12, 0, 0),
+        )
+
+        speaker = Speaker(kind=SpeakerKind.HUMAN, name="Admin")
+        result = atomic_control_table(
+            conn=test_db,
+            table_id=table_id,
+            speaker=speaker,
+            control_content="**CONTROL: CLOSE**",
+            new_status=TableStatus.CLOSED,
+            current_table=stale_table,
+            now=datetime(2024, 1, 1, 13, 0, 0),
+        )
+
+        # Verify we get the typed error (not a string)
+        assert isinstance(result, Failure)
+        error = result.failure()
+        assert isinstance(error, ControlVersionConflictError)
+        assert error.table_id == table_id
+        assert error.expected_version == 1
+
+        # Verify to_json returns proper structure for API response
+        json_data = error.to_json()
+        assert json_data["error"] == "version_conflict"
+        assert json_data["table_id"] == table_id
+        assert json_data["expected_version"] == 1
+        assert "message" in json_data

@@ -243,7 +243,7 @@ class TestUpdateTable:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
 
-    def test_update_table_success(self, admin_client: TestClient) -> None:
+    def test_put_without_status_change_updates_metadata(self, admin_client: TestClient) -> None:
         """Update table with correct version succeeds (same status)."""
         # Create a table
         create_response = admin_client.post(
@@ -268,7 +268,7 @@ class TestUpdateTable:
         assert data["status"] == "open"
         assert data["version"] == 2
 
-    def test_update_table_status_change_rejected(self, admin_client: TestClient) -> None:
+    def test_put_with_status_change_returns_400(self, admin_client: TestClient) -> None:
         """Update with different status returns 400 Bad Request."""
         # Create a table (status is "open")
         create_response = admin_client.post(
@@ -290,6 +290,38 @@ class TestUpdateTable:
         detail = response.json()["detail"]
         assert "status changes are not allowed" in detail.lower()
         assert "POST /tables/{table_id}/control" in detail
+
+    def test_put_status_change_closed_to_open_returns_400(self, admin_client: TestClient) -> None:
+        """PUT cannot change status from closed to open - must use control endpoint."""
+        # Create a table and close it
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+
+        # Close the table via control endpoint
+        admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "close", "speaker_name": "Admin"},
+        )
+
+        # Get current version
+        get_response = admin_client.get(f"/tables/{table_id}")
+        current_version = get_response.json()["version"]
+
+        # Try to change status back to "open" via PUT
+        response = admin_client.put(
+            f"/tables/{table_id}?expected_version={current_version}",
+            json={
+                "question": "Updated question?",
+                "context": None,
+                "status": "open",  # Trying to change status
+            },
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "status changes are not allowed" in detail.lower()
 
     def test_update_table_version_conflict(self, admin_client: TestClient) -> None:
         """Update with wrong version returns 409 Conflict."""
@@ -535,7 +567,7 @@ class TestTablesObservability:
 class TestControlTable:
     """Tests for POST /tables/{table_id}/control endpoint."""
 
-    def test_control_requires_auth(self, client: TestClient) -> None:
+    def test_control_requires_admin_auth(self, client: TestClient) -> None:
         """Control endpoint requires admin authentication."""
         response = client.post(
             "/tables/some-id/control",
@@ -543,7 +575,7 @@ class TestControlTable:
         )
         assert response.status_code == 401
 
-    def test_control_invalid_action(self, admin_client: TestClient) -> None:
+    def test_control_invalid_action_returns_400(self, admin_client: TestClient) -> None:
         """Invalid action returns 400."""
         # Create a table first
         create_response = admin_client.post(
@@ -560,7 +592,7 @@ class TestControlTable:
         assert response.status_code == 400
         assert "invalid action" in response.json()["detail"].lower()
 
-    def test_control_close_updates_status_and_creates_saying(
+    def test_control_close_creates_control_saying_and_updates_status(
         self, admin_client: TestClient, test_db: sqlite3.Connection
     ) -> None:
         """Close action updates table status and creates CONTROL saying."""
@@ -597,7 +629,7 @@ class TestControlTable:
         assert rows[0][1] == "human"  # speaker_kind
         assert rows[0][2] == "Admin"  # speaker_name
 
-    def test_control_close_already_closed_returns_409(self, admin_client: TestClient) -> None:
+    def test_control_close_on_closed_table_returns_409(self, admin_client: TestClient) -> None:
         """Closing an already closed table returns 409."""
         # Create a table and close it
         create_response = admin_client.post(
@@ -657,6 +689,40 @@ class TestControlTable:
         )
         assert response.status_code == 200
         assert response.json()["table_status"] == "open"
+
+    def test_control_pause_then_resume(self, admin_client: TestClient) -> None:
+        """Combined pause->resume flow test verifying full state transitions."""
+        # Create a table (starts as open)
+        create_response = admin_client.post(
+            "/tables",
+            json={"question": "Test question?"},
+        )
+        table_id = create_response.json()["id"]
+        assert create_response.json()["status"] == "open"
+
+        # Pause the table
+        pause_response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "pause", "speaker_name": "Admin"},
+        )
+        assert pause_response.status_code == 200
+        assert pause_response.json()["table_status"] == "paused"
+
+        # Verify table is paused
+        get_response = admin_client.get(f"/tables/{table_id}")
+        assert get_response.json()["status"] == "paused"
+
+        # Resume the table
+        resume_response = admin_client.post(
+            f"/tables/{table_id}/control",
+            json={"action": "resume", "speaker_name": "Admin"},
+        )
+        assert resume_response.status_code == 200
+        assert resume_response.json()["table_status"] == "open"
+
+        # Verify table is back to open
+        get_response2 = admin_client.get(f"/tables/{table_id}")
+        assert get_response2.json()["status"] == "open"
 
     def test_control_resume_from_open_returns_409(self, admin_client: TestClient) -> None:
         """Resume action from open state returns 409."""

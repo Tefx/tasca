@@ -29,6 +29,7 @@ from tasca.config import settings
 from tasca.core.domain.table import Table, TableStatus, Version
 from tasca.core.schema import create_tables_table_ddl
 from tasca.shell.services.table_id_generator import generate_table_id
+from tasca.shell.skills_cli import cmd_skills_install, cmd_skills_list, cmd_skills_show
 from tasca.shell.storage.table_repo import create_table as repo_create_table
 from returns.result import Failure, Success
 
@@ -581,93 +582,6 @@ def cmd_new(args: argparse.Namespace) -> int:
 
 
 # @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
-def cmd_skills_list(_args: argparse.Namespace) -> int:
-    """List all bundled skill names.
-
-    Enumerates subdirectories of tasca.skills that contain a SKILL.md file,
-    printing one name per line to stdout.
-
-    Args:
-        _args: Parsed command-line arguments (unused).
-
-    Returns:
-        Exit code (0 for success).
-    """
-    import importlib.resources
-
-    skills_pkg = importlib.resources.files("tasca.skills")
-    for entry in skills_pkg.iterdir():
-        try:
-            skill_md = entry / "SKILL.md"
-            skill_md.read_text(encoding="utf-8")
-        except (FileNotFoundError, NotADirectoryError, IsADirectoryError, AttributeError, OSError):
-            continue
-        print(entry.name)
-    return 0
-
-
-# @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
-def cmd_skills_show(args: argparse.Namespace) -> int:
-    """Print the SKILL.md content for a named skill to stdout.
-
-    Uses importlib.resources to read the bundled skill file. If the skill
-    name is not found, prints an error to stderr and returns 1.
-
-    Args:
-        args: Parsed command-line arguments (args.name).
-
-    Returns:
-        Exit code (0 for success, 1 if skill not found).
-    """
-    import importlib.resources
-
-    try:
-        skill_md = importlib.resources.files("tasca.skills") / args.name / "SKILL.md"
-        content = skill_md.read_text(encoding="utf-8")
-        print(content, end="")
-        return 0
-    except FileNotFoundError:
-        print(f"Error: skill '{args.name}' not found", file=sys.stderr)
-        return 1
-
-
-# @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
-def cmd_skills_install(args: argparse.Namespace) -> int:
-    """Install a bundled skill's SKILL.md to a user-specified target directory.
-
-    Reads the skill via importlib.resources and writes it to
-    <target>/<name>/SKILL.md. Creates the target directory if it does not
-    exist. The --target argument is required (enforced by argparse).
-
-    Args:
-        args: Parsed command-line arguments (args.name, args.target).
-
-    Returns:
-        Exit code (0 for success, 1 on error).
-    """
-    import importlib.resources
-    import pathlib
-
-    try:
-        skill_md = importlib.resources.files("tasca.skills") / args.name / "SKILL.md"
-        content = skill_md.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        print(f"Error: skill '{args.name}' not found", file=sys.stderr)
-        return 1
-
-    dest_dir = pathlib.Path(args.target) / args.name
-    try:
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_file = dest_dir / "SKILL.md"
-        dest_file.write_text(content, encoding="utf-8")
-        print(f"Installed: {args.name} -> {dest_file}")
-        return 0
-    except OSError as e:
-        print(f"Error: cannot write to '{args.target}': {e}", file=sys.stderr)
-        return 1
-
-
-# @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
 # @shell_orchestration: Argument parsing and command dispatch is orchestration, not business logic
 # @invar:allow shell_result: CLI command, delegates to MCP server entry point
 def cmd_mcp(_args: argparse.Namespace) -> int:
@@ -736,54 +650,47 @@ def main(argv: list[str] | None = None) -> int:
     new_parser.set_defaults(func=cmd_new)
 
     # 'mcp' subcommand
-    mcp_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "mcp",
         help="Start the MCP stdio server",
         description="Start the MCP server using stdio transport (for agent integration).",
-    )
-    mcp_parser.set_defaults(func=cmd_mcp)
+    ).set_defaults(func=cmd_mcp)
 
     # 'version' subcommand
-    version_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "version",
         help="Show Tasca version",
-    )
-    version_parser.set_defaults(func=cmd_version)
+    ).set_defaults(func=cmd_version)
 
     # 'skills' subcommand group
-    skills_parser = subparsers.add_parser(
+    skills_sub = subparsers.add_parser(
         "skills",
         help="Manage bundled agent skills",
         description="List, show, and install bundled agent skills.",
-    )
-    skills_sub = skills_parser.add_subparsers(dest="skills_command", help="Skills commands")
+    ).add_subparsers(dest="skills_command", help="Skills commands")
 
     # skills list
-    skills_list_parser = skills_sub.add_parser("list", help="List bundled skills")
-    skills_list_parser.set_defaults(func=cmd_skills_list)
+    skills_sub.add_parser("list", help="List bundled skills").set_defaults(func=cmd_skills_list)
 
     # skills show
-    skills_show_parser = skills_sub.add_parser("show", help="Print skill content to stdout")
-    skills_show_parser.add_argument("name", help="Skill name")
-    skills_show_parser.set_defaults(func=cmd_skills_show)
+    _show = skills_sub.add_parser("show", help="Print skill content to stdout")
+    _show.add_argument("name", help="Skill name")
+    _show.set_defaults(func=cmd_skills_show)
 
     # skills install
-    skills_install_parser = skills_sub.add_parser("install", help="Install skill to target directory")
-    skills_install_parser.add_argument("name", help="Skill name")
-    skills_install_parser.add_argument("--target", required=True, help="Target directory (required)")
-    skills_install_parser.set_defaults(func=cmd_skills_install)
+    _install = skills_sub.add_parser("install", help="Install skill to target directory")
+    _install.add_argument("name", help="Skill name")
+    _install.add_argument("--target", required=True, help="Target directory (required)")
+    _install.set_defaults(func=cmd_skills_install)
 
     args = parser.parse_args(argv)
 
     if args.command is None:
         parser.print_help()
         return 1
-
-    if args.command == "skills":
-        if not hasattr(args, "func"):
-            skills_parser.print_help()
-            return 1
-
+    if args.command == "skills" and not hasattr(args, "func"):
+        parser.parse_args(["skills", "--help"])
+        return 1
     return args.func(args)
 
 

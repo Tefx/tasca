@@ -349,7 +349,6 @@ def patron_register(
     meta: dict[str, Any] | None = None,
     patron_id: str | None = None,
     dedup_id: str | None = None,
-    *,
     # Backward compatibility: accept 'name' as alias for display_name
     name: str | None = None,
     kind: str = "agent",

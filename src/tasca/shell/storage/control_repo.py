@@ -14,7 +14,6 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from datetime import UTC, datetime
-from typing import NewType
 
 from returns.result import Failure, Result, Success
 
@@ -24,8 +23,64 @@ from tasca.core.services.saying_service import compute_next_sequence
 from tasca.core.services.table_service import VersionMismatchError
 from tasca.shell.storage.table_repo import TableNotFoundError, VersionConflictError
 
-# Type for repository errors
-ControlError = NewType("ControlError", str)
+
+# =============================================================================
+# Error Types
+# =============================================================================
+
+
+class ControlError(Exception):
+    """Base error for control operations."""
+
+    pass
+
+
+class ControlVersionConflictError(ControlError):
+    """Version conflict during atomic control operation.
+
+    This error is raised when the optimistic concurrency check fails
+    during a control operation (pause/resume/close).
+
+    Attributes:
+        table_id: The ID of the table that had the conflict.
+        expected_version: The version the client expected.
+    """
+
+    def __init__(self, table_id: str, expected_version: int) -> None:
+        self.table_id = table_id
+        self.expected_version = expected_version
+        super().__init__(
+            f"Version conflict for table {table_id}: expected {expected_version}, but was modified"
+        )
+
+    def to_json(self) -> dict:
+        """Convert error to JSON for API responses.
+
+        Returns:
+            JSON representation of the conflict error.
+        """
+        return {
+            "error": "version_conflict",
+            "table_id": self.table_id,
+            "expected_version": self.expected_version,
+            "message": str(self),
+        }
+
+
+class ControlIntegrityError(ControlError):
+    """Integrity constraint violation during control operation.
+
+    Raised when a unique constraint is violated, such as a duplicate
+    sequence number.
+    """
+
+    pass
+
+
+class ControlDatabaseError(ControlError):
+    """Database error during control operation."""
+
+    pass
 
 
 # @shell_complexity: Atomic operation - saying append + status update + version check + error paths
@@ -144,12 +199,7 @@ def atomic_control_table(
             if cursor.rowcount == 0:
                 # Version mismatch - concurrent modification
                 conn.rollback()
-                return Failure(
-                    ControlError(
-                        f"Version conflict for table {table_id}: "
-                        f"expected {current_table.version}, but was modified"
-                    )
-                )
+                return Failure(ControlVersionConflictError(table_id, current_table.version))
 
             # Step 4: Commit the transaction
             conn.commit()
@@ -180,16 +230,15 @@ def atomic_control_table(
 
         except sqlite3.IntegrityError as e:
             conn.rollback()
-            error_msg = str(e).lower()
-            if "unique" in error_msg:
-                return Failure(
-                    ControlError(
-                        f"Sequence conflict: duplicate (table_id, sequence) for table {table_id}"
-                    )
-                )
-            return Failure(ControlError(f"Integrity error: {e}"))
+            return Failure(ControlIntegrityError(f"Integrity error: {e}"))
+
+        except Exception:
+            # Catch-all: ensure rollback for ANY non-sqlite exception after BEGIN
+            # Re-raise to avoid swallowing unexpected errors (bugs should surface)
+            conn.rollback()
+            raise
 
     except sqlite3.Error as e:
         # Ensure rollback on any outer error (e.g., BEGIN IMMEDIATE failure)
         conn.rollback()
-        return Failure(ControlError(f"Database error: {e}"))
+        return Failure(ControlDatabaseError(f"Database error: {e}"))

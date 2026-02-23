@@ -19,7 +19,11 @@ from tasca.core.domain.patron import PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.core.schema import create_sayings_table_ddl, create_tables_table_ddl
-from tasca.shell.storage.control_repo import ControlError, atomic_control_table
+from tasca.shell.storage.control_repo import (
+    ControlIntegrityError,
+    ControlVersionConflictError,
+    atomic_control_table,
+)
 from tasca.shell.storage.table_repo import create_table
 
 
@@ -152,8 +156,11 @@ class TestAtomicControlTable:
 
         assert isinstance(result, Failure)
         error = result.failure()
-        assert "Version conflict" in error
-        assert "expected 1" in error
+        assert isinstance(error, ControlVersionConflictError)
+        assert error.table_id == "table-1"
+        assert error.expected_version == 1
+        assert "Version conflict" in str(error)
+        assert "expected 1" in str(error)
 
         # Verify no saying was created (rollback)
         cursor.execute("SELECT COUNT(*) FROM sayings WHERE table_id = ?", ("table-1",))
@@ -431,6 +438,56 @@ class TestAtomicControlTableEdgeCases:
         saying, _ = result.unwrap()
         assert saying.speaker.kind == SpeakerKind.AGENT
         assert saying.speaker.patron_id == PatronId("patron-bot-123")
+
+    def test_non_sqlite_exception_rolls_back(self, db_conn: sqlite3.Connection) -> None:
+        """Non-sqlite exceptions after BEGIN should trigger rollback, not leave transaction open."""
+        # Create initial table
+        table = create_test_table("table-1", "Test", TableStatus.OPEN)
+        create_table(db_conn, table)
+
+        speaker = Speaker(kind=SpeakerKind.AGENT, name="moderator")
+        now = datetime(2024, 1, 1, 12, 0, 0)
+
+        # Monkey-patch compute_next_sequence to raise after transaction starts
+        import tasca.shell.storage.control_repo as repo_module
+
+        original_compute = repo_module.compute_next_sequence
+
+        def raise_value_error(seq: int) -> int:
+            raise ValueError("Simulated non-sqlite error during transaction")
+
+        try:
+            repo_module.compute_next_sequence = raise_value_error
+
+            # This should raise ValueError internally, trigger rollback, then re-raise
+            with pytest.raises(ValueError, match="Simulated non-sqlite error"):
+                atomic_control_table(
+                    db_conn,
+                    "table-1",
+                    speaker,
+                    "Pause",
+                    TableStatus.PAUSED,
+                    table,
+                    now,
+                )
+
+            # Verify no transaction is left open (can execute new queries)
+            cursor = db_conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sayings WHERE table_id = ?", ("table-1",))
+            assert cursor.fetchone()[0] == 0  # No saying created
+
+            # Verify table is unchanged
+            cursor.execute("SELECT status, version FROM tables WHERE id = ?", ("table-1",))
+            row = cursor.fetchone()
+            assert row[0] == "open"  # Original status
+            assert row[1] == 1  # Original version
+
+            # Verify connection is usable (no orphaned transaction)
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute("ROLLBACK")
+
+        finally:
+            repo_module.compute_next_sequence = original_compute
 
     def test_pinned_always_false_for_control(self, db_conn: sqlite3.Connection) -> None:
         """CONTROL sayings are never pinned."""

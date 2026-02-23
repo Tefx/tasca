@@ -310,13 +310,15 @@ async def test_delete_table() -> None:
 
 @pytest.mark.asyncio
 async def test_404_on_unknown_path() -> None:
-    """Test that unknown paths return 404.
+    """Test that unknown API paths return 404.
 
     Scenario: REST 404 Handling
-    Verifies that accessing an unknown endpoint returns 404.
+    Verifies that accessing an unknown API endpoint returns 404.
+    Note: Non-API paths may return SPA fallback (200) for client-side routing.
     """
     async with ASGIRESTHarness() as harness:
-        response = await harness.client.get("/unknown-endpoint")
+        # Test unknown API endpoint (not SPA route)
+        response = await harness.client.get("/api/v1/nonexistent-endpoint")
         assert response.status_code == 404
 
 

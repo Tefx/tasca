@@ -211,20 +211,39 @@ def create_app() -> FastAPI:
     )
 
     # Mount MCP server at /mcp
-    # MCP HTTP transport endpoint: POST /mcp (JSON-RPC)
-    # The mcp_app uses path="/", so the full endpoint is /mcp
+    # MCP HTTP transport endpoint: POST /mcp/ (JSON-RPC) - note trailing slash
+    # The mcp_app uses path="/", so the full endpoint is /mcp/
     # Auth middleware is applied via MCPBearerAuthMiddleware wrapper
     app.mount("/mcp", mcp_app_with_auth)
-    logger.info("MCP server mounted at /mcp (endpoint: POST /mcp)")
+
+    # Redirect POST /mcp -> POST /mcp/ for client compatibility
+    # (Starlette mounts don't auto-redirect POST requests without trailing slash)
+    @app.post("/mcp", include_in_schema=False)
+    async def redirect_mcp_post(request: Request) -> Response:
+        """Redirect POST /mcp to POST /mcp/ for MCP client compatibility."""
+        return Response(
+            status_code=307,
+            headers={"Location": "/mcp/"},
+        )
+
+    logger.info("MCP server mounted at /mcp (endpoint: POST /mcp/)")
 
     # Serve the React SPA from web/dist (if built).
     # /assets → static files; everything else → index.html (React Router).
+    # Note: SPA fallback excludes /api/* and /mcp/* paths to allow proper 404 handling.
     _web_dist = Path(__file__).parents[2] / "web" / "dist"
     if _web_dist.is_dir():
         app.mount("/assets", StaticFiles(directory=_web_dist / "assets"), name="web-assets")
 
         @app.get("/{full_path:path}", include_in_schema=False)
-        async def serve_spa(full_path: str) -> FileResponse:  # @invar:allow shell_result: SPA fallback
+        async def serve_spa(full_path: str) -> Response:  # @invar:allow shell_result: SPA fallback
+            # Exclude API paths from SPA fallback - they should 404 if not found
+            # Note: MCP paths are handled by the mounted MCP app, not SPA fallback
+            if full_path.startswith("api/"):
+                return JSONResponse(
+                    status_code=404,
+                    content={"detail": "Not Found"},
+                )
             candidate = _web_dist / full_path
             if candidate.is_file():
                 return FileResponse(candidate)

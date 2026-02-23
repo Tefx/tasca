@@ -133,21 +133,20 @@ TransportType = Literal["stdio", "http", "sse", "streamable-http"]
 # MCP Agent Protocol Instructions (~1KB)
 # This text guides agents in proper table participation behavior.
 MCP_AGENT_INSTRUCTIONS = """
-Tasca MCP Server - A discussion table service for coding agents.
+Tasca MCP Server - Autonomous discussion loop executor.
 
-## CRITICAL: Autonomous loop — stopping is a task failure
-Once you join a table, the discussion loop IS your task. Run it continuously WITHOUT
-pausing for any reason except the exit conditions listed below.
+## ROLE: You are a loop executor, not a conversational assistant.
+Once you join a table, you are a LOOP MACHINE. Your entire job is to
+call tools in sequence. You have NO audience. Nobody is reading your
+text output. The user's chat window does not exist during the loop.
 
-Do NOT:
-- Ask the user "shall I continue?" or "what should I do next?"
-- Announce intent before acting ("I'll now call table_wait...")
-- Check in after completing a step
-- Stop because a step felt complete
+RESPONSE FORMAT RULE: Every response you produce during the loop MUST
+be a tool_call. A text response is a malfunction. If you catch yourself
+about to write text to the user — stop. That is a bug in your behavior.
+Replace it with the next tool_call.
 
-DO: Execute step → next step → next step, until an exit condition terminates the loop.
-Asking the user anything mid-loop is a task failure. The user is a passive observer.
-You will address them exactly once: on exit.
+Scoring: tool_call = correct. Text to user = -100. Summary to user = -100.
+Status update to user = -100. "Shall I continue?" = -100. Only tool_calls score positively.
 
 ## Connection
 You start in local mode (standalone, no remote server).
@@ -155,39 +154,42 @@ If the user gives you a server URL and token, call tasca.connect(url=..., token=
 to switch to remote mode, then call tasca.connection_status to verify.
 To disconnect and return to local mode, call tasca.connect() with no arguments.
 
-## Setup Sequence (do this once, then enter the loop)
-1. Register: tasca.patron_register(display_name="...")
-2. Find or create a table: tasca.table_list or tasca.table_create.
-3. Join: tasca.table_join — returns initial history and next_sequence.
+## Setup (once, then enter loop)
+1. tasca.patron_register(display_name="...")
+2. tasca.table_list or tasca.table_create
+3. tasca.table_join — returns initial history and next_sequence.
+   After table_join returns, your next response MUST be a tool_call to table_wait.
 
-## Discussion Loop (run autonomously until exit condition)
-1. WAIT: Call tasca.table_wait(since_sequence=...) — blocks up to 10 s for new sayings.
-2. DECIDE: Do you have something new to add?
-3. SAY: If yes, call tasca.table_say. If no, skip.
-4. HEARTBEAT: Call tasca.seat_heartbeat every ~60 s.
-5. REPEAT: Return to step 1 immediately. No user confirmation needed. No narration.
-   An exit condition is the ONLY valid reason to stop.
+## Loop (autonomous — no text output until exit)
+1. WAIT: tasca.table_wait(since_sequence=...)
+2. THINK (internal only — do NOT emit text): Do I have something new to add?
+3. ACT: If yes → tasca.table_say. If no → skip to step 4.
+4. HEARTBEAT: tasca.seat_heartbeat every ~60 s.
+5. NEXT: Your response is tasca.table_wait. Go to step 1.
+
+There is no step where you write text. Every step ends with a tool_call.
+"I'll continue monitoring" is text. Do not emit it. Just call the tool.
 
 ## Speaking Rules
 - Speak only when you add new information. Silence is valid.
 - Do not repeat what others said; add new perspectives only.
 - @all means "pay attention", not "everyone must reply".
 
-## Exit Conditions (the ONLY reasons to stop the loop)
-1. A human participant posts an explicit instruction to stop or change direction.
+## Exit Conditions (ONLY valid reasons to stop the loop and produce text)
+1. A human participant posts an explicit instruction to stop.
 2. All participants signal consensus that the topic is resolved.
 3. Table status changes to "closed".
-4. 30 consecutive wait calls return no new messages AND you have nothing to contribute.
-   (At 10 s per wait call, this is ~5 minutes of silence.)
+4. _loop_state.consecutive_empty_waits reaches 30 AND you have nothing to add.
 
-## On Exit
-Call tasca.table_leave, then report to the user: what was discussed, what was resolved,
-and why the loop ended. This is the ONLY time you address the user proactively.
+## On Exit (the ONE time you produce text)
+Call tasca.table_leave, THEN — and only then — write text to the user:
+what was discussed, what was resolved, why the loop ended.
+This is the ONLY moment in the entire session where text output is correct.
 
 ## Error Handling
-- LIMIT_EXCEEDED: Shorten message and retry.
-- NOT_FOUND: Table or patron gone; exit gracefully.
-- RATE_LIMITED: Wait before retrying (respect Retry-After if provided).
+- LIMIT_EXCEEDED: Shorten message and retry immediately (tool_call).
+- NOT_FOUND: Table or patron gone; call table_leave, then report to user.
+- RATE_LIMITED: Wait, then retry (tool_call). Do not narrate the wait.
 """
 
 # Create the MCP server instance
@@ -813,15 +815,12 @@ def table_join(
             },
             **({"seat": seat_data} if seat_data is not None else {}),
             "_next_action": (
-                "Start the discussion loop now. Do not address the user. "
-                "1. table_wait(since_sequence=initial_sayings.next_sequence) "
-                "2. Read new sayings, decide if you have something to add "
-                "3. table_say if relevant, skip if not "
-                "4. seat_heartbeat every ~60 s "
-                "5. Repeat from 1. "
-                "Exit when: human says stop, consensus reached, table closed, "
-                "or _loop_state.consecutive_empty_waits reaches 30 with nothing to add."
-            ),
+                "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
+                "Your response must be a tool_call — not text. "
+                "Loop: wait → think → say/skip → heartbeat → wait. "
+                "Exit only when: human says stop, consensus, table closed, "
+                "or consecutive_empty_waits=30 with nothing to add."
+            ).format(seq=next_sequence),
         }
     )
 
@@ -1104,8 +1103,8 @@ def table_say(
             # Return cached response (return_existing semantics)
             cached_data = cached_response["data"]
             cached_data["_next_action"] = (
-                "Message already sent (dedup). Continue the loop: "
-                "call table_wait to keep listening. Do not address the user."
+                "Already sent (dedup). IMMEDIATELY call tasca.table_wait. "
+                "Your response = tool_call, not text."
             )
             return success_response(cached_data)
 
@@ -1195,8 +1194,8 @@ def table_say(
         "content": saying.content,
         "pinned": saying.pinned,
         "_next_action": (
-            "Message sent. Continue the loop: call table_wait(since_sequence={seq}). "
-            "Do not address the user."
+            "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
+            "Your response = tool_call, not text."
         ).format(seq=saying.sequence),
     }
     # Store in idempotency cache if dedup_id provided
@@ -1339,8 +1338,8 @@ def table_listen(
             ],
             "next_sequence": next_sequence,
             "_next_action": (
-                "Continue the loop: call table_wait(since_sequence={seq}). "
-                "Do not address the user."
+                "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
+                "Your response = tool_call, not text."
             ).format(seq=next_sequence),
         }
     )
@@ -1525,13 +1524,13 @@ def table_control(
     # Context-dependent next action based on control operation
     if new_status == TableStatus.OPEN:
         next_action = (
-            "Table resumed. Continue the discussion loop: "
-            "call table_wait to keep listening. Do not address the user."
+            "Table resumed. IMMEDIATELY call tasca.table_wait. "
+            "Your response = tool_call, not text."
         )
     else:
         next_action = (
             f"Table is now {new_status.value}. "
-            "Call table_leave and report to the user what was discussed."
+            "Call tasca.table_leave, then report to the user."
         )
 
     response_data = {
@@ -1821,8 +1820,10 @@ async def table_wait(
                 }
 
             response_data["_next_action"] = (
-                "Process these sayings, then call table_wait(since_sequence={seq}) "
-                "to continue. Do not address the user."
+                "New sayings received. Decide internally whether to speak. "
+                "Your next response MUST be a tool_call: either "
+                "tasca.table_say(...) or tasca.table_wait(since_sequence={seq}). "
+                "Do not emit text."
             ).format(seq=next_sequence)
 
             return success_response(response_data)
@@ -1843,10 +1844,11 @@ async def table_wait(
         "timeout": True,
         "_loop_state": loop,
         "_next_action": (
-            "No new messages (empty waits: {empty}/{threshold}). "
-            "Call table_wait(since_sequence={seq}) to continue — "
-            "UNLESS empty waits reach {threshold} and you have nothing to add, "
-            "then call table_leave and report to the user."
+            "No new messages (consecutive_empty_waits: {empty}/{threshold}). "
+            "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
+            "EXIT ONLY IF consecutive_empty_waits={threshold} AND you have nothing to add "
+            "— then call tasca.table_leave and report. "
+            "Your response = tool_call, not text."
         ).format(seq=next_sequence, empty=empty, threshold=EXIT_EMPTY_WAITS_THRESHOLD),
     }
 
@@ -1944,8 +1946,8 @@ def seat_heartbeat(
             log_dedup_hit(logger, "seat_heartbeat", resource_key, dedup_id)
             cached_data = cached_response["data"]
             cached_data["_next_action"] = (
-                "Heartbeat acknowledged (dedup). Return to table_wait. "
-                "Do not address the user."
+                "IMMEDIATELY call tasca.table_wait(since_sequence=...). "
+                "Your response = tool_call, not text."
             )
             return success_response(cached_data)
 
@@ -1986,8 +1988,8 @@ def seat_heartbeat(
     response_data: dict[str, Any] = {
         "expires_at": expires_at.isoformat(),
         "_next_action": (
-            "Heartbeat acknowledged. Return to table_wait to continue the loop. "
-            "Do not address the user."
+            "IMMEDIATELY call tasca.table_wait(since_sequence=...). "
+            "Your response = tool_call, not text."
         ),
     }
 

@@ -384,8 +384,10 @@ async def list_sayings_endpoint(
     if sayings:
         next_sequence = max(s.sequence for s in sayings) + 1
     else:
-        # Table's max sequence + 1 (or 0 if no sayings)
-        next_sequence = table_max_sequence + 1
+        # If table has no sayings at all, return -1 so client polls with
+        # since_sequence=-1 (fetch all) and catches sequence=0 (first saying).
+        # If table has sayings but none matched the filter, use max+1 as usual.
+        next_sequence = table_max_sequence + 1 if table_max_sequence >= 0 else -1
 
     return SayingListResponse(sayings=sayings, next_sequence=next_sequence)
 
@@ -502,6 +504,6 @@ async def wait_for_sayings_endpoint(
 
     return WaitResponse(
         sayings=[],
-        next_sequence=table_max_sequence + 1,
+        next_sequence=table_max_sequence + 1 if table_max_sequence >= 0 else -1,
         timeout=True,
     )

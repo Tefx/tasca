@@ -171,9 +171,23 @@ There is no step where you write text. Every step ends with a tool_call.
 "I'll continue monitoring" is text. Do not emit it. Just call the tool.
 
 ## Speaking Rules
-- Speak only when you add new information. Silence is valid.
-- Do not repeat what others said; add new perspectives only.
+- Speak only when you add new information. Do not echo others.
+- Add new perspectives, challenge assumptions, or propose synthesis.
 - @all means "pay attention", not "everyone must reply".
+
+## Opening Move (anti-deadlock)
+When you join a table with no prior discussion (empty sayings history),
+you MUST share your opening perspective on the table's question immediately
+via table_say. Do not wait for others to go first. An empty table needs
+a first voice, not more silence.
+
+## Silence Breaking
+During the loop, if table_wait returns consecutive_empty_waits >= 4 and the
+table's question has not been fully resolved:
+  - Advance the discussion: raise an unaddressed aspect, propose a synthesis,
+    challenge a prior point, or ask a sharpening question.
+  - "Don't echo others" is a content quality rule, not an initiative rule.
+    If nobody has spoken in 4+ rounds, the discussion is stuck, not finished.
 
 ## Exit Conditions (ONLY valid reasons to stop the loop and produce text)
 1. A human participant posts an explicit instruction to stop.
@@ -233,6 +247,55 @@ def _record_wait_result(table_id: str, *, got_sayings: bool) -> dict[str, int]:
     else:
         state["consecutive_empty_waits"] += 1
     return state
+
+
+# Silence-breaking nudge thresholds for tiered _next_action
+_NUDGE_THRESHOLD = 4
+_URGENCY_THRESHOLD = 11
+
+
+# @invar:allow shell_result: Pure string builder, not I/O
+# @invar:allow shell_pure_logic: Formatting helper co-located with MCP tools
+def _silence_next_action(empty_waits: int, next_sequence: int) -> str:
+    """Build tiered _next_action string based on consecutive empty waits.
+
+    Tiers:
+      1-3   (patience): Just keep waiting.
+      4-10  (nudge): Consider advancing the discussion.
+      11-29 (urgency): Speak now or the discussion ends.
+      30+   (exit): Leave the table.
+    """
+    threshold = EXIT_EMPTY_WAITS_THRESHOLD
+
+    if empty_waits < _NUDGE_THRESHOLD:
+        return (
+            f"No new messages ({empty_waits}/{threshold}). "
+            f"IMMEDIATELY call tasca.table_wait(since_sequence={next_sequence}). "
+            "Your response = tool_call, not text."
+        )
+    elif empty_waits < _URGENCY_THRESHOLD:
+        return (
+            f"Silence for {empty_waits} consecutive waits — discussion may be stalling. "
+            "Consider whether the table's question has been fully addressed. "
+            "If not, call tasca.table_say to advance: raise an unaddressed aspect, "
+            "propose a synthesis, or ask a sharpening question. "
+            f"If fully addressed, call tasca.table_wait(since_sequence={next_sequence}). "
+            "Your response = tool_call, not text."
+        )
+    elif empty_waits < threshold:
+        return (
+            f"Extended silence ({empty_waits}/{threshold}). If you have ANY remaining "
+            "perspective on the table's question, call tasca.table_say NOW — "
+            "this is your last chance before the discussion ends. "
+            f"If the topic is genuinely exhausted, call tasca.table_wait(since_sequence={next_sequence}). "
+            f"EXIT at {threshold} if nothing to add. "
+            "Your response = tool_call, not text."
+        )
+    else:
+        return (
+            f"Empty waits reached {threshold}. Discussion is over. "
+            "IMMEDIATELY call tasca.table_leave, then report to the user."
+        )
 
 
 # =============================================================================
@@ -815,12 +878,22 @@ def table_join(
             },
             **({"seat": seat_data} if seat_data is not None else {}),
             "_next_action": (
-                "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
-                "Your response must be a tool_call — not text. "
-                "Loop: wait → think → say/skip → heartbeat → wait. "
-                "Exit only when: human says stop, consensus, table closed, "
-                "or consecutive_empty_waits=30 with nothing to add."
-            ).format(seq=next_sequence),
+                (
+                    "The table has a question but no discussion yet. "
+                    "IMMEDIATELY call tasca.table_say to share your opening perspective "
+                    "on the table's question. You are starting the discussion. "
+                    "After speaking, call tasca.table_wait(since_sequence=...). "
+                    "Your response must be a tool_call — not text."
+                )
+                if not history_sayings
+                else (
+                    "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
+                    "Your response must be a tool_call — not text. "
+                    "Loop: wait → think → say/skip → heartbeat → wait. "
+                    "Exit only when: human says stop, consensus, table closed, "
+                    "or consecutive_empty_waits=30 with nothing to add."
+                ).format(seq=next_sequence)
+            ),
         }
     )
 
@@ -1843,13 +1916,7 @@ async def table_wait(
         "next_sequence": next_sequence,
         "timeout": True,
         "_loop_state": loop,
-        "_next_action": (
-            "No new messages (consecutive_empty_waits: {empty}/{threshold}). "
-            "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
-            "EXIT ONLY IF consecutive_empty_waits={threshold} AND you have nothing to add "
-            "— then call tasca.table_leave and report. "
-            "Your response = tool_call, not text."
-        ).format(seq=next_sequence, empty=empty, threshold=EXIT_EMPTY_WAITS_THRESHOLD),
+        "_next_action": _silence_next_action(empty, next_sequence),
     }
 
     if include_table:

@@ -74,12 +74,13 @@ class SayingListResponse(BaseModel):
     Clients should call /wait?since_sequence={next_sequence} to wait.
 
     next_sequence rules:
-    - If sayings exist: next_sequence = max(sequence) + 1
-    - If no sayings: next_sequence = 0
+    - If sayings exist: next_sequence = max(sequence)  [last seen sequence]
+    - If no sayings: next_sequence = -1
+    Clients pass next_sequence back as since_sequence; server returns sequence > since_sequence.
 
     Attributes:
         sayings: List of sayings ordered by sequence (ascending).
-        next_sequence: Sequence number for the next saying.
+        next_sequence: Last seen sequence (pass as since_sequence on next call).
     """
 
     sayings: list[Saying]
@@ -336,11 +337,12 @@ async def list_sayings_endpoint(
     Returns sayings ordered by sequence (ascending), with next_sequence
     for the client to use when polling for new sayings.
 
-    next_sequence rules:
-    - If sayings returned: next_sequence = max(sequence in results) + 1
-    - If no sayings in table: next_sequence = 0
+    next_sequence rules (last-seen semantics):
+    - If sayings returned: next_sequence = max(sequence in results)
+    - If no sayings in table: next_sequence = -1
     - After filtering by since_sequence, if results empty but table has sayings:
-      next_sequence = max(sequence in table) + 1
+      next_sequence = max(sequence in table)
+    Pass next_sequence as since_sequence; server returns sequence > since_sequence.
 
     Args:
         table_id: The table identifier.
@@ -378,16 +380,18 @@ async def list_sayings_endpoint(
 
     sayings = result.unwrap()
 
-    # Calculate next_sequence
-    # If we got sayings back, next_sequence is max(sayings.sequence) + 1
-    # Otherwise, use table's max sequence + 1 (or 0 if empty table)
+    # next_sequence = last sequence seen (NOT +1).
+    # Clients pass it back as since_sequence; server returns sequence > since_sequence.
+    # So next_sequence must equal the last seen sequence for the next call to
+    # catch sequence (last+1). Using last+1 would require sequence > last+1,
+    # which skips the very next message.
     if sayings:
-        next_sequence = max(s.sequence for s in sayings) + 1
+        next_sequence = max(s.sequence for s in sayings)
     else:
-        # If table has no sayings at all, return -1 so client polls with
-        # since_sequence=-1 (fetch all) and catches sequence=0 (first saying).
-        # If table has sayings but none matched the filter, use max+1 as usual.
-        next_sequence = table_max_sequence + 1 if table_max_sequence >= 0 else -1
+        # table_max_sequence is -1 when truly empty → client polls since_sequence=-1
+        # (sequence > -1 = all sayings, catches sequence=0).
+        # Otherwise equals the max sequence already seen by the client.
+        next_sequence = table_max_sequence
 
     return SayingListResponse(sayings=sayings, next_sequence=next_sequence)
 
@@ -474,7 +478,7 @@ async def wait_for_sayings_endpoint(
                     detail=f"Failed to list sayings: {full_result.failure()}",
                 )
             full_sayings = full_result.unwrap()
-            next_sequence = max(s.sequence for s in full_sayings) + 1
+            next_sequence = max(s.sequence for s in full_sayings)
 
             # Log wait returned
             log_wait_returned(logger, table_id, since_sequence, len(full_sayings))
@@ -504,6 +508,6 @@ async def wait_for_sayings_endpoint(
 
     return WaitResponse(
         sayings=[],
-        next_sequence=table_max_sequence + 1 if table_max_sequence >= 0 else -1,
+        next_sequence=table_max_sequence,
         timeout=True,
     )

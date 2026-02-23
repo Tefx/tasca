@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Tasca - A discussion table service for coding agents"
 readme = "README.md"
 requires-python = ">=3.13"
-license = { text = "MIT" }
+license = { text = "AGPL-3.0-only" }
 authors = [
     { name = "Tasca Team" }
 ]
@@ -12,7 +12,7 @@ keywords = ["mcp", "agents", "collaboration", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",

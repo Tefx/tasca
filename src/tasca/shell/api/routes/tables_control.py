@@ -3,6 +3,10 @@ Tables control API routes.
 
 Endpoint for table lifecycle control operations (pause, resume, close).
 Extracted from tables.py (SF-2) to keep that module below 500 lines.
+
+CRITICAL: Control operations are ATOMIC - both the CONTROL saying append
+and the table status update happen in a single transaction. This ensures
+the audit trail and state remain consistent even on failure.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from pydantic import BaseModel, Field
 from returns.result import Failure
 
 from tasca.core.domain.saying import Speaker, SpeakerKind
-from tasca.core.domain.table import TableId, TableUpdate, Version
+from tasca.core.domain.table import TableId
 from tasca.core.table_state_machine import (
     can_transition_to_closed,
     can_transition_to_open,
@@ -26,12 +30,10 @@ from tasca.core.table_state_machine import (
 )
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
-from tasca.shell.storage.saying_repo import append_saying
+from tasca.shell.storage.control_repo import atomic_control_table
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
-    VersionConflictError,
     get_table,
-    update_table,
 )
 
 router = APIRouter()
@@ -153,51 +155,35 @@ async def control_table_endpoint(
     # Create speaker for CONTROL saying (human speaker, no patron_id)
     speaker = Speaker(kind=SpeakerKind.HUMAN, name=data.speaker_name)
 
-    # Append CONTROL saying
-    saying_result = append_saying(
+    # Atomically append CONTROL saying and update table status
+    # This ensures the audit trail and state remain consistent even on failure
+    now = datetime.now(UTC)
+    result = atomic_control_table(
         conn=conn,
         table_id=table_id,
         speaker=speaker,
-        content=control_content,
-    )
-
-    if isinstance(saying_result, Failure):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to append control saying: {saying_result.failure()}",
-        )
-
-    saying = saying_result.unwrap()
-
-    # Update table status via TableUpdate
-    now = datetime.now(UTC)
-    update = TableUpdate(
-        question=current_table.question,
-        context=current_table.context,
-        status=new_status,
-    )
-
-    update_result = update_table(
-        conn=conn,
-        table_id=TableId(table_id),
-        update=update,
-        expected_version=current_table.version,
+        control_content=control_content,
+        new_status=new_status,
+        current_table=current_table,
         now=now,
     )
 
-    if isinstance(update_result, Failure):
-        error = update_result.failure()
-        if isinstance(error, VersionConflictError):
+    if isinstance(result, Failure):
+        error = result.failure()
+        error_str = str(error).lower()
+        if "version conflict" in error_str:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=error.to_json(),
+                detail={"error": "version_conflict", "message": str(error)},
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update table status: {error}",
+            detail=f"Failed to execute control operation: {error}",
         )
 
+    saying, updated_table = result.unwrap()
+
     return TableControlResponse(
-        table_status=new_status.value,
+        table_status=updated_table.status.value,
         control_saying_sequence=saying.sequence,
     )

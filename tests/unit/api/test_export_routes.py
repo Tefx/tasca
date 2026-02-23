@@ -212,6 +212,27 @@ class TestExportJSONL:
         assert response.status_code == 200
         assert "text/plain" in response.headers["content-type"]
 
+    def test_export_jsonl_with_download_param(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Export with download=true returns attachment header."""
+        table = create_test_table(test_db, "table-1", "Question?")
+
+        response = client.get(f"/tables/{table.id}/export/jsonl?download=true")
+        assert response.status_code == 200
+        assert "Content-Disposition" in response.headers
+        assert f'attachment; filename="{table.id}.jsonl"' == response.headers["Content-Disposition"]
+
+    def test_export_jsonl_without_download_param(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Export without download param has no attachment header."""
+        table = create_test_table(test_db, "table-1", "Question?")
+
+        response = client.get(f"/tables/{table.id}/export/jsonl")
+        assert response.status_code == 200
+        assert "Content-Disposition" not in response.headers
+
 
 # =============================================================================
 # GET /tables/{table_id}/export/markdown - Markdown Export Tests
@@ -299,22 +320,20 @@ class TestExportMarkdown:
         assert "(agent:AgentA)" in md
         assert "(human:Alice)" in md
 
-    def test_export_markdown_long_content_truncated(
+    def test_export_markdown_long_content_not_truncated(
         self, client: TestClient, test_db: sqlite3.Connection
     ) -> None:
-        """Export truncates long saying content."""
+        """Export preserves full saying content without truncation."""
         table = create_test_table(test_db, "table-1", "Question?")
-        long_content = "A" * 300  # Too long
+        long_content = "A" * 300  # Long content
         create_test_saying(test_db, table.id, long_content, speaker_name="Speaker")
 
         response = client.get(f"/tables/{table.id}/export/markdown")
         assert response.status_code == 200
 
         md = response.text
-        # Should be truncated with ellipsis
-        assert "..." in md
-        # The full content should not be present
-        assert "A" * 300 not in md
+        # Full content should be present (no truncation)
+        assert long_content in md
 
     def test_export_markdown_response_type(
         self, client: TestClient, test_db: sqlite3.Connection
@@ -325,6 +344,27 @@ class TestExportMarkdown:
         response = client.get(f"/tables/{table.id}/export/markdown")
         assert response.status_code == 200
         assert "text/plain" in response.headers["content-type"]
+
+    def test_export_markdown_with_download_param(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Export with download=true returns attachment header."""
+        table = create_test_table(test_db, "table-1", "Question?")
+
+        response = client.get(f"/tables/{table.id}/export/markdown?download=true")
+        assert response.status_code == 200
+        assert "Content-Disposition" in response.headers
+        assert f'attachment; filename="{table.id}.md"' == response.headers["Content-Disposition"]
+
+    def test_export_markdown_without_download_param(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Export without download param has no attachment header."""
+        table = create_test_table(test_db, "table-1", "Question?")
+
+        response = client.get(f"/tables/{table.id}/export/markdown")
+        assert response.status_code == 200
+        assert "Content-Disposition" not in response.headers
 
     def test_export_markdown_table_status(
         self, client: TestClient, test_db: sqlite3.Connection

@@ -45,6 +45,7 @@ _started_server_process: subprocess.Popen[str] | None = None
 
 
 # @invar:allow shell_result: Helper function returns string for banner, not Result
+# @shell_orchestration: Socket I/O for LAN IP discovery (connect to public DNS)
 def get_lan_ip() -> str:
     """Get the LAN IP address for remote access.
 
@@ -697,6 +698,7 @@ def cmd_export(args: argparse.Namespace) -> int:
 
 
 # @invar:allow shell_result: CLI entry point, returns exit code int
+# @shell_orchestration: Argument parsing (argparse) and command dispatch to I/O handlers
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the Tasca CLI.
 

@@ -1,3 +1,4 @@
+// DEPRECATED: Board content moved to HUD collapsible. Kept for reference.
 /**
  * Board component — Context rail for Mission Control.
  *

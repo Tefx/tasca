@@ -17948,3 +17948,1642 @@ phases:
 
       All 4 fix steps executed with proper evidence. All 4 retest steps passed with
       independent verification. No unresolved blockers. No regressions detected.'
+- id: ux_foundation
+  name: Foundation — CSS fixes, scroll race fix, and structural layout changes
+  status: in_progress
+  steps:
+  - id: ux_foundation.fix-smooth-scroll-race
+    name: fix-smooth-scroll-race
+    status: done
+    description: 'Remove `scroll-behavior: smooth` from `.mc-stream` in table.css
+      (line 408). This causes a race condition: smooth scroll animates scrollTop assignment
+      over 300-500ms, during which isAtBottom evaluates to false mid-animation, causing
+      the ''N new sayings'' pill to flash/flicker in high-velocity streams.
+
+
+      Fix:
+
+      1. In `web/src/styles/table.css` line 408: remove `scroll-behavior: smooth;`
+      from `.mc-stream`.
+
+      2. In `web/src/components/Stream.tsx` `jumpToBottom()` function (~line 274-281):
+      change `el.scrollTop = el.scrollHeight` to `el.scrollTo({ top: el.scrollHeight,
+      behavior: ''smooth'' })` so only user-initiated scroll (clicking the pill) uses
+      smooth behavior. Auto-follow in the useEffect (~line 258) should remain instant
+      (`el.scrollTop = el.scrollHeight`).'
+    verification: '1. Open a table with high-velocity stream (10+ sayings arriving
+      in quick succession).
+
+      2. Confirm the ''N new sayings'' pill does NOT flash/flicker when auto-following
+      at bottom.
+
+      3. Click the ''N new sayings'' pill when scrolled up — confirm it smooth-scrolls
+      to bottom.
+
+      4. Confirm auto-follow (when at bottom) snaps instantly without animation.
+
+      5. Confirm `prefers-reduced-motion` media query still suppresses animation (the
+      existing rule at line 1577-1579 can be removed since we removed the CSS property).'
+    refs:
+    - web/src/styles/table.css
+    - web/src/components/Stream.tsx
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-24T13:12:36.287571+00:00'
+    evidence: 'Artifact:
+
+      - Commit: e075158
+
+
+      Verification:
+
+      - Run: pnpm tsc --noEmit -> PASSED (0 errors)
+
+      - Run: pnpm test -> PASSED (145 tests in 6 files)
+
+      - Run: pnpm build -> PASSED (built in 511ms)
+
+
+      Spec link:
+
+      - Step: ux_foundation.fix-smooth-scroll-race
+
+
+      Files changed:
+
+      - web/src/styles/table.css
+
+      - web/src/components/Stream.tsx
+
+
+      Notes:
+
+      - Removed global smooth scrolling from `.mc-stream` to avoid scroll animation
+      race with bottom detection.
+
+      - `jumpToBottom()` now uses `scrollTo({ top, behavior })` so user-triggered
+      jump remains smooth while auto-follow remains instant.
+
+      - Reduced-motion preference is respected in JS by switching behavior to `auto`.'
+  - id: ux_foundation.fix-root-max-width
+    name: fix-root-max-width
+    status: done
+    description: "Override `#root { max-width: 1280px; padding: 2rem }` for the Mission\
+      \ Control route. Add a CSS rule scoped to `.mc` that resets the constraint.\n\
+      \nIn `web/src/styles/table.css`, in the Page Layout section (after line ~79),\
+      \ add:\n```css\n/* Override #root constraint for Mission Control (full viewport)\
+      \ */\n.mc {\n  max-width: none;\n  padding: 0;\n}\n```\n\nNote: `.mc` is already\
+      \ the outermost wrapper in Table.tsx (line 328). The rule uses specificity:\
+      \ `.mc` as a child of `#root` inherits the constraint but can override it because\
+      \ the `.mc` rule sets width: 100% and height: 100vh. We need to also ensure\
+      \ the parent `#root` does not clip. The cleanest approach: add `#root:has(.mc)\
+      \ { max-width: none; padding: 0; }` which scopes the override only when Mission\
+      \ Control is rendered.\n\nFallback for browsers without :has() support: the\
+      \ existing `.mc { width: 100% }` already works within the 1280px constraint,\
+      \ but wastes horizontal space. The :has() approach is progressive enhancement."
+    verification: '1. Navigate to Mission Control table page — confirm it fills the
+      full viewport width (no 1280px cap, no 2rem padding).
+
+      2. Navigate to Watchtower (home) page — confirm it still has the 1280px max-width
+      and 2rem padding.
+
+      3. Resize browser window to various widths (800px, 1200px, 1600px, 2000px) —
+      Mission Control should always fill full width.
+
+      4. Check browser compatibility: test in Chrome and Firefox (Safari :has() support
+      is fine since Safari 15.4).'
+    refs:
+    - web/src/styles/table.css
+    - web/src/styles/index.css
+    depends_on:
+    - ux_foundation.fix-smooth-scroll-race
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-24T13:18:47.625269+00:00'
+    evidence: 'Artifact:
+
+      - Commit: c23e2ec
+
+
+      Verification:
+
+      - Run: pnpm build -> SUCCESS (550ms, 309 modules transformed)
+
+      - Run: grep '':has('' dist/assets/index-*.css -> FOUND: `#root:has(.mc){max-width:none;padding:0}`
+
+      - Run: grep ''#root{'' dist/assets/index-*.css -> EXISTS: `#root{width:100%;max-width:1280px;margin:0
+      auto;padding:2rem}`
+
+
+      Spec link:
+
+      - Step: ux_foundation.fix-root-max-width
+
+
+      Files changed:
+
+      - web/src/styles/table.css
+
+      - web/vite.config.ts
+
+
+      Notes:
+
+      - Added Mission Control scoped override via `#root:has(.mc)` to remove root
+      max-width/padding only when `.mc` is present.
+
+      - Preserved global `#root` constraints for non-Mission Control routes.
+
+      - Subagent reported browser support and progressive enhancement behavior for
+      `:has()`.'
+  - id: ux_foundation.remove-left-column-css
+    name: remove-left-column-css
+    status: done
+    description: 'Change the three-column grid to a two-column grid by removing the
+      Board (left) column.
+
+
+      In `web/src/styles/table.css`:
+
+      1. Line 220: change `grid-template-columns: 250px 1fr 220px` to `grid-template-columns:
+      1fr 220px`.
+
+      2. Remove or comment out the entire `.mc-col-left` CSS block (lines 231-243)
+      and `.mc-col-left::-webkit-scrollbar` (lines 241-243).
+
+      3. Remove or comment out `.mc-board`, `.mc-board-section`, `.mc-board-section-title`,
+      `.mc-board-empty` CSS blocks (lines 246-271).
+
+      4. Remove or comment out `.mc-meta-list`, `.mc-meta-item`, `.mc-meta-label`,
+      `.mc-meta-value`, `.mc-meta-value--mono` CSS blocks (lines 274-305). These will
+      be re-added in a simpler form in the HUD metadata step.
+
+      5. Update the responsive media query at line 1503-1526: remove `.mc-col-left`
+      rules, update `.mc-columns` to `grid-template-columns: 1fr` (stays the same
+      for mobile).'
+    verification: '1. Build passes with no CSS errors.
+
+      2. The grid is now two columns (stream + seat deck).
+
+      3. No leftover .mc-col-left or .mc-board styles in table.css.
+
+      4. Responsive breakpoint at 1024px still stacks to single column.'
+    refs:
+    - web/src/styles/table.css
+    depends_on:
+    - ux_foundation.fix-root-max-width
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-24T13:22:59.009097+00:00'
+    evidence: 'Artifact:
+
+      - Commit: c80c1ba
+
+
+      Verification:
+
+      - Run: pnpm build -> SUCCESS (built in 531ms, 0 errors)
+
+      - Run: grep -n "grid-template-columns" web/src/styles/table.css -> two-column
+      `1fr 220px` and responsive `1fr` present
+
+      - Run: grep for leftover selectors (`mc-col-left`, `mc-board`, `mc-meta-*`)
+      in web/src/styles/table.css -> no matches
+
+
+      Spec link:
+
+      - Step: ux_foundation.remove-left-column-css
+
+
+      Files changed:
+
+      - web/src/styles/table.css
+
+
+      Notes:
+
+      - Left-column style blocks are removed and layout remains two-column desktop/single-column
+      mobile.
+
+      - Updated stale comment referencing old three-column layout.'
+  - id: ux_foundation.remove-left-column-jsx
+    name: remove-left-column-jsx
+    status: claimed
+    description: 'Remove the Board component from the Table layout and move its metadata
+      into a collapsible element in the HUD area.
+
+
+      In `web/src/routes/Table.tsx`:
+
+      1. Remove `import { Board } from ''../components/Board''` (line 19).
+
+      2. Remove the `<div className="mc-col-left"><Board table={table} /></div>` block
+      (lines 331-333).
+
+      3. In the `Hud` component, add a collapsible `<details>` element for table metadata.
+      Place it in Tier 2 (after TableControls). The summary should be a compact label
+      like ''Info''. The details should show: Status, Created, Updated, Version, Context
+      (same data as Board.tsx showed). Import the formatting helpers from Board.tsx
+      or inline them.
+
+      4. `web/src/components/Board.tsx` — This file can remain but is now unused.
+      Add a comment at the top: `// DEPRECATED: Board content moved to HUD collapsible.
+      Kept for reference.`
+
+
+      Add minimal inline styles or CSS classes for the collapsible metadata (`mc-hud-meta-details`,
+      `mc-hud-meta-summary`).'
+    verification: '1. Table page renders with two columns only (no left column).
+
+      2. HUD shows a collapsible ''Info'' element.
+
+      3. Clicking ''Info'' expands to show Status, Created, Updated, Version, Context.
+
+      4. Collapsible closes when clicked again.
+
+      5. No console errors or warnings.
+
+      6. Board.tsx is marked deprecated but not deleted.'
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/components/Board.tsx
+    depends_on:
+    - ux_foundation.remove-left-column-css
+    agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-02-24T13:41:58.628420+00:00'
+  - id: ux_foundation.two-tier-hud-structure
+    name: two-tier-hud-structure
+    status: pending
+    description: "Split the single flex-wrap HUD into two tiers for better information\
+      \ hierarchy.\n\nIn `web/src/routes/Table.tsx`, restructure the `Hud` component:\n\
+      \n**Tier 1** (`.mc-hud-tier1`): Navigation back button + table title (question).\
+      \ Full width, prominent.\n\n**Tier 2** (`.mc-hud-tier2`): Status pill (from\
+      \ TableControls) + action buttons (Download, End Meeting) + collapsible metadata\
+      \ (from previous step) + invite code/share + ModeIndicator. Compact, secondary.\n\
+      \nThe JSX structure should be:\n```tsx\n<header className=\"mc-hud\">\n  <div\
+      \ className=\"mc-hud-tier1\">\n    <Link to=\"/\" ...>Watchtower</Link>\n  \
+      \  <h1 className=\"mc-hud-title\">{table.question}</h1>\n  </div>\n  <div className=\"\
+      mc-hud-tier2\">\n    <TableControls table={table} onStatusChange={onStatusChange}\
+      \ />\n    {/* collapsible metadata details element */}\n    <div className=\"\
+      mc-hud-actions\">...</div>\n    <ModeIndicator />\n  </div>\n</header>\n```\n\
+      \nKeep the CopyButton and shortCode/shareUrl helpers as-is."
+    verification: '1. HUD renders in two rows: Tier 1 (nav + title) and Tier 2 (controls
+      + metadata + mode).
+
+      2. Title has full width on Tier 1, no longer competing with controls.
+
+      3. All HUD elements still present and functional.
+
+      4. Mobile layout (640px) still works — tiers stack naturally.
+
+      5. No TypeScript compilation errors.'
+    refs:
+    - web/src/routes/Table.tsx
+    depends_on:
+    - ux_foundation.remove-left-column-jsx
+    agent: frontend-engineer
+  - id: ux_foundation.two-tier-hud-css
+    name: two-tier-hud-css
+    status: pending
+    description: 'Add CSS for the two-tier HUD layout replacing the single `.mc-hud`
+      flex layout.
+
+
+      In `web/src/styles/table.css`, replace/update the HUD Header section (lines
+      85-155):
+
+
+      1. Keep `.mc-hud` as the outer container (flex column, gap between tiers).
+
+      2. Add `.mc-hud-tier1`: `display: flex; align-items: center; gap: 0.75rem;`
+      — contains back link + title.
+
+      3. Add `.mc-hud-tier2`: `display: flex; align-items: center; gap: 0.5rem; flex-wrap:
+      wrap; font-size: 0.8125rem;` — contains status, controls, metadata toggle, invite,
+      mode.
+
+      4. Add `.mc-hud-meta-details` and `.mc-hud-meta-summary` for the collapsible
+      metadata element. Summary styled as a small button-like element. Details panel
+      styled as a dropdown below Tier 2.
+
+      5. Add `.mc-hud-meta-list` (replacement for the old `.mc-meta-list` that was
+      in the Board column) — horizontal compact list.
+
+      6. Update the mobile media query (640px) to handle tier stacking.
+
+      7. Remove the old `.mc-hud { flex-wrap: wrap }` since tiers handle the layout
+      now.'
+    verification: '1. Tier 1 spans full width with nav + title.
+
+      2. Tier 2 is compact with all controls in a single row (wrapping gracefully
+      if needed).
+
+      3. Collapsible metadata has appropriate styling (looks like a dropdown/panel).
+
+      4. Mobile breakpoint stacks tiers correctly.
+
+      5. All spacing and alignment consistent with existing MC design tokens.
+
+      6. No CSS lint errors.'
+    refs:
+    - web/src/styles/table.css
+    depends_on:
+    - ux_foundation.two-tier-hud-structure
+    agent: frontend-engineer
+  - id: ux_foundation.foundation-verify
+    name: foundation-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (blind-tester), validate the Foundation
+      phase changes from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: Mission Control page loads with two-column layout, two-tier HUD,
+      no max-width constraint, smooth scroll race fixed.
+
+      - Edge cases: Very long table titles (truncation), empty table (no sayings),
+      closed table status, no participants.
+
+      - Error scenarios: Navigate between Watchtower and Mission Control repeatedly,
+      refresh on Mission Control, direct URL access.
+
+      - Layout: Test at 640px, 1024px, 1280px, 1600px, 2000px viewport widths.
+
+      - Scroll race: Rapidly add sayings while scrolled to bottom — no pill flicker.
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+
+      Independence Level: L1'
+    verification: Full visual and functional verification of all Foundation phase
+      changes. See description for test matrix.
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/styles/table.css
+    - web/src/styles/index.css
+    - web/src/components/Stream.tsx
+    depends_on:
+    - ux_foundation.two-tier-hud-css
+    agent: blind-tester
+  - id: ux_foundation.ux-foundation-gate
+    name: ux_foundation.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether the ux_foundation
+      phase meets the quality bar for proceeding to the Density phase.
+
+
+      YOU ARE THE QUALITY GATE. Your job is to BLOCK progress if quality is insufficient.
+
+
+      Review criteria:
+
+      1. Completeness: All 7 planned steps executed (scroll race, max-width, left
+      column removal, HUD restructure).
+
+      2. Evidence Quality: Evidence is specific, verifiable, includes screenshots
+      or DOM inspection.
+
+      3. Known Issues: All blockers resolved. Tech debt documented.
+
+      4. Cross-cutting: Layout does not break at any viewport width. No regressions
+      in existing functionality.
+
+
+      Independence: You MUST NOT be the same agent as frontend-engineer.'
+    verification: 'Gate review checklist:
+
+      - All phase steps completed successfully
+
+      - Evidence collected and reviewed
+
+      - No unresolved blockers
+
+      - Ready for ux_density phase'
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/styles/table.css
+    depends_on:
+    - ux_foundation.foundation-verify
+    agent: gate-reviewer
+- id: ux_density
+  name: Density — Information density improvements
+  status: locked
+  depends_on:
+  - ux_foundation
+  steps:
+  - id: ux_density.remove-log-block-badges
+    name: remove-log-block-badges
+    status: pending
+    description: 'Remove redundant AGENT/HUMAN/PATRON text badges from log block headers
+      in Stream.tsx. The border color + background tint already communicates speaker
+      kind, making the text badges redundant information.
+
+
+      In `web/src/components/Stream.tsx`:
+
+      1. Remove the `speakerBadgeLabel()` function (lines 77-86).
+
+      2. In the `LogBlock` component, remove the entire `<span className="mc-log-badge
+      ...">` element (lines 147-152).
+
+      3. Simplify the PIN marker: change `<span className="mc-log-pin">PIN</span>`
+      (lines 153-156) to use a pin icon character. Use a Unicode pin character and
+      shrink the element.
+
+
+      This saves approximately 8px of vertical space per saying header.'
+    verification: '1. Log blocks no longer show AGENT/HUMAN/PATRON text badges.
+
+      2. Speaker kind is still visually distinguishable via border color and background
+      tint.
+
+      3. PIN indicator shows a compact icon instead of text.
+
+      4. Sequence number, speaker name, and timestamp still visible.
+
+      5. No accessibility regression (speaker kind still available via aria-label
+      on the article element).'
+    refs:
+    - web/src/components/Stream.tsx
+    agent: frontend-engineer
+  - id: ux_density.remove-log-badge-css
+    name: remove-log-badge-css
+    status: pending
+    description: 'Clean up the CSS for removed log block badges and update PIN styling.
+
+
+      In `web/src/styles/table.css`:
+
+      1. Remove `.mc-log-badge` base styles (lines 549-558).
+
+      2. Remove `.mc-log-badge--agent`, `.mc-log-badge--human`, `.mc-log-badge--patron`
+      (lines 560-573).
+
+      3. Update `.mc-log-pin` (lines 575-581): make it more compact for the icon.
+      Reduce font-size to 0.8125rem, remove text-transform uppercase and letter-spacing.
+
+      4. Reduce `.mc-log-header` gap from 0.5rem to 0.375rem (line 532) for tighter
+      header rows.
+
+      5. Optionally reduce `.mc-log-block` padding from 0.625rem to 0.5rem (line 495)
+      for additional density.'
+    verification: '1. No .mc-log-badge CSS remains in table.css.
+
+      2. .mc-log-pin styled for compact icon rendering.
+
+      3. Header row tighter with reduced gap.
+
+      4. No CSS errors on build.'
+    refs:
+    - web/src/styles/table.css
+    depends_on:
+    - ux_density.remove-log-block-badges
+    agent: frontend-engineer
+  - id: ux_density.simplify-seat-card-badges
+    name: simplify-seat-card-badges
+    status: pending
+    description: "Reduce badge overload on seat cards in SeatDeck.tsx. The avatar\
+      \ color already communicates patron kind (blue=agent, white=human), so the text\
+      \ badges are redundant.\n\nIn `web/src/components/SeatDeck.tsx`:\n1. Remove\
+      \ `presenceBadgeText()` function (lines 136-145).\n2. In `SeatCard`, simplify\
+      \ the badges section (lines 221-237):\n   - Remove the `<span className=\"mc-seat-presence-badge\"\
+      >` element.\n   - Remove the `<span className=\"mc-seat-kind\">` element.\n\
+      \   - Keep the `seat.state === 'left'` badge.\n3. The `.mc-seat-badges` container\
+      \ should only contain the LEFT badge.\n4. Ensure `.mc-seat-card--offline` opacity\
+      \ still works."
+    verification: '1. Seat cards show avatar + name + dot + time, no text badges.
+
+      2. LEFT badge still shows for departed participants.
+
+      3. Offline seats have reduced opacity.
+
+      4. Presence dot in mc-seat-meta still visible.
+
+      5. aria-label on card still includes kind and status.'
+    refs:
+    - web/src/components/SeatDeck.tsx
+    agent: frontend-engineer
+  - id: ux_density.simplify-seat-card-css
+    name: simplify-seat-card-css
+    status: pending
+    description: 'Clean up CSS for removed seat card badges.
+
+
+      In `web/src/styles/table.css`:
+
+      1. Remove `.mc-seat-presence-badge` and all variants (lines 840-885).
+
+      2. Remove `.mc-seat-kind` and its variants (lines 896-915).
+
+      3. Simplify `.mc-seat-badges` (lines 888-893).
+
+      4. Keep `.mc-seat-state` and `.mc-seat-state--left` (lines 918-937).'
+    verification: '1. No .mc-seat-presence-badge CSS remains.
+
+      2. No .mc-seat-kind CSS remains.
+
+      3. Build succeeds.'
+    refs:
+    - web/src/styles/table.css
+    depends_on:
+    - ux_density.simplify-seat-card-badges
+    agent: frontend-engineer
+  - id: ux_density.remove-human-prefix
+    name: remove-human-prefix
+    status: pending
+    description: 'Remove the ''HUMAN >'' prefix from the command console input, saving
+      72px of input width.
+
+
+      In `web/src/components/MentionInput.tsx`:
+
+      1. Remove `<span className="mc-mention-input-prefix">HUMAN &gt;</span>` (line
+      306).
+
+      2. Simplify `wrapperClassName` (line 295) — remove the `--active` modifier logic.
+
+      3. Keep disabled overlay as-is.
+
+
+      In `web/src/styles/table.css`:
+
+      1. Remove `.mc-mention-input-prefix` styles (lines 1407-1420).
+
+      2. Remove `.mc-mention-input-wrapper--active .mc-mention-input` padding override
+      (lines 1422-1425).'
+    verification: '1. Input has no ''HUMAN >'' prefix, full width available.
+
+      2. Placeholder text still shows.
+
+      3. Disabled overlay in viewer mode still works.
+
+      4. Mention picker still triggers on @.'
+    refs:
+    - web/src/components/MentionInput.tsx
+    - web/src/styles/table.css
+    agent: frontend-engineer
+  - id: ux_density.density-verify
+    name: density-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (blind-tester), validate all Density phase
+      changes from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: Stream shows clean headers, seat cards compact, input full width.
+
+      - Edge cases: Pinned sayings, LEFT badge, long names, many participants.
+
+      - Accessibility: Screen readers identify speaker kind, seat status, pinned state.
+
+      - Visual regression: ~8px savings per saying confirmed.
+
+      - Cross-component: Mention picker works after prefix removal.
+
+
+      Independence Level: L1'
+    verification: Full visual and functional verification of all Density phase changes.
+    refs:
+    - web/src/components/Stream.tsx
+    - web/src/components/SeatDeck.tsx
+    - web/src/components/MentionInput.tsx
+    - web/src/styles/table.css
+    depends_on:
+    - ux_density.remove-log-badge-css
+    - ux_density.simplify-seat-card-css
+    - ux_density.remove-human-prefix
+    agent: blind-tester
+  - id: ux_density.ux-density-gate
+    name: ux_density.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether ux_density
+      meets quality bar for proceeding to ux_polish.
+
+
+      Review criteria:
+
+      1. Completeness: All 5 implementation steps executed.
+
+      2. Evidence Quality: Verification includes visual checks.
+
+      3. Accessibility: No regression in screen reader support.
+
+
+      Independence: MUST NOT be frontend-engineer.'
+    verification: 'Gate review: all steps complete, evidence reviewed, no blockers.'
+    refs:
+    - web/src/components/Stream.tsx
+    - web/src/components/SeatDeck.tsx
+    - web/src/components/MentionInput.tsx
+    - web/src/styles/table.css
+    depends_on:
+    - ux_density.density-verify
+    agent: gate-reviewer
+- id: ux_polish
+  name: Polish — Visual consistency, empty states, and overflow guard
+  status: locked
+  depends_on:
+  - ux_density
+  steps:
+  - id: ux_polish.token-dialog-dark-theme
+    name: token-dialog-dark-theme
+    status: pending
+    description: "Add .mc-scoped dark theme overrides for ModeIndicator's token dialog.\
+      \ Currently the dialog uses light-theme CSS custom properties that clash with\
+      \ the Mission Control dark background.\n\nIn `web/src/styles/table.css`, add\
+      \ a new section near the existing mode indicator overrides (~line 1591):\n\n\
+      ```css\n/* Token Dialog — Dark Theme Override for Mission Control */\n.mc .token-dialog-overlay\
+      \ {\n  background-color: rgba(0, 0, 0, 0.7);\n}\n.mc .token-dialog {\n  background-color:\
+      \ var(--mc-surface);\n  border: 1px solid var(--mc-border);\n  box-shadow: 0\
+      \ 10px 25px -5px rgba(0, 0, 0, 0.5);\n}\n.mc .token-dialog-title {\n  color:\
+      \ var(--mc-text);\n}\n.mc .token-dialog-hint {\n  color: var(--mc-text-muted);\n\
+      }\n.mc .token-label {\n  color: var(--mc-text-dim);\n}\n.mc .token-input {\n\
+      \  background-color: var(--mc-bg);\n  border-color: var(--mc-border);\n  color:\
+      \ var(--mc-text);\n}\n.mc .token-input:focus {\n  border-color: var(--mc-accent);\n\
+      \  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);\n}\n.mc .token-input::placeholder\
+      \ {\n  color: var(--mc-text-muted);\n}\n.mc .token-error {\n  color: #f87171;\n\
+      }\n.mc .token-btn--cancel {\n  background-color: var(--mc-surface);\n  color:\
+      \ var(--mc-text-dim);\n  border: 1px solid var(--mc-border);\n}\n.mc .token-btn--cancel:hover\
+      \ {\n  background-color: var(--mc-surface-hover);\n}\n.mc .token-btn--submit\
+      \ {\n  background-color: var(--mc-accent);\n  color: #fff;\n}\n.mc .token-btn--submit:hover\
+      \ {\n  background-color: var(--mc-accent-hover);\n}\n.mc .token-btn--submit:disabled\
+      \ {\n  background-color: var(--mc-border);\n  color: var(--mc-text-muted);\n\
+      }\n```\n\nNo JSX changes needed. The `.mc` ancestor selector provides the scope."
+    verification: '1. Open Mission Control, click Admin button (or Viewer->Admin switch).
+
+      2. Token dialog appears with dark theme matching MC background.
+
+      3. Input field, buttons, and text are all readable on dark background.
+
+      4. Focus states visible (blue accent ring on input).
+
+      5. Error state (empty submit) shows red text on dark background.
+
+      6. Cancel/Submit buttons have appropriate dark styling.
+
+      7. Dialog on Watchtower (non-MC) page still uses light theme.'
+    refs:
+    - web/src/styles/table.css
+    - web/src/components/ModeIndicator.css
+    agent: frontend-engineer
+  - id: ux_polish.purposeful-zero-states-stream
+    name: purposeful-zero-states-stream
+    status: pending
+    description: 'Replace developer-speak empty states in Stream.tsx with contextual,
+      actionable messages based on table status.
+
+
+      In `web/src/components/Stream.tsx`, the `Stream` component needs to receive
+      table status to show contextual messages. Update the `StreamProps` interface
+      to include `tableStatus?: TableStatus`.
+
+
+      Replace the empty state (lines 298-302):
+
+      ```tsx
+
+      // Before:
+
+      <p>No sayings yet.</p>
+
+      <p>Sayings will appear here as the discussion progresses.</p>
+
+
+      // After (conditional on table status):
+
+      // open: "Waiting for the conversation to begin. Sayings will appear here in
+      real time."
+
+      // paused: "This table is paused. Resume the table to allow new sayings."
+
+      // closed: "This discussion has ended. No sayings were recorded."
+
+      // default (no status): "No sayings yet."
+
+      ```
+
+
+      In `web/src/routes/Table.tsx`, pass `tableStatus={table.status}` to the `<Stream>`
+      component.'
+    verification: '1. Open table with no sayings + status ''open'': shows waiting
+      message.
+
+      2. Paused table with no sayings: shows paused message.
+
+      3. Closed table with no sayings: shows ended message.
+
+      4. Table with sayings: no change in behavior.
+
+      5. TypeScript compiles without errors.'
+    refs:
+    - web/src/components/Stream.tsx
+    - web/src/routes/Table.tsx
+    agent: frontend-engineer
+  - id: ux_polish.purposeful-zero-states-seats
+    name: purposeful-zero-states-seats
+    status: pending
+    description: 'Replace developer-speak empty state in SeatDeck.tsx with contextual,
+      actionable message.
+
+
+      In `web/src/components/SeatDeck.tsx`, update the empty state (lines 322-326):
+
+      ```tsx
+
+      // Before:
+
+      ''No participants yet''
+
+
+      // After:
+
+      ''Share the table invite code to bring participants in.''
+
+      ```
+
+
+      For the mentionable-only empty state, update:
+
+      ```tsx
+
+      // Before:
+
+      ''No active participants to mention''
+
+
+      // After:
+
+      ''No active participants available to mention right now.''
+
+      ```'
+    verification: '1. Empty seat deck shows actionable message about sharing invite
+      code.
+
+      2. Empty mention picker shows updated message.
+
+      3. Non-empty states unchanged.
+
+      4. No TypeScript errors.'
+    refs:
+    - web/src/components/SeatDeck.tsx
+    agent: frontend-engineer
+  - id: ux_polish.markdown-overflow-guard
+    name: markdown-overflow-guard
+    status: pending
+    description: 'Add overflow protection to log blocks to prevent wide markdown content
+      (tables, pre blocks, long URLs) from breaking the layout.
+
+
+      In `web/src/styles/table.css`:
+
+      1. Add `overflow: hidden;` to `.mc-log-block` (line ~491-498).
+
+      2. Add `max-width: 100%; overflow-x: auto;` to `.mc-log-content` (line ~591-597).
+      This allows horizontal scroll within the content area rather than breaking the
+      grid.
+
+      3. The existing `.mc-log-content pre { overflow-x: auto; }` (line 1305) already
+      handles code blocks. Ensure `.mc-log-content table` also gets `overflow-x: auto;
+      display: block; max-width: 100%;` for markdown tables.'
+    verification: '1. Wide markdown table in a saying does not break grid layout.
+
+      2. Wide code block scrolls horizontally within the log block.
+
+      3. Long URLs word-break as before.
+
+      4. Normal content unaffected.
+
+      5. No visual clipping of regular content.'
+    refs:
+    - web/src/styles/table.css
+    agent: frontend-engineer
+  - id: ux_polish.polish-verify
+    name: polish-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (blind-tester), validate all Polish phase
+      changes.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Token dialog: dark theme matches MC. All interactive elements visible and
+      usable.
+
+      - Empty states: contextual messages for open/paused/closed tables and empty
+      seat deck.
+
+      - Overflow: inject wide markdown content (table with 20 columns, code block
+      with 200-char lines) and verify containment.
+
+      - Regression: existing functionality unbroken.
+
+
+      Independence Level: L1'
+    verification: Full visual and functional verification of all Polish phase changes.
+    refs:
+    - web/src/styles/table.css
+    - web/src/components/Stream.tsx
+    - web/src/components/SeatDeck.tsx
+    - web/src/components/ModeIndicator.tsx
+    - web/src/components/ModeIndicator.css
+    depends_on:
+    - ux_polish.token-dialog-dark-theme
+    - ux_polish.purposeful-zero-states-stream
+    - ux_polish.purposeful-zero-states-seats
+    - ux_polish.markdown-overflow-guard
+    agent: blind-tester
+  - id: ux_polish.ux-polish-gate
+    name: ux_polish.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether ux_polish
+      meets quality bar for proceeding to ux_reliability.
+
+
+      Review criteria:
+
+      1. Completeness: All 4 implementation steps executed.
+
+      2. Evidence Quality: Visual checks documented.
+
+      3. Cross-cutting: Dark theme consistent, overflow contained.
+
+
+      Independence: MUST NOT be frontend-engineer.'
+    verification: 'Gate review: all steps complete, evidence reviewed, no blockers.'
+    refs:
+    - web/src/styles/table.css
+    - web/src/components/Stream.tsx
+    - web/src/components/SeatDeck.tsx
+    depends_on:
+    - ux_polish.polish-verify
+    agent: gate-reviewer
+- id: ux_reliability
+  name: Reliability — Trust signals and real-time UX
+  status: locked
+  depends_on:
+  - ux_polish
+  steps:
+  - id: ux_reliability.connection-status-escalation
+    name: connection-status-escalation
+    status: pending
+    description: "When connectionStatus is 'offline' or 'connecting', promote from\
+      \ the tiny pill in Stream header to a full-width warning banner below the HUD\
+      \ in Table.tsx.\n\nIn `web/src/routes/Table.tsx`:\n1. Add a `ConnectionWarningBanner`\
+      \ component (inline in Table.tsx or as a small sub-component):\n   - Shows only\
+      \ when `connectionStatus !== 'live'`.\n   - 'connecting': yellow/amber banner:\
+      \ 'Reconnecting to stream...'\n   - 'offline': red banner: 'Stream disconnected.\
+      \ Check your network connection.'\n2. Place it between `<Hud>` and `<div className=\"\
+      mc-columns\">` in the render.\n3. The existing `ConnectionBadge` in Stream.tsx\
+      \ can remain as a secondary indicator, or be hidden when the banner is active\
+      \ (implementer's choice).\n\nIn `web/src/styles/table.css`, add CSS for the\
+      \ banner (see next step)."
+    verification: '1. When connection is ''live'': no banner visible.
+
+      2. When ''connecting'': amber/yellow full-width banner appears below HUD.
+
+      3. When ''offline'': red full-width banner appears below HUD.
+
+      4. Banner disappears when connection returns to ''live''.
+
+      5. Banner text is clear and actionable.
+
+      6. Banner does not cause layout shift (stream area adjusts).'
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/components/Stream.tsx
+    agent: frontend-engineer
+  - id: ux_reliability.connection-banner-css
+    name: connection-banner-css
+    status: pending
+    description: "Add CSS for the connection warning banner.\n\nIn `web/src/styles/table.css`,\
+      \ add:\n```css\n/* Connection Warning Banner */\n.mc-connection-banner {\n \
+      \ flex-shrink: 0;\n  padding: 0.5rem 0.75rem;\n  font-size: 0.8125rem;\n  font-weight:\
+      \ 500;\n  text-align: center;\n  border-bottom: 1px solid transparent;\n}\n\n\
+      .mc-connection-banner--connecting {\n  background: rgba(234, 179, 8, 0.12);\n\
+      \  color: #eab308;\n  border-bottom-color: rgba(234, 179, 8, 0.3);\n}\n\n.mc-connection-banner--offline\
+      \ {\n  background: rgba(239, 68, 68, 0.12);\n  color: #ef4444;\n  border-bottom-color:\
+      \ rgba(239, 68, 68, 0.3);\n}\n```\n\nPlace this section near the HUD styles\
+      \ (after the HUD section, before the columns section)."
+    verification: '1. Banner styled correctly: amber for connecting, red for offline.
+
+      2. Banner full-width, readable text.
+
+      3. Border bottom provides visual separation from stream area.
+
+      4. No CSS errors.'
+    refs:
+    - web/src/styles/table.css
+    depends_on:
+    - ux_reliability.connection-status-escalation
+    agent: frontend-engineer
+  - id: ux_reliability.timestamp-staleness-hook
+    name: timestamp-staleness-hook
+    status: pending
+    description: "Create a `useNow` hook that returns a Date object that auto-refreshes\
+      \ at a given interval. This forces re-renders so relative timestamps ('5m ago')\
+      \ stay accurate.\n\nCreate new file `web/src/hooks/useNow.ts`:\n```typescript\n\
+      import { useState, useEffect } from 'react'\n\n/**\n * Returns a Date that auto-refreshes\
+      \ every `intervalMs` milliseconds.\n * Used to keep relative timestamps (e.g.,\
+      \ '5m ago') accurate without\n * requiring new data from the server.\n *\n *\
+      \ @param intervalMs - Refresh interval in milliseconds (default: 30000 = 30s)\n\
+      \ */\nexport function useNow(intervalMs: number = 30_000): Date {\n  const [now,\
+      \ setNow] = useState(() => new Date())\n\n  useEffect(() => {\n    const id\
+      \ = setInterval(() => setNow(new Date()), intervalMs)\n    return () => clearInterval(id)\n\
+      \  }, [intervalMs])\n\n  return now\n}\n```\n\nThen wire it into consumers:\n\
+      1. In `web/src/components/Stream.tsx`: import `useNow`, call it in `Stream`\
+      \ component, pass `now` to `LogBlock`, use it in `formatTime()` instead of `new\
+      \ Date()`. The `formatTime` function should accept a `now` parameter.\n2. In\
+      \ `web/src/components/SeatDeck.tsx`: import `useNow`, call it in `SeatDeck`,\
+      \ pass `now` to `SeatCard`, use in `formatHeartbeat()` and `getPresenceStatus()`.\
+      \ These functions should accept a `now` parameter.\n\nThis ensures timestamps\
+      \ refresh every 30 seconds even when no new data arrives."
+    verification: '1. `web/src/hooks/useNow.ts` exists with correct implementation.
+
+      2. Stream timestamps update every 30 seconds without new sayings arriving.
+
+      3. SeatDeck timestamps update every 30 seconds.
+
+      4. Presence status (active/idle/offline) transitions correctly over time.
+
+      5. No excessive re-renders (check React DevTools Profiler).
+
+      6. Timer is cleaned up on unmount (no memory leak).'
+    refs:
+    - web/src/hooks/useNow.ts
+    - web/src/components/Stream.tsx
+    - web/src/components/SeatDeck.tsx
+    agent: frontend-engineer
+  - id: ux_reliability.reliability-verify
+    name: reliability-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (blind-tester), validate all Reliability
+      phase changes.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Connection banner: simulate offline (DevTools Network throttle), verify banner
+      appears/disappears.
+
+      - Timestamp freshness: wait 60+ seconds without activity, verify timestamps
+      update.
+
+      - Edge cases: rapid connection state changes, page with many sayings + timestamp
+      refresh.
+
+      - Layout: banner does not push content off screen or cause jumps.
+
+      - Performance: timestamp refresh on page with 100+ sayings should not cause
+      visible jank.
+
+
+      Independence Level: L1'
+    verification: Full functional verification of connection banner and timestamp
+      staleness fix.
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/components/Stream.tsx
+    - web/src/components/SeatDeck.tsx
+    - web/src/hooks/useNow.ts
+    - web/src/styles/table.css
+    depends_on:
+    - ux_reliability.connection-banner-css
+    - ux_reliability.timestamp-staleness-hook
+    agent: blind-tester
+  - id: ux_reliability.ux-reliability-gate
+    name: ux_reliability.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether ux_reliability
+      meets quality bar for proceeding to ux_power_user.
+
+
+      Review criteria:
+
+      1. Completeness: Connection banner and timestamp hook both implemented.
+
+      2. Evidence Quality: Includes real browser testing.
+
+      3. Performance: No jank from 30s timestamp refresh.
+
+
+      Independence: MUST NOT be frontend-engineer.'
+    verification: 'Gate review: all steps complete, evidence reviewed, no blockers.'
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/components/Stream.tsx
+    - web/src/hooks/useNow.ts
+    - web/src/styles/table.css
+    depends_on:
+    - ux_reliability.reliability-verify
+    agent: gate-reviewer
+- id: ux_power_user
+  name: Power User — Keyboard nav, responsive tabs, console toolbar, and End Meeting
+    relocation
+  status: locked
+  depends_on:
+  - ux_reliability
+  steps:
+  - id: ux_power_user.keyboard-navigation-hook
+    name: keyboard-navigation-hook
+    status: pending
+    description: "Create a `useKeyboardNav` hook for stream navigation.\n\nCreate\
+      \ new file `web/src/hooks/useKeyboardNav.ts`:\n\nThe hook should:\n1. Listen\
+      \ for keydown events on the document.\n2. Only activate when no input/textarea\
+      \ is focused (check `document.activeElement?.tagName`).\n3. Key bindings:\n\
+      \   - `j`: Move focus to the next saying (increment focused index).\n   - `k`:\
+      \ Move focus to the previous saying (decrement focused index).\n   - `g`: Jump\
+      \ to the first saying (index 0).\n   - `G` (shift+g): Jump to the last saying.\n\
+      \   - `/`: Focus the command console input.\n4. Accept parameters: `{ sayingsCount:\
+      \ number, streamRef: RefObject<HTMLDivElement>, inputRef: RefObject<HTMLTextAreaElement>\
+      \ }`.\n5. Return: `{ focusedIndex: number | null, setFocusedIndex: (n: number\
+      \ | null) => void }`.\n6. When focusedIndex changes, scroll the corresponding\
+      \ saying into view.\n7. Clean up event listener on unmount."
+    verification: '1. Hook file created with correct TypeScript types.
+
+      2. Key bindings only fire when no input is focused.
+
+      3. j/k navigate, g/G jump to top/bottom, / focuses input.
+
+      4. focusedIndex tracks correctly.
+
+      5. Scroll-into-view works.
+
+      6. Event listener cleaned up on unmount.
+
+      7. No TypeScript compilation errors.'
+    refs:
+    - web/src/hooks/useKeyboardNav.ts
+    agent: frontend-engineer
+  - id: ux_power_user.keyboard-navigation-wire
+    name: keyboard-navigation-wire
+    status: pending
+    description: 'Wire the `useKeyboardNav` hook into the Table page and add visual
+      focus indicators.
+
+
+      In `web/src/routes/Table.tsx`:
+
+      1. Import `useKeyboardNav` from the new hook.
+
+      2. Create refs for the stream container and input element. Pass them to the
+      hook along with `sayingsCount`.
+
+      3. Pass `focusedIndex` down to `Stream` component.
+
+
+      In `web/src/components/Stream.tsx`:
+
+      1. Accept optional `focusedIndex` prop.
+
+      2. Add `data-saying-index={index}` attribute to each `LogBlock` article element.
+
+      3. When `focusedIndex` matches the index, add a `mc-log-block--focused` CSS
+      class.
+
+
+      In `web/src/styles/table.css`:
+
+      1. Add `.mc-log-block--focused` style: subtle outline or background highlight
+      to indicate keyboard focus. Example: `outline: 2px solid var(--mc-accent); outline-offset:
+      -2px;`.
+
+
+      In `web/src/components/CommandConsole.tsx` or `MentionInput.tsx`:
+
+      1. Expose a ref to the textarea so the keyboard hook can focus it with `/`.'
+    verification: '1. Press j/k: saying focus moves visually (highlight/outline).
+
+      2. Press g: jumps to first saying with visual indicator.
+
+      3. Press G: jumps to last saying.
+
+      4. Press /: input focuses, keyboard nav deactivates.
+
+      5. Click away from input: keyboard nav reactivates.
+
+      6. Focus indicator visible but not intrusive.
+
+      7. Works with 0 sayings (no crash).
+
+      8. Works with 100+ sayings.'
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/components/Stream.tsx
+    - web/src/styles/table.css
+    - web/src/components/CommandConsole.tsx
+    depends_on:
+    - ux_power_user.keyboard-navigation-hook
+    agent: frontend-engineer
+  - id: ux_power_user.responsive-tabs
+    name: responsive-tabs
+    status: pending
+    description: 'Replace vertical column stacking at <=1024px with tab navigation
+      showing Stream, Seats, and Info tabs.
+
+
+      In `web/src/routes/Table.tsx`:
+
+      1. Add state: `const [activeTab, setActiveTab] = useState<''stream'' | ''seats''
+      | ''info''>(''stream'')`.
+
+      2. Add a tab bar component that renders at <=1024px (use CSS to hide at desktop,
+      show at mobile). Tabs: ''Stream'', ''Seats'', ''Info''.
+
+      3. Conditionally render the active panel based on `activeTab`.
+
+      4. The tab bar should sit between HUD and the content area.
+
+
+      In `web/src/styles/table.css`:
+
+      1. Add `.mc-tab-bar` styles: hidden by default, shown at `@media (max-width:
+      1024px)`.
+
+      2. Add `.mc-tab-btn`, `.mc-tab-btn--active` styles.
+
+      3. Update the 1024px media query: instead of stacking all columns vertically,
+      show only the active tab''s content.
+
+      4. At desktop (>1024px): tab bar hidden, all columns visible as grid.
+
+
+      The Info tab content = the collapsible metadata from the HUD (already built
+      in Phase 1). At mobile width, it moves from HUD to its own tab.'
+    verification: '1. At >1024px: no tab bar visible, two-column grid as normal.
+
+      2. At <=1024px: tab bar appears with Stream/Seats/Info tabs.
+
+      3. Default tab is Stream.
+
+      4. Switching tabs shows correct content.
+
+      5. Stream tab includes the CommandConsole.
+
+      6. Seats tab shows SeatDeck.
+
+      7. Info tab shows table metadata.
+
+      8. Tab state persists during the session (no reset on data update).'
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/styles/table.css
+    agent: frontend-engineer
+  - id: ux_power_user.console-controls-toolbar
+    name: console-controls-toolbar
+    status: pending
+    description: 'Move Pause/Resume/Summary controls from below the input to above
+      it as an operations toolbar.
+
+
+      In `web/src/components/CommandConsole.tsx`:
+
+      1. Move the `.mc-console-controls` div (lines 147-178) from after the console-row
+      to before it.
+
+      2. Rename the CSS class to `.mc-console-toolbar` for semantic clarity.
+
+      3. Update the visual style: the toolbar should feel like a tool palette above
+      the input, not a footer.
+
+
+      In `web/src/styles/table.css`:
+
+      1. Rename `.mc-console-controls` to `.mc-console-toolbar`.
+
+      2. Update styles: remove `border-top` and `margin-top`, add `border-bottom:
+      1px solid var(--mc-border)` and `padding-bottom: 0.375rem`.
+
+      3. This places the controls visually above the input area.'
+    verification: '1. Pause/Resume/Summary buttons appear above the input, not below.
+
+      2. Visual style feels like a toolbar (border-bottom separating from input).
+
+      3. All buttons still function correctly.
+
+      4. Admin-only visibility preserved.
+
+      5. No layout shift when switching between open/paused status.'
+    refs:
+    - web/src/components/CommandConsole.tsx
+    - web/src/styles/table.css
+    agent: frontend-engineer
+  - id: ux_power_user.power-user-verify
+    name: power-user-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (blind-tester), validate all Power User
+      phase changes.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Keyboard nav: full key binding matrix test (j, k, g, G, /) in various states.
+
+      - Responsive tabs: test at exactly 1024px, 1025px, 1023px, 640px.
+
+      - Console toolbar: verify no regression in posting sayings or controlling table.
+
+      - End Meeting placement: verify End Meeting button is in Console footer toolbar,
+      right-aligned, NOT in HUD header.
+
+      - Inline confirmation: click End Meeting -> [Cancel] [Confirm End] inline. Test
+      auto-revert (5s), Escape cancel, Enter-does-not-confirm.
+
+      - Edge cases: keyboard nav with 0 sayings, tabs with empty content, toolbar
+      in viewer mode, inline confirm during closing state.
+
+      - Conflicts: keyboard nav does not interfere with tab switching, input, or inline
+      confirmation. Escape in inline confirmation does not trigger keyboard nav.
+
+
+      Independence Level: L1'
+    verification: Full functional verification of all Power User phase changes.
+    evidence_template: '## Verification Report: Power User Phase
+
+
+      **Tester**: blind-tester (independent of frontend-engineer)
+
+      **Scope**: Proposals #5, #10, #13, #16
+
+      **Independence Level**: L1
+
+      **Timestamp**: <ISO 8601>
+
+
+      ### Test Execution
+
+      - Commands executed: <actual test commands>
+
+      - Output summary: <key results>
+
+
+      ### Issues Found
+
+      | Severity | Description | Location | Reproduction |
+
+      |----------|-------------|----------|--------------|
+
+
+      ### Coverage Assessment
+
+      - Keyboard nav (j/k/g/G//): YES/NO
+
+      - Responsive tabs at breakpoints: YES/NO
+
+      - Console toolbar above input: YES/NO
+
+      - End Meeting in console, right-aligned: YES/NO
+
+      - Inline confirmation (click -> [Cancel] [Confirm End]): YES/NO
+
+      - Auto-revert after 5s: YES/NO
+
+      - Escape cancels inline confirm: YES/NO
+
+      - Enter does NOT confirm: YES/NO
+
+      - End Meeting removed from HUD header: YES/NO
+
+      - Viewer mode: no controls visible: YES/NO
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [ ] ISSUES_FOUND
+
+      - [ ] INCOMPLETE
+
+
+      **Confidence**: high/medium/low'
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/components/Stream.tsx
+    - web/src/components/CommandConsole.tsx
+    - web/src/components/TableControls.tsx
+    - web/src/hooks/useKeyboardNav.ts
+    - web/src/styles/table.css
+    depends_on:
+    - ux_power_user.keyboard-navigation-wire
+    - ux_power_user.responsive-tabs
+    - ux_power_user.console-controls-toolbar
+    - ux_power_user.inline-end-confirmation
+    agent: blind-tester
+  - id: ux_power_user.ux-power-user-gate
+    name: ux_power_user.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether ux_power_user
+      meets quality bar for proceeding to ux_a11y.
+
+
+      Review criteria:
+
+      1. Completeness: Keyboard nav, responsive tabs, toolbar, End Meeting relocation,
+      and inline confirmation all implemented.
+
+      2. Evidence Quality: Includes responsive testing evidence and inline confirmation
+      interaction testing.
+
+      3. Interaction conflicts: No keyboard nav conflicts with input, tabs, or inline
+      confirmation.
+
+      4. Destructive action safety: End Meeting requires two deliberate clicks, auto-reverts,
+      and Enter does not confirm.
+
+      5. Performance: No degradation from keyboard event listeners.
+
+
+      Independence: MUST NOT be frontend-engineer.'
+    verification: 'Gate review: all steps complete, evidence reviewed, no blockers.'
+    evidence_template: '## Gate Review Report: ux_power_user
+
+
+      **Reviewer**: gate-reviewer
+
+      **Phase**: ux_power_user
+
+      **Timestamp**: <ISO 8601>
+
+
+      ### Step-by-Step Review
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      |---------|--------|-----------------|----------|
+
+      | keyboard-navigation-hook | OK/WARN/FAIL | | |
+
+      | keyboard-navigation-wire | OK/WARN/FAIL | | |
+
+      | responsive-tabs | OK/WARN/FAIL | | |
+
+      | console-controls-toolbar | OK/WARN/FAIL | | |
+
+      | move-end-meeting-to-console | OK/WARN/FAIL | | |
+
+      | inline-end-confirmation | OK/WARN/FAIL | | |
+
+      | power-user-verify | OK/WARN/FAIL | | |
+
+
+      ### Destructive Action Safety Check
+
+      - [ ] End Meeting requires 2 clicks (not 1)
+
+      - [ ] Auto-revert after 5s inactivity
+
+      - [ ] Enter key does NOT confirm
+
+      - [ ] Escape cancels
+
+      - [ ] No modal dialog used
+
+
+      ### Gate Decision
+
+      - [ ] OPEN: Proceed to ux_a11y
+
+      - [ ] BLOCKED: Issues must be resolved'
+    refs:
+    - web/src/routes/Table.tsx
+    - web/src/components/Stream.tsx
+    - web/src/components/CommandConsole.tsx
+    - web/src/components/TableControls.tsx
+    - web/src/hooks/useKeyboardNav.ts
+    - web/src/styles/table.css
+    depends_on:
+    - ux_power_user.power-user-verify
+    agent: gate-reviewer
+  - id: ux_power_user.move-end-meeting-to-console
+    name: move-end-meeting-to-console
+    status: pending
+    description: "Move the Close/End Meeting button from the HUD header (TableControls.tsx)\
+      \ to the CommandConsole footer, placing it inside the controls toolbar (which\
+      \ Step 5.3 renamed to `.mc-console-toolbar`).\n\nIn `web/src/components/TableControls.tsx`:\n\
+      1. Remove the End Meeting button and its ConfirmDialog from the render (lines\
+      \ 140-181).\n2. Remove the close-related handlers: `handleClose`, `confirmClose`,\
+      \ `cancelClose`, and `showCloseDialog` state (lines 80, 90-111).\n3. Remove\
+      \ `closeTable` import and the `canClose` helper.\n4. Remove `OperationState`\
+      \ type and `operation` state (only used for closing).\n5. Keep: status pill,\
+      \ Download button, closed timestamp display. TableControls becomes a read-only\
+      \ status + download component.\n\nIn `web/src/components/CommandConsole.tsx`:\n\
+      1. Import `closeTable` from `'../api/tables'`.\n2. Add `closeState: 'idle' |\
+      \ 'confirming' | 'closing'` state (for the inline confirmation, handled in the\
+      \ next step).\n3. Add the End Meeting button to the toolbar (the `.mc-console-toolbar`\
+      \ div), positioned after the Pause/Resume cluster with `margin-left: auto` to\
+      \ push it right.\n4. The button should use ghost/transparent style with red\
+      \ text: `className=\"mc-control-btn mc-control-btn--end-ghost\"`. Only visible\
+      \ when `isAdmin && canClose(table.status)`.\n5. The button text: 'End Meeting'.\n\
+      \nIn `web/src/styles/table.css`:\n1. Add `.mc-control-btn--end-ghost` style:\n\
+      \   ```css\n   .mc-control-btn--end-ghost {\n     background: transparent;\n\
+      \     border-color: transparent;\n     color: #ef4444;\n     margin-left: auto;\n\
+      \   }\n   .mc-control-btn--end-ghost:hover:not(:disabled) {\n     background:\
+      \ rgba(239, 68, 68, 0.1);\n     border-color: rgba(239, 68, 68, 0.3);\n   }\n\
+      \   ```\n\nIn `web/src/routes/Table.tsx`:\n1. Pass `onStatusChange` callback\
+      \ to `CommandConsole` (already passed).\n2. Ensure `CommandConsole` receives\
+      \ the `table` prop with current status (already passed)."
+    verification: '1. End Meeting button no longer appears in HUD header.
+
+      2. End Meeting button appears in Console toolbar, right-aligned.
+
+      3. Ghost style: transparent background, red text.
+
+      4. Button only visible in admin mode when table is open or paused.
+
+      5. TableControls still shows status pill, Download, and closed timestamp.
+
+      6. No TypeScript compilation errors.
+
+      7. ConfirmDialog no longer rendered from TableControls.'
+    refs:
+    - web/src/components/CommandConsole.tsx
+    - web/src/components/TableControls.tsx
+    - web/src/styles/table.css
+    depends_on:
+    - ux_power_user.console-controls-toolbar
+    agent: frontend-engineer
+  - id: ux_power_user.inline-end-confirmation
+    name: inline-end-confirmation
+    status: pending
+    description: "Replace the modal ConfirmDialog for End Meeting with an inline two-step\
+      \ confirmation pattern directly in the console toolbar.\n\nIn `web/src/components/CommandConsole.tsx`:\n\
+      1. Add state: `const [closeState, setCloseState] = useState<'idle' | 'confirming'\
+      \ | 'closing'>('idle')`.\n2. Add an auto-revert timer: when `closeState` becomes\
+      \ `'confirming'`, start a 5-second timeout that resets to `'idle'`. Clear the\
+      \ timeout on unmount or when state changes.\n3. Replace the single End Meeting\
+      \ button with a conditional render:\n   - `closeState === 'idle'`: show the\
+      \ ghost End Meeting button (from previous step).\n   - `closeState === 'confirming'`:\
+      \ show `[Cancel] [Confirm End]` in place of the End Meeting button. Cancel is\
+      \ a ghost button. Confirm End uses filled red background (`background: rgba(239,\
+      \ 68, 68, 0.8); color: #fff`).\n   - `closeState === 'closing'`: show a disabled\
+      \ 'Closing...' button.\n4. Click End Meeting -> `setCloseState('confirming')`.\n\
+      5. Click Cancel -> `setCloseState('idle')`.\n6. Click Confirm End -> call `closeTable(table)`,\
+      \ handle success/error, `setCloseState('idle')`.\n7. Escape key handler: when\
+      \ `closeState === 'confirming'`, Escape cancels. Add a `useEffect` with document\
+      \ keydown listener.\n8. Enter key must NOT confirm (prevent accidental double-tap\
+      \ from submitting a saying then immediately confirming close).\n9. Remove the\
+      \ `ConfirmDialog` import from `CommandConsole.tsx` if it was imported (it was\
+      \ only in TableControls, but verify).\n\nIn `web/src/styles/table.css`:\n1.\
+      \ Add `.mc-end-confirm-group` style for the [Cancel] [Confirm End] button pair:\n\
+      \   ```css\n   .mc-end-confirm-group {\n     display: inline-flex;\n     align-items:\
+      \ center;\n     gap: 0.375rem;\n     margin-left: auto;\n   }\n   ```\n2. Add\
+      \ `.mc-control-btn--confirm-end` style:\n   ```css\n   .mc-control-btn--confirm-end\
+      \ {\n     background: rgba(239, 68, 68, 0.8);\n     border-color: rgba(239,\
+      \ 68, 68, 0.6);\n     color: #fff;\n   }\n   .mc-control-btn--confirm-end:hover:not(:disabled)\
+      \ {\n     background: rgba(239, 68, 68, 1);\n   }\n   ```\n3. Add `.mc-control-btn--cancel-end`\
+      \ style (ghost, neutral):\n   ```css\n   .mc-control-btn--cancel-end {\n   \
+      \  background: transparent;\n     border-color: var(--mc-border);\n     color:\
+      \ var(--mc-text-dim);\n   }\n   .mc-control-btn--cancel-end:hover:not(:disabled)\
+      \ {\n     background: var(--mc-surface-hover);\n   }\n   ```"
+    verification: '1. Click End Meeting -> transforms to [Cancel] [Confirm End] inline.
+
+      2. Click Cancel -> reverts to End Meeting ghost button.
+
+      3. Click Confirm End -> calls close API, shows ''Closing...'', then status updates.
+
+      4. Wait 5 seconds after clicking End Meeting without acting -> auto-reverts
+      to End Meeting.
+
+      5. Press Escape during confirming state -> cancels.
+
+      6. Press Enter during confirming state -> does NOT confirm (prevents accidental
+      double-tap).
+
+      7. Confirm End button is filled red, visually prominent.
+
+      8. No modal/dialog rendered anywhere for close confirmation.
+
+      9. Rapid click End Meeting -> Cancel -> End Meeting works without bugs.
+
+      10. After table is closed, End Meeting button disappears from toolbar.'
+    refs:
+    - web/src/components/CommandConsole.tsx
+    - web/src/styles/table.css
+    depends_on:
+    - ux_power_user.move-end-meeting-to-console
+    agent: frontend-engineer
+- id: ux_a11y
+  name: Accessibility — Aria live region fix
+  status: locked
+  depends_on:
+  - ux_power_user
+  steps:
+  - id: ux_a11y.aria-live-debounce
+    name: aria-live-debounce
+    status: pending
+    description: "Replace per-message aria-live=\"polite\" on the stream scroll container\
+      \ with a debounced count announcement.\n\nIn `web/src/components/Stream.tsx`:\n\
+      1. Remove `aria-live=\"polite\"` from the `<div ref={streamRef} className=\"\
+      mc-stream\" role=\"log\">` element (line ~310). Keep `role=\"log\"` as it is\
+      \ semantically correct.\n2. Add a visually-hidden `<div>` with `aria-live=\"\
+      polite\"` that contains a debounced count message. This div should:\n   - Be\
+      \ visually hidden (use the existing `.sr-only` class).\n   - Update its text\
+      \ content after a 2-second debounce following new sayings.\n   - Text format:\
+      \ `{count} sayings` or `{newCount} new sayings` when count increases.\n3. Implement\
+      \ the debounce: create a `useDebouncedAnnouncement` hook or use a `useEffect`\
+      \ with `setTimeout`:\n   ```typescript\n   const [announcement, setAnnouncement]\
+      \ = useState('')\n   useEffect(() => {\n     const id = setTimeout(() => {\n\
+      \       setAnnouncement(`${sayings.length} ${sayings.length === 1 ? 'saying'\
+      \ : 'sayings'} in stream`)\n     }, 2000)\n     return () => clearTimeout(id)\n\
+      \   }, [sayings.length])\n   ```\n4. This prevents screen readers from announcing\
+      \ each individual message in a high-velocity stream, while still providing count-based\
+      \ awareness.\n\nNote: The `.sr-only` class is already defined in table.css (lines\
+      \ 56-66)."
+    verification: '1. aria-live="polite" is NOT on the scroll container.
+
+      2. A visually-hidden aria-live region exists with debounced count.
+
+      3. Screen reader (VoiceOver or NVDA) announces count after 2s debounce, NOT
+      each message.
+
+      4. The role="log" remains on the scroll container (semantic meaning preserved).
+
+      5. Visual output is unchanged (the sr-only div is invisible).
+
+      6. With 10 rapid sayings: only ONE announcement after the burst settles.
+
+      7. Manual test plan documented for VoiceOver/NVDA.'
+    refs:
+    - web/src/components/Stream.tsx
+    - web/src/styles/table.css
+    agent: frontend-engineer
+  - id: ux_a11y.a11y-verify
+    name: a11y-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (blind-tester), validate the Accessibility
+      phase changes.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: Screen reader announces debounced count after new sayings.
+
+      - Edge cases: 0 sayings (no announcement), 1 saying (''1 saying''), rapid burst
+      (single announcement).
+
+      - Regression: Visual output unchanged, stream scroll behavior unaffected.
+
+      - Cross-browser: Test with Chrome (NVDA) and Safari (VoiceOver) if possible.
+
+      - Semantic: role="log" still present, aria-label still correct.
+
+
+      Independence Level: L1'
+    verification: Full accessibility verification including screen reader testing.
+    refs:
+    - web/src/components/Stream.tsx
+    depends_on:
+    - ux_a11y.aria-live-debounce
+    agent: blind-tester
+  - id: ux_a11y.ux-a11y-gate
+    name: ux_a11y.gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (gate-reviewer), assess whether ux_a11y
+      meets quality bar.
+
+
+      This is the FINAL gate for the entire UX optimization plan.
+
+
+      Review criteria:
+
+      1. Completeness: aria-live debounce implemented.
+
+      2. Evidence Quality: Includes screen reader test evidence (even if manual).
+
+      3. Regression: No a11y regressions from earlier phases.
+
+      4. Overall: All 15 proposals addressed across 6 phases.
+
+
+      Independence: MUST NOT be frontend-engineer.'
+    verification: 'Final gate review: all steps complete, a11y evidence reviewed,
+      plan complete.'
+    refs:
+    - web/src/components/Stream.tsx
+    depends_on:
+    - ux_a11y.a11y-verify
+    agent: gate-reviewer

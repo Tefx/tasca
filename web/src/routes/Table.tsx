@@ -1,8 +1,10 @@
 /**
  * Table — Mission Control page.
  *
- * Displays a single discussion table with three-column layout:
- * Board (context rail) | Stream (sayings) | SeatDeck (presence).
+ * Displays a single discussion table with two-column layout:
+ * Stream (sayings) | SeatDeck (presence).
+ *
+ * Table metadata is shown in a collapsible "Info" section in the HUD.
  *
  * Data fetching:
  *   - Table metadata + seats: fetched once on mount.
@@ -13,10 +15,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getTable, type Table as TableType } from '../api/tables'
+import { getTable, type Table as TableType, type TableStatus } from '../api/tables'
 import { listSeats, type Seat } from '../api/sayings'
 import { useSayingsStream } from '../hooks/useLongPoll'
-import { Board } from '../components/Board'
 import { Stream } from '../components/Stream'
 import { SeatDeck, type PatronInfo } from '../components/SeatDeck'
 import { ModeIndicator } from '../components/ModeIndicator'
@@ -119,6 +120,34 @@ function useStaticTableData(tableId: string | undefined) {
 }
 
 // =============================================================================
+// Utility (formatting helpers moved from Board.tsx)
+// =============================================================================
+
+/** Format an ISO date string to a locale-friendly display. */
+function formatDate(iso: string): string {
+  const date = new Date(iso)
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** Get human-readable status label. */
+function statusLabel(status: TableStatus): string {
+  switch (status) {
+    case 'open':
+      return 'Open'
+    case 'paused':
+      return 'Paused'
+    case 'closed':
+      return 'Closed'
+  }
+}
+
+// =============================================================================
 // Sub-Components
 // =============================================================================
 
@@ -213,6 +242,34 @@ function Hud({ table, onStatusChange }: HudProps) {
       </Link>
       <h1 className="mc-hud-title">{table.question}</h1>
       <TableControls table={table} onStatusChange={onStatusChange} />
+      {/* HUD Tier 2: Collapsible table metadata (moved from Board) */}
+      <details className="mc-hud-meta-details">
+        <summary className="mc-hud-meta-summary">Info</summary>
+        <ul className="mc-meta-list">
+          <li className="mc-meta-item">
+            <span className="mc-meta-label">Status</span>
+            <span className="mc-meta-value">{statusLabel(table.status)}</span>
+          </li>
+          <li className="mc-meta-item">
+            <span className="mc-meta-label">Created</span>
+            <span className="mc-meta-value">{formatDate(table.created_at)}</span>
+          </li>
+          <li className="mc-meta-item">
+            <span className="mc-meta-label">Updated</span>
+            <span className="mc-meta-value">{formatDate(table.updated_at)}</span>
+          </li>
+          <li className="mc-meta-item">
+            <span className="mc-meta-label">Version</span>
+            <span className="mc-meta-value mc-meta-value--mono">v{table.version}</span>
+          </li>
+          {table.context && (
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Context</span>
+              <span className="mc-meta-value">{table.context}</span>
+            </li>
+          )}
+        </ul>
+      </details>
       <div className="mc-hud-actions">
         <span className="mc-hud-action">
           <code>{shortCode(table.id)}</code>
@@ -333,9 +390,6 @@ export function Table() {
     <div className="mc">
       <Hud table={table} onStatusChange={handleStatusChange} />
       <div className="mc-columns">
-        <div className="mc-col-left">
-          <Board table={table} />
-        </div>
         <div className="mc-col-center">
           <Stream sayings={sayings} connectionStatus={connectionStatus} />
           <CommandConsole

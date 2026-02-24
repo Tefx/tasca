@@ -230,6 +230,91 @@
 }
 
 /* =============================================================================
+   HUD Collapsible Metadata
+   ============================================================================= */
+
+.mc-hud-meta-details {
+  display: inline-flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.mc-hud-meta-summary {
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  color: var(--mc-text-dim);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+  transition: border-color 0.15s, color 0.15s;
+  font-family: inherit;
+}
+
+.mc-hud-meta-summary::-webkit-details-marker {
+  display: none;
+}
+
+.mc-hud-meta-summary::marker {
+  display: none;
+}
+
+.mc-hud-meta-summary:hover {
+  border-color: var(--mc-text-dim);
+  color: var(--mc-text);
+}
+
+.mc-hud-meta-details[open] .mc-hud-meta-summary {
+  border-color: var(--mc-accent);
+  color: var(--mc-accent);
+}
+
+/* Metadata list (reused from Board) */
+.mc-meta-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  font-size: 0.75rem;
+  min-width: 180px;
+  position: absolute;
+  z-index: 50;
+}
+
+.mc-meta-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--mc-border);
+}
+
+.mc-meta-item:last-child {
+  border-bottom: none;
+}
+
+.mc-meta-label {
+  color: var(--mc-text-muted);
+  flex-shrink: 0;
+}
+
+.mc-meta-value {
+  color: var(--mc-text);
+  text-align: right;
+  word-break: break-word;
+}
+
+.mc-meta-value--mono {
+  font-family: var(--mc-font-mono);
+  font-size: 0.6875rem;
+}
+
+/* =============================================================================
    Two-Column Layout
    ============================================================================= */
 

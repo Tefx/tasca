@@ -71,7 +71,11 @@ def pick_random_word(
 
 @deal.pre(
     lambda adjective, noun, verb, separator="-", suffix=None: (
-        len(adjective) > 0 and len(noun) > 0 and len(verb) > 0 and len(separator) > 0
+        len(adjective) > 0
+        and len(noun) > 0
+        and len(verb) > 0
+        and len(separator) > 0
+        and (suffix is None or suffix >= 0)
     )
 )
 @deal.post(lambda result: len(result) > 0)
@@ -116,7 +120,9 @@ def format_human_readable_id(
 
 
 @deal.pre(
-    lambda random_choice, separator="-", suffix=None: callable(random_choice) and len(separator) > 0
+    lambda random_choice, separator="-", suffix=None: (
+        callable(random_choice) and len(separator) > 0 and (suffix is None or suffix >= 0)
+    )
 )
 def generate_human_readable_id(
     random_choice: Callable[[list[str]], str],

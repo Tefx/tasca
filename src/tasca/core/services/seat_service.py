@@ -66,10 +66,16 @@ def _seat_has_safe_datetimes(seat: Seat) -> bool:
 # =============================================================================
 
 
-@deal.pre(lambda seat, ttl_seconds, now: seat is not None and ttl_seconds > 0 and now is not None)
-@deal.pre(lambda seat, ttl_seconds, now: _is_safe_datetime(now))
-@deal.pre(lambda seat, ttl_seconds, now: _is_safe_ttl(ttl_seconds))
-@deal.pre(lambda seat, ttl_seconds, now: _seat_has_safe_datetimes(seat))
+@deal.pre(
+    lambda seat, ttl_seconds, now: (
+        seat is not None
+        and ttl_seconds > 0
+        and now is not None
+        and _is_safe_datetime(now)
+        and _is_safe_ttl(ttl_seconds)
+        and _seat_has_safe_datetimes(seat)
+    )
+)
 @deal.post(lambda result: isinstance(result, bool))
 def is_seat_expired(seat: Seat, ttl_seconds: int, now: datetime) -> bool:
     """Check if a seat has expired based on TTL.
@@ -117,9 +123,14 @@ def is_seat_expired(seat: Seat, ttl_seconds: int, now: datetime) -> bool:
     return now > expiry_time
 
 
-@deal.pre(lambda last_heartbeat, ttl_seconds: last_heartbeat is not None and ttl_seconds > 0)
-@deal.pre(lambda last_heartbeat, ttl_seconds: _is_safe_datetime(last_heartbeat))
-@deal.pre(lambda last_heartbeat, ttl_seconds: _is_safe_ttl(ttl_seconds))
+@deal.pre(
+    lambda last_heartbeat, ttl_seconds: (
+        last_heartbeat is not None
+        and ttl_seconds > 0
+        and _is_safe_datetime(last_heartbeat)
+        and _is_safe_ttl(ttl_seconds)
+    )
+)
 @deal.post(lambda result: result is not None)
 def calculate_expiry_time(last_heartbeat: datetime, ttl_seconds: int) -> datetime:
     """Calculate when a seat expires based on its last heartbeat.
@@ -142,10 +153,16 @@ def calculate_expiry_time(last_heartbeat: datetime, ttl_seconds: int) -> datetim
     return last_heartbeat + timedelta(seconds=ttl_seconds)
 
 
-@deal.pre(lambda seat, ttl_seconds, now: seat is not None and ttl_seconds > 0 and now is not None)
-@deal.pre(lambda seat, ttl_seconds, now: _is_safe_datetime(now))
-@deal.pre(lambda seat, ttl_seconds, now: _is_safe_ttl(ttl_seconds))
-@deal.pre(lambda seat, ttl_seconds, now: _seat_has_safe_datetimes(seat))
+@deal.pre(
+    lambda seat, ttl_seconds, now: (
+        seat is not None
+        and ttl_seconds > 0
+        and now is not None
+        and _is_safe_datetime(now)
+        and _is_safe_ttl(ttl_seconds)
+        and _seat_has_safe_datetimes(seat)
+    )
+)
 @deal.post(lambda result: result >= 0)
 def seconds_until_expiry(seat: Seat, ttl_seconds: int, now: datetime) -> float:
     """Calculate seconds remaining before a seat expires.
@@ -185,9 +202,15 @@ def seconds_until_expiry(seat: Seat, ttl_seconds: int, now: datetime) -> float:
     return max(0.0, remaining)
 
 
-@deal.pre(lambda seats, ttl_seconds, now: seats is not None and ttl_seconds > 0 and now is not None)
-@deal.pre(lambda seats, ttl_seconds, now: _is_safe_datetime(now))
-@deal.pre(lambda seats, ttl_seconds, now: _is_safe_ttl(ttl_seconds))
+@deal.pre(
+    lambda seats, ttl_seconds, now: (
+        seats is not None
+        and ttl_seconds > 0
+        and now is not None
+        and _is_safe_datetime(now)
+        and _is_safe_ttl(ttl_seconds)
+    )
+)
 @deal.post(lambda result: isinstance(result, list))
 def filter_expired_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> list[Seat]:
     """Filter seats that have expired based on TTL.
@@ -225,9 +248,15 @@ def filter_expired_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> 
     return [seat for seat in seats if is_seat_expired(seat, ttl_seconds, now)]
 
 
-@deal.pre(lambda seats, ttl_seconds, now: seats is not None and ttl_seconds > 0 and now is not None)
-@deal.pre(lambda seats, ttl_seconds, now: _is_safe_datetime(now))
-@deal.pre(lambda seats, ttl_seconds, now: _is_safe_ttl(ttl_seconds))
+@deal.pre(
+    lambda seats, ttl_seconds, now: (
+        seats is not None
+        and ttl_seconds > 0
+        and now is not None
+        and _is_safe_datetime(now)
+        and _is_safe_ttl(ttl_seconds)
+    )
+)
 @deal.post(lambda result: isinstance(result, list))
 def filter_active_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> list[Seat]:
     """Filter seats that are still active (not expired).

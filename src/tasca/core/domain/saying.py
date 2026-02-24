@@ -143,8 +143,7 @@ def human_speaker(name: str) -> Speaker:
     return Speaker(kind=SpeakerKind.HUMAN, name=name, patron_id=None)
 
 
-@deal.pre(lambda name, patron_id: len(name) > 0)
-@deal.pre(lambda name, patron_id: len(patron_id) > 0)
+@deal.pre(lambda name, patron_id: len(name) > 0 and len(patron_id) > 0)
 @deal.post(lambda result: result.is_patron() is True)
 @deal.post(lambda result: result.patron_id is not None)
 def patron_speaker(name: str, patron_id: PatronId) -> Speaker:

@@ -192,9 +192,15 @@ def is_external_url(value: str) -> bool:
     return False
 
 
-@deal.pre(lambda content, tag_name, start_pos: content is not None)
-@deal.pre(lambda content, tag_name, start_pos: tag_name is not None and len(tag_name) > 0)
-@deal.pre(lambda content, tag_name, start_pos: isinstance(start_pos, int) and start_pos >= 0)
+@deal.pre(
+    lambda content, tag_name, start_pos: (
+        content is not None
+        and tag_name is not None
+        and len(tag_name) > 0
+        and isinstance(start_pos, int)
+        and start_pos >= 0
+    )
+)
 @deal.post(lambda result: result is None or hasattr(result, "group"))
 def find_closing_tag(content: str, tag_name: str, start_pos: int) -> re.Match[str] | None:
     """Find the matching closing tag for an opening tag.

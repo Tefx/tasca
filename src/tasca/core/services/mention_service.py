@@ -170,7 +170,7 @@ def is_uuid_format(text: str) -> bool:
     return bool(UUID_PATTERN.match(text))
 
 
-@deal.pre(lambda handle, patrons: len(handle) > 0)
+@deal.pre(lambda handle, patrons: len(handle) > 0 and patrons is not None)
 @deal.post(
     lambda result: isinstance(result, (ResolvedMention, AmbiguousMention, UnresolvedMention))
 )
@@ -243,9 +243,15 @@ def resolve_single_mention(
     return UnresolvedMention(handle=handle)
 
 
-@deal.pre(lambda mentions, patrons, max_unresolved=10: isinstance(mentions, list))
-@deal.pre(lambda mentions, patrons, max_unresolved=10: isinstance(patrons, list))
-@deal.pre(lambda mentions, patrons, max_unresolved=10: max_unresolved >= 0)
+@deal.pre(
+    lambda mentions, patrons, max_unresolved=10: (
+        isinstance(mentions, list)
+        and isinstance(patrons, list)
+        and max_unresolved >= 0
+        and len(mentions) >= 0
+        and len(patrons) >= 0
+    )
+)
 @deal.post(lambda result: isinstance(result, MentionsResult))
 def resolve_mentions(
     mentions: list[str],
@@ -318,8 +324,7 @@ def resolve_mentions(
     )
 
 
-@deal.pre(lambda unresolved_count, max_allowed: unresolved_count >= 0)
-@deal.pre(lambda unresolved_count, max_allowed: max_allowed >= 0)
+@deal.pre(lambda unresolved_count, max_allowed: unresolved_count >= 0 and max_allowed >= 0)
 @deal.post(lambda result: isinstance(result, bool))
 def validate_unresolved_limit(unresolved_count: int, max_allowed: int) -> bool:
     """Validate that unresolved mention count is within allowed limit.
@@ -346,7 +351,7 @@ def validate_unresolved_limit(unresolved_count: int, max_allowed: int) -> bool:
     return unresolved_count <= max_allowed
 
 
-@deal.pre(lambda handles, patrons: isinstance(handles, list))
+@deal.pre(lambda handles, patrons: isinstance(handles, list) and isinstance(patrons, list))
 @deal.post(lambda result: isinstance(result, list))
 @deal.post(lambda result: all(isinstance(h, str) for h in result))
 def get_unresolved_handles(

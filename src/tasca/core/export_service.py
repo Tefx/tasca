@@ -13,13 +13,12 @@ Design Decisions:
     - Full content: No truncation of saying content
 """
 
-import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 import deal
 from pydantic import BaseModel
 
-from tasca.core.domain.saying import Saying
+from tasca.core.domain.saying import Saying, SpeakerKind
 from tasca.core.domain.table import Table
 
 
@@ -76,9 +75,15 @@ class SayingExport(BaseModel):
 # =============================================================================
 
 
-@deal.pre(lambda table, sayings, exported_at: table is not None)
-@deal.pre(lambda table, sayings, exported_at: sayings is not None)
-@deal.pre(lambda table, sayings, exported_at: exported_at is not None and len(exported_at) > 0)
+@deal.pre(
+    lambda table, sayings, exported_at: (
+        table is not None
+        and sayings is not None
+        and exported_at is not None
+        and len(exported_at) > 0
+        and isinstance(exported_at, str)
+    )
+)
 @deal.post(lambda result: isinstance(result, str))
 @deal.post(lambda result: len(result) > 0)
 @deal.ensure(
@@ -188,8 +193,26 @@ def generate_jsonl(table: Table, sayings: list[Saying], exported_at: str) -> str
 # =============================================================================
 
 
-@deal.pre(lambda table, sayings: table is not None)
-@deal.pre(lambda table, sayings: sayings is not None)
+@deal.pre(lambda dt: dt is not None)
+@deal.post(lambda result: isinstance(result, str) and "UTC" in result)
+def _fmt_dt(dt: datetime) -> str:
+    """Format a datetime as human-readable UTC string.
+
+    Args:
+        dt: Datetime to format.
+
+    Returns:
+        Human-readable string like "2024-01-01 12:00 UTC".
+
+    Examples:
+        >>> from datetime import datetime, timezone
+        >>> _fmt_dt(datetime(2024, 1, 15, 14, 30, tzinfo=timezone.utc))
+        '2024-01-15 14:30 UTC'
+    """
+    return dt.strftime("%Y-%m-%d %H:%M") + " UTC"
+
+
+@deal.pre(lambda table, sayings: table is not None and sayings is not None)
 @deal.post(lambda result: isinstance(result, str))
 @deal.post(lambda result: len(result) > 0)
 @deal.ensure(lambda table, sayings, result: table.question in result)
@@ -199,9 +222,9 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
 
     Markdown format:
         - Title header with question
-        - Metadata section (table_id, status, version, timestamps, context)
-        - Board section (placeholder)
-        - Transcript section with sayings (FULL content, no truncation)
+        - Metadata table (table_id, status, version, timestamps)
+        - Context section (if present)
+        - Transcript section with sayings as headed blocks (speaker name, kind badge, timestamp)
 
     Note:
         Saying content is NOT truncated. Full content is preserved.
@@ -230,7 +253,7 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
         >>> result = generate_markdown(t, [])
         >>> "# What is AI?" in result
         True
-        >>> "table_id: t-001" in result
+        >>> "`t-001`" in result
         True
         >>> "_No sayings yet._" in result
         True
@@ -240,17 +263,28 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
         ...     table_id="t-001",
         ...     sequence=0,
         ...     speaker=Speaker(kind=SpeakerKind.HUMAN, name="Alice"),
-        ...     content="This is a very long content that would have been truncated to 200 chars but now is preserved in full.",
+        ...     content="Full content preserved without truncation.",
         ...     created_at=datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc),
         ... )
         >>> result2 = generate_markdown(t, [s1])
-        >>> "This is a very long content that would have been truncated to 200 chars but now is preserved in full." in result2
+        >>> "Full content preserved without truncation." in result2
         True
-        >>> "..." not in result2.split("Transcript")[1].split("\\n")[1]  # No truncation marker
+        >>> "**#0 Alice**" in result2
         True
-        >>> "[seq=0]" in result2
+
+        >>> s2 = Saying(
+        ...     id=SayingId("s-002"),
+        ...     table_id="t-001",
+        ...     sequence=1,
+        ...     speaker=Speaker(kind=SpeakerKind.AGENT, name="Bot", patron_id=PatronId("p-1")),
+        ...     content="Agent reply.",
+        ...     pinned=True,
+        ...     created_at=datetime(2024, 1, 1, 12, 5, tzinfo=timezone.utc),
+        ... )
+        >>> result3 = generate_markdown(t, [s1, s2])
+        >>> "[AI]" in result3
         True
-        >>> "human:Alice" in result2
+        >>> "[pinned]" in result3
         True
     """
     lines: list[str] = []
@@ -259,21 +293,23 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
     lines.append(f"# {table.question}")
     lines.append("")
 
-    # Metadata
-    lines.append(f"- table_id: {table.id}")
-    lines.append(f"- status: {table.status.value}")
-    lines.append(f"- version: {table.version}")
-    lines.append(f"- created_at: {table.created_at.isoformat()}")
-    lines.append(f"- updated_at: {table.updated_at.isoformat()}")
-    if table.context:
-        lines.append(f"- context: {table.context}")
+    # Metadata (headerless table for compact key-value display)
+    lines.append("| | |")
+    lines.append("|---|---|")
+    lines.append(f"| **Table** | `{table.id}` |")
+    lines.append(f"| **Status** | {table.status.value} |")
+    lines.append(f"| **Created** | {_fmt_dt(table.created_at)} |")
+    lines.append(f"| **Updated** | {_fmt_dt(table.updated_at)} |")
     lines.append("")
 
-    # Board section (placeholder - no board data yet)
-    lines.append("## Board")
-    lines.append("")
-    lines.append("_No board data available._")
-    lines.append("")
+    # Context section (blockquote to signal "background/framing")
+    if table.context:
+        lines.append("## Context")
+        lines.append("")
+        # Blockquote each line of context
+        for ctx_line in table.context.split("\n"):
+            lines.append(f"> {ctx_line}" if ctx_line.strip() else ">")
+        lines.append("")
 
     # Transcript section
     lines.append("## Transcript")
@@ -282,12 +318,34 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
     if not sayings:
         lines.append("_No sayings yet._")
     else:
-        for saying in sayings:
-            # Format: - [seq=N] TIMESTAMP (SPEAKER_KIND:NAME): content
-            speaker_prefix = f"{saying.speaker.kind.value}:{saying.speaker.name}"
-            timestamp = saying.created_at.strftime("%Y-%m-%dT%H:%M:%SZ")
-            # Full content - NO truncation (per task requirement)
-            content = saying.content
-            lines.append(f"- [seq={saying.sequence}] {timestamp} ({speaker_prefix}): {content}")
+        last_date: str | None = None
+
+        for i, saying in enumerate(sayings):
+            current_date = saying.created_at.strftime("%Y-%m-%d")
+
+            # Date-change separator (replaces --- for that transition)
+            if last_date is not None and current_date != last_date:
+                display_date = saying.created_at.strftime("%b %-d, %Y")
+                lines.append(f"_{display_date}_")
+                lines.append("")
+            elif i > 0:
+                # Horizontal rule between sayings (same day)
+                lines.append("---")
+                lines.append("")
+
+            last_date = current_date
+
+            # Speaker line: **#seq Name** [AI] -- HH:MM [pinned]
+            seq = saying.sequence
+            name = saying.speaker.name
+            ai_tag = " [AI]" if saying.speaker.kind != SpeakerKind.HUMAN else ""
+            time_str = saying.created_at.strftime("%H:%M")
+            pin_tag = " [pinned]" if saying.pinned else ""
+
+            lines.append(f"**#{seq} {name}**{ai_tag} -- {time_str}{pin_tag}")
+
+            # Full content - NO truncation
+            lines.append(saying.content)
+            lines.append("")
 
     return "\n".join(lines)

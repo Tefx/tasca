@@ -64,6 +64,7 @@ def _build_export_response(
     )
 
 
+# @shell_complexity: 4 branches for table lookup + sayings fetch + size check + error paths
 # @invar:allow shell_result: Helper raises HTTPException directly (no Result needed)
 def _fetch_table_and_sayings(
     conn: sqlite3.Connection,

@@ -342,6 +342,8 @@ def get_recent_sayings(
 DEFAULT_EXPORT_MAX_BYTES = 100 * 1024 * 1024  # 100 MiB
 
 
+# @shell_complexity: 4 branches for byte check + database query + error handling
+# @invar:allow shell_result: Shell layer - database I/O
 def list_all_sayings_by_table(
     conn: sqlite3.Connection,
     table_id: str,

@@ -178,21 +178,53 @@ def is_event_handler_attribute(attr_name: str) -> bool:
 @deal.pre(lambda tag_name: tag_name is not None)
 @deal.post(lambda result: isinstance(result, bool))
 def is_allowed_element(tag_name: str) -> bool:
-    """Check if an element tag is in the allowlist."""
+    """Check if an element tag is in the allowlist.
+
+    >>> is_allowed_element("svg")
+    True
+    >>> is_allowed_element("rect")
+    True
+    >>> is_allowed_element("script")
+    False
+    >>> is_allowed_element("iframe")
+    False
+    """
     return tag_name in ALLOWED_ELEMENTS
 
 
 @deal.pre(lambda attr_name: attr_name is not None)
 @deal.post(lambda result: isinstance(result, bool))
 def is_allowed_attribute(attr_name: str) -> bool:
-    """Check if an attribute name is in the allowlist."""
+    """Check if an attribute name is in the allowlist.
+
+    >>> is_allowed_attribute("fill")
+    True
+    >>> is_allowed_attribute("stroke")
+    True
+    >>> is_allowed_attribute("onclick")
+    False
+    >>> is_allowed_attribute("onload")
+    False
+    """
     return attr_name in ALLOWED_ATTRIBUTES
 
 
 @deal.pre(lambda value: value is not None)
 @deal.post(lambda result: isinstance(result, bool))
 def is_external_reference(value: str) -> bool:
-    """Check if a value is an external reference (dangerous URL)."""
+    """Check if a value is an external reference (dangerous URL).
+
+    >>> is_external_reference("http://example.com/image.png")
+    True
+    >>> is_external_reference("https://evil.com/script.js")
+    True
+    >>> is_external_reference("#gradient1")
+    False
+    >>> is_external_reference("data:image/png;base64,abc")
+    False
+    >>> is_external_reference("javascript:alert(1)")
+    True
+    """
     return is_external_url(value)
 
 

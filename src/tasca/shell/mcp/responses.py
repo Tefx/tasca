@@ -11,6 +11,7 @@ from typing import Any
 
 
 # @invar:allow shell_result: MCP response envelopes return primitives, not Result[T, E]
+# @invar:allow shell_pure_logic: Response envelope construction - pure helper
 def error_response(
     code: str, message: str, details: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -40,6 +41,7 @@ def error_response(
 
 
 # @invar:allow shell_result: MCP response envelopes return primitives, not Result[T, E]
+# @invar:allow shell_pure_logic: Response envelope construction - pure helper
 def success_response(data: dict[str, Any]) -> dict[str, Any]:
     """Create a standardized success envelope.
 

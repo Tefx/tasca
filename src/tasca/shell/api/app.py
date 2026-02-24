@@ -144,6 +144,7 @@ class CSPMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# @shell_complexity: 4 branches for middleware wiring + CORS + router mount + exception handlers
 # @invar:allow shell_result: FastAPI app factory - returns FastAPI, not Result
 # @shell_orchestration: App configuration and wiring is orchestration, not business logic
 def create_app() -> FastAPI:

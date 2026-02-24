@@ -465,6 +465,7 @@ def get_upstream_config() -> Result[UpstreamConfig, ProxyConfigError]:
     return Success(_config)
 
 
+# @invar:allow shell_pure_logic: Updates module-level config state; no I/O
 def switch_to_remote(url: str, token: str | None = None) -> None:
     """Switch the global config to remote upstream mode.
 
@@ -482,6 +483,7 @@ def switch_to_remote(url: str, token: str | None = None) -> None:
     _config.switch_to_remote(url, token)
 
 
+# @invar:allow shell_pure_logic: Updates module-level config state; no I/O
 def switch_to_local() -> None:
     """Switch the global config to local mode.
 

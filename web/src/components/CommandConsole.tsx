@@ -14,7 +14,6 @@ import { MentionInput, type MentionInputRef } from './MentionInput'
 import { type PatronInfo } from './SeatDeck'
 import { useAuth } from '../auth/AuthContext'
 import { RequestSummaryButton } from './RequestSummaryButton'
-import { ConfirmDialog } from './ConfirmDialog'
 
 // =============================================================================
 // Types
@@ -67,8 +66,7 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [controlState, setControlState] = useState<'idle' | 'pausing' | 'resuming'>('idle')
-    const [showCloseDialog, setShowCloseDialog] = useState(false)
-    const [isClosing, setIsClosing] = useState(false)
+    const [closeState, setCloseState] = useState<'idle' | 'confirming' | 'closing'>('idle')
     const mentionInputRef = useRef<MentionInputRef>(null)
 
     const isAdmin = mode === 'admin' && hasToken
@@ -124,26 +122,28 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
       }
     }, [table, isOperating, onStatusChange, onError])
 
+    // Step 1: arm the confirmation (show inline confirm/cancel)
     const handleClose = useCallback(() => {
-      if (!canClose(table.status) || isOperating || isClosing) return
-      setShowCloseDialog(true)
-    }, [table.status, isOperating, isClosing])
+      if (!canClose(table.status) || isOperating || closeState !== 'idle') return
+      setCloseState('confirming')
+    }, [table.status, isOperating, closeState])
 
+    // Step 2: confirmed — execute close
     const confirmClose = useCallback(async () => {
-      setIsClosing(true)
-      setShowCloseDialog(false)
+      if (closeState !== 'confirming') return
+      setCloseState('closing')
       try {
         const updated = await closeTable(table)
         onStatusChange?.(updated)
       } catch (err) {
         onError?.(err instanceof Error ? err : new Error('Failed to close table'))
-      } finally {
-        setIsClosing(false)
+        setCloseState('idle')
       }
-    }, [table, onStatusChange, onError])
+    }, [table, closeState, onStatusChange, onError])
 
+    // Cancel inline confirmation — return to idle
     const cancelClose = useCallback(() => {
-      setShowCloseDialog(false)
+      setCloseState('idle')
     }, [])
 
     const handleInsertSummaryRequest = useCallback((text: string) => {
@@ -153,8 +153,7 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
     }, [])
 
     return (
-      <>
-        <div className="mc-console">
+      <div className="mc-console">
           {/* Toolbar controls — only for admin */}
           {isAdmin && (
             <div className="mc-console-toolbar">
@@ -187,16 +186,39 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
                   {controlState === 'resuming' ? 'Resuming...' : 'Resume'}
                 </button>
               )}
-              {canClose(table.status) && (
+              {canClose(table.status) && closeState === 'idle' && (
                 <button
                   type="button"
                   className="mc-control-btn mc-control-btn--end-ghost"
                   onClick={handleClose}
-                  disabled={isOperating || isClosing}
+                  disabled={isOperating}
                   title="End meeting — close table permanently"
                 >
-                  {isClosing ? 'Closing...' : 'End Meeting'}
+                  End Meeting
                 </button>
+              )}
+              {canClose(table.status) && closeState !== 'idle' && (
+                <span className="mc-inline-confirm" role="group" aria-label="Confirm end meeting">
+                  <span className="mc-inline-confirm-label">End meeting?</span>
+                  <button
+                    type="button"
+                    className="mc-control-btn mc-control-btn--end-confirm"
+                    onClick={confirmClose}
+                    disabled={closeState === 'closing'}
+                    aria-label="Confirm end meeting"
+                  >
+                    {closeState === 'closing' ? 'Closing...' : 'Confirm'}
+                  </button>
+                  <button
+                    type="button"
+                    className="mc-control-btn mc-control-btn--cancel"
+                    onClick={cancelClose}
+                    disabled={closeState === 'closing'}
+                    aria-label="Cancel end meeting"
+                  >
+                    Cancel
+                  </button>
+                </span>
               )}
             </div>
           )}
@@ -231,25 +253,6 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
             )}
           </div>
         </div>
-
-        {/* End meeting confirmation dialog */}
-        <ConfirmDialog
-          isOpen={showCloseDialog}
-          title="End Meeting?"
-          message={
-            <p>
-              This will close the table permanently. No further sayings or joins
-              will be allowed. This action cannot be undone.
-            </p>
-          }
-          confirmLabel="End Meeting"
-          cancelLabel="Cancel"
-          variant="danger"
-          onConfirm={confirmClose}
-          onCancel={cancelClose}
-          isLoading={isClosing}
-        />
-      </>
     )
   }
 )

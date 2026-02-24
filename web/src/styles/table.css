@@ -2029,6 +2029,43 @@
   color: #ef4444;
 }
 
+/* End Meeting confirm button — red, fills on hover */
+.mc-control-btn--end-confirm {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+}
+
+.mc-control-btn--end-confirm:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.28);
+  border-color: rgba(239, 68, 68, 0.7);
+}
+
+/* Cancel button — neutral */
+.mc-control-btn--cancel {
+  background: transparent;
+  border-color: var(--mc-border);
+  color: var(--mc-text-muted);
+}
+
+.mc-control-btn--cancel:hover:not(:disabled) {
+  background: var(--mc-surface-hover);
+  color: var(--mc-text);
+}
+
+/* Inline confirmation group */
+.mc-inline-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.mc-inline-confirm-label {
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  white-space: nowrap;
+}
+
 /* Keyboard-focused saying (j/k navigation) */
 .mc-log-block--focused {
   outline: 2px solid var(--mc-accent);

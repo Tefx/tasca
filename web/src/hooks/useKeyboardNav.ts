@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, type RefObject } from 'react'
 
 interface UseKeyboardNavOptions {
   sayingsCount: number
-  streamRef: RefObject<HTMLDivElement | null>
-  inputRef: RefObject<HTMLTextAreaElement | null>
+  streamRef: RefObject<HTMLDivElement>
+  /** Ref to any focusable element with a `.focus()` method (e.g. CommandConsoleRef). */
+  inputRef: RefObject<{ focus: () => void } | null>
 }
 
 interface UseKeyboardNavResult {

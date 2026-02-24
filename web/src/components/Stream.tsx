@@ -14,7 +14,7 @@
  * - New sayings highlight briefly with a CSS animation on entry.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, type RefObject } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Saying, SpeakerKind } from '../api/sayings'
@@ -36,6 +36,10 @@ interface StreamProps {
   connectionStatus: ConnectionStatus
   /** Optional table status — drives contextual empty state messages. */
   tableStatus?: TableStatus
+  /** Index of the currently keyboard-focused saying, or null. */
+  focusedIndex?: number | null
+  /** External ref for the scrollable container (shared with keyboard nav hook). */
+  containerRef?: RefObject<HTMLDivElement>
 }
 
 // =============================================================================
@@ -115,15 +119,20 @@ interface LogBlockProps {
   isNew: boolean
   /** Current time — passed from parent to keep timestamps fresh. */
   now: Date
+  /** Index for keyboard navigation (data-saying-index attribute). */
+  sayingIndex: number
+  /** Whether this block is keyboard-focused. */
+  isFocused?: boolean
 }
 
-function LogBlock({ saying, isNew, now }: LogBlockProps) {
+function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps) {
   const kind = saying.speaker.kind
   const isMonospace = kind === 'agent' || kind === 'patron'
 
   return (
     <article
-      className={`mc-log-block mc-log-block--${speakerKindClass(kind)}${isNew ? ' mc-log-block--new' : ''}`}
+      className={`mc-log-block mc-log-block--${speakerKindClass(kind)}${isNew ? ' mc-log-block--new' : ''}${isFocused ? ' mc-log-block--focused' : ''}`}
+      data-saying-index={sayingIndex}
       aria-label={`Saying ${saying.sequence} by ${saying.speaker.name} (${kind})`}
     >
       {/* Header: sequence, speaker name, pin marker, timestamp */}
@@ -183,9 +192,11 @@ function LogBlock({ saying, isNew, now }: LogBlockProps) {
 // Main Component
 // =============================================================================
 
-export function Stream({ sayings, connectionStatus, tableStatus }: StreamProps) {
+export function Stream({ sayings, connectionStatus, tableStatus, focusedIndex, containerRef }: StreamProps) {
   const now = useNow()
-  const streamRef = useRef<HTMLDivElement>(null)
+  const internalRef = useRef<HTMLDivElement>(null)
+  // Use external containerRef if provided (shared with keyboard nav hook for scrollToIndex)
+  const streamRef = containerRef ?? internalRef
 
   /**
    * ID of the oldest "new" saying visible after the initial load.
@@ -325,6 +336,8 @@ export function Stream({ sayings, connectionStatus, tableStatus }: StreamProps) 
                 saying={saying}
                 isNew={index >= initialCount}
                 now={now}
+                sayingIndex={index}
+                isFocused={focusedIndex === index}
               />
             ))}
           </div>

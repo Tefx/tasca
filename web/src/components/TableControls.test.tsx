@@ -65,7 +65,7 @@ describe('getExportUrl', () => {
 describe('TableControls download action', () => {
   it('renders download link for viewer mode', () => {
     asViewer()
-    render(<TableControls table={makeTable()} onStatusChange={vi.fn()} />)
+    render(<TableControls table={makeTable()}  />)
 
     const link = screen.getByRole('link', { name: /^download$/i })
     expect(link).toBeInTheDocument()
@@ -78,7 +78,7 @@ describe('TableControls download action', () => {
 
   it('renders download link for admin mode and click is not canceled', () => {
     asAdmin()
-    render(<TableControls table={makeTable()} onStatusChange={vi.fn()} />)
+    render(<TableControls table={makeTable()}  />)
 
     const link = screen.getByRole('link', { name: /^download$/i })
     expect(link).toBeInTheDocument()

@@ -13,7 +13,7 @@
  * Design source: docs/tasca-web-uiux-v0.1.md (Table View / Mission Control spec)
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getTable, type Table as TableType, type TableStatus } from '../api/tables'
 import { listSeats, type Seat } from '../api/sayings'
@@ -22,7 +22,8 @@ import { Stream } from '../components/Stream'
 import { SeatDeck, type PatronInfo } from '../components/SeatDeck'
 import { ModeIndicator } from '../components/ModeIndicator'
 import { TableControls } from '../components/TableControls'
-import { CommandConsole } from '../components/CommandConsole'
+import { CommandConsole, type CommandConsoleRef } from '../components/CommandConsole'
+import { useKeyboardNav } from '../hooks/useKeyboardNav'
 import '../styles/table.css'
 
 // =============================================================================
@@ -283,10 +284,9 @@ function ConnectionWarningBanner({ status }: ConnectionWarningBannerProps) {
 
 interface HudProps {
   table: TableType
-  onStatusChange: (table: TableType) => void
 }
 
-function Hud({ table, onStatusChange }: HudProps) {
+function Hud({ table }: HudProps) {
   return (
     <header className="mc-hud">
       {/* Tier 1: Navigation + Title (full-width, prominent) */}
@@ -294,8 +294,8 @@ function Hud({ table, onStatusChange }: HudProps) {
         <Link to="/" className="mc-hud-back" aria-label="Back to Watchtower">
           &larr; Watchtower
         </Link>
-        <h1 
-          className="mc-hud-title" 
+        <h1
+          className="mc-hud-title"
           title={table.question.length > 50 ? table.question : undefined}
         >
           {table.question}
@@ -304,7 +304,7 @@ function Hud({ table, onStatusChange }: HudProps) {
 
       {/* Tier 2: Controls + Metadata + Actions + Mode */}
       <div className="mc-hud-tier2">
-        <TableControls table={table} onStatusChange={onStatusChange} />
+        <TableControls table={table} />
         <details className="mc-hud-meta-details">
           <summary className="mc-hud-meta-summary">Info</summary>
           <ul className="mc-meta-list">
@@ -369,6 +369,17 @@ export function Table() {
     connectionStatus,
     appendSaying,
   } = useSayingsStream(tableId)
+
+  // Refs for keyboard navigation
+  const streamContainerRef = useRef<HTMLDivElement>(null)
+  const consoleRef = useRef<CommandConsoleRef>(null)
+
+  // Keyboard navigation: j/k/g/G to move between sayings, / to focus console
+  const { focusedIndex } = useKeyboardNav({
+    sayingsCount: sayings.length,
+    streamRef: streamContainerRef,
+    inputRef: consoleRef,
+  })
 
   // ---------------------------------------------------------------------------
   // Handle status changes from TableControls
@@ -452,7 +463,7 @@ export function Table() {
 
   return (
     <div className="mc">
-      <Hud table={table} onStatusChange={handleStatusChange} />
+      <Hud table={table} />
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
       <ConnectionWarningBanner status={connectionStatus} />
       <div className="mc-columns">
@@ -460,8 +471,15 @@ export function Table() {
           id="mc-tab-panel-stream"
           className={`mc-col-center mc-tab-panel${activeTab === 'stream' ? ' mc-tab-panel--active' : ''}`}
         >
-          <Stream sayings={sayings} connectionStatus={connectionStatus} tableStatus={table.status} />
+          <Stream
+            sayings={sayings}
+            connectionStatus={connectionStatus}
+            tableStatus={table.status}
+            focusedIndex={focusedIndex}
+            containerRef={streamContainerRef}
+          />
           <CommandConsole
+            ref={consoleRef}
             table={table}
             seats={seats}
             patrons={patronsMap}

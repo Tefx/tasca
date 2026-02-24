@@ -1,21 +1,19 @@
 /**
- * TableControls — Status indicator and Close control for table HUD header.
+ * TableControls — Status indicator and download control for table HUD header.
  *
- * Provides status display and Close (end meeting) control.
- * Pause/Resume controls are now in the footer console area.
+ * Shows the table status pill, a Download link, and a closed timestamp when
+ * the meeting has ended.
+ *
+ * Close (End Meeting) control has moved to the CommandConsole toolbar.
  *
  * Design source: Task web_fix.s1-pause-resume-footer (Spec §E Controls)
  */
 
-import { useState, useCallback } from 'react'
-import { useAuth } from '../auth/AuthContext'
 import {
-  closeTable,
   getExportUrl,
   type Table as TableType,
   type TableStatus,
 } from '../api/tables'
-import { ConfirmDialog } from './ConfirmDialog'
 import '../styles/table.css'
 
 // =============================================================================
@@ -25,13 +23,7 @@ import '../styles/table.css'
 interface TableControlsProps {
   /** Current table state */
   table: TableType
-  /** Called when table status changes successfully */
-  onStatusChange: (table: TableType) => void
-  /** Called when an error occurs */
-  onError?: (error: Error) => void
 }
-
-type OperationState = 'idle' | 'closing'
 
 // =============================================================================
 // Status Helpers
@@ -61,125 +53,46 @@ function statusLabel(status: TableStatus): string {
   }
 }
 
-/** Check if table can be closed. */
-function canClose(status: TableStatus): boolean {
-  return status === 'open' || status === 'paused'
-}
-
 // =============================================================================
 // Component
 // =============================================================================
 
-export function TableControls({
-  table,
-  onStatusChange,
-  onError,
-}: TableControlsProps) {
-  const { mode, hasToken } = useAuth()
-  const [operation, setOperation] = useState<OperationState>('idle')
-  const [showCloseDialog, setShowCloseDialog] = useState(false)
-
-  const isAdmin = mode === 'admin' && hasToken
-  const isOperating = operation !== 'idle'
+export function TableControls({ table }: TableControlsProps) {
   const exportMarkdownUrl = getExportUrl(table.id, 'markdown')
 
-  // ---------------------------------------------------------------------------
-  // Handlers
-  // ---------------------------------------------------------------------------
-
-  const handleClose = useCallback(async () => {
-    if (!canClose(table.status) || isOperating) return
-
-    setShowCloseDialog(true)
-  }, [table.status, isOperating])
-
-  const confirmClose = useCallback(async () => {
-    setOperation('closing')
-    setShowCloseDialog(false)
-    try {
-      const updated = await closeTable(table)
-      onStatusChange(updated)
-    } catch (error) {
-      onError?.(error instanceof Error ? error : new Error('Failed to close table'))
-    } finally {
-      setOperation('idle')
-    }
-  }, [table, onStatusChange, onError])
-
-  const cancelClose = useCallback(() => {
-    setShowCloseDialog(false)
-  }, [])
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-
   return (
-    <>
-      <div className="mc-table-controls">
-        {/* Status indicator */}
-        <div className="mc-table-controls-status">
-          <span
-            className={`mc-status-pill mc-status-pill--${table.status}`}
-            title={statusDescription(table.status)}
-          >
-            {statusLabel(table.status)}
-          </span>
-        </div>
-
-        <div className="mc-table-controls-actions">
-          <a
-            href={exportMarkdownUrl}
-            download
-            className="mc-control-btn mc-control-btn--download"
-            title="Download table transcript as Markdown"
-          >
-            Download
-          </a>
-
-          {/* Close button — only visible in admin mode */}
-          {isAdmin && canClose(table.status) && (
-            <button
-              type="button"
-              className="mc-control-btn mc-control-btn--close"
-              onClick={handleClose}
-              disabled={isOperating}
-              title="End meeting — close table permanently"
-            >
-              {operation === 'closing' ? 'Closing...' : 'End Meeting'}
-            </button>
-          )}
-        </div>
-
-        {/* Closed timestamp */}
-        {table.status === 'closed' && (
-          <div className="mc-table-controls-closed">
-            <span className="mc-table-closed-label">Closed</span>
-            <time className="mc-table-closed-time" dateTime={table.updated_at}>
-              {formatClosedTime(table.updated_at)}
-            </time>
-          </div>
-        )}
+    <div className="mc-table-controls">
+      {/* Status indicator */}
+      <div className="mc-table-controls-status">
+        <span
+          className={`mc-status-pill mc-status-pill--${table.status}`}
+          title={statusDescription(table.status)}
+        >
+          {statusLabel(table.status)}
+        </span>
       </div>
 
-      {/* Close confirmation dialog */}
-      <ConfirmDialog
-        isOpen={showCloseDialog}
-        title="End Meeting?"
-        message={
-          <p>
-            This will close the table permanently. No further sayings or joins
-            will be allowed. This action cannot be undone.
-          </p>
-        }
-        confirmLabel="End Meeting"
-        cancelLabel="Cancel"
-        variant="danger"
-        onConfirm={confirmClose}
-        onCancel={cancelClose}
-        isLoading={operation === 'closing'}
-      />
-    </>
+      <div className="mc-table-controls-actions">
+        <a
+          href={exportMarkdownUrl}
+          download
+          className="mc-control-btn mc-control-btn--download"
+          title="Download table transcript as Markdown"
+        >
+          Download
+        </a>
+      </div>
+
+      {/* Closed timestamp */}
+      {table.status === 'closed' && (
+        <div className="mc-table-controls-closed">
+          <span className="mc-table-closed-label">Closed</span>
+          <time className="mc-table-closed-time" dateTime={table.updated_at}>
+            {formatClosedTime(table.updated_at)}
+          </time>
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -399,7 +399,7 @@ export function Table() {
       <Hud table={table} onStatusChange={handleStatusChange} />
       <div className="mc-columns">
         <div className="mc-col-center">
-          <Stream sayings={sayings} connectionStatus={connectionStatus} />
+          <Stream sayings={sayings} connectionStatus={connectionStatus} tableStatus={table.status} />
           <CommandConsole
             table={table}
             seats={seats}

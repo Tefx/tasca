@@ -625,10 +625,11 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0.625rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--mc-border);
   border-left: 3px solid transparent;
   transition: background 0.1s;
+  overflow: hidden;
 }
 
 .mc-log-block:hover {
@@ -662,7 +663,7 @@
 .mc-log-header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   font-size: 0.75rem;
   flex-wrap: wrap;
 }
@@ -679,38 +680,10 @@
   color: var(--mc-text);
 }
 
-.mc-log-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.0625rem 0.375rem;
-  border-radius: 999px;
-  font-size: 0.625rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.mc-log-badge--agent {
-  color: var(--mc-accent);
-  background: rgba(96, 165, 250, 0.15);
-}
-
-.mc-log-badge--human {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.mc-log-badge--patron {
-  color: #a855f7;
-  background: rgba(168, 85, 247, 0.15);
-}
-
 .mc-log-pin {
-  font-size: 0.625rem;
+  font-size: 0.8125rem;
   color: var(--mc-status-paused);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .mc-log-time {
@@ -727,6 +700,8 @@
   color: var(--mc-text);
   white-space: pre-wrap;
   word-break: break-word;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .mc-log-content--mono {
@@ -970,82 +945,12 @@
   background: var(--mc-status-closed);
 }
 
-/* Seat presence badge with dot + label (ONLINE/IDLE/OFFLINE) */
-.mc-seat-presence-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.125rem 0.4375rem;
-  border-radius: 999px;
-  font-size: 0.5625rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.mc-seat-presence-badge-dot {
-  width: 0.375rem;
-  height: 0.375rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.mc-seat-presence-badge--active {
-  color: var(--mc-status-open);
-  background: var(--mc-status-open-bg);
-}
-
-.mc-seat-presence-badge--active .mc-seat-presence-badge-dot {
-  background: var(--mc-status-open);
-  box-shadow: 0 0 4px var(--mc-status-open);
-}
-
-.mc-seat-presence-badge--idle {
-  color: var(--mc-status-paused);
-  background: var(--mc-status-paused-bg);
-}
-
-.mc-seat-presence-badge--idle .mc-seat-presence-badge-dot {
-  background: var(--mc-status-paused);
-}
-
-.mc-seat-presence-badge--offline {
-  color: var(--mc-status-closed);
-  background: var(--mc-status-closed-bg);
-}
-
-.mc-seat-presence-badge--offline .mc-seat-presence-badge-dot {
-  background: var(--mc-status-closed);
-}
-
 /* Seat badges container */
 .mc-seat-badges {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   flex-shrink: 0;
-}
-
-/* Seat kind badge (AGENT/HUMAN) */
-.mc-seat-kind {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.0625rem 0.375rem;
-  border-radius: 999px;
-  font-size: 0.5625rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.mc-seat-kind--agent {
-  color: var(--mc-accent);
-  background: rgba(96, 165, 250, 0.15);
-}
-
-.mc-seat-kind--human {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.15);
 }
 
 /* Seat state badge */
@@ -1058,11 +963,6 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.mc-seat-state--joined {
-  color: var(--mc-seat-joined);
-  background: var(--mc-seat-joined-bg);
 }
 
 .mc-seat-state--left {
@@ -1189,12 +1089,18 @@
   flex-shrink: 0;
 }
 
-.mc-mention-presence--active {
-  background: var(--mc-status-open);
+.mc-mention-presence--offline {
+  background: var(--mc-status-closed);
 }
 
-.mc-mention-presence--idle {
-  background: var(--mc-status-paused);
+/* Offline mention item - visible but disabled */
+.mc-mention-item--offline {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mc-mention-item--offline:hover {
+  background: transparent;
 }
 
 /* =============================================================================
@@ -1462,6 +1368,13 @@
   color: var(--mc-text-muted);
 }
 
+.mc-log-content table {
+  overflow-x: auto;
+  display: block;
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
 /* =============================================================================
    Command Console (footer input)
    ============================================================================= */
@@ -1532,30 +1445,6 @@
   padding-top: 0.5rem;
   border-top: 1px solid var(--mc-border);
   margin-top: 0.25rem;
-}
-
-/* =============================================================================
-   Mention Input — Active Prefix Label
-   ============================================================================= */
-
-.mc-mention-input-prefix {
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--mc-accent);
-  pointer-events: none;
-  z-index: 1;
-  white-space: nowrap;
-}
-
-/* When prefix is shown, indent the textarea (uses wrapper class for Safari 15 compatibility) */
-.mc-mention-input-wrapper--active .mc-mention-input {
-  padding-left: 4.5rem;
 }
 
 /* =============================================================================
@@ -1824,6 +1713,75 @@
 
 .mc-hud .mode-btn--logout:hover {
   background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* =============================================================================
+   Token Dialog — Dark Theme Override for Mission Control
+   ============================================================================= */
+
+.mc .token-dialog-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.mc .token-dialog {
+  background-color: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.mc .token-dialog-title {
+  color: var(--mc-text);
+}
+
+.mc .token-dialog-hint {
+  color: var(--mc-text-muted);
+}
+
+.mc .token-label {
+  color: var(--mc-text-dim);
+}
+
+.mc .token-input {
+  background-color: var(--mc-bg);
+  border-color: var(--mc-border);
+  color: var(--mc-text);
+}
+
+.mc .token-input:focus {
+  border-color: var(--mc-accent);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+}
+
+.mc .token-input::placeholder {
+  color: var(--mc-text-muted);
+}
+
+.mc .token-error {
+  color: #f87171;
+}
+
+.mc .token-btn--cancel {
+  background-color: var(--mc-surface);
+  color: var(--mc-text-dim);
+  border: 1px solid var(--mc-border);
+}
+
+.mc .token-btn--cancel:hover {
+  background-color: var(--mc-surface-hover);
+}
+
+.mc .token-btn--submit {
+  background-color: var(--mc-accent);
+  color: #fff;
+}
+
+.mc .token-btn--submit:hover {
+  background-color: var(--mc-accent-hover);
+}
+
+.mc .token-btn--submit:disabled {
+  background-color: var(--mc-border);
+  color: var(--mc-text-muted);
 }
 
 /* =============================================================================

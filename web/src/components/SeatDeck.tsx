@@ -314,7 +314,7 @@ export function SeatDeck({
 
         {displaySeats.length === 0 ? (
           <div className="mc-seat-deck-empty" role="status">
-            {mentionableOnly ? 'No active participants to mention' : 'No participants yet'}
+            {mentionableOnly ? 'No active participants available to mention right now.' : 'Share the table invite code to bring participants in.'}
           </div>
         ) : (
           <div role={mentionableOnly ? 'presentation' : 'list'} aria-label="Participant list">

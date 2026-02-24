@@ -3,7 +3,7 @@
  *
  * Renders sayings as full-width log blocks (NOT chat bubbles).
  * Agent sayings get a tinted background + monospace content.
- * Human sayings get a high-contrast left border + "HUMAN" badge.
+ * Human sayings get a high-contrast left border.
  *
  * Design source: docs/tasca-web-uiux-v0.1.md (Stream spec)
  *
@@ -19,6 +19,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Saying, SpeakerKind } from '../api/sayings'
 import type { ConnectionStatus } from '../hooks/useLongPoll'
+import type { TableStatus } from '../api/tables'
 
 // =============================================================================
 // Types
@@ -32,6 +33,8 @@ interface StreamProps {
    * Design source: task spec web.long_poll_stream — Connection status indicator.
    */
   connectionStatus: ConnectionStatus
+  /** Optional table status — drives contextual empty state messages. */
+  tableStatus?: TableStatus
 }
 
 // =============================================================================
@@ -71,18 +74,6 @@ function formatTime(iso: string): string {
 /** Get the CSS class suffix for a speaker kind. */
 function speakerKindClass(kind: SpeakerKind): string {
   return kind
-}
-
-/** Get the display label for a speaker kind badge. */
-function speakerBadgeLabel(kind: SpeakerKind): string {
-  switch (kind) {
-    case 'agent':
-      return 'AGENT'
-    case 'human':
-      return 'HUMAN'
-    case 'patron':
-      return 'PATRON'
-  }
 }
 
 // =============================================================================
@@ -131,9 +122,9 @@ function LogBlock({ saying, isNew }: LogBlockProps) {
   return (
     <article
       className={`mc-log-block mc-log-block--${speakerKindClass(kind)}${isNew ? ' mc-log-block--new' : ''}`}
-      aria-label={`Saying ${saying.sequence} by ${saying.speaker.name}`}
+      aria-label={`Saying ${saying.sequence} by ${saying.speaker.name} (${kind})`}
     >
-      {/* Header: sequence, speaker name, kind badge, pin marker, timestamp */}
+      {/* Header: sequence, speaker name, pin marker, timestamp */}
       <div className="mc-log-header">
         <span className="mc-log-seq" aria-label="Sequence number">
           #{saying.sequence}
@@ -144,15 +135,9 @@ function LogBlock({ saying, isNew }: LogBlockProps) {
           </span>
         )}
         <span className="mc-log-speaker">{saying.speaker.name}</span>
-        <span
-          className={`mc-log-badge mc-log-badge--${speakerKindClass(kind)}`}
-          aria-label={`Speaker type: ${kind}`}
-        >
-          {speakerBadgeLabel(kind)}
-        </span>
         {saying.pinned && (
-          <span className="mc-log-pin" aria-label="Pinned">
-            PIN
+          <span className="mc-log-pin" aria-label="Pinned" title="Pinned">
+            📌
           </span>
         )}
         <time className="mc-log-time" dateTime={saying.created_at}>
@@ -196,7 +181,7 @@ function LogBlock({ saying, isNew }: LogBlockProps) {
 // Main Component
 // =============================================================================
 
-export function Stream({ sayings, connectionStatus }: StreamProps) {
+export function Stream({ sayings, connectionStatus, tableStatus }: StreamProps) {
   const streamRef = useRef<HTMLDivElement>(null)
 
   /**
@@ -313,8 +298,13 @@ export function Stream({ sayings, connectionStatus }: StreamProps) {
 
       {sayings.length === 0 ? (
         <div className="mc-stream-empty" role="status">
-          <p>No sayings yet.</p>
-          <p>Sayings will appear here as the discussion progresses.</p>
+          {tableStatus === 'paused' ? (
+            <p>This table is paused. Resume the table to allow new sayings.</p>
+          ) : tableStatus === 'closed' ? (
+            <p>This discussion has ended. No sayings were recorded.</p>
+          ) : (
+            <p>Waiting for the conversation to begin. Sayings will appear here in real time.</p>
+          )}
         </div>
       ) : (
         <div className="mc-stream-body">

@@ -69,6 +69,24 @@
    Page Layout
    ============================================================================= */
 
+/**
+ * Mission Control Full-Width Override
+ *
+ * The global #root has max-width: 1280px; padding: 2rem from index.css.
+ * Mission Control needs full viewport width for the three-column layout.
+ * Using :has() for scoped override - only applies when .mc is a descendant.
+ *
+ * Browser Support:
+ * - Chrome 105+ (Sep 2022)
+ * - Safari 15.4+ (Mar 2022)
+ * - Firefox 121+ (Dec 2023)
+ * Progressive enhancement: older browsers still get constrained layout.
+ */
+#root:has(.mc) {
+  max-width: none;
+  padding: 0;
+}
+
 .mc {
   width: 100%;
   height: 100vh;

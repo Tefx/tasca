@@ -1015,12 +1015,16 @@ def table_list(status: Literal["open"] = "open") -> dict[str, Any]:
     )
 
 
-# @shell_complexity: 5 branches for table lookup + sayings fetch + format validation + error paths
+# Valid export formats
+VALID_EXPORT_FORMATS = ("markdown", "jsonl")
+
+
+# @shell_complexity: 6 branches for format validation + table lookup + sayings fetch + format dispatch + error paths
 # @invar:allow shell_result: MCP tools return serializable primitives, not Result
 @mcp.tool
 def table_export(
     table_id: str,
-    format: Literal["markdown", "jsonl"] = "markdown",
+    format: str = "markdown",
 ) -> dict[str, Any]:
     """Export a table and its sayings to a formatted string.
 
@@ -1047,6 +1051,14 @@ def table_export(
         - INVALID_REQUEST: Unknown format
         - DATABASE_ERROR: Failed to query table or sayings
     """
+    # Validate format early - return INVALID_REQUEST envelope instead of raising ValidationError
+    if format not in VALID_EXPORT_FORMATS:
+        return error_response(
+            "INVALID_REQUEST",
+            f"Unknown format: {format}. Supported formats: markdown, jsonl",
+            {"format": format, "supported": list(VALID_EXPORT_FORMATS)},
+        )
+
     conn = next(get_mcp_db())
 
     # Verify table exists and fetch it
@@ -1067,19 +1079,12 @@ def table_export(
 
     sayings = sayings_result.unwrap()
 
-    # Generate export content based on format
-    if format == "markdown":
-        content = generate_markdown(table, sayings)
-    elif format == "jsonl":
+    # Generate export content based on format (format already validated above)
+    if format == "jsonl":
         exported_at = datetime.now(UTC).isoformat()
         content = generate_jsonl(table, sayings, exported_at)
-    else:
-        # This shouldn't happen due to Literal type, but handle defensively
-        return error_response(
-            "INVALID_REQUEST",
-            f"Unknown format: {format}. Supported formats: markdown, jsonl",
-            {"format": format, "supported": ["markdown", "jsonl"]},
-        )
+    else:  # markdown (default, already validated)
+        content = generate_markdown(table, sayings)
 
     return success_response(
         {

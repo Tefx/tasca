@@ -24,6 +24,7 @@ from tasca.shell.mcp.server import (
     seat_list,
     table_control,
     table_create,
+    table_export,
     table_get,
     table_join,
     table_list,
@@ -762,6 +763,200 @@ class TestTableListen:
         assert result2["data"]["sayings"] == []
         # Since no sayings returned, next_sequence = since_sequence (last-seen semantics)
         assert result2["data"]["next_sequence"] == 10
+
+
+class TestTableExport:
+    """Tests for table_export MCP tool.
+
+    table_export exports a table and its sayings to markdown or jsonl format.
+    """
+
+    def test_export_table_not_found(self) -> None:
+        """Export non-existent table returns NOT_FOUND error envelope."""
+        result = table_export(table_id="nonexistent-id")
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
+        assert "table" in result["error"]["message"].lower()
+
+    def test_export_markdown_empty_table(self) -> None:
+        """Export empty table as markdown returns valid markdown."""
+        # Create table
+        table_result = table_create(question="What is the meaning of life?")
+        table_id = table_result["data"]["id"]
+
+        # Export as markdown
+        result = table_export(table_id=table_id, format="markdown")
+
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["format"] == "markdown"
+        assert data["table_id"] == table_id
+        assert "content" in data
+
+        # Verify markdown structure
+        content = data["content"]
+        assert "# What is the meaning of life?" in content
+        assert "table_id:" in content
+        assert "status: open" in content
+        assert "_No sayings yet._" in content
+
+    def test_export_markdown_with_sayings(self) -> None:
+        """Export table with sayings as markdown includes full content."""
+        # Create table and add sayings
+        table_result = table_create(question="Discussion topic")
+        table_id = table_result["data"]["id"]
+
+        table_say(table_id=table_id, content="First point", speaker_name="Alice")
+        table_say(table_id=table_id, content="Second point", speaker_name="Bob")
+
+        # Export as markdown
+        result = table_export(table_id=table_id, format="markdown")
+
+        assert result["ok"] is True
+        content = result["data"]["content"]
+
+        # Verify content includes sayings
+        assert "[seq=0]" in content
+        assert "[seq=1]" in content
+        assert "First point" in content
+        assert "Second point" in content
+        assert "agent:Alice" in content
+        assert "agent:Bob" in content
+
+    def test_export_jsonl_empty_table(self) -> None:
+        """Export empty table as jsonl returns valid jsonl."""
+        # Create table
+        table_result = table_create(question="JSONL test")
+        table_id = table_result["data"]["id"]
+
+        # Export as jsonl
+        result = table_export(table_id=table_id, format="jsonl")
+
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["format"] == "jsonl"
+        assert data["table_id"] == table_id
+        assert "content" in data
+
+        # Verify jsonl structure (2 lines: header + table)
+        import json
+
+        lines = data["content"].strip().split("\n")
+        assert len(lines) == 2
+
+        # First line is header
+        header = json.loads(lines[0])
+        assert header["type"] == "export_header"
+        assert header["table_id"] == table_id
+
+        # Second line is table
+        table_line = json.loads(lines[1])
+        assert table_line["type"] == "table"
+        assert table_line["table"]["question"] == "JSONL test"
+
+    def test_export_jsonl_with_sayings(self) -> None:
+        """Export table with sayings as jsonl includes all sayings."""
+        # Create table and add sayings
+        table_result = table_create(question="JSONL with sayings")
+        table_id = table_result["data"]["id"]
+
+        table_say(table_id=table_id, content="First", speaker_name="A")
+        table_say(table_id=table_id, content="Second", speaker_name="B")
+
+        # Export as jsonl
+        result = table_export(table_id=table_id, format="jsonl")
+
+        assert result["ok"] is True
+        import json
+
+        lines = result["data"]["content"].strip().split("\n")
+
+        # 4 lines: header + table + 2 sayings
+        assert len(lines) == 4
+
+        # Verify saying lines
+        saying1 = json.loads(lines[2])
+        assert saying1["type"] == "saying"
+        assert saying1["saying"]["content"] == "First"
+        assert saying1["saying"]["sequence"] == 0
+
+        saying2 = json.loads(lines[3])
+        assert saying2["type"] == "saying"
+        assert saying2["saying"]["content"] == "Second"
+        assert saying2["saying"]["sequence"] == 1
+
+    def test_export_default_format_is_markdown(self) -> None:
+        """Export without format parameter defaults to markdown."""
+        table_result = table_create(question="Default format test")
+        table_id = table_result["data"]["id"]
+
+        # Export without specifying format
+        result = table_export(table_id=table_id)
+
+        assert result["ok"] is True
+        assert result["data"]["format"] == "markdown"
+        assert "# Default format test" in result["data"]["content"]
+
+    def test_export_invalid_format_returns_invalid_request(self) -> None:
+        """Export with invalid format returns INVALID_REQUEST error envelope.
+
+        P1_EMPTY_ROOM fix: Invalid format must return tool-level INVALID_REQUEST
+        envelope, NOT raise ValidationError that escapes to the framework layer.
+        """
+        table_result = table_create(question="Format test")
+        table_id = table_result["data"]["id"]
+
+        # Call with invalid format - must return error envelope, not raise
+        result = table_export(table_id=table_id, format="invalid_format")
+
+        assert result["ok"] is False
+        assert "error" in result
+        assert result["error"]["code"] == "INVALID_REQUEST"
+        assert "invalid_format" in result["error"]["message"]
+        # Verify details include supported formats
+        assert "details" in result["error"]
+        assert result["error"]["details"]["format"] == "invalid_format"
+        assert "markdown" in result["error"]["details"]["supported"]
+        assert "jsonl" in result["error"]["details"]["supported"]
+
+    def test_export_invalid_format_various_values(self) -> None:
+        """Various invalid format values all return INVALID_REQUEST."""
+        table_result = table_create(question="Format variants test")
+        table_id = table_result["data"]["id"]
+
+        invalid_formats = [
+            "JSON",  # Case sensitivity
+            "MARKDOWN",  # Case sensitivity
+            "",  # Empty string
+            "  markdown  ",  # Whitespace
+            "xml",  # Completely wrong
+        ]
+
+        for fmt in invalid_formats:
+            result = table_export(table_id=table_id, format=fmt)
+            assert result["ok"] is False, f"Expected error for format '{fmt}'"
+            assert result["error"]["code"] == "INVALID_REQUEST", f"Wrong error code for '{fmt}'"
+
+    def test_export_response_shape(self) -> None:
+        """Export response has correct envelope shape."""
+        table_result = table_create(question="Shape test")
+        table_id = table_result["data"]["id"]
+
+        result = table_export(table_id=table_id, format="markdown")
+
+        # Success envelope shape
+        assert result["ok"] is True
+        assert "data" in result
+        assert "error" not in result
+
+        # Data shape
+        data = result["data"]
+        assert set(data.keys()) == {"content", "format", "table_id"}
+        assert isinstance(data["content"], str)
+        assert len(data["content"]) > 0
+        assert data["format"] in ("markdown", "jsonl")
+        assert data["table_id"] == table_id
 
 
 # =============================================================================
@@ -1798,9 +1993,7 @@ class TestTableWait:
         assert "updated_at" in table_snapshot
 
         # Saying data also present
-        found = any(
-            s["content"] == "Saying triggering hit path" for s in data["sayings"]
-        )
+        found = any(s["content"] == "Saying triggering hit path" for s in data["sayings"])
         assert found, "Expected saying content not found in wait response"
 
     @pytest.mark.asyncio
@@ -1859,7 +2052,12 @@ class TestConnect:
     async def test_connect_switches_to_remote_mode(self) -> None:
         """connect(url=...) switches to remote mode and returns status."""
         from tasca.shell.mcp.server import connect
-        from tasca.shell.mcp.proxy import UpstreamConfig, get_upstream_config, switch_to_local, switch_to_remote
+        from tasca.shell.mcp.proxy import (
+            UpstreamConfig,
+            get_upstream_config,
+            switch_to_local,
+            switch_to_remote,
+        )
 
         try:
             # Mock session init to avoid real HTTP call

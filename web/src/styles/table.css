@@ -71,10 +71,11 @@
 
 .mc {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 0;
+  overflow: hidden;
 }
 
 /* =============================================================================
@@ -220,8 +221,7 @@
   gap: 1px;
   flex: 1;
   min-height: 0;
-  /* Fixed height: viewport minus HUD header and root padding */
-  height: calc(100vh - 8rem);
+  overflow: hidden;
 }
 
 /* =============================================================================
@@ -235,6 +235,11 @@
   overflow-y: auto;
   border-right: 1px solid var(--mc-border);
   padding-right: 0.75rem;
+  scrollbar-width: none;          /* Firefox */
+}
+
+.mc-col-left::-webkit-scrollbar {
+  display: none;                  /* Chrome/Safari */
 }
 
 /* Board Component */
@@ -401,6 +406,25 @@
   flex: 1;
   padding: 0 0.75rem;
   scroll-behavior: smooth;
+  scrollbar-width: thin;                          /* Firefox */
+  scrollbar-color: var(--mc-border) transparent;  /* Firefox */
+}
+
+.mc-stream::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mc-stream::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mc-stream::-webkit-scrollbar-thumb {
+  background: var(--mc-border);
+  border-radius: 3px;
+}
+
+.mc-stream::-webkit-scrollbar-thumb:hover {
+  background: var(--mc-text-muted);
 }
 
 /* Stream empty/no sayings state */
@@ -588,6 +612,11 @@
   overflow-y: auto;
   border-left: 1px solid var(--mc-border);
   padding-left: 0.75rem;
+  scrollbar-width: none;          /* Firefox */
+}
+
+.mc-col-right::-webkit-scrollbar {
+  display: none;                  /* Chrome/Safari */
 }
 
 .mc-seat-deck {

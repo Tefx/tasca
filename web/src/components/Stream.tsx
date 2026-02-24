@@ -203,8 +203,10 @@ export function Stream({ sayings, connectionStatus }: StreamProps) {
    * ID of the oldest "new" saying visible after the initial load.
    * sayings arriving after this point are marked isNew=true for the
    * highlight animation.
+   *
+   * Updated when user scrolls to bottom (they've "seen" all sayings).
    */
-  const initialCountRef = useRef<number | null>(null)
+  const initialCountRef = useRef<number>(0)
 
   /**
    * Whether the user is at (or near) the stream bottom.
@@ -221,8 +223,11 @@ export function Stream({ sayings, connectionStatus }: StreamProps) {
   // ---------------------------------------------------------------------------
   // Track "initial" count — everything before the first render with data is
   // considered pre-existing; sayings after that get the highlight animation.
+  // IMPORTANT: Reset when user is at bottom and has seen all sayings.
   // ---------------------------------------------------------------------------
-  if (initialCountRef.current === null && sayings.length > 0) {
+  
+  // On mount with data, mark all existing sayings as "seen"
+  if (initialCountRef.current === 0 && sayings.length > 0) {
     initialCountRef.current = sayings.length
   }
 
@@ -240,11 +245,14 @@ export function Stream({ sayings, connectionStatus }: StreamProps) {
     setIsAtBottom(atBottom)
 
     if (atBottom) {
-      // User scrolled back to bottom — clear unread badge.
+      // User scrolled back to bottom — clear unread badge and mark all sayings as "seen"
       setUnreadCount(0)
       countAtScrollUpRef.current = 0
+      // Update initial count so new sayings after this point get highlighted properly
+      // This prevents "new" markers from appearing on sayings user has already seen
+      initialCountRef.current = sayings.length
     }
-  }, [])
+  }, [sayings.length])
 
   // ---------------------------------------------------------------------------
   // Auto-scroll when new sayings arrive.
@@ -254,8 +262,10 @@ export function Stream({ sayings, connectionStatus }: StreamProps) {
     if (!el || sayings.length === 0) return
 
     if (isAtBottom) {
-      // Follow the tail.
+      // Follow the tail
       el.scrollTop = el.scrollHeight
+      // Mark all sayings as seen since we're auto-following
+      initialCountRef.current = sayings.length
     } else {
       // Accumulate unread count while user is scrolled up.
       const newSinceScrollUp = sayings.length - countAtScrollUpRef.current
@@ -280,12 +290,16 @@ export function Stream({ sayings, connectionStatus }: StreamProps) {
     setIsAtBottom(true)
     setUnreadCount(0)
     countAtScrollUpRef.current = 0
-  }, [])
+    // Mark all current sayings as seen
+    initialCountRef.current = sayings.length
+  }, [sayings.length])
 
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
-  const initialCount = initialCountRef.current ?? sayings.length
+  // Only mark sayings as "new" if they came after the current initialCount
+  // This prevents flash effects when user is at bottom and sayings arrive
+  const initialCount = initialCountRef.current
 
   return (
     <div className="mc-stream-panel">

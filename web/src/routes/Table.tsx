@@ -242,7 +242,12 @@ function Hud({ table, onStatusChange }: HudProps) {
         <Link to="/" className="mc-hud-back" aria-label="Back to Watchtower">
           &larr; Watchtower
         </Link>
-        <h1 className="mc-hud-title">{table.question}</h1>
+        <h1 
+          className="mc-hud-title" 
+          title={table.question.length > 50 ? table.question : undefined}
+        >
+          {table.question}
+        </h1>
       </div>
 
       {/* Tier 2: Controls + Metadata + Actions + Mode */}

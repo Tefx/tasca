@@ -133,6 +133,9 @@ export const MentionInput = forwardRef<MentionInputRef, MentionInputProps>(funct
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // IME composition state — true while composing (e.g. Chinese/Japanese input)
+  const composingRef = useRef(false)
+
   // Mention picker state
   const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null)
   const [pickerPosition, setPickerPosition] = useState({ top: 0, left: 0 })
@@ -231,6 +234,9 @@ export const MentionInput = forwardRef<MentionInputRef, MentionInputProps>(funct
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Ignore all Enter/key events during IME composition (Chinese, Japanese, etc.)
+      if (composingRef.current) return
+
       // If picker is open
       if (mentionTrigger) {
         if (e.key === 'Escape') {
@@ -305,6 +311,8 @@ export const MentionInput = forwardRef<MentionInputRef, MentionInputProps>(funct
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => { composingRef.current = true }}
+          onCompositionEnd={() => { composingRef.current = false }}
           onFocus={handleFocus}
           placeholder={placeholder}
           disabled={disabled}

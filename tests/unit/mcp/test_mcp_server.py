@@ -2053,28 +2053,36 @@ class TestConnect:
         """connect(url=...) switches to remote mode and returns status."""
         from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import (
-            UpstreamConfig,
+            _config,
             get_upstream_config,
             switch_to_local,
-            switch_to_remote,
         )
 
         try:
             # Mock session init to avoid real HTTP call
-            mock_config = UpstreamConfig(url="http://api.example.com")
-            mock_config.switch_to_remote("http://api.example.com", "secret-token")
+            # Note: switch_to_remote_with_session is imported INSIDE connect(),
+            # so we patch it in the proxy module where it's defined.
+            # The mocked function must also update the global _config.
+            async def mock_switch_to_remote_with_session(url: str, token: str | None = None):
+                from tasca.shell.mcp.proxy import UpstreamConfig
+
+                # Update the actual global _config (same object returned)
+                _config.url = url
+                _config.token = token
+                _config.session_id = "test-session-id"
+                return Success(_config)
+
             with patch(
-                "tasca.shell.mcp.server.switch_to_remote_with_session",
-                new=AsyncMock(return_value=Success(mock_config)),
+                "tasca.shell.mcp.proxy.switch_to_remote_with_session",
+                new=AsyncMock(side_effect=mock_switch_to_remote_with_session),
             ):
-                # Also set the real global state so get_upstream_config works
-                switch_to_remote("http://api.example.com", "secret-token")
                 result = await connect(url="http://api.example.com", token="secret-token")
 
             assert result["ok"] is True
             assert result["data"]["mode"] == "remote"
             assert result["data"]["url"] == "http://api.example.com"
             assert result["data"]["has_token"] is True
+            assert result["data"]["has_session"] is True
             assert "token" not in result["data"]
 
             # Verify global config was updated
@@ -2089,10 +2097,28 @@ class TestConnect:
     async def test_connect_switches_to_remote_without_token(self) -> None:
         """connect(url=...) without token switches to remote mode."""
         from tasca.shell.mcp.server import connect
-        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local
+        from tasca.shell.mcp.proxy import (
+            _config,
+            get_upstream_config,
+            switch_to_local,
+        )
 
         try:
-            result = await connect(url="http://api.example.com")
+            # Mock session init to avoid real HTTP call
+            async def mock_switch_to_remote_with_session(url: str, token: str | None = None):
+                from tasca.shell.mcp.proxy import UpstreamConfig
+
+                # Update the actual global _config (same object returned)
+                _config.url = url
+                _config.token = token
+                _config.session_id = "test-session-id"
+                return Success(_config)
+
+            with patch(
+                "tasca.shell.mcp.proxy.switch_to_remote_with_session",
+                new=AsyncMock(side_effect=mock_switch_to_remote_with_session),
+            ):
+                result = await connect(url="http://api.example.com")
 
             assert result["ok"] is True
             assert result["data"]["mode"] == "remote"

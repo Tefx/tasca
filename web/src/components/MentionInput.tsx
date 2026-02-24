@@ -10,7 +10,6 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { MentionPicker } from './SeatDeck'
-import { IDLE_THRESHOLD_SECONDS } from '../constants/presence'
 import type { PatronInfo } from './SeatDeck'
 import type { Seat } from '../api/sayings'
 
@@ -152,16 +151,11 @@ export const MentionInput = forwardRef<MentionInputRef, MentionInputProps>(funct
     },
   }), [])
 
-  // Filter active seats for mention picker
-  const activeSeats = useMemo(() => {
-    return seats.filter((seat) => {
-      if (seat.state !== 'joined') return false
-      // Offline check - same threshold as SeatDeck
-      const lastHeartbeat = new Date(seat.last_heartbeat)
-      const now = new Date()
-      const diffSeconds = (now.getTime() - lastHeartbeat.getTime()) / 1000
-      return diffSeconds <= IDLE_THRESHOLD_SECONDS
-    })
+  // All joined seats for mention picker - MentionPicker handles offline display
+  // Design: Offline participants are visible but disabled in the picker
+  // Source: docs/tasca-web-uiux-v0.1.md — "Offline participants are disabled in the picker (but still visible)"
+  const joinedSeats = useMemo(() => {
+    return seats.filter((seat) => seat.state === 'joined')
   }, [seats])
 
   // Handle text changes and detect @mentions
@@ -291,19 +285,14 @@ export const MentionInput = forwardRef<MentionInputRef, MentionInputProps>(funct
     }
   }, [value])
 
-  // Add wrapper class when prefix is active (for Safari 15 / older Chrome compatibility)
-  const wrapperClassName = `mc-mention-input-wrapper${!disabled ? ' mc-mention-input-wrapper--active' : ''}`
-
   return (
     <div ref={containerRef} className={`mc-mention-input-container ${className}`}>
-      <div className={wrapperClassName}>
-        {disabled ? (
+      <div className="mc-mention-input-wrapper">
+        {disabled && (
           <div className="mc-mention-input-disabled-overlay" aria-label="Input disabled in viewer mode">
             <span className="mc-mention-input-label">HUMAN</span>
             <span className="mc-mention-input-readonly">View only — enter admin mode to post</span>
           </div>
-        ) : (
-          <span className="mc-mention-input-prefix" aria-hidden="true">HUMAN &gt;</span>
         )}
         <textarea
           ref={textareaRef}
@@ -328,7 +317,7 @@ export const MentionInput = forwardRef<MentionInputRef, MentionInputProps>(funct
           style={{ top: pickerPosition.top, left: pickerPosition.left }}
         >
           <MentionPicker
-            seats={activeSeats}
+            seats={joinedSeats}
             patrons={patrons}
             filter={mentionTrigger.filter}
             onSelect={handleMentionSelect}

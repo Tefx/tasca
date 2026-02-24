@@ -47,8 +47,6 @@ export type SeatPresenceStatus = 'active' | 'idle' | 'offline'
 interface SeatDeckProps {
   /** Seats (participants) to display */
   seats: Seat[]
-  /** Number of currently active (non-expired) seats from the API */
-  activeCount: number
   /** Optional: Patron data map (patron_id -> PatronInfo) */
   patrons?: Map<string, PatronInfo>
   /** Optional: Current user's patron ID (for highlight) */
@@ -131,20 +129,6 @@ function presenceLabel(status: SeatPresenceStatus): string {
 }
 
 /**
- * Uppercase badge text for presence status.
- */
-function presenceBadgeText(status: SeatPresenceStatus): string {
-  switch (status) {
-    case 'active':
-      return 'ONLINE'
-    case 'idle':
-      return 'IDLE'
-    case 'offline':
-      return 'OFFLINE'
-  }
-}
-
-/**
  * CSS class suffix for presence status.
  */
 function presenceClass(status: SeatPresenceStatus): string {
@@ -218,23 +202,19 @@ function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, positio
           {formatHeartbeat(seat.last_heartbeat)}
         </span>
       </div>
-      <div className="mc-seat-badges">
-        <span
-          className={`mc-seat-presence-badge mc-seat-presence-badge--${presenceClass(presenceStatus)}`}
-          aria-label={`Status: ${presenceLabel(presenceStatus)}`}
-        >
-          <span className="mc-seat-presence-badge-dot" />
-          {presenceBadgeText(presenceStatus)}
-        </span>
-        <span className={`mc-seat-kind mc-seat-kind--${patronKind}`}>
-          {patronKind.toUpperCase()}
-        </span>
-        {seat.state === 'left' && (
-          <span className="mc-seat-state mc-seat-state--left" aria-label="Left">
+      {seat.state === 'left' && (
+        <div className="mc-seat-badges">
+          <span 
+            className="mc-seat-state mc-seat-state--left" 
+            role="status"
+            aria-live="polite"
+          >
+            <span className="sr-only">Status: </span>
             LEFT
+            <span className="sr-only"> — participant has left the table</span>
           </span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -245,7 +225,6 @@ function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, positio
 
 export function SeatDeck({
   seats,
-  activeCount,
   patrons,
   currentPatronId,
   onSelect,
@@ -286,6 +265,10 @@ export function SeatDeck({
     return { active, idle, offline }
   }, [seatsWithPatrons])
 
+  // Total online participants (active + idle, not offline)
+  // This matches the API's activeCount semantics
+  const onlineCount = counts.active + counts.idle
+
   return (
     <div className="mc-col-right">
       <div
@@ -296,8 +279,8 @@ export function SeatDeck({
         <div className="mc-seat-deck-header">
           {mentionableOnly ? 'Select participant' : 'Seats'}
           {!mentionableOnly && (
-            <span className="mc-seat-deck-count" aria-label={`${activeCount} active`}>
-              {activeCount} active
+            <span className="mc-seat-deck-count" aria-label={`${counts.active + counts.idle + counts.offline} total, ${counts.active} active`}>
+              {onlineCount} online
             </span>
           )}
         </div>
@@ -372,20 +355,16 @@ export function MentionPicker({
   filter = '',
   onSelect,
 }: MentionPickerProps) {
-  // Filter and sort participants
+  // Filter participants - show all joined seats, mark offline as disabled
+  // Design source: docs/tasca-web-uiux-v0.1.md — "Offline participants are disabled in the picker (but still visible)"
   const filteredSeats = useMemo(() => {
-    const activeSeats = seats.filter((seat) => {
-      // Only show joined and non-offline seats
-      if (seat.state !== 'joined') return false
-      const presenceStatus = getPresenceStatus(seat.last_heartbeat)
-      if (presenceStatus === 'offline') return false
-      return true
-    })
+    // Show all joined participants (including offline)
+    const joinedSeats = seats.filter((seat) => seat.state === 'joined')
 
-    if (!filter.trim()) return activeSeats
+    if (!filter.trim()) return joinedSeats
 
     const filterLower = filter.toLowerCase()
-    return activeSeats.filter((seat) => {
+    return joinedSeats.filter((seat) => {
       const patron = patrons?.get(seat.patron_id)
       const name = patron?.name ?? seat.patron_id
       const nameLower = name.toLowerCase()
@@ -410,8 +389,10 @@ export function MentionPicker({
         <div className="mc-mention-picker-empty">
           {filter.trim() ? (
             <>No participants match "{filter}"</>
-          ) : (
+          ) : seats.some(s => s.state === 'joined') ? (
             'No active participants'
+          ) : (
+            'No participants'
           )}
         </div>
       </div>
@@ -425,15 +406,18 @@ export function MentionPicker({
         const displayName = patron?.name ?? seat.patron_id
         const presenceStatus = getPresenceStatus(seat.last_heartbeat)
         const patronKind = patron?.kind ?? 'agent'
+        const isOffline = presenceStatus === 'offline'
 
         return (
           <button
             key={seat.id}
             type="button"
-            className="mc-mention-item"
+            className={`mc-mention-item${isOffline ? ' mc-mention-item--offline' : ''}`}
             role="option"
-            onClick={() => handleSelect(seat)}
+            onClick={() => !isOffline && handleSelect(seat)}
             aria-selected={false}
+            aria-disabled={isOffline || undefined}
+            disabled={isOffline}
           >
             <div className={`mc-mention-avatar mc-mention-avatar--${patronKind}`}>
               {avatarInitial(displayName, seat.patron_id)}
@@ -442,7 +426,7 @@ export function MentionPicker({
               <span className="mc-mention-name">{displayName}</span>
               <span className="mc-mention-meta">
                 <span className={`mc-mention-presence mc-mention-presence--${presenceStatus}`} />
-                {patronKind}
+                {isOffline ? 'offline' : patronKind}
               </span>
             </div>
           </button>

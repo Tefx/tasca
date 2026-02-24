@@ -32,7 +32,6 @@ import '../styles/table.css'
 interface StaticTableData {
   table: TableType
   seats: Seat[]
-  activeCount: number
 }
 
 type LoadState =
@@ -78,7 +77,6 @@ function useStaticTableData(tableId: string | undefined) {
         data: {
           table,
           seats: seatsResponse.seats,
-          activeCount: seatsResponse.active_count,
         },
       })
     } catch (err) {
@@ -104,7 +102,6 @@ function useStaticTableData(tableId: string | undefined) {
             data: {
               ...prev.data,
               seats: seatsResponse.seats,
-              activeCount: seatsResponse.active_count,
             },
           }
         })
@@ -390,7 +387,7 @@ export function Table() {
     )
   }
 
-  const { seats, activeCount } = state.data
+  const { seats } = state.data
 
   // Table priority: optimistic (brief, until stream confirms) > stream > static.
   // Optimistic is set by user actions (pause/resume/close) and cleared once
@@ -412,7 +409,7 @@ export function Table() {
             onError={handleError}
           />
         </div>
-        <SeatDeck seats={seats} activeCount={activeCount} patrons={patronsMap} />
+        <SeatDeck seats={seats} patrons={patronsMap} />
       </div>
     </div>
   )

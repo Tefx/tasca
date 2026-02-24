@@ -237,49 +237,55 @@ interface HudProps {
 function Hud({ table, onStatusChange }: HudProps) {
   return (
     <header className="mc-hud">
-      <Link to="/" className="mc-hud-back" aria-label="Back to Watchtower">
-        &larr; Watchtower
-      </Link>
-      <h1 className="mc-hud-title">{table.question}</h1>
-      <TableControls table={table} onStatusChange={onStatusChange} />
-      {/* HUD Tier 2: Collapsible table metadata (moved from Board) */}
-      <details className="mc-hud-meta-details">
-        <summary className="mc-hud-meta-summary">Info</summary>
-        <ul className="mc-meta-list">
-          <li className="mc-meta-item">
-            <span className="mc-meta-label">Status</span>
-            <span className="mc-meta-value">{statusLabel(table.status)}</span>
-          </li>
-          <li className="mc-meta-item">
-            <span className="mc-meta-label">Created</span>
-            <span className="mc-meta-value">{formatDate(table.created_at)}</span>
-          </li>
-          <li className="mc-meta-item">
-            <span className="mc-meta-label">Updated</span>
-            <span className="mc-meta-value">{formatDate(table.updated_at)}</span>
-          </li>
-          <li className="mc-meta-item">
-            <span className="mc-meta-label">Version</span>
-            <span className="mc-meta-value mc-meta-value--mono">v{table.version}</span>
-          </li>
-          {table.context && (
-            <li className="mc-meta-item">
-              <span className="mc-meta-label">Context</span>
-              <span className="mc-meta-value">{table.context}</span>
-            </li>
-          )}
-        </ul>
-      </details>
-      <div className="mc-hud-actions">
-        <span className="mc-hud-action">
-          <code>{shortCode(table.id)}</code>
-          <CopyButton text={shortCode(table.id)} label="invite code" />
-        </span>
-        <span className="mc-hud-action">
-          <CopyButton text={shareUrl(table.id)} label="share URL" />
-        </span>
+      {/* Tier 1: Navigation + Title (full-width, prominent) */}
+      <div className="mc-hud-tier1">
+        <Link to="/" className="mc-hud-back" aria-label="Back to Watchtower">
+          &larr; Watchtower
+        </Link>
+        <h1 className="mc-hud-title">{table.question}</h1>
       </div>
-      <ModeIndicator />
+
+      {/* Tier 2: Controls + Metadata + Actions + Mode */}
+      <div className="mc-hud-tier2">
+        <TableControls table={table} onStatusChange={onStatusChange} />
+        <details className="mc-hud-meta-details">
+          <summary className="mc-hud-meta-summary">Info</summary>
+          <ul className="mc-meta-list">
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Status</span>
+              <span className="mc-meta-value">{statusLabel(table.status)}</span>
+            </li>
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Created</span>
+              <span className="mc-meta-value">{formatDate(table.created_at)}</span>
+            </li>
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Updated</span>
+              <span className="mc-meta-value">{formatDate(table.updated_at)}</span>
+            </li>
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Version</span>
+              <span className="mc-meta-value mc-meta-value--mono">v{table.version}</span>
+            </li>
+            {table.context && (
+              <li className="mc-meta-item">
+                <span className="mc-meta-label">Context</span>
+                <span className="mc-meta-value">{table.context}</span>
+              </li>
+            )}
+          </ul>
+        </details>
+        <div className="mc-hud-actions">
+          <span className="mc-hud-action">
+            <code>{shortCode(table.id)}</code>
+            <CopyButton text={shortCode(table.id)} label="invite code" />
+          </span>
+          <span className="mc-hud-action">
+            <CopyButton text={shareUrl(table.id)} label="share URL" />
+          </span>
+        </div>
+        <ModeIndicator />
+      </div>
     </header>
   )
 }

@@ -77,12 +77,19 @@
  */
 .mc {
   width: 100%;
+  max-width: 100vw;
   min-height: 100vh;
   height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 0;
   overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Ensure all direct children use border-box for proper sizing */
+.mc > *,
+.mc-hud > * {
   box-sizing: border-box;
 }
 
@@ -97,6 +104,8 @@
   border-bottom: 1px solid var(--mc-border);
   background: var(--mc-bg);
   flex-shrink: 0;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 /* Tier 1: Navigation + Title (prominent, full-width row) */
@@ -109,6 +118,7 @@
   /* Clear visual separation from tier 2 */
   background: rgba(255, 255, 255, 0.02);
   border-bottom: 1px solid var(--mc-border);
+  box-sizing: border-box;
 }
 
 /* Tier 2: Controls + Metadata + Actions + Mode (secondary row) */
@@ -119,6 +129,8 @@
   flex-wrap: wrap;
   font-size: 0.8125rem;
   padding: 0.5rem 0.75rem;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .mc-hud-back {

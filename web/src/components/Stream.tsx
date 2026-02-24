@@ -20,6 +20,7 @@ import remarkGfm from 'remark-gfm'
 import type { Saying, SpeakerKind } from '../api/sayings'
 import type { ConnectionStatus } from '../hooks/useLongPoll'
 import type { TableStatus } from '../api/tables'
+import { useNow } from '../hooks/useNow'
 
 // =============================================================================
 // Types
@@ -52,9 +53,8 @@ const AT_BOTTOM_THRESHOLD_PX = 48
 // =============================================================================
 
 /** Format an ISO date string to a compact time display. */
-function formatTime(iso: string): string {
+function formatTime(iso: string, now: Date): string {
   const date = new Date(iso)
-  const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffMinutes = Math.floor(diffMs / 60_000)
   const diffHours = Math.floor(diffMs / 3_600_000)
@@ -113,9 +113,11 @@ interface LogBlockProps {
   saying: Saying
   /** Whether this block was added in the current mount cycle (triggers highlight). */
   isNew: boolean
+  /** Current time — passed from parent to keep timestamps fresh. */
+  now: Date
 }
 
-function LogBlock({ saying, isNew }: LogBlockProps) {
+function LogBlock({ saying, isNew, now }: LogBlockProps) {
   const kind = saying.speaker.kind
   const isMonospace = kind === 'agent' || kind === 'patron'
 
@@ -141,7 +143,7 @@ function LogBlock({ saying, isNew }: LogBlockProps) {
           </span>
         )}
         <time className="mc-log-time" dateTime={saying.created_at}>
-          {formatTime(saying.created_at)}
+          {formatTime(saying.created_at, now)}
         </time>
       </div>
 
@@ -182,6 +184,7 @@ function LogBlock({ saying, isNew }: LogBlockProps) {
 // =============================================================================
 
 export function Stream({ sayings, connectionStatus, tableStatus }: StreamProps) {
+  const now = useNow()
   const streamRef = useRef<HTMLDivElement>(null)
 
   /**
@@ -321,6 +324,7 @@ export function Stream({ sayings, connectionStatus, tableStatus }: StreamProps) 
                 key={saying.id}
                 saying={saying}
                 isNew={index >= initialCount}
+                now={now}
               />
             ))}
           </div>

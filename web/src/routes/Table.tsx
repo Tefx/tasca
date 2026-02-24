@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getTable, type Table as TableType, type TableStatus } from '../api/tables'
 import { listSeats, type Seat } from '../api/sayings'
-import { useSayingsStream } from '../hooks/useLongPoll'
+import { useSayingsStream, type ConnectionStatus } from '../hooks/useLongPoll'
 import { Stream } from '../components/Stream'
 import { SeatDeck, type PatronInfo } from '../components/SeatDeck'
 import { ModeIndicator } from '../components/ModeIndicator'
@@ -223,6 +223,31 @@ function ErrorState({ message, onRetry }: ErrorStateProps) {
 }
 
 // =============================================================================
+// =============================================================================
+// Connection Warning Banner
+// =============================================================================
+
+interface ConnectionWarningBannerProps {
+  status: ConnectionStatus
+}
+
+function ConnectionWarningBanner({ status }: ConnectionWarningBannerProps) {
+  if (status === 'live') return null
+
+  return (
+    <div
+      className={`mc-connection-banner mc-connection-banner--${status}`}
+      role="status"
+      aria-live="polite"
+    >
+      {status === 'connecting'
+        ? 'Reconnecting to stream...'
+        : 'Stream disconnected. Check your network connection.'}
+    </div>
+  )
+}
+
+// =============================================================================
 // HUD Header
 // =============================================================================
 
@@ -397,6 +422,7 @@ export function Table() {
   return (
     <div className="mc">
       <Hud table={table} onStatusChange={handleStatusChange} />
+      <ConnectionWarningBanner status={connectionStatus} />
       <div className="mc-columns">
         <div className="mc-col-center">
           <Stream sayings={sayings} connectionStatus={connectionStatus} tableStatus={table.status} />

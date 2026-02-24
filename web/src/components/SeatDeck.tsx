@@ -17,6 +17,7 @@ import { useMemo } from 'react'
 import type { Seat } from '../api/sayings'
 import type { PatronKind } from '../api/patrons'
 import { IDLE_THRESHOLD_SECONDS } from '../constants/presence'
+import { useNow } from '../hooks/useNow'
 
 // Re-export Seat for consumers
 export type { Seat } from '../api/sayings'
@@ -74,9 +75,8 @@ const ACTIVE_THRESHOLD_SECONDS = 30
 /**
  * Format an ISO date string to a compact relative time.
  */
-function formatHeartbeat(iso: string): string {
+function formatHeartbeat(iso: string, now: Date): string {
   const date = new Date(iso)
-  const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffSeconds = Math.floor(diffMs / 1000)
   const diffMinutes = Math.floor(diffMs / 60_000)
@@ -93,10 +93,10 @@ function formatHeartbeat(iso: string): string {
 /**
  * Determine presence status based on last heartbeat.
  */
-export function getPresenceStatus(lastHeartbeat: string): SeatPresenceStatus {
+export function getPresenceStatus(lastHeartbeat: string, now?: Date): SeatPresenceStatus {
   const date = new Date(lastHeartbeat)
-  const now = new Date()
-  const diffSeconds = (now.getTime() - date.getTime()) / 1000
+  const current = now ?? new Date()
+  const diffSeconds = (current.getTime() - date.getTime()) / 1000
 
   if (diffSeconds <= ACTIVE_THRESHOLD_SECONDS) return 'active'
   if (diffSeconds <= IDLE_THRESHOLD_SECONDS) return 'idle'
@@ -156,10 +156,12 @@ interface SeatCardProps {
   onSelect?: (seat: SeatWithPatron) => void
   showPosition?: boolean
   position?: number
+  /** Current time — passed from parent to keep timestamps fresh. */
+  now: Date
 }
 
-function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, position }: SeatCardProps) {
-  const presenceStatus = getPresenceStatus(seat.last_heartbeat)
+function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, position, now }: SeatCardProps) {
+  const presenceStatus = getPresenceStatus(seat.last_heartbeat, now)
   const displayName = resolveDisplayName(patron, seat.patron_id)
   const patronKind = patron?.kind ?? 'agent'
   const isOffline = presenceStatus === 'offline'
@@ -209,7 +211,7 @@ function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, positio
         </span>
         <span className="mc-seat-meta">
           <span className={`mc-seat-presence mc-seat-presence--${presenceClass(presenceStatus)}`} />
-          {formatHeartbeat(seat.last_heartbeat)}
+          {formatHeartbeat(seat.last_heartbeat, now)}
         </span>
       </div>
       {seat.state === 'left' && (
@@ -240,6 +242,8 @@ export function SeatDeck({
   onSelect,
   mentionableOnly = false,
 }: SeatDeckProps) {
+  const now = useNow()
+
   // Derive patron info from seats
   const seatsWithPatrons = useMemo<SeatWithPatron[]>(() => {
     return seats.map((seat) => ({
@@ -253,10 +257,10 @@ export function SeatDeck({
     if (!mentionableOnly) return seatsWithPatrons
     // Only show seats that are active and could potentially be mentioned
     return seatsWithPatrons.filter((seat) => {
-      const presenceStatus = getPresenceStatus(seat.last_heartbeat)
+      const presenceStatus = getPresenceStatus(seat.last_heartbeat, now)
       return seat.state === 'joined' && presenceStatus !== 'offline'
     })
-  }, [seatsWithPatrons, mentionableOnly])
+  }, [seatsWithPatrons, mentionableOnly, now])
 
   // Count by presence status
   const counts = useMemo(() => {
@@ -266,14 +270,14 @@ export function SeatDeck({
 
     for (const seat of seatsWithPatrons) {
       if (seat.state !== 'joined') continue
-      const status = getPresenceStatus(seat.last_heartbeat)
+      const status = getPresenceStatus(seat.last_heartbeat, now)
       if (status === 'active') active++
       else if (status === 'idle') idle++
       else offline++
     }
 
     return { active, idle, offline }
-  }, [seatsWithPatrons])
+  }, [seatsWithPatrons, now])
 
   // Total online participants (active + idle, not offline)
   // This matches the API's activeCount semantics
@@ -327,6 +331,7 @@ export function SeatDeck({
                 onSelect={onSelect}
                 showPosition={!mentionableOnly}
                 position={index + 1}
+                now={now}
               />
             ))}
           </div>
@@ -365,6 +370,7 @@ export function MentionPicker({
   filter = '',
   onSelect,
 }: MentionPickerProps) {
+  const now = useNow()
   // Filter participants - show all joined seats, mark offline as disabled
   // Design source: docs/tasca-web-uiux-v0.1.md — "Offline participants are disabled in the picker (but still visible)"
   const filteredSeats = useMemo(() => {
@@ -414,7 +420,7 @@ export function MentionPicker({
       {filteredSeats.map((seat) => {
         const patron = patrons?.get(seat.patron_id)
         const displayName = resolveDisplayName(patron, seat.patron_id)
-        const presenceStatus = getPresenceStatus(seat.last_heartbeat)
+        const presenceStatus = getPresenceStatus(seat.last_heartbeat, now)
         const patronKind = patron?.kind ?? 'agent'
         const isOffline = presenceStatus === 'offline'
 

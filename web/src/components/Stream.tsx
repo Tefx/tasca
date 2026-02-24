@@ -23,6 +23,79 @@ import type { TableStatus } from '../api/tables'
 import { useNow } from '../hooks/useNow'
 
 // =============================================================================
+// Accessibility: Debounced Aria-Live Announcements
+// =============================================================================
+
+/**
+ * Debounce delay for aria-live announcements (ms).
+ * Prevents announcement spam during rapid saying bursts.
+ * Source: WCAG 2.1 + screen reader best practices.
+ */
+const ANNOUNCEMENT_DEBOUNCE_MS = 2000
+
+/**
+ * Hook to debounce aria-live announcements based on count changes.
+ * Returns announcement text after a settle period.
+ *
+ * Rationale: Screen readers announce every aria-live change.
+ * Without debouncing, a burst of 10 sayings triggers 10 rapid
+ * "X sayings in stream" announcements. This hook delays announcement
+ * until the count stabilizes, then announces the final count.
+ *
+ * @param count - Current saying count
+ * @returns Debounced announcement text (empty string when nothing to announce)
+ */
+function useDebouncedAnnouncement(count: number): string {
+  const [announcement, setAnnouncement] = useState('')
+  const prevCountRef = useRef(count)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    // Clear pending timeout on cleanup
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    // Only announce when count increases
+    if (count <= prevCountRef.current) {
+      prevCountRef.current = count
+      return
+    }
+
+    // Clear any pending announcement from a previous burst
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+
+    // Debounce: wait 2 seconds after count stabilizes
+    timeoutRef.current = setTimeout(() => {
+      // Announce the current count, not per-message spam
+      const text = count === 1
+        ? '1 saying in stream'
+        : `${count} sayings in stream`
+      setAnnouncement(text)
+
+      // Clear announcement text after a short delay so the live region
+      // is ready for the next update (screen readers won't re-announce empty)
+      setTimeout(() => setAnnouncement(''), 100)
+
+      // Update the reference count after announcement
+      prevCountRef.current = count
+      timeoutRef.current = null
+    }, ANNOUNCEMENT_DEBOUNCE_MS)
+
+    // Don't update prevCountRef yet — the timeout needs to see the delta
+    // prevCountRef is updated inside the timeout after announcement
+  }, [count])
+
+  return announcement
+}
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -219,6 +292,13 @@ export function Stream({ sayings, connectionStatus, tableStatus, focusedIndex, c
   /** Snapshot of the saying count when the user last scrolled up. */
   const countAtScrollUpRef = useRef(0)
 
+  /**
+   * Debounced aria-live announcement for screen readers.
+   * Announces count-based summary after settle period, not per-message spam.
+   * Accessibility: Prevents overwhelming bursts during rapid saying arrival.
+   */
+  const announcement = useDebouncedAnnouncement(sayings.length)
+
   // ---------------------------------------------------------------------------
   // Track "initial" count — everything before the first render with data is
   // considered pre-existing; sayings after that get the highlight animation.
@@ -322,12 +402,24 @@ export function Stream({ sayings, connectionStatus, tableStatus, focusedIndex, c
         </div>
       ) : (
         <div className="mc-stream-body">
+          {/*
+            Visually hidden live region for screen reader announcements.
+            Uses aria-live="polite" to announce count-based updates after
+            a 2-second debounce period. This replaces the aria-live on the
+            scroll container which caused per-message announcement spam.
+
+            Accessibility note: sr-only class makes this invisible to sighted
+            users while remaining accessible to screen readers.
+          */}
+          <div className="sr-only" aria-live="polite" aria-atomic="true">
+            {announcement}
+          </div>
+
           <div
             ref={streamRef}
             className="mc-stream"
             role="log"
             aria-label="Discussion stream"
-            aria-live="polite"
             onScroll={handleScroll}
           >
             {sayings.map((saying, index) => (

@@ -115,6 +115,16 @@ function avatarInitial(name: string, patronId: string): string {
 }
 
 /**
+ * Get display name for a seat, falling back to a readable short ID
+ * when the patron has not yet posted (and is therefore not in patronsMap).
+ */
+function resolveDisplayName(patron: PatronInfo | undefined, patronId: string): string {
+  if (patron?.name) return patron.name
+  // Participant has not spoken yet — show a short readable ID
+  return `[${patronId.slice(0, 8)}]`
+}
+
+/**
  * Human-readable label for presence status.
  */
 function presenceLabel(status: SeatPresenceStatus): string {
@@ -150,7 +160,7 @@ interface SeatCardProps {
 
 function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, position }: SeatCardProps) {
   const presenceStatus = getPresenceStatus(seat.last_heartbeat)
-  const displayName = patron?.name ?? seat.patron_id
+  const displayName = resolveDisplayName(patron, seat.patron_id)
   const patronKind = patron?.kind ?? 'agent'
   const isOffline = presenceStatus === 'offline'
   const isInteractive = !!onSelect && !isOffline
@@ -159,7 +169,7 @@ function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, positio
     if (isInteractive && onSelect) {
       onSelect({
         ...seat,
-        patron: patron ?? { id: seat.patron_id, name: seat.patron_id, kind: 'agent' },
+        patron: patron ?? { id: seat.patron_id, name: displayName, kind: 'agent' },
       })
     }
   }
@@ -379,7 +389,7 @@ export function MentionPicker({
     const patron = patrons?.get(seat.patron_id)
     onSelect({
       patronId: seat.patron_id,
-      displayName: patron?.name ?? seat.patron_id,
+      displayName: resolveDisplayName(patron, seat.patron_id),
     })
   }
 
@@ -403,7 +413,7 @@ export function MentionPicker({
     <div className="mc-mention-picker" role="listbox" aria-label="Mention a participant">
       {filteredSeats.map((seat) => {
         const patron = patrons?.get(seat.patron_id)
-        const displayName = patron?.name ?? seat.patron_id
+        const displayName = resolveDisplayName(patron, seat.patron_id)
         const presenceStatus = getPresenceStatus(seat.last_heartbeat)
         const patronKind = patron?.kind ?? 'agent'
         const isOffline = presenceStatus === 'offline'

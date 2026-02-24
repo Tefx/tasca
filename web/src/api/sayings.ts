@@ -182,11 +182,13 @@ export function postSaying(tableId: string, data: SayingCreate): Promise<Saying>
 /**
  * Fetch seats for a table.
  *
- * Returns active seats by default (active_only=true on backend).
+ * Returns ALL seats (active_only=false) so the frontend can show offline
+ * participants in the mention picker and seat deck. The frontend handles
+ * presence status via getPresenceStatus() based on last_heartbeat.
  * Backend endpoint: GET /tables/{tableId}/seats
  */
 export function listSeats(tableId: string): Promise<SeatListResponse> {
-  return apiClient<SeatListResponse>(`/tables/${tableId}/seats`)
+  return apiClient<SeatListResponse>(`/tables/${tableId}/seats?active_only=false`)
 }
 
 /**

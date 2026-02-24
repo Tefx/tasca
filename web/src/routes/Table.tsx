@@ -237,8 +237,9 @@ export function Table() {
   // Static data: table metadata + seats (one-time fetch).
   const { state, refetch } = useStaticTableData(tableId)
 
-  // Local table state for status updates (merged with stream updates).
-  const [localTable, setLocalTable] = useState<TableType | null>(null)
+  // Optimistic table state — set by controls (pause/resume/close), cleared
+  // when the long-poll stream confirms the server-side state.
+  const [optimisticTable, setOptimisticTable] = useState<TableType | null>(null)
 
   // Live data: sayings stream via long-poll.
   const {
@@ -253,7 +254,7 @@ export function Table() {
   // ---------------------------------------------------------------------------
 
   const handleStatusChange = useCallback((updatedTable: TableType) => {
-    setLocalTable(updatedTable)
+    setOptimisticTable(updatedTable)
   }, [])
 
   // ---------------------------------------------------------------------------
@@ -266,14 +267,17 @@ export function Table() {
   }, [])
 
   // ---------------------------------------------------------------------------
-  // Reset local table when static data loads
+  // Clear optimistic override once the stream confirms the new state.
+  // When the server pushes an updated table via long-poll, it becomes the
+  // source of truth and the optimistic value is no longer needed.
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    if (state.status === 'loaded') {
-      setLocalTable(state.data.table)
+    if (streamTable && optimisticTable) {
+      // Stream caught up — server confirmed the state change.
+      setOptimisticTable(null)
     }
-  }, [state])
+  }, [streamTable, optimisticTable])
 
   // ---------------------------------------------------------------------------
   // Build patrons map from sayings for mention autocomplete
@@ -320,9 +324,10 @@ export function Table() {
 
   const { seats, activeCount } = state.data
 
-  // Table priority: local state (from controls) > stream (live updates) > static
-  // This ensures status changes from controls take precedence.
-  const table = localTable ?? streamTable ?? state.data.table
+  // Table priority: optimistic (brief, until stream confirms) > stream > static.
+  // Optimistic is set by user actions (pause/resume/close) and cleared once
+  // the long-poll stream delivers the server-confirmed table state.
+  const table = optimisticTable ?? streamTable ?? state.data.table
 
   return (
     <div className="mc">

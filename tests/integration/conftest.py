@@ -18,6 +18,78 @@ Usage:
 
     # Run with custom external URL (requires running server)
     TASCA_TEST_API_URL=http://api.example.com pytest tests/integration/
+
+================================================================================
+TEST SERVER CLEANUP ARCHITECTURE
+================================================================================
+
+The upstream_server fixture spawns external subprocess processes for E2E tests.
+Proper cleanup is CRITICAL to avoid leaking processes and occupied ports.
+
+Cleanup Layers (in order of invocation):
+    1. Context Manager (_server_lifecycle) — guaranteed cleanup via finally block
+    2. Signal Handlers (SIGTERM, SIGINT) — graceful shutdown on interrupt
+    3. atexit Handler (_emergency_cleanup) — last-resort cleanup on interpreter exit
+
+Cleanup Sequence (_cleanup_server_process):
+    Step 1: proc.terminate() — send SIGTERM for graceful shutdown
+            Wait up to timeout_terminate (default: 5s)
+            ↓
+    Step 2: proc.kill() — send SIGKILL if terminate times out
+            Wait up to timeout_kill (default: 2s)
+            ↓
+    Step 3: Port verification — poll until port released (max 2s)
+            Warn if port still occupied (non-blocking)
+
+Error Scenarios and Recovery:
+    ┌─────────────────────────────┬─────────────────────────────────────────┐
+    │ Scenario                    │ Recovery Action                         │
+    ├─────────────────────────────┼─────────────────────────────────────────┤
+    │ Process hangs on SIGTERM    │ Force SIGKILL after timeout_terminate   │
+    │ Process unkillable (zombie) │ Log warning, let OS reap                  │
+    │ Port still bound            │ Warn but continue (non-blocking)        │
+    │ Interpreter crash           │ atexit handler performs emergency kill  │
+    │ SIGINT/SIGTERM received     │ Signal handler cleans all processes     │
+    └─────────────────────────────┴─────────────────────────────────────────┘
+
+Port Occupation Troubleshooting:
+    Symptom: "Port XXXXX may still be in use after cleanup" warning
+
+    Diagnosis:
+        # Check if port is still bound
+        lsof -i :<PORT>
+        netstat -an | grep <PORT>
+
+    Common causes:
+        1. Server process didn't close connections gracefully
+           → Increase timeout_terminate in _server_lifecycle call
+        2. OS TCP TIME_WAIT state (normal, clears in 30-60s)
+           → Use SO_REUSEADDR in server (not in test control)
+        3. Zombie process holding port
+           → `kill -9 <PID>` manually, or wait for OS reaping
+
+    Cleanup verification:
+        # Kill any orphaned test processes
+        pkill -f "tasca.*new.*proxy-e2e-test"
+
+        # Find processes listening on test ports
+        lsof -i -P | grep LISTEN | grep tasca
+
+Cleanup Verification in Tests:
+    Tests using upstream_server fixture can verify clean state:
+
+        def test_something(upstream_server):
+            port = upstream_server['port']
+            # ... test logic ...
+            # Fixture automatically cleans up after test
+
+        # After all tests in module complete, verify no port leaks:
+        # (add to test file if needed)
+        def test_no_port_leak():
+            import socket
+            for port in RANGE_OF_TEST_PORTS:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                assert sock.connect_ex(('127.0.0.1', port)) != 0
 """
 
 from __future__ import annotations
@@ -317,15 +389,44 @@ def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, No
 
 UPSTREAM_TOKEN = "test-upstream-token"
 
-# Global registry for tracking spawned processes for emergency cleanup
+# =============================================================================
+# PROCESS REGISTRY FOR EMERGENCY CLEANUP
+# =============================================================================
+# Global registry tracks all spawned processes for emergency cleanup.
+# This provides a backstop when normal cleanup (context manager) fails.
+#
+# Tracking mechanism:
+#   _register_process() → Called when process starts
+#   _unregister_process() → Called when process dies (normal or killed)
+#   _spawned_processes → Dict of pid -> Popen for atexit to iterate
+#
+# Thread safety: NOT thread-safe. Assumes single-threaded pytest execution.
+# If parallel test execution is enabled, this registry would need locking.
+
 _spawned_processes: dict[int, subprocess.Popen] = {}
 
 
 def _emergency_cleanup() -> None:
     """Emergency cleanup handler for atexit.
 
-    Kills any remaining spawned processes that weren't properly cleaned up.
-    This is a last-resort safety net for orphaned processes.
+    LAST-RESORT SAFETY NET for orphaned processes.
+
+    When this handler runs:
+        - Normal pytest cleanup failed (exception, crash, etc.)
+        - Interpreter is shutting down (atexit triggered)
+        - Process resources must be freed before exit
+
+    This handler iterates through ALL registered processes and kills them.
+    It's called automatically by Python's atexit mechanism, ensuring cleanup
+    even if the test fixture's context manager doesn't exit cleanly.
+
+    Safety guarantees:
+        - Catches all exceptions (cleanup should never fail)
+        - Short timeout for kill wait (we're in interpreter shutdown)
+        - Clears registry to prevent double-cleanup attempts
+
+    IMPORTANT: This is not a substitute for proper cleanup in tests.
+    It exists to prevent process leaks when things go wrong.
     """
     for _pid, proc in list(_spawned_processes.items()):
         if proc.poll() is None:  # Process still running
@@ -338,9 +439,20 @@ def _emergency_cleanup() -> None:
 
 
 def _signal_handler(signum: int, frame: object) -> None:
-    """Signal handler for graceful shutdown.
+    """Signal handler for graceful shutdown on SIGTERM/SIGINT.
 
-    Terminates all spawned processes before exit.
+    Triggered when:
+        - User hits Ctrl+C (SIGINT)
+        - Process receives SIGTERM (e.g., from process manager)
+        - CI environment cancels the job
+
+    Sequence:
+        1. Kill all spawned processes via _emergency_cleanup()
+        2. Restore default signal handler
+        3. Re-raise signal so Python exits with correct code
+
+    This ensures test processes don't outlive the parent test runner.
+    Without this handler, Ctrl+C would leave orphan servers running.
     """
     _emergency_cleanup()
     # Re-raise signal with default handler
@@ -373,8 +485,27 @@ def _server_lifecycle(
 ) -> Generator[subprocess.Popen, None, None]:
     """Context manager for robust server process lifecycle.
 
-    Ensures cleanup via finally block, covers all exception paths.
-    Includes timeout-based fallback from terminate to kill.
+    GUARANTEED CLEANUP via finally block - covers all exception paths:
+        - Normal exit (yield returns)
+        - Test failure (assertion error)
+        - Unexpected exception
+        - Early return from test
+
+    This is the PRIMARY cleanup mechanism for spawned processes.
+    Signal handlers and atexit are backstops for abnormal termination.
+
+    Timeline:
+        ┌─────────────────────────────────────────────────────┐
+        │ Test function body                                  │
+        │ with _server_lifecycle(proc, port):                 │
+        │     yield proc  ← Test uses the server              │
+        │     # ... test code ...                             │
+        │                                                     │
+        │ # Any exit path triggers finally block              │
+        │ finally:                                            │
+        │     _cleanup_server_process(proc, port, ...)        │
+        │     # → terminate → kill → verify port              │
+        └─────────────────────────────────────────────────────┘
 
     Args:
         proc: The subprocess.Popen instance to manage.
@@ -388,6 +519,7 @@ def _server_lifecycle(
     try:
         yield proc
     finally:
+        # GUARANTEED: always runs, even on exception/early return
         _cleanup_server_process(proc, port, timeout_terminate, timeout_kill)
 
 
@@ -401,35 +533,75 @@ def _cleanup_server_process(
 
     Uses graceful termination first, then force kill with timeouts.
     Verifies port is released after cleanup.
+
+    CLEANUP SEQUENCE (see module docstring for architecture overview):
+
+    Phase 1: Graceful Termination (SIGTERM)
+        - Sends terminate signal allowing process to close connections
+        - Waits up to timeout_terminate (default: 5s) for clean exit
+        - Most servers exit cleanly here, releasing ports immediately
+
+    Phase 2: Force Kill (SIGKILL)
+        - Triggered if terminate times out (hung process)
+        - Unconditionally kills process via OS signal
+        - Process may not close connections properly → port may linger
+
+    Phase 3: Port Release Verification
+        - Polls port availability via non-blocking connect
+        - Waits up to max_attempts * delay (default: 2s total)
+        - Warns if port still bound (non-blocking for test reliability)
+        - Port may remain in TIME_WAIT state due to OS TCP protocol
+
+    Error Handling:
+        - All exceptions caught to ensure cleanup continues
+        - Unregister process from emergency tracking after any outcome
+        - Never raises - cleanup should be idempotent and safe
     """
+    # Early exit: process already dead
     if proc.poll() is not None:
-        # Process already terminated
+        # Process already terminated - just unregister from tracking
         _unregister_process(proc)
         return
 
-    # Step 1: Graceful termination
+    # ─────────────────────────────────────────────────────────────────────
+    # PHASE 1: Graceful Termination (SIGTERM)
+    # ─────────────────────────────────────────────────────────────────────
+    # Preferred method - allows server to close connections properly
+    # Most well-behaved servers exit within timeout_terminate
     try:
         proc.terminate()
         proc.wait(timeout=timeout_terminate)
     except subprocess.TimeoutExpired:
-        # Step 2: Force kill fallback
+        # Server didn't respond to SIGTERM in time - it's hung
+        # Fall through to Phase 2: force kill
+        # ─────────────────────────────────────────────────────────────────
+        # PHASE 2: Force Kill (SIGKILL)
+        # ─────────────────────────────────────────────────────────────────
+        # SIGKILL cannot be caught - OS forcibly terminates process
+        # Downside: connections may not close cleanly, port may linger
         try:
             proc.kill()
             proc.wait(timeout=timeout_kill)
         except subprocess.TimeoutExpired:
-            # Last resort: detached process will be reaped by OS
+            # Extremely rare: zombie process that won't die
+            # OS will reap eventually; we've done our best
             pass
     except Exception:
-        # Any other error during cleanup - try kill as fallback
+        # Unexpected error during terminate (e.g., permission denied)
+        # Try force kill as last resort before giving up
         try:
             proc.kill()
             proc.wait(timeout=timeout_kill)
         except Exception:
-            pass
+            pass  # Best effort - don't crash the test suite
 
+    # Remove from emergency cleanup tracking (process is dead or unkillable)
     _unregister_process(proc)
 
-    # Step 3: Verify port release (with short timeout)
+    # ─────────────────────────────────────────────────────────────────────
+    # PHASE 3: Port Release Verification
+    # ─────────────────────────────────────────────────────────────────────
+    # Poll until port is free or we give up (non-blocking for test reliability)
     _verify_port_released(port, max_attempts=20, delay=0.1)
 
 
@@ -446,8 +618,35 @@ def _unregister_process(proc: subprocess.Popen) -> None:
 def _verify_port_released(port: int, max_attempts: int = 20, delay: float = 0.1) -> None:
     """Verify that a port has been released.
 
-    Polls until the port is no longer bound or max_attempts exhausted.
-    Uses non-blocking connect to check port availability.
+    NON-BLOCKING: Warns if port still occupied but does NOT fail the test.
+    This is intentional - port occupation is often transient and tests should
+    not fail due to OS TCP state (TIME_WAIT) that clears naturally.
+
+    How it works:
+        1. Creates a TCP socket
+        2. Attempts non-blocking connect to 127.0.0.1:port
+        3. If connection refused (ECONNREFUSED) → port is free
+        4. If connection succeeds → port still in use, retry
+        5. After max_attempts, warn and return
+
+    Why ports may remain occupied after process kill:
+        ┌──────────────────────────────────────────────────────────────┐
+        │ Scenario              │ Cause                    │ Duration   │
+        ├──────────────────────────────────────────────────────────────┤
+        │ TIME_WAIT state       │ OS TCP protocol          │ 30-60s     │
+        │ Zombie process        │ Process not reaped       │ Indefinite │
+        │ Socket linger         │ Server SO_LINGER option  │ Configured │
+        │ Multiple listeners    │ SO_REUSEPORT in use      │ Immediate  │
+        └──────────────────────────────────────────────────────────────┘
+
+    Troubleshooting port occupation:
+        # Check what's using the port
+        lsof -i :<PORT>
+
+        # Force kill any remaining processes
+        kill -9 $(lsof -t -i :<PORT>)
+
+        # Wait for OS to clear TIME_WAIT (or use SO_REUSEADDR in server)
 
     Args:
         port: The port to check.
@@ -492,15 +691,32 @@ def upstream_server(tmp_path_factory: pytest.TempPathFactory):
     (_config, mcp) that cause self-referencing proxy loops when running
     two instances in the same process.
 
-    Hardening features:
-    - atexit handler for emergency cleanup on interpreter exit
-    - Signal handlers (SIGTERM, SIGINT) for graceful shutdown
-    - Context manager pattern for guaranteed cleanup via finally
-    - Timeout-based fallback: terminate -> kill -> wait
-    - Port release verification before test completion
+    CLEANUP ARCHITECTURE:
+    See module docstring for detailed cleanup layer documentation.
+
+        Layer 1: _server_lifecycle context manager (primary)
+            └── Guaranteed via finally block
+        Layer 2: Signal handlers (SIGTERM, SIGINT)
+            └── Triggered on user interrupt
+        Layer 3: atexit handler (_emergency_cleanup)
+            └── Triggered on interpreter shutdown
+
+    Fixture Timeline:
+        1. Find free port via socket bind
+        2. Spawn subprocess with tasca CLI
+        3. Register process for emergency cleanup
+        4. Poll until server healthy (max 10s)
+        5. Enter context manager for guaranteed cleanup
+        6. Yield server config to test
+        7. Test runs...
+        8. Context manager exits → cleanup triggered
+        9. Process terminated, port verified
 
     Yields:
         Dict with 'url' (MCP endpoint), 'token', and 'port'.
+
+    Raises:
+        RuntimeError: Server fails to start within 10s timeout.
     """
     import socket
     import time

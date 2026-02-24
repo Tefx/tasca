@@ -398,22 +398,67 @@ UPSTREAM_TOKEN = "test-upstream-token"
 # Tracking mechanism:
 #   _register_process() → Called when process starts
 #   _unregister_process() → Called when process dies (normal or killed)
-#   _spawned_processes → Dict of pid -> Popen for atexit to iterate
+#   _spawned_processes → Dict of pid -> ProcessInfo for atexit to iterate
 #
 # Thread safety: NOT thread-safe. Assumes single-threaded pytest execution.
 # If parallel test execution is enabled, this registry would need locking.
+#
+# CRITICAL: Signal handlers are registered at MODULE LOAD (not in fixtures)
+# to ensure cleanup works even on early SIGINT/SIGTERM before tests start.
 
-_spawned_processes: dict[int, subprocess.Popen] = {}
+from dataclasses import dataclass
+
+
+@dataclass
+class ProcessInfo:
+    """Tracked process information for cleanup."""
+
+    proc: subprocess.Popen
+    port: int
+    name: str = "unknown"
+
+
+_spawned_processes: dict[int, ProcessInfo] = {}
+_cleanup_in_progress = False  # Prevent re-entrant cleanup
+
+
+def _do_kill_process(info: ProcessInfo, timeout_kill: float = 2.0) -> None:
+    """Kill a process and wait for it to exit.
+
+    Uses process group kill for reliable termination of all child processes.
+    """
+    proc = info.proc
+    if proc.poll() is not None:
+        return  # Already dead
+
+    try:
+        # Try process group kill first (catches child processes too)
+        # On Windows, this would need different handling
+        pgid = os.getpgid(proc.pid)
+        os.killpg(pgid, signal.SIGKILL)
+    except (OSError, ProcessLookupError):
+        # Process group doesn't exist or process already dead
+        # Fall back to individual process kill
+        try:
+            proc.kill()
+        except (OSError, ProcessLookupError):
+            pass
+
+    try:
+        proc.wait(timeout=timeout_kill)
+    except subprocess.TimeoutExpired:
+        pass  # Zombie process - OS will reap
 
 
 def _emergency_cleanup() -> None:
-    """Emergency cleanup handler for atexit.
+    """Emergency cleanup handler for atexit and signal handlers.
 
     LAST-RESORT SAFETY NET for orphaned processes.
 
     When this handler runs:
         - Normal pytest cleanup failed (exception, crash, etc.)
         - Interpreter is shutting down (atexit triggered)
+        - SIGINT/SIGTERM received during test run
         - Process resources must be freed before exit
 
     This handler iterates through ALL registered processes and kills them.
@@ -422,20 +467,31 @@ def _emergency_cleanup() -> None:
 
     Safety guarantees:
         - Catches all exceptions (cleanup should never fail)
+        - Prevents re-entrant cleanup via _cleanup_in_progress flag
+        - Uses process group kill for reliable termination
         - Short timeout for kill wait (we're in interpreter shutdown)
         - Clears registry to prevent double-cleanup attempts
 
     IMPORTANT: This is not a substitute for proper cleanup in tests.
     It exists to prevent process leaks when things go wrong.
     """
-    for _pid, proc in list(_spawned_processes.items()):
-        if proc.poll() is None:  # Process still running
-            try:
-                proc.kill()
-                proc.wait(timeout=2)
-            except Exception:
-                pass  # Best effort in emergency cleanup
-    _spawned_processes.clear()
+    global _cleanup_in_progress
+
+    if _cleanup_in_progress:
+        return  # Prevent re-entrant cleanup
+
+    _cleanup_in_progress = True
+
+    try:
+        for pid, info in list(_spawned_processes.items()):
+            if info.proc.poll() is None:  # Process still running
+                try:
+                    _do_kill_process(info, timeout_kill=2.0)
+                except Exception:
+                    pass  # Best effort in emergency cleanup
+        _spawned_processes.clear()
+    finally:
+        _cleanup_in_progress = False
 
 
 def _signal_handler(signum: int, frame: object) -> None:
@@ -447,30 +503,46 @@ def _signal_handler(signum: int, frame: object) -> None:
         - CI environment cancels the job
 
     Sequence:
-        1. Kill all spawned processes via _emergency_cleanup()
+        1. Run emergency cleanup (kill all spawned processes)
         2. Restore default signal handler
         3. Re-raise signal so Python exits with correct code
 
     This ensures test processes don't outlive the parent test runner.
     Without this handler, Ctrl+C would leave orphan servers running.
     """
+    # Run cleanup - this will kill all tracked processes
     _emergency_cleanup()
-    # Re-raise signal with default handler
+
+    # Restore default handler and re-raise
     signal.signal(signum, signal.SIG_DFL)
     os.kill(os.getpid(), signum)
 
 
 def _register_signal_handlers() -> None:
-    """Register signal handlers for graceful shutdown."""
+    """Register signal handlers for graceful shutdown.
+
+    Called once at module load to ensure handlers are active
+    before any tests run.
+    """
+    # Use signal.SIG_IGN to prevent interruption during handler setup
     signal.signal(signal.SIGTERM, _signal_handler)
     signal.signal(signal.SIGINT, _signal_handler)
 
 
 def _unregister_signal_handlers() -> None:
-    """Restore default signal handlers."""
-    signal.signal(signal.SIGTERM, signal.SIG_DFL)
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    """Restore default signal handlers.
 
+    DEPRECATED: This function should NOT be called during tests.
+    Signal handlers should remain active for the entire session.
+    Kept for compatibility but does nothing.
+    """
+    # Intentionally do nothing - handlers should remain active
+    pass
+
+
+# Register signal handlers at module load (BEFORE any tests run)
+# This ensures cleanup works even on early SIGINT/SIGTERM
+_register_signal_handlers()
 
 # Register atexit handler at module load
 atexit.register(_emergency_cleanup)
@@ -538,6 +610,7 @@ def _cleanup_server_process(
 
     Phase 1: Graceful Termination (SIGTERM)
         - Sends terminate signal allowing process to close connections
+        - Uses process group kill if available (catches child processes)
         - Waits up to timeout_terminate (default: 5s) for clean exit
         - Most servers exit cleanly here, releasing ports immediately
 
@@ -564,23 +637,32 @@ def _cleanup_server_process(
         return
 
     # ─────────────────────────────────────────────────────────────────────
-    # PHASE 1: Graceful Termination (SIGTERM)
+    # PHASE 1: Graceful Termination (SIGTERM via process group)
     # ─────────────────────────────────────────────────────────────────────
     # Preferred method - allows server to close connections properly
-    # Most well-behaved servers exit within timeout_terminate
+    # Use process group for reliable termination of all child processes
     try:
-        proc.terminate()
+        try:
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGTERM)
+        except (OSError, ProcessLookupError):
+            # Fall back to individual process terminate
+            proc.terminate()
         proc.wait(timeout=timeout_terminate)
     except subprocess.TimeoutExpired:
         # Server didn't respond to SIGTERM in time - it's hung
         # Fall through to Phase 2: force kill
         # ─────────────────────────────────────────────────────────────────
-        # PHASE 2: Force Kill (SIGKILL)
+        # PHASE 2: Force Kill (SIGKILL via process group)
         # ─────────────────────────────────────────────────────────────────
         # SIGKILL cannot be caught - OS forcibly terminates process
         # Downside: connections may not close cleanly, port may linger
         try:
-            proc.kill()
+            try:
+                pgid = os.getpgid(proc.pid)
+                os.killpg(pgid, signal.SIGKILL)
+            except (OSError, ProcessLookupError):
+                proc.kill()
             proc.wait(timeout=timeout_kill)
         except subprocess.TimeoutExpired:
             # Extremely rare: zombie process that won't die
@@ -590,7 +672,11 @@ def _cleanup_server_process(
         # Unexpected error during terminate (e.g., permission denied)
         # Try force kill as last resort before giving up
         try:
-            proc.kill()
+            try:
+                pgid = os.getpgid(proc.pid)
+                os.killpg(pgid, signal.SIGKILL)
+            except (OSError, ProcessLookupError):
+                proc.kill()
             proc.wait(timeout=timeout_kill)
         except Exception:
             pass  # Best effort - don't crash the test suite
@@ -605,9 +691,15 @@ def _cleanup_server_process(
     _verify_port_released(port, max_attempts=20, delay=0.1)
 
 
-def _register_process(proc: subprocess.Popen) -> None:
-    """Register a process for emergency cleanup tracking."""
-    _spawned_processes[proc.pid] = proc
+def _register_process(proc: subprocess.Popen, port: int, name: str = "server") -> None:
+    """Register a process for emergency cleanup tracking.
+
+    Args:
+        proc: The subprocess to track.
+        port: The port the server is listening on.
+        name: Human-readable name for logging/debugging.
+    """
+    _spawned_processes[proc.pid] = ProcessInfo(proc=proc, port=port, name=name)
 
 
 def _unregister_process(proc: subprocess.Popen) -> None:
@@ -751,11 +843,13 @@ def upstream_server(tmp_path_factory: pytest.TempPathFactory):
             },
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            # Start new process group for reliable cleanup of child processes
+            # This allows us to kill the entire process tree via os.killpg()
+            start_new_session=True,
         )
 
-        # Register for emergency cleanup
-        _register_process(proc)
-        _register_signal_handlers()
+        # Register for emergency cleanup (signal handlers already registered at module load)
+        _register_process(proc, port, name="upstream-server")
 
         # Poll until server is ready (max 10s)
         base_url = f"http://127.0.0.1:{port}"
@@ -783,9 +877,11 @@ def upstream_server(tmp_path_factory: pytest.TempPathFactory):
         with _server_lifecycle(proc, port):
             yield {"url": f"{base_url}/mcp", "token": UPSTREAM_TOKEN, "port": port}
 
-    finally:
-        # Unregister signal handlers after fixture scope ends
-        _unregister_signal_handlers()
+    except Exception:
+        # If an exception occurred before context manager entry, clean up manually
+        if proc is not None and proc.poll() is None:
+            _cleanup_server_process(proc, port)
+        raise
 
 
 # =============================================================================

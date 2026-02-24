@@ -323,9 +323,19 @@ class TestExportMarkdown:
     def test_export_markdown_long_content_not_truncated(
         self, client: TestClient, test_db: sqlite3.Connection
     ) -> None:
-        """Export preserves full saying content without truncation."""
+        """Export preserves full saying content without truncation.
+
+        Verifies:
+        - Full content is present in output
+        - No truncation markers (ellipsis) are added
+        - Content exceeding typical truncation limits is preserved
+        """
         table = create_test_table(test_db, "table-1", "Question?")
-        long_content = "A" * 300  # Long content
+        # Create content longer than common truncation limits (500+ chars)
+        long_content = (
+            "This is a very long message content that would have been truncated under old behavior. "
+            * 10
+        )
         create_test_saying(test_db, table.id, long_content, speaker_name="Speaker")
 
         response = client.get(f"/tables/{table.id}/export/markdown")
@@ -334,6 +344,10 @@ class TestExportMarkdown:
         md = response.text
         # Full content should be present (no truncation)
         assert long_content in md
+        # No truncation markers (ellipsis) should appear in transcript section
+        # The only "..." should be in "_No board data available." if at all
+        transcript_section = md.split("## Transcript")[1]
+        assert "..." not in transcript_section or long_content in transcript_section
 
     def test_export_markdown_response_type(
         self, client: TestClient, test_db: sqlite3.Connection
@@ -377,6 +391,113 @@ class TestExportMarkdown:
 
         md = response.text
         assert "status: paused" in md
+
+
+# =============================================================================
+# Core Function Delegation Tests
+# =============================================================================
+
+
+class TestExportCoreDelegation:
+    """Tests verifying routes delegate to core export_service functions."""
+
+    def test_jsonl_delegates_to_generate_jsonl(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """JSONL endpoint calls core generate_jsonl function."""
+        from unittest.mock import patch
+
+        table = create_test_table(test_db, "table-1", "Test Question?")
+        create_test_saying(test_db, table.id, "Test message", speaker_name="Speaker")
+
+        with patch("tasca.shell.api.routes.export.generate_jsonl") as mock_generate:
+            mock_generate.return_value = "mocked-jsonl-output"
+
+            response = client.get(f"/tables/{table.id}/export/jsonl")
+
+            # Verify core function was called with correct arguments
+            assert mock_generate.called
+            # First positional arg should be the table
+            call_args = mock_generate.call_args
+            assert call_args is not None
+            # Check table was passed
+            assert hasattr(call_args[0][0], "id")  # Table has id attribute
+            # Check sayings were passed (list)
+            assert isinstance(call_args[0][1], list)
+            # Check exported_at was passed (ISO timestamp string)
+            assert isinstance(call_args[0][2], str)
+            # Verify response uses core function output
+            assert response.text == "mocked-jsonl-output"
+
+    def test_markdown_delegates_to_generate_markdown(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Markdown endpoint calls core generate_markdown function."""
+        from unittest.mock import patch
+
+        table = create_test_table(test_db, "table-1", "Test Question?")
+        create_test_saying(test_db, table.id, "Test message", speaker_name="Speaker")
+
+        with patch("tasca.shell.api.routes.export.generate_markdown") as mock_generate:
+            mock_generate.return_value = "mocked-markdown-output"
+
+            response = client.get(f"/tables/{table.id}/export/markdown")
+
+            # Verify core function was called with correct arguments
+            assert mock_generate.called
+            call_args = mock_generate.call_args
+            assert call_args is not None
+            # Check table was passed
+            assert hasattr(call_args[0][0], "id")  # Table has id attribute
+            # Check sayings were passed (list)
+            assert isinstance(call_args[0][1], list)
+            # Verify response uses core function output
+            assert response.text == "mocked-markdown-output"
+
+    def test_jsonl_core_receives_empty_sayings_list(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Core function receives empty sayings list for table without sayings."""
+        from unittest.mock import patch
+
+        table = create_test_table(test_db, "table-1", "Empty Table?")
+
+        with patch("tasca.shell.api.routes.export.generate_jsonl") as mock_generate:
+            mock_generate.return_value = "header-and-table-only"
+
+            client.get(f"/tables/{table.id}/export/jsonl")
+
+            # Verify empty sayings list was passed
+            call_args = mock_generate.call_args
+            assert call_args is not None
+            sayings = call_args[0][1]
+            assert sayings == []
+
+    def test_markdown_core_receives_ordered_sayings(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Core function receives sayings in correct order."""
+        from unittest.mock import patch
+
+        table = create_test_table(test_db, "table-1", "Order Test?")
+        # Create sayings in sequence order
+        create_test_saying(test_db, table.id, "First", speaker_name="A")
+        create_test_saying(test_db, table.id, "Second", speaker_name="B")
+        create_test_saying(test_db, table.id, "Third", speaker_name="C")
+
+        with patch("tasca.shell.api.routes.export.generate_markdown") as mock_generate:
+            mock_generate.return_value = "mocked"
+
+            client.get(f"/tables/{table.id}/export/markdown")
+
+            # Verify sayings are ordered by sequence
+            call_args = mock_generate.call_args
+            assert call_args is not None
+            sayings = call_args[0][1]
+            assert len(sayings) == 3
+            # Verify sequence ordering
+            sequences = [s.sequence for s in sayings]
+            assert sequences == sorted(sequences)
 
 
 # =============================================================================

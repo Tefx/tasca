@@ -390,39 +390,44 @@ export function Stream({ sayings, connectionStatus, tableStatus, focusedIndex, c
         <ConnectionBadge status={connectionStatus} />
       </div>
 
-      {sayings.length === 0 ? (
-        <div className="mc-stream-empty" role="status">
-          {tableStatus === 'paused' ? (
-            <p>This table is paused. Resume the table to allow new sayings.</p>
-          ) : tableStatus === 'closed' ? (
-            <p>This discussion has ended. No sayings were recorded.</p>
-          ) : (
-            <p>Waiting for the conversation to begin. Sayings will appear here in real time.</p>
-          )}
+      <div className="mc-stream-body">
+        {/*
+          Visually hidden live region for screen reader announcements.
+          Uses aria-live="polite" to announce count-based updates after
+          a 2-second debounce period. This replaces the aria-live on the
+          scroll container which caused per-message announcement spam.
+
+          Accessibility note: sr-only class makes this invisible to sighted
+          users while remaining accessible to screen readers.
+        */}
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {announcement}
         </div>
-      ) : (
-        <div className="mc-stream-body">
-          {/*
-            Visually hidden live region for screen reader announcements.
-            Uses aria-live="polite" to announce count-based updates after
-            a 2-second debounce period. This replaces the aria-live on the
-            scroll container which caused per-message announcement spam.
 
-            Accessibility note: sr-only class makes this invisible to sighted
-            users while remaining accessible to screen readers.
-          */}
-          <div className="sr-only" aria-live="polite" aria-atomic="true">
-            {announcement}
-          </div>
-
-          <div
-            ref={streamRef}
-            className="mc-stream"
-            role="log"
-            aria-label="Discussion stream"
-            onScroll={handleScroll}
-          >
-            {sayings.map((saying, index) => (
+        {/*
+          Persistent log container with role="log" for screen reader navigation.
+          Must remain in DOM even when empty to maintain consistent a11y semantics.
+          Empty-state message is rendered as child content when no sayings exist.
+        */}
+        <div
+          ref={streamRef}
+          className="mc-stream"
+          role="log"
+          aria-label="Discussion stream"
+          onScroll={handleScroll}
+        >
+          {sayings.length === 0 ? (
+            <div className="mc-stream-empty" role="status">
+              {tableStatus === 'paused' ? (
+                <p>This table is paused. Resume the table to allow new sayings.</p>
+              ) : tableStatus === 'closed' ? (
+                <p>This discussion has ended. No sayings were recorded.</p>
+              ) : (
+                <p>Waiting for the conversation to begin. Sayings will appear here in real time.</p>
+              )}
+            </div>
+          ) : (
+            sayings.map((saying, index) => (
               <LogBlock
                 key={saying.id}
                 saying={saying}
@@ -431,22 +436,22 @@ export function Stream({ sayings, connectionStatus, tableStatus, focusedIndex, c
                 sayingIndex={index}
                 isFocused={focusedIndex === index}
               />
-            ))}
-          </div>
-
-          {/* Floating "N new sayings" button — visible only when scrolled up and there are unread sayings */}
-          {!isAtBottom && unreadCount > 0 && (
-            <button
-              type="button"
-              className="mc-stream-jump"
-              onClick={jumpToBottom}
-              aria-label={`Jump to bottom — ${unreadCount} new ${unreadCount === 1 ? 'saying' : 'sayings'}`}
-            >
-              &darr; {unreadCount} new {unreadCount === 1 ? 'saying' : 'sayings'}
-            </button>
+            ))
           )}
         </div>
-      )}
+
+        {/* Floating "N new sayings" button — visible only when scrolled up and there are unread sayings */}
+        {!isAtBottom && unreadCount > 0 && (
+          <button
+            type="button"
+            className="mc-stream-jump"
+            onClick={jumpToBottom}
+            aria-label={`Jump to bottom — ${unreadCount} new ${unreadCount === 1 ? 'saying' : 'sayings'}`}
+          >
+            &darr; {unreadCount} new {unreadCount === 1 ? 'saying' : 'sayings'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

@@ -697,6 +697,98 @@ def cmd_export(args: argparse.Namespace) -> int:
         conn.close()
 
 
+# @invar:allow shell_result: CLI argparse setup helper, returns None
+# @shell_orchestration: Argument parser configuration for CLI dispatch
+def _setup_new_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Setup the 'new' subcommand parser.
+
+    Args:
+        subparsers: Subparsers action to add the 'new' command to.
+    """
+    new_parser = subparsers.add_parser(
+        "new",
+        help="Create a new discussion table and start server",
+        description="Create a new discussion table, print startup banner, and start the HTTP server in foreground.",
+    )
+    new_parser.add_argument("question", help="The question or topic for discussion")
+    new_parser.add_argument(
+        "-c", "--context", help="Optional context for the discussion", default=None
+    )
+    new_parser.add_argument(
+        "--host", help="Host to bind when starting server (default: from TASCA_API_HOST)"
+    )
+    new_parser.add_argument(
+        "--port", type=int, help="Port to bind when starting server (default: from TASCA_API_PORT)"
+    )
+    new_parser.add_argument(
+        "-v", "--verbose", action="store_true", default=False, help="Show per-request access logs"
+    )
+    new_parser.set_defaults(func=cmd_new)
+
+
+# @invar:allow shell_result: CLI argparse setup helper, returns None
+# @shell_orchestration: Argument parser configuration for CLI dispatch
+def _setup_export_subparser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Setup the 'export' subcommand parser.
+
+    Args:
+        subparsers: Subparsers action to add the 'export' command to.
+    """
+    export_parser = subparsers.add_parser(
+        "export",
+        help="Export a table and its sayings",
+        description="Export a table and its sayings to a file or stdout.",
+    )
+    export_parser.add_argument("table_id", help="ID of the table to export")
+    export_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["md", "jsonl"],
+        default="md",
+        help="Export format: md (markdown) or jsonl (default: md)",
+    )
+    export_parser.add_argument(
+        "-o", "--output", help="Output file path (default: stdout)", default=None
+    )
+    export_parser.set_defaults(func=cmd_export)
+
+
+# @invar:allow shell_result: CLI argparse setup helper, returns parser
+# @shell_orchestration: Argument parser configuration for CLI dispatch
+def _setup_skills_subparser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> argparse.ArgumentParser:
+    """Setup the 'skills' subcommand group parser.
+
+    Args:
+        subparsers: Subparsers action to add the 'skills' command to.
+
+    Returns:
+        The skills parser for help printing.
+    """
+    skills_parser = subparsers.add_parser(
+        "skills",
+        help="Manage bundled agent skills",
+        description="List, show, and install bundled agent skills.",
+    )
+    skills_sub = skills_parser.add_subparsers(dest="skills_command", help="Skills commands")
+
+    skills_sub.add_parser("list", help="List bundled skills").set_defaults(func=cmd_skills_list)
+
+    show_parser = skills_sub.add_parser("show", help="Print skill content to stdout")
+    show_parser.add_argument("name", help="Skill name")
+    show_parser.set_defaults(func=cmd_skills_show)
+
+    install_parser = skills_sub.add_parser("install", help="Install skill to target directory")
+    install_parser.add_argument("name", help="Skill name")
+    install_parser.add_argument("--target", required=True, help="Target directory (required)")
+    install_parser.set_defaults(func=cmd_skills_install)
+
+    return skills_parser
+
+
 # @invar:allow shell_result: CLI entry point, returns exit code int
 # @shell_orchestration: Argument parsing (argparse) and command dispatch to I/O handlers
 def main(argv: list[str] | None = None) -> int:
@@ -714,99 +806,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # 'new' subcommand
-    new_parser = subparsers.add_parser(
-        "new",
-        help="Create a new discussion table and start server",
-        description="Create a new discussion table, print startup banner, and start the HTTP server in foreground.",
-    )
-    new_parser.add_argument(
-        "question",
-        help="The question or topic for discussion",
-    )
-    new_parser.add_argument(
-        "-c",
-        "--context",
-        help="Optional context for the discussion",
-        default=None,
-    )
-    new_parser.add_argument(
-        "--host",
-        help="Host to bind when starting server (default: from TASCA_API_HOST)",
-    )
-    new_parser.add_argument(
-        "--port",
-        type=int,
-        help="Port to bind when starting server (default: from TASCA_API_PORT)",
-    )
-    new_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        default=False,
-        help="Show per-request access logs",
-    )
-    new_parser.set_defaults(func=cmd_new)
+    # Setup subcommands
+    _setup_new_subparser(subparsers)
 
-    # 'mcp' subcommand
     subparsers.add_parser(
         "mcp",
         help="Start the MCP stdio server",
         description="Start the MCP server using stdio transport (for agent integration).",
     ).set_defaults(func=cmd_mcp)
 
-    # 'version' subcommand
-    subparsers.add_parser(
-        "version",
-        help="Show Tasca version",
-    ).set_defaults(func=cmd_version)
+    subparsers.add_parser("version", help="Show Tasca version").set_defaults(func=cmd_version)
 
-    # 'export' subcommand
-    export_parser = subparsers.add_parser(
-        "export",
-        help="Export a table and its sayings",
-        description="Export a table and its sayings to a file or stdout.",
-    )
-    export_parser.add_argument(
-        "table_id",
-        help="ID of the table to export",
-    )
-    export_parser.add_argument(
-        "--format",
-        "-f",
-        choices=["md", "jsonl"],
-        default="md",
-        help="Export format: md (markdown) or jsonl (default: md)",
-    )
-    export_parser.add_argument(
-        "-o",
-        "--output",
-        help="Output file path (default: stdout)",
-        default=None,
-    )
-    export_parser.set_defaults(func=cmd_export)
-
-    # 'skills' subcommand group
-    _skills_parser = subparsers.add_parser(
-        "skills",
-        help="Manage bundled agent skills",
-        description="List, show, and install bundled agent skills.",
-    )
-    skills_sub = _skills_parser.add_subparsers(dest="skills_command", help="Skills commands")
-
-    # skills list
-    skills_sub.add_parser("list", help="List bundled skills").set_defaults(func=cmd_skills_list)
-
-    # skills show
-    _show = skills_sub.add_parser("show", help="Print skill content to stdout")
-    _show.add_argument("name", help="Skill name")
-    _show.set_defaults(func=cmd_skills_show)
-
-    # skills install
-    _install = skills_sub.add_parser("install", help="Install skill to target directory")
-    _install.add_argument("name", help="Skill name")
-    _install.add_argument("--target", required=True, help="Target directory (required)")
-    _install.set_defaults(func=cmd_skills_install)
+    _setup_export_subparser(subparsers)
+    skills_parser = _setup_skills_subparser(subparsers)
 
     args = parser.parse_args(argv)
 
@@ -814,7 +826,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
     if args.command == "skills" and not hasattr(args, "func"):
-        _skills_parser.print_help()
+        skills_parser.print_help()
         return 1
     return args.func(args)
 

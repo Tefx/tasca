@@ -22,8 +22,12 @@ Usage:
 
 from __future__ import annotations
 
+import atexit
 import os
+import signal
+import subprocess
 from collections.abc import Generator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, TypedDict
 
 import pytest
@@ -313,6 +317,172 @@ def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, No
 
 UPSTREAM_TOKEN = "test-upstream-token"
 
+# Global registry for tracking spawned processes for emergency cleanup
+_spawned_processes: dict[int, subprocess.Popen] = {}
+
+
+def _emergency_cleanup() -> None:
+    """Emergency cleanup handler for atexit.
+
+    Kills any remaining spawned processes that weren't properly cleaned up.
+    This is a last-resort safety net for orphaned processes.
+    """
+    for _pid, proc in list(_spawned_processes.items()):
+        if proc.poll() is None:  # Process still running
+            try:
+                proc.kill()
+                proc.wait(timeout=2)
+            except Exception:
+                pass  # Best effort in emergency cleanup
+    _spawned_processes.clear()
+
+
+def _signal_handler(signum: int, frame: object) -> None:
+    """Signal handler for graceful shutdown.
+
+    Terminates all spawned processes before exit.
+    """
+    _emergency_cleanup()
+    # Re-raise signal with default handler
+    signal.signal(signum, signal.SIG_DFL)
+    os.kill(os.getpid(), signum)
+
+
+def _register_signal_handlers() -> None:
+    """Register signal handlers for graceful shutdown."""
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
+
+
+def _unregister_signal_handlers() -> None:
+    """Restore default signal handlers."""
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
+# Register atexit handler at module load
+atexit.register(_emergency_cleanup)
+
+
+@contextmanager
+def _server_lifecycle(
+    proc: subprocess.Popen,
+    port: int,
+    timeout_terminate: float = 5.0,
+    timeout_kill: float = 2.0,
+) -> Generator[subprocess.Popen, None, None]:
+    """Context manager for robust server process lifecycle.
+
+    Ensures cleanup via finally block, covers all exception paths.
+    Includes timeout-based fallback from terminate to kill.
+
+    Args:
+        proc: The subprocess.Popen instance to manage.
+        port: The port the server is listening on (for verification).
+        timeout_terminate: Seconds to wait after SIGTERM before SIGKILL.
+        timeout_kill: Seconds to wait after SIGKILL before giving up.
+
+    Yields:
+        The process instance.
+    """
+    try:
+        yield proc
+    finally:
+        _cleanup_server_process(proc, port, timeout_terminate, timeout_kill)
+
+
+def _cleanup_server_process(
+    proc: subprocess.Popen,
+    port: int,
+    timeout_terminate: float = 5.0,
+    timeout_kill: float = 2.0,
+) -> None:
+    """Clean up a server process with verification.
+
+    Uses graceful termination first, then force kill with timeouts.
+    Verifies port is released after cleanup.
+    """
+    if proc.poll() is not None:
+        # Process already terminated
+        _unregister_process(proc)
+        return
+
+    # Step 1: Graceful termination
+    try:
+        proc.terminate()
+        proc.wait(timeout=timeout_terminate)
+    except subprocess.TimeoutExpired:
+        # Step 2: Force kill fallback
+        try:
+            proc.kill()
+            proc.wait(timeout=timeout_kill)
+        except subprocess.TimeoutExpired:
+            # Last resort: detached process will be reaped by OS
+            pass
+    except Exception:
+        # Any other error during cleanup - try kill as fallback
+        try:
+            proc.kill()
+            proc.wait(timeout=timeout_kill)
+        except Exception:
+            pass
+
+    _unregister_process(proc)
+
+    # Step 3: Verify port release (with short timeout)
+    _verify_port_released(port, max_attempts=20, delay=0.1)
+
+
+def _register_process(proc: subprocess.Popen) -> None:
+    """Register a process for emergency cleanup tracking."""
+    _spawned_processes[proc.pid] = proc
+
+
+def _unregister_process(proc: subprocess.Popen) -> None:
+    """Unregister a process from emergency cleanup tracking."""
+    _spawned_processes.pop(proc.pid, None)
+
+
+def _verify_port_released(port: int, max_attempts: int = 20, delay: float = 0.1) -> None:
+    """Verify that a port has been released.
+
+    Polls until the port is no longer bound or max_attempts exhausted.
+    Uses non-blocking connect to check port availability.
+
+    Args:
+        port: The port to check.
+        max_attempts: Maximum number of connection attempts.
+        delay: Delay between attempts in seconds.
+    """
+    import socket
+    import time
+
+    for _ in range(max_attempts):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.1)
+        try:
+            # If connect succeeds, port is still in use
+            result = sock.connect_ex(("127.0.0.1", port))
+            if result != 0:
+                # Connection refused - port is free
+                return
+        except OSError:
+            # Port is free
+            return
+        finally:
+            sock.close()
+        time.sleep(delay)
+
+    # Port still in use after max attempts - log warning but don't fail
+    # (this is best-effort verification)
+    import warnings
+
+    warnings.warn(
+        f"Port {port} may still be in use after cleanup (max attempts exceeded)",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+
 
 @pytest.fixture(scope="module")
 def upstream_server(tmp_path_factory: pytest.TempPathFactory):
@@ -322,11 +492,17 @@ def upstream_server(tmp_path_factory: pytest.TempPathFactory):
     (_config, mcp) that cause self-referencing proxy loops when running
     two instances in the same process.
 
+    Hardening features:
+    - atexit handler for emergency cleanup on interpreter exit
+    - Signal handlers (SIGTERM, SIGINT) for graceful shutdown
+    - Context manager pattern for guaranteed cleanup via finally
+    - Timeout-based fallback: terminate -> kill -> wait
+    - Port release verification before test completion
+
     Yields:
         Dict with 'url' (MCP endpoint), 'token', and 'port'.
     """
     import socket
-    import subprocess
     import time
 
     import httpx
@@ -338,50 +514,62 @@ def upstream_server(tmp_path_factory: pytest.TempPathFactory):
 
     db_path = tmp_path_factory.mktemp("upstream") / "upstream.db"
 
-    proc = subprocess.Popen(
-        [
-            "uv", "run", "tasca", "new", "proxy-e2e-test",
-            "--host", "127.0.0.1", "--port", str(port),
-        ],
-        env={
-            **os.environ,
-            "TASCA_DB_PATH": str(db_path),
-            "TASCA_ADMIN_TOKEN": UPSTREAM_TOKEN,
-        },
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-
-    # Poll until server is ready (max 10s)
-    base_url = f"http://127.0.0.1:{port}"
-    ready = False
-    for _ in range(100):
-        try:
-            r = httpx.get(f"{base_url}/api/v1/health", timeout=1)
-            if r.status_code == 200:
-                ready = True
-                break
-        except (httpx.ConnectError, httpx.ReadError, httpx.TimeoutException):
-            pass
-        time.sleep(0.1)
-
-    if not ready:
-        proc.kill()
-        stdout = proc.stdout.read().decode() if proc.stdout else ""
-        stderr = proc.stderr.read().decode() if proc.stderr else ""
-        raise RuntimeError(
-            f"Upstream server failed to start on port {port}.\n"
-            f"stdout: {stdout[:500]}\nstderr: {stderr[:500]}"
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            [
+                "uv",
+                "run",
+                "tasca",
+                "new",
+                "proxy-e2e-test",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+            ],
+            env={
+                **os.environ,
+                "TASCA_DB_PATH": str(db_path),
+                "TASCA_ADMIN_TOKEN": UPSTREAM_TOKEN,
+            },
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
 
-    yield {"url": f"{base_url}/mcp", "token": UPSTREAM_TOKEN, "port": port}
+        # Register for emergency cleanup
+        _register_process(proc)
+        _register_signal_handlers()
 
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
+        # Poll until server is ready (max 10s)
+        base_url = f"http://127.0.0.1:{port}"
+        ready = False
+        for _ in range(100):
+            try:
+                r = httpx.get(f"{base_url}/api/v1/health", timeout=1)
+                if r.status_code == 200:
+                    ready = True
+                    break
+            except (httpx.ConnectError, httpx.ReadError, httpx.TimeoutException):
+                pass
+            time.sleep(0.1)
+
+        if not ready:
+            # Cleanup before raising error
+            _cleanup_server_process(proc, port)
+            stdout = proc.stdout.read().decode() if proc.stdout else ""
+            stderr = proc.stderr.read().decode() if proc.stderr else ""
+            raise RuntimeError(
+                f"Upstream server failed to start on port {port}.\n"
+                f"stdout: {stdout[:500]}\nstderr: {stderr[:500]}"
+            )
+
+        with _server_lifecycle(proc, port):
+            yield {"url": f"{base_url}/mcp", "token": UPSTREAM_TOKEN, "port": port}
+
+    finally:
+        # Unregister signal handlers after fixture scope ends
+        _unregister_signal_handlers()
 
 
 # =============================================================================

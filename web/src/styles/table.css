@@ -122,6 +122,7 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  font-size: 0.8125rem;
 }
 
 .mc-hud-back {
@@ -248,13 +249,19 @@
    HUD Collapsible Metadata
    ============================================================================= */
 
+/* Metadata details container - button-like trigger + dropdown panel */
 .mc-hud-meta-details {
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 
+/* Summary button trigger - compact, button-like appearance */
 .mc-hud-meta-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   padding: 0.25rem 0.5rem;
   background: transparent;
   border: 1px solid var(--mc-border);
@@ -264,8 +271,9 @@
   font-weight: 500;
   cursor: pointer;
   list-style: none;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
   font-family: inherit;
+  white-space: nowrap;
 }
 
 .mc-hud-meta-summary::-webkit-details-marker {
@@ -276,17 +284,79 @@
   display: none;
 }
 
+/* Chevron indicator */
+.mc-hud-meta-summary::after {
+  content: '▾';
+  font-size: 0.625rem;
+  margin-left: 0.125rem;
+  transition: transform 0.15s;
+}
+
+.mc-hud-meta-details[open] .mc-hud-meta-summary::after {
+  transform: rotate(180deg);
+}
+
 .mc-hud-meta-summary:hover {
   border-color: var(--mc-text-dim);
   color: var(--mc-text);
+  background: var(--mc-surface);
 }
 
 .mc-hud-meta-details[open] .mc-hud-meta-summary {
   border-color: var(--mc-accent);
   color: var(--mc-accent);
+  background: rgba(96, 165, 250, 0.08);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
-/* Metadata list (reused from Board) */
+/* Metadata dropdown panel - appears below tier 2 as a panel */
+.mc-hud-meta-details .mc-meta-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: -1px; /* overlap border with summary */
+  border-top-left-radius: 0;
+  border-top-right-radius: var(--mc-radius);
+  border-bottom-left-radius: var(--mc-radius);
+  border-bottom-right-radius: var(--mc-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Horizontal metadata list - compact inline display in tier 2 */
+.mc-hud-meta-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--mc-text-muted);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mc-hud-meta-list-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mc-hud-meta-list-label {
+  color: var(--mc-text-muted);
+}
+
+.mc-hud-meta-list-value {
+  color: var(--mc-text-dim);
+  font-weight: 500;
+}
+
+.mc-hud-meta-list-value--mono {
+  font-family: var(--mc-font-mono);
+  font-size: 0.6875rem;
+}
+
+/* Legacy Metadata list (dropdown panel content) */
 .mc-meta-list {
   list-style: none;
   margin: 0.5rem 0 0;
@@ -1560,30 +1630,50 @@
    ============================================================================= */
 
 @media (max-width: 640px) {
+  /* Two-tier HUD mobile stacking */
   .mc-hud {
+    gap: 0.375rem;
+  }
+
+  /* Tier 1: Full-width nav + title (stacked on mobile) */
+  .mc-hud-tier1 {
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 
-  .mc-hud-tier1 {
-    flex-wrap: wrap;
+  .mc-hud-back {
+    flex-shrink: 0;
   }
 
   .mc-hud-title {
     white-space: normal;
     font-size: 0.9375rem;
-    flex-basis: 100%;
-    order: 2;
-    margin-top: 0.25rem;
+    flex-basis: calc(100% - 3.5rem); /* account for back button */
+    flex-grow: 1;
   }
 
-  .mc-hud-back {
-    order: 1;
-  }
-
+  /* Tier 2: Compact controls with graceful wrap */
   .mc-hud-tier2 {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
+    width: 100%;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+  }
+
+  /* Metadata dropdown on mobile - full width */
+  .mc-hud-meta-details {
+    width: 100%;
+  }
+
+  .mc-hud-meta-details .mc-meta-list {
+    left: 0;
+    right: 0;
+    min-width: auto;
+    width: max-content;
+    max-width: 100%;
+  }
+
+  /* Horizontal meta list wraps gracefully */
+  .mc-hud-meta-list {
     width: 100%;
   }
 

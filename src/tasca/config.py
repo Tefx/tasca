@@ -6,6 +6,7 @@ Environment variables can be used to override defaults.
 
 import secrets
 from importlib.metadata import version as _pkg_version
+from pathlib import Path
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,8 +27,8 @@ class Settings(BaseSettings):
     debug: bool = False
     environment: str = "development"  # "development" or "production"
 
-    # Database
-    db_path: str = "./data/tasca.db"
+    # Database (default: ~/.tasca/tasca.db; override via TASCA_DB_PATH)
+    db_path: str = str(Path.home() / ".tasca" / "tasca.db")
 
     # API
     api_host: str = "0.0.0.0"

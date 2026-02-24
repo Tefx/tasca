@@ -5,7 +5,6 @@ This module manages SQLite connections with proper WAL mode setup.
 Shell layer - handles I/O (file paths, database connections).
 """
 
-import os
 import sqlite3
 from pathlib import Path
 
@@ -19,30 +18,8 @@ from tasca.core.schema import (
     is_wal_mode,
 )
 
-# Default database path (can be overridden via TASCA_DB_PATH env var)
-DEFAULT_DB_PATH = Path.home() / ".tasca" / "tasca.db"
-
 # Default busy timeout in milliseconds
 DEFAULT_BUSY_TIMEOUT = 5000
-
-
-# @invar:allow shell_result: Path retrieval is infallible - returns default if env not set
-def get_database_path() -> Path:
-    """
-    Get the database path from TASCA_DB_PATH environment variable.
-
-    Default: ~/.tasca/tasca.db
-
-    This function reads an environment variable, so it has I/O.
-    Returns Path directly since failure here is exceptional.
-
-    >>> isinstance(get_database_path(), Path)
-    True
-    """
-    db_path_str = os.environ.get("TASCA_DB_PATH")
-    if db_path_str:
-        return Path(db_path_str)
-    return DEFAULT_DB_PATH
 
 
 # @shell_complexity: 4 branches for directory creation + WAL mode check + :memory: handling

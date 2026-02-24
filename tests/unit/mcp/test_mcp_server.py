@@ -797,8 +797,7 @@ class TestTableExport:
         # Verify markdown structure
         content = data["content"]
         assert "# What is the meaning of life?" in content
-        assert "table_id:" in content
-        assert "status: open" in content
+        assert "| **Status** | open |" in content
         assert "_No sayings yet._" in content
 
     def test_export_markdown_with_sayings(self) -> None:
@@ -816,13 +815,11 @@ class TestTableExport:
         assert result["ok"] is True
         content = result["data"]["content"]
 
-        # Verify content includes sayings
-        assert "[seq=0]" in content
-        assert "[seq=1]" in content
+        # Verify content includes sayings with speaker lines
+        assert "**#0 Alice** [AI]" in content
+        assert "**#1 Bob** [AI]" in content
         assert "First point" in content
         assert "Second point" in content
-        assert "agent:Alice" in content
-        assert "agent:Bob" in content
 
     def test_export_jsonl_empty_table(self) -> None:
         """Export empty table as jsonl returns valid jsonl."""

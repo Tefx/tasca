@@ -260,15 +260,15 @@ class TestExportMarkdown:
         assert response.status_code == 200
 
         md = response.text
-        # Check header
+        # Check header and metadata table
         assert "# What is the best approach?" in md
-        assert f"table_id: {table.id}" in md
-        assert "status: open" in md
-        assert "version: 1" in md
-        assert "context: Consider performance" in md
+        assert f"| **Table** | `{table.id}` |" in md
+        assert "| **Status** | open |" in md
+        # Context rendered as blockquote
+        assert "## Context" in md
+        assert "> Consider performance" in md
 
         # Check sections
-        assert "## Board" in md
         assert "## Transcript" in md
         assert "_No sayings yet._" in md
 
@@ -284,13 +284,13 @@ class TestExportMarkdown:
         assert response.status_code == 200
 
         md = response.text
-        # Check transcript entries (0-based sequence)
-        assert "[seq=0]" in md
-        assert "[seq=1]" in md
-        assert "Alice" in md
-        assert "Bob" in md
+        # Check transcript entries — speaker lines with sequence numbers
+        assert "**#0 Alice**" in md
+        assert "**#1 Bob**" in md
         assert "First message here" in md
         assert "Second message here" in md
+        # Horizontal rule between sayings
+        assert "---" in md
 
     def test_export_markdown_speaker_format(
         self, client: TestClient, test_db: sqlite3.Connection
@@ -317,8 +317,12 @@ class TestExportMarkdown:
         assert response.status_code == 200
 
         md = response.text
-        assert "(agent:AgentA)" in md
-        assert "(human:Alice)" in md
+        # Agent gets [AI] tag, human does not
+        assert "**#0 AgentA** [AI]" in md
+        assert "**#1 Alice**" in md
+        # Human has no [AI] tag
+        alice_line = [line for line in md.split("\n") if "Alice" in line][0]
+        assert "[AI]" not in alice_line
 
     def test_export_markdown_long_content_not_truncated(
         self, client: TestClient, test_db: sqlite3.Connection
@@ -390,7 +394,7 @@ class TestExportMarkdown:
         assert response.status_code == 200
 
         md = response.text
-        assert "status: paused" in md
+        assert "| **Status** | paused |" in md
 
 
 # =============================================================================
@@ -534,9 +538,9 @@ class TestExportIntegration:
         assert response.status_code == 200
         md = response.text
         assert "Initial Question?" in md
-        assert "[seq=0]" in md
-        assert "[seq=1]" in md
-        assert "[seq=2]" in md
+        assert "First message" in md
+        assert "Second message" in md
+        assert "Third message" in md
 
     def test_export_multiple_tables(self, client: TestClient, test_db: sqlite3.Connection) -> None:
         """Export different tables independently."""

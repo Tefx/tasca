@@ -55,7 +55,7 @@ def main() -> None:
         print("Server Configuration:")
         print("  TASCA_API_HOST    Host to bind (default: 0.0.0.0)")
         print("  TASCA_API_PORT    Port to bind (default: 8000)")
-        print("  TASCA_DB_PATH     Database path (default: ./data/tasca.db)")
+        print("  TASCA_DB_PATH     Database path (default: ~/.tasca/tasca.db)")
         print("  TASCA_ADMIN_TOKEN Admin token for API auth (auto-generated if not set)")
         print()
         print("Options:")

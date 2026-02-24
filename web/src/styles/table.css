@@ -70,35 +70,14 @@
    ============================================================================= */
 
 /**
- * Mission Control Full-Width Override
+ * Mission Control Container
  *
- * The global #root has max-width: 1280px; padding: 2rem from index.css.
- * Mission Control needs full viewport width for the two-column layout.
- * Using :has() for scoped override - only applies when .mc is a descendant.
- *
- * Browser Support:
- * - Chrome 105+ (Sep 2022)
- * - Safari 15.4+ (Mar 2022)
- * - Firefox 121+ (Dec 2023)
- * Progressive enhancement: older browsers still get constrained layout.
+ * Full viewport height, flexible column layout with HUD header at top
+ * and content columns below. Root sizing overrides are in index.css.
  */
-#root:has(.mc) {
-  max-width: none;
-  padding: 0;
-  overflow-x: hidden;
-}
-
-/* Fallback for browsers without :has() support - use body-level override */
-body:has(.mc) #root,
-html:has(.mc) #root {
-  max-width: none;
-  padding: 0;
-  overflow-x: hidden;
-}
-
 .mc {
   width: 100%;
-  max-width: 100%;
+  min-height: 100vh;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -115,31 +94,31 @@ html:has(.mc) #root {
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0.75rem 0;
   border-bottom: 1px solid var(--mc-border);
   background: var(--mc-bg);
+  flex-shrink: 0;
 }
 
-/* Tier 1: Navigation + Title (full-width, prominent) */
+/* Tier 1: Navigation + Title (prominent, full-width row) */
 .mc-hud-tier1 {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   width: 100%;
-  padding: 0 0.75rem;
-  /* Visual separation from tier 2 */
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0.75rem 0.75rem;
+  /* Clear visual separation from tier 2 */
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--mc-border);
 }
 
-/* Tier 2: Controls + Metadata + Actions + Mode */
+/* Tier 2: Controls + Metadata + Actions + Mode (secondary row) */
 .mc-hud-tier2 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
   font-size: 0.8125rem;
-  padding: 0.5rem 0.75rem 0;
+  padding: 0.5rem 0.75rem;
 }
 
 .mc-hud-back {
@@ -176,13 +155,14 @@ html:has(.mc) #root {
   margin: 0;
   flex: 1;
   min-width: 0;
-  max-width: 100%;
+  /* Constrained width to prevent overflow; ellipsis for truncation */
+  max-width: calc(100% - 120px); /* Leave space for back button */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Tooltip for truncated title via data attribute or native title */
+/* Tooltip for truncated title via native title attribute */
 .mc-hud-title[title] {
   cursor: help;
 }
@@ -428,19 +408,22 @@ html:has(.mc) #root {
 
 .mc-columns {
   display: grid;
-  grid-template-columns: 1fr minmax(180px, 220px);
+  grid-template-columns: 1fr minmax(180px, 260px);
   gap: 0;
   flex: 1;
   min-height: 0;
   overflow: hidden;
   width: 100%;
   max-width: 100%;
+  padding: 0 0.75rem;
+  box-sizing: border-box;
 }
 
 /* Prevent horizontal overflow at any viewport width */
 .mc-columns > * {
   min-width: 0;
   overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* =============================================================================
@@ -466,7 +449,7 @@ html:has(.mc) #root {
 
 /* Header row: label left, connection badge right */
 .mc-stream-header {
-  padding: 0.75rem 0.75rem 0.5rem;
+  padding: 0.75rem 0 0.5rem;
   font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -544,7 +527,6 @@ html:has(.mc) #root {
   gap: 0;
   overflow-y: auto;
   flex: 1;
-  padding: 0 0.75rem;
   scrollbar-width: thin;                          /* Firefox */
   scrollbar-color: var(--mc-border) transparent;  /* Firefox */
 }
@@ -751,6 +733,7 @@ html:has(.mc) #root {
   overflow-y: auto;
   border-left: 1px solid var(--mc-border);
   padding-left: 0.75rem;
+  padding-top: 0.75rem;
   scrollbar-width: none;          /* Firefox */
 }
 
@@ -1474,7 +1457,7 @@ html:has(.mc) #root {
 .mc-console {
   flex-shrink: 0;
   border-top: 1px solid var(--mc-border);
-  padding: 0.625rem 0.75rem;
+  padding: 0.625rem 0;
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
@@ -1636,7 +1619,7 @@ html:has(.mc) #root {
 }
 
 /* =============================================================================
-   Responsive — Tablet (columns stack)
+   Responsive — Tablet (768px to 1023px, columns stack)
    ============================================================================= */
 
 @media (max-width: 1024px) {
@@ -1644,6 +1627,7 @@ html:has(.mc) #root {
     grid-template-columns: 1fr;
     height: auto;
     flex: none;
+    padding: 0 0.625rem;
   }
 
   .mc-col-center {
@@ -1656,6 +1640,12 @@ html:has(.mc) #root {
     padding-left: 0;
     padding-top: 0.75rem;
   }
+
+  /* HUD tier adjustments for medium screens */
+  .mc-hud-tier2 {
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
 }
 
 /* =============================================================================
@@ -1663,16 +1653,16 @@ html:has(.mc) #root {
    ============================================================================= */
 
 @media (max-width: 640px) {
-  /* Two-tier HUD mobile stacking */
+  /* Two-tier HUD mobile adjustments */
   .mc-hud {
     gap: 0;
   }
 
-  /* Tier 1: Nav + title with proper handling */
+  /* Tier 1: Nav + title - allow title to wrap on very long titles */
   .mc-hud-tier1 {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 0.5rem;
-    padding-bottom: 0.375rem;
+    padding: 0.625rem 0.625rem;
   }
 
   .mc-hud-back {
@@ -1680,13 +1670,15 @@ html:has(.mc) #root {
   }
 
   .mc-hud-title {
-    /* Allow wrapping at mobile instead of truncation for very long titles */
+    /* On mobile: allow multi-line for long titles instead of truncation */
     white-space: normal;
     word-break: break-word;
     overflow-wrap: anywhere;
     font-size: 0.9375rem;
-    line-height: 1.3;
-    /* Remove ellipsis - allow wrap */
+    line-height: 1.35;
+    max-width: 100%;
+    flex-basis: 100%;
+    /* Clear text-overflow for wrapped text */
     text-overflow: clip;
   }
 
@@ -1695,7 +1687,7 @@ html:has(.mc) #root {
     width: 100%;
     gap: 0.375rem;
     font-size: 0.75rem;
-    padding-top: 0.375rem;
+    padding: 0.5rem 0.625rem;
   }
 
   /* Metadata dropdown on mobile - full width */
@@ -1721,6 +1713,20 @@ html:has(.mc) #root {
     gap: 0.375rem;
   }
 
+  /* Columns tighter padding on mobile */
+  .mc-columns {
+    padding: 0 0.5rem;
+  }
+
+  .mc-col-right {
+    padding-left: 0;
+    padding-top: 0.625rem;
+  }
+
+  .mc-stream-header {
+    padding: 0.625rem 0 0.5rem;
+  }
+
   .mc-log-header {
     gap: 0.375rem;
   }
@@ -1728,6 +1734,10 @@ html:has(.mc) #root {
   .mc-log-time {
     margin-left: 0;
     flex-basis: 100%;
+  }
+
+  .mc-console {
+    padding: 0.5rem 0;
   }
 }
 

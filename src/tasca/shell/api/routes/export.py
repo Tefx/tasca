@@ -57,9 +57,14 @@ def _build_export_response(
     if download:
         headers["Content-Disposition"] = f'attachment; filename="{filename}"'
 
+    # Use application/octet-stream for downloads to prevent browser from
+    # rendering content inline (which can appear "stuck" for large files).
+    # For non-download (API consumers), use text/plain for readability.
+    media_type = "application/octet-stream" if download else "text/plain; charset=utf-8"
+
     return Response(
         content=content,
-        media_type="text/plain; charset=utf-8",
+        media_type=media_type,
         headers=headers if headers else None,
     )
 

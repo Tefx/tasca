@@ -73,7 +73,7 @@
  * Mission Control Full-Width Override
  *
  * The global #root has max-width: 1280px; padding: 2rem from index.css.
- * Mission Control needs full viewport width for the three-column layout.
+ * Mission Control needs full viewport width for the two-column layout.
  * Using :has() for scoped override - only applies when .mc is a descendant.
  *
  * Browser Support:

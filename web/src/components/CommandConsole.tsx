@@ -113,39 +113,9 @@ export function CommandConsole({ table, seats, patrons, onPosted, onStatusChange
 
   return (
     <div className="mc-console">
-      {error && (
-        <p className="mc-console-error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="mc-console-row">
-        <MentionInput
-          ref={mentionInputRef}
-          value={value}
-          onChange={setValue}
-          seats={seats}
-          patrons={patrons}
-          disabled={!isAdmin}
-          onSubmit={handleSubmit}
-          placeholder={isAdmin ? 'Say something…' : 'Viewer mode — enter admin to post'}
-          className="mc-console-input"
-        />
-        {isAdmin && (
-          <button
-            type="button"
-            className="mc-console-send-btn"
-            onClick={handleSubmit}
-            disabled={!value.trim() || isSubmitting}
-            title="Send saying (Enter)"
-          >
-            {isSubmitting ? '…' : 'Send'}
-          </button>
-        )}
-      </div>
-
-      {/* Footer controls — only for admin */}
+      {/* Toolbar controls — only for admin */}
       {isAdmin && (
-        <div className="mc-console-controls">
+        <div className="mc-console-toolbar">
           <RequestSummaryButton
             seats={seats}
             patrons={patrons}
@@ -177,6 +147,36 @@ export function CommandConsole({ table, seats, patrons, onPosted, onStatusChange
           )}
         </div>
       )}
+
+      {error && (
+        <p className="mc-console-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="mc-console-row">
+        <MentionInput
+          ref={mentionInputRef}
+          value={value}
+          onChange={setValue}
+          seats={seats}
+          patrons={patrons}
+          disabled={!isAdmin}
+          onSubmit={handleSubmit}
+          placeholder={isAdmin ? 'Say something…' : 'Viewer mode — enter admin to post'}
+          className="mc-console-input"
+        />
+        {isAdmin && (
+          <button
+            type="button"
+            className="mc-console-send-btn"
+            onClick={handleSubmit}
+            disabled={!value.trim() || isSubmitting}
+            title="Send saying (Enter)"
+          >
+            {isSubmitting ? '…' : 'Send'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

@@ -224,6 +224,36 @@ function ErrorState({ message, onRetry }: ErrorStateProps) {
 
 // =============================================================================
 // =============================================================================
+// Tab Bar (mobile only — hidden at desktop)
+// =============================================================================
+
+type ActiveTab = 'stream' | 'seats' | 'info'
+
+interface TabBarProps {
+  activeTab: ActiveTab
+  onTabChange: (tab: ActiveTab) => void
+}
+
+function TabBar({ activeTab, onTabChange }: TabBarProps) {
+  return (
+    <nav className="mc-tab-bar" aria-label="View tabs">
+      {(['stream', 'seats', 'info'] as const).map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          className={`mc-tab-btn${activeTab === tab ? ' mc-tab-btn--active' : ''}`}
+          onClick={() => onTabChange(tab)}
+          aria-selected={activeTab === tab}
+          aria-controls={`mc-tab-panel-${tab}`}
+        >
+          {tab.charAt(0).toUpperCase() + tab.slice(1)}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+// =============================================================================
 // Connection Warning Banner
 // =============================================================================
 
@@ -323,6 +353,7 @@ function Hud({ table, onStatusChange }: HudProps) {
 
 export function Table() {
   const { tableId } = useParams<{ tableId: string }>()
+  const [activeTab, setActiveTab] = useState<ActiveTab>('stream')
 
   // Static data: table metadata + seats (one-time fetch).
   const { state, refetch } = useStaticTableData(tableId)
@@ -422,9 +453,13 @@ export function Table() {
   return (
     <div className="mc">
       <Hud table={table} onStatusChange={handleStatusChange} />
+      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
       <ConnectionWarningBanner status={connectionStatus} />
       <div className="mc-columns">
-        <div className="mc-col-center">
+        <div
+          id="mc-tab-panel-stream"
+          className={`mc-col-center mc-tab-panel${activeTab === 'stream' ? ' mc-tab-panel--active' : ''}`}
+        >
           <Stream sayings={sayings} connectionStatus={connectionStatus} tableStatus={table.status} />
           <CommandConsole
             table={table}
@@ -435,7 +470,41 @@ export function Table() {
             onError={handleError}
           />
         </div>
-        <SeatDeck seats={seats} patrons={patronsMap} />
+        <div
+          id="mc-tab-panel-seats"
+          className={`mc-tab-panel${activeTab === 'seats' ? ' mc-tab-panel--active' : ''}`}
+        >
+          <SeatDeck seats={seats} patrons={patronsMap} />
+        </div>
+        <div
+          id="mc-tab-panel-info"
+          className={`mc-tab-panel mc-tab-info${activeTab === 'info' ? ' mc-tab-panel--active' : ''}`}
+        >
+          <ul className="mc-meta-list mc-tab-info-list">
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Status</span>
+              <span className="mc-meta-value">{statusLabel(table.status)}</span>
+            </li>
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Created</span>
+              <span className="mc-meta-value">{formatDate(table.created_at)}</span>
+            </li>
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Updated</span>
+              <span className="mc-meta-value">{formatDate(table.updated_at)}</span>
+            </li>
+            <li className="mc-meta-item">
+              <span className="mc-meta-label">Version</span>
+              <span className="mc-meta-value mc-meta-value--mono">v{table.version}</span>
+            </li>
+            {table.context && (
+              <li className="mc-meta-item">
+                <span className="mc-meta-label">Context</span>
+                <span className="mc-meta-value">{table.context}</span>
+              </li>
+            )}
+          </ul>
+        </div>
       </div>
     </div>
   )

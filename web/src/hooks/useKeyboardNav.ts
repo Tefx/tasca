@@ -1,0 +1,109 @@
+import { useState, useEffect, useCallback, type RefObject } from 'react'
+
+interface UseKeyboardNavOptions {
+  sayingsCount: number
+  streamRef: RefObject<HTMLDivElement | null>
+  inputRef: RefObject<HTMLTextAreaElement | null>
+}
+
+interface UseKeyboardNavResult {
+  focusedIndex: number | null
+  setFocusedIndex: (n: number | null) => void
+}
+
+/**
+ * Keyboard navigation hook for the Stream saying list.
+ *
+ * Key bindings (only active when no input/textarea is focused):
+ * - j: Move focus to the next saying
+ * - k: Move focus to the previous saying
+ * - g: Jump to the first saying
+ * - G: Jump to the last saying
+ * - /: Focus the command console input
+ *
+ * @param sayingsCount - Total number of sayings currently rendered
+ * @param streamRef - Ref to the scrollable stream container
+ * @param inputRef - Ref to the command console textarea
+ */
+export function useKeyboardNav({
+  sayingsCount,
+  streamRef,
+  inputRef,
+}: UseKeyboardNavOptions): UseKeyboardNavResult {
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
+
+  const scrollToIndex = useCallback(
+    (index: number) => {
+      const stream = streamRef.current
+      if (!stream) return
+      const el = stream.querySelector<HTMLElement>(`[data-saying-index="${index}"]`)
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    },
+    [streamRef]
+  )
+
+  const updateFocusedIndex = useCallback(
+    (index: number | null) => {
+      setFocusedIndex(index)
+      if (index !== null) scrollToIndex(index)
+    },
+    [scrollToIndex]
+  )
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only activate when no input/textarea is focused
+      const tag = (document.activeElement as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea') return
+
+      if (sayingsCount === 0) {
+        if (e.key === '/') {
+          e.preventDefault()
+          inputRef.current?.focus()
+        }
+        return
+      }
+
+      switch (e.key) {
+        case 'j': {
+          e.preventDefault()
+          setFocusedIndex((prev) => {
+            const next = prev === null ? 0 : Math.min(prev + 1, sayingsCount - 1)
+            scrollToIndex(next)
+            return next
+          })
+          break
+        }
+        case 'k': {
+          e.preventDefault()
+          setFocusedIndex((prev) => {
+            const next = prev === null ? sayingsCount - 1 : Math.max(prev - 1, 0)
+            scrollToIndex(next)
+            return next
+          })
+          break
+        }
+        case 'g': {
+          e.preventDefault()
+          updateFocusedIndex(0)
+          break
+        }
+        case 'G': {
+          e.preventDefault()
+          updateFocusedIndex(sayingsCount - 1)
+          break
+        }
+        case '/': {
+          e.preventDefault()
+          inputRef.current?.focus()
+          break
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [sayingsCount, inputRef, scrollToIndex, updateFocusedIndex])
+
+  return { focusedIndex, setFocusedIndex }
+}

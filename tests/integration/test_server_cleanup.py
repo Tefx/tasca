@@ -683,22 +683,26 @@ def assert_port_released(port: int, timeout: float = 2.0) -> None:
 
 
 class TestSignalInterruption:
-    """Tests for signal handler cleanup with REAL signal delivery.
+    """Unit-level tests for signal handler cleanup.
 
-    GAP CLOSED: Previous tests verified signal handler registration but never
-    exercised the actual signal delivery path. These tests send real SIGTERM
-    and SIGINT signals and verify the cleanup path runs correctly.
+    DEPRECATED in favor of TestSignalInterruptionE2E for true signal testing.
 
-    Architecture (from conftest.py):
-        Signal received → _signal_handler() → _emergency_cleanup() → kill all tracked
+    These tests call _emergency_cleanup() DIRECTLY, bypassing the actual signal
+    delivery mechanism. They are useful for unit testing the cleanup function
+    but do NOT validate the real signal handler path.
+
+    For E2E signal testing that sends REAL SIGTERM/SIGINT signals, see:
+        - TestSignalInterruptionE2E.test_sigterm_delivered_kills_registered_grandchild_e2e
+        - TestSignalInterruptionE2E.test_sigint_delivered_kills_registered_grandchild_e2e
+        - TestSignalInterruptionE2E.test_multiple_signals_idempotent_cleanup_e2e
 
     These tests validate:
-        1. Signal handler cleans up REGISTERED processes
-        2. Port release after signal-triggered cleanup
-        3. Process registry is cleared after signal
+        1. _emergency_cleanup() interface works correctly
+        2. Port release after direct cleanup call
+        3. Process registry management
 
-    CRITICAL: These tests spawn real processes and send real signals.
-    They MUST be robust against subprocess timing variations.
+    CRITICAL: These tests DO NOT send real signals (which would kill pytest).
+    They call _emergency_cleanup() directly to test the cleanup logic in isolation.
     """
 
     def test_sigterm_cleans_up_registered_process(self) -> None:
@@ -935,7 +939,11 @@ while True:
 
 
 class TestSignalHandlerRegistration:
-    """Tests for signal handler registration mechanism."""
+    """Tests for signal handler registration mechanism.
+
+    UNIT-LEVEL: These tests verify signal handler setup without real signal delivery.
+    For E2E signal tests with real signal delivery, see TestSignalInterruptionE2E.
+    """
 
     def test_signal_handlers_are_callable(self) -> None:
         """Signal handler functions are properly defined."""
@@ -969,6 +977,472 @@ class TestSignalHandlerRegistration:
 
             # Process should be killed
             assert proc.poll() is not None
+
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+            _spawned_processes.clear()
+
+
+# =============================================================================
+# E2E Signal Tests with Real Signal Delivery (NOT direct _emergency_cleanup calls)
+# =============================================================================
+
+
+class TestSignalInterruptionE2E:
+    """End-to-end tests for signal handler cleanup with REAL signal delivery.
+
+    These tests verify the COMPLETE signal handling path:
+        1. Signal sent to process (os.kill with SIGTERM/SIGINT)
+        2. _signal_handler() invoked by OS
+        3. _emergency_cleanup() runs and kills all registered processes
+        4. Ports are released
+
+    Architecture:
+        We spawn a CHILD TEST RUNNER (subprocess) that:
+        - Sets up signal handlers (via importing conftest)
+        - Registers a GRANDCHILD process (server simulator)
+        - Waits for signal from us (the parent pytest process)
+
+        We (parent) then:
+        - Send SIGTERM/SIGINT to the child test runner
+        - Verify the grandchild was killed (port released)
+        - Verify child test runner exited cleanly
+
+    CRITICAL: We do NOT call _emergency_cleanup() directly in these tests.
+    The signal handler is exercised via actual os.kill() to the child process.
+    """
+
+    def test_sigterm_delivered_kills_registered_grandchild_e2e(self) -> None:
+        """REAL SIGTERM triggers cleanup of registered grandchild process.
+
+        E2E test: signal sent → handler runs → grandchild killed → port freed.
+        """
+        import sys
+
+        # Find a free port for the grandchild server
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            test_port = s.getsockname()[1]
+
+        # This script becomes the "child test runner" that will receive the signal
+        # It imports our conftest (which registers signal handlers) and spawns a grandchild
+        child_script = f'''
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+# Import conftest to register signal handlers (happens on import)
+# This sets up SIGTERM/SIGINT handlers via _register_signal_handlers()
+from tests.integration.conftest import (
+    _register_process,
+    _spawned_processes,
+)
+
+# Create grandchild process that binds to test port
+grandchild_script = """
+import socket
+import time
+import sys
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind(("127.0.0.1", {test_port}))
+sock.listen(1)
+print("GRANDCHILD_READY", flush=True)
+
+while True:
+    try:
+        sock.settimeout(0.1)
+        conn, _ = sock.accept()
+        conn.close()
+    except socket.timeout:
+        continue
+    except Exception:
+        break
+"""
+
+grandchild = subprocess.Popen(
+    [sys.executable, "-c", grandchild_script],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    start_new_session=True,
+)
+
+# Wait for grandchild to be ready
+ready = grandchild.stdout.readline()
+if b"GRANDCHILD_READY" not in ready:
+    sys.exit(1)
+
+# Register grandchild for emergency cleanup
+_register_process(grandchild, port={test_port}, name="e2e-grandchild")
+
+# Signal parent that we're ready
+print("CHILD_READY", flush=True)
+
+# Wait for signal (SIGTERM from parent)
+# Sleep in a loop so signal handler can interrupt
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    pass
+'''
+
+        # Spawn the child test runner
+        child = subprocess.Popen(
+            [sys.executable, "-c", child_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+
+        try:
+            # Wait for child to be ready
+            assert child.stdout is not None, "stdout should be PIPE"
+            ready = child.stdout.readline()
+            if b"CHILD_READY" not in ready:
+                child.kill()
+                child.wait()
+                stderr = child.stderr.read().decode() if child.stderr else "unknown"
+                pytest.fail(f"Child test runner failed to start: {stderr}")
+
+            # Verify grandchild is actually listening on the port
+            verify_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            verify_sock.settimeout(1.0)
+            try:
+                result = verify_sock.connect_ex(("127.0.0.1", test_port))
+                assert result == 0, (
+                    f"Port {test_port} should be OCCUPIED by grandchild before signal. "
+                    f"connect_ex returned {result}"
+                )
+            finally:
+                verify_sock.close()
+
+            # === CRITICAL: Send REAL SIGTERM to child process ===
+            # This triggers the signal handler chain:
+            #   SIGTERM → _signal_handler() → _emergency_cleanup() → kills grandchild
+            child.send_signal(signal.SIGTERM)
+
+            # Wait for child to exit (signal handler should have cleaned up)
+            try:
+                child.wait(timeout=5.0)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+                pytest.fail("Child process did not exit after SIGTERM")
+
+            # Child should have exited (non-zero due to signal, but that's OK)
+            assert child.poll() is not None, "Child process should have exited"
+
+            # === PRIMARY VERIFICATION: Port should be FREE ===
+            # The grandchild was killed by signal handler, so port should be released
+            final_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            final_sock.settimeout(2.0)
+            try:
+                result = final_sock.connect_ex(("127.0.0.1", test_port))
+                assert result != 0, (
+                    f"Port {test_port} should be FREE after SIGTERM cleanup. "
+                    f"Signal handler should have killed grandchild. connect_ex={result}"
+                )
+            finally:
+                final_sock.close()
+
+        finally:
+            # Safety cleanup
+            if child.poll() is None:
+                child.kill()
+                child.wait()
+
+    def test_sigint_delivered_kills_registered_grandchild_e2e(self) -> None:
+        """REAL SIGINT triggers cleanup of registered grandchild process.
+
+        E2E test: SIGINT (Ctrl+C signal) delivered → handler runs → cleanup.
+        """
+        import sys
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            test_port = s.getsockname()[1]
+
+        child_script = f'''
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+# Import conftest to register signal handlers
+from tests.integration.conftest import (
+    _register_process,
+    _spawned_processes,
+)
+
+# Create grandchild that binds to port
+grandchild_script = """
+import socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind(("127.0.0.1", {test_port}))
+sock.listen(1)
+print("READY", flush=True)
+import time
+while True:
+    time.sleep(60)
+"""
+
+grandchild = subprocess.Popen(
+    [sys.executable, "-c", grandchild_script],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    start_new_session=True,
+)
+
+ready = grandchild.stdout.readline()
+if b"READY" not in ready:
+    sys.exit(1)
+
+_register_process(grandchild, port={test_port}, name="e2e-sigint-grandchild")
+print("CHILD_READY", flush=True)
+
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    pass
+'''
+
+        child = subprocess.Popen(
+            [sys.executable, "-c", child_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+
+        try:
+            assert child.stdout is not None, "stdout should be PIPE"
+            ready = child.stdout.readline()
+            if b"CHILD_READY" not in ready:
+                child.kill()
+                child.wait()
+                stderr = child.stderr.read().decode() if child.stderr else "unknown"
+                pytest.fail(f"Child test runner failed: {stderr}")
+
+            # Verify port is occupied
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
+            try:
+                result = sock.connect_ex(("127.0.0.1", test_port))
+                assert result == 0, f"Port {test_port} should be occupied before signal"
+            finally:
+                sock.close()
+
+            # Send SIGINT (Ctrl+C signal)
+            child.send_signal(signal.SIGINT)
+
+            # Wait for child to exit
+            try:
+                child.wait(timeout=5.0)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+                pytest.fail("Child did not exit after SIGINT")
+
+            # Verify port is FREE after signal handler cleanup
+            verify_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            verify_sock.settimeout(2.0)
+            try:
+                result = verify_sock.connect_ex(("127.0.0.1", test_port))
+                assert result != 0, (
+                    f"Port {test_port} should be FREE after SIGINT cleanup. "
+                    f"Signal handler should have killed grandchild."
+                )
+            finally:
+                verify_sock.close()
+
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
+
+    def test_multiple_signals_idempotent_cleanup_e2e(self) -> None:
+        """Multiple signals to same process result in safe, idempotent cleanup."""
+        import sys
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            test_port = s.getsockname()[1]
+
+        child_script = f'''
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+
+from tests.integration.conftest import _register_process
+
+grandchild_script = """
+import socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind(("127.0.0.1", {test_port}))
+sock.listen(1)
+print("READY", flush=True)
+import time
+while True:
+    time.sleep(60)
+"""
+
+grandchild = subprocess.Popen(
+    [sys.executable, "-c", grandchild_script],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    start_new_session=True,
+)
+
+ready = grandchild.stdout.readline()
+if b"READY" not in ready:
+    sys.exit(1)
+
+_register_process(grandchild, port={test_port}, name="e2e-multi-sig-grandchild")
+print("CHILD_READY", flush=True)
+
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    pass
+'''
+
+        child = subprocess.Popen(
+            [sys.executable, "-c", child_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+
+        try:
+            assert child.stdout is not None, "stdout should be PIPE"
+            ready = child.stdout.readline()
+            if b"CHILD_READY" not in ready:
+                child.kill()
+                child.wait()
+                pytest.fail("Child failed to start")
+
+            # Verify port occupied
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
+            try:
+                result = sock.connect_ex(("127.0.0.1", test_port))
+                assert result == 0
+            finally:
+                sock.close()
+
+            # Send multiple signals rapidly (stress test for idempotency)
+            child.send_signal(signal.SIGTERM)
+            child.send_signal(signal.SIGTERM)  # Second signal while handling first
+            child.send_signal(signal.SIGINT)  # Third different signal
+
+            # Should exit cleanly without hanging or crashing
+            try:
+                child.wait(timeout=5.0)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+                pytest.fail("Child hung after multiple signals")
+
+            # Port should still be freed
+            verify_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            verify_sock.settimeout(2.0)
+            try:
+                result = verify_sock.connect_ex(("127.0.0.1", test_port))
+                assert result != 0, f"Port {test_port} should be FREE after multi-signal cleanup"
+            finally:
+                verify_sock.close()
+
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
+
+
+# =============================================================================
+# UNIT-LEVEL Direct _emergency_cleanup Tests (for comparison with E2E)
+# =============================================================================
+
+
+class TestEmergencyCleanupUnit:
+    """Unit-level tests for _emergency_cleanup called directly.
+
+    DEPRECATED: These tests call _emergency_cleanup() directly, bypassing
+    the signal handler. They are kept for unit testing the cleanup function
+    itself, but E2E signal path testing is in TestSignalInterruptionE2E.
+
+    For TRUE signal handling verification, use TestSignalInterruptionE2E which
+    sends real SIGTERM/SIGINT signals and verifies the complete handler path.
+    """
+
+    def test_emergency_cleanup_direct_unit(self) -> None:
+        """Direct call to _emergency_cleanup kills registered process.
+
+        UNIT TEST: Does NOT test signal delivery path.
+        See TestSignalInterruptionE2E for real signal tests.
+        """
+        import sys
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            test_port = s.getsockname()[1]
+
+        server_script = f"""
+import socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind(("127.0.0.1", {test_port}))
+sock.listen(1)
+print("READY", flush=True)
+import time
+while True:
+    time.sleep(60)
+"""
+        proc = subprocess.Popen(
+            [sys.executable, "-c", server_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+
+        try:
+            assert proc.stdout is not None, "stdout should be PIPE"
+            ready = proc.stdout.readline()
+            assert b"READY" in ready, f"Subprocess failed: {ready!r}"
+
+            _register_process(proc, port=test_port, name="direct-cleanup-unit")
+
+            # Direct call to _emergency_cleanup (unit test, not signal path)
+            _emergency_cleanup()
+
+            # Process should be killed
+            assert proc.poll() is not None, "Process should be killed"
+
+            # Registry should be cleared
+            assert proc.pid not in _spawned_processes
+
+            # Port should be freed
+            verify_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            verify_sock.settimeout(1.0)
+            try:
+                result = verify_sock.connect_ex(("127.0.0.1", test_port))
+                assert result != 0, f"Port {test_port} should be FREE"
+            finally:
+                verify_sock.close()
 
         finally:
             if proc.poll() is None:

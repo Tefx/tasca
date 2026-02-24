@@ -108,6 +108,7 @@ from tasca.shell.storage.saying_repo import (
     append_saying,
     get_recent_sayings,
     get_table_max_sequence,
+    list_all_sayings_by_table,
     list_sayings_by_table,
 )
 from tasca.shell.storage.seat_repo import (
@@ -1071,11 +1072,18 @@ def table_export(
 
     table = table_result.unwrap()
 
-    # Fetch all sayings for this table (since_sequence=-1 gets all)
-    sayings_result = list_sayings_by_table(conn, table_id, since_sequence=-1, limit=10000)
+    # Fetch ALL sayings for export (no count truncation)
+    sayings_result = list_all_sayings_by_table(conn, table_id)
     if isinstance(sayings_result, Failure):
-        error = sayings_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to list sayings: {error}")
+        error_msg = str(sayings_result.failure())
+        # Check if it's a size exceeded error
+        if "Export size exceeded" in error_msg:
+            return error_response(
+                "LIMIT_EXCEEDED",
+                error_msg,
+                {"table_id": table_id},
+            )
+        return error_response("DATABASE_ERROR", f"Failed to list sayings: {error_msg}")
 
     sayings = sayings_result.unwrap()
 

@@ -337,6 +337,80 @@ def get_recent_sayings(
         return Failure(SayingError(f"Database error: {e}"))
 
 
+# Default max bytes for export operations (100 MiB)
+# This prevents OOM on extremely large tables while still allowing all practical exports
+DEFAULT_EXPORT_MAX_BYTES = 100 * 1024 * 1024  # 100 MiB
+
+
+def list_all_sayings_by_table(
+    conn: sqlite3.Connection,
+    table_id: str,
+    max_bytes: int = DEFAULT_EXPORT_MAX_BYTES,
+) -> Result[list[Saying], SayingError]:
+    """List ALL sayings for a table for export WITHOUT count truncation.
+
+    This is the export path function - it does NOT truncate by count.
+    Memory safety is provided by max_bytes limit.
+
+    For tables exceeding max_bytes, returns a Failure with an error
+    indicating the table is too large to export.
+
+    Args:
+        conn: Database connection.
+        table_id: UUID of the table.
+        max_bytes: Maximum total bytes of content (default 100 MiB).
+            Set to 0 or negative to disable byte limit.
+
+    Returns:
+        Success with list of ALL Sayings (ordered by sequence),
+        or Failure with error (including size exceeded).
+
+    Raises:
+        No exceptions raised - errors return Failure.
+    """
+    try:
+        # First, check if the table content exceeds max_bytes
+        if max_bytes > 0:
+            cursor = conn.execute(
+                "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM sayings WHERE table_id = ?",
+                (table_id,),
+            )
+            row = cursor.fetchone()
+            total_chars = int(row[0]) if row else 0
+
+            # Estimate bytes (UTF-8 can be up to 4 bytes per char, but usually 1-2)
+            # Use 2x as a reasonable upper bound estimate
+            estimated_bytes = total_chars * 2
+
+            if estimated_bytes > max_bytes:
+                return Failure(
+                    SayingError(
+                        f"Export size exceeded: table has ~{estimated_bytes // (1024 * 1024)} MiB "
+                        f"of content (limit: {max_bytes // (1024 * 1024)} MiB). "
+                        f"Use a larger max_bytes limit if needed."
+                    )
+                )
+
+        # Fetch ALL sayings without count limit
+        cursor = conn.execute(
+            """
+            SELECT id, table_id, sequence, speaker_kind, speaker_name,
+                   patron_id, content, pinned, created_at
+            FROM sayings
+            WHERE table_id = ?
+            ORDER BY sequence ASC
+            """,
+            (table_id,),
+        )
+        rows = cursor.fetchall()
+
+        sayings = [_row_to_saying(row) for row in rows]
+        return Success(sayings)
+
+    except sqlite3.Error as e:
+        return Failure(SayingError(f"Database error: {e}"))
+
+
 def get_table_max_sequence(conn: sqlite3.Connection, table_id: str) -> Result[int, SayingError]:
     """Get the maximum sequence for a table.
 

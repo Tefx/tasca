@@ -22,7 +22,7 @@ from returns.result import Failure
 from tasca.core.domain.table import TableId
 from tasca.core.export_service import generate_jsonl, generate_markdown
 from tasca.shell.api.deps import get_db
-from tasca.shell.storage.saying_repo import list_sayings_by_table
+from tasca.shell.storage.saying_repo import list_all_sayings_by_table
 from tasca.shell.storage.table_repo import TableNotFoundError, get_table
 
 if TYPE_CHECKING:
@@ -69,7 +69,10 @@ def _fetch_table_and_sayings(
     conn: sqlite3.Connection,
     table_id: str,
 ) -> tuple:
-    """Fetch table and sayings from database.
+    """Fetch table and all sayings from database for export.
+
+    Export fetches ALL sayings without count truncation.
+    Memory safety is provided by max-bytes limit in the repository.
 
     Args:
         conn: Database connection.
@@ -80,6 +83,7 @@ def _fetch_table_and_sayings(
 
     Raises:
         HTTPException: 404 if table not found.
+        HTTPException: 413 if table too large to export.
         HTTPException: 500 if database operation fails.
     """
     # Get table
@@ -98,12 +102,19 @@ def _fetch_table_and_sayings(
 
     table = table_result.unwrap()
 
-    # Get sayings
-    sayings_result = list_sayings_by_table(conn, table_id, since_sequence=-1, limit=10000)
+    # Get ALL sayings for export (no count truncation)
+    sayings_result = list_all_sayings_by_table(conn, table_id)
     if isinstance(sayings_result, Failure):
+        error_msg = str(sayings_result.failure())
+        # Check if it's a size exceeded error
+        if "Export size exceeded" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=error_msg,
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get sayings: {sayings_result.failure()}",
+            detail=f"Failed to get sayings: {error_msg}",
         )
 
     sayings = sayings_result.unwrap()

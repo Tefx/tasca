@@ -32,7 +32,7 @@ from tasca.core.export_service import generate_jsonl, generate_markdown
 from tasca.core.schema import create_tables_table_ddl
 from tasca.shell.services.table_id_generator import generate_table_id
 from tasca.shell.skills_cli import cmd_skills_install, cmd_skills_list, cmd_skills_show
-from tasca.shell.storage.saying_repo import list_sayings_by_table
+from tasca.shell.storage.saying_repo import list_all_sayings_by_table
 from tasca.shell.storage.table_repo import (
     create_table as repo_create_table,
     get_table,
@@ -653,10 +653,15 @@ def cmd_export(args: argparse.Namespace) -> int:
 
         table = table_result.unwrap()
 
-        # Fetch all sayings (since_sequence=-1, no limit)
-        sayings_result = list_sayings_by_table(conn, table_id, since_sequence=-1, limit=1_000_000)
+        # Fetch ALL sayings for export (no count truncation)
+        sayings_result = list_all_sayings_by_table(conn, table_id)
         if isinstance(sayings_result, Failure):
-            print(f"Error: Failed to fetch sayings: {sayings_result.failure()}", file=sys.stderr)
+            error_msg = str(sayings_result.failure())
+            # Check if it's a size exceeded error
+            if "Export size exceeded" in error_msg:
+                print(f"Error: {error_msg}", file=sys.stderr)
+            else:
+                print(f"Error: Failed to fetch sayings: {error_msg}", file=sys.stderr)
             return 1
 
         sayings = sayings_result.unwrap()

@@ -274,7 +274,9 @@ export function Stream({ sayings, connectionStatus }: StreamProps) {
   const jumpToBottom = useCallback(() => {
     const el = streamRef.current
     if (!el) return
-    el.scrollTop = el.scrollHeight
+    // Respect prefers-reduced-motion: instant scroll if user prefers reduced motion
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion ? 'auto' : 'smooth' })
     setIsAtBottom(true)
     setUnreadCount(0)
     countAtScrollUpRef.current = 0

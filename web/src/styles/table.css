@@ -405,7 +405,6 @@
   overflow-y: auto;
   flex: 1;
   padding: 0 0.75rem;
-  scroll-behavior: smooth;
   scrollbar-width: thin;                          /* Firefox */
   scrollbar-color: var(--mc-border) transparent;  /* Firefox */
 }
@@ -1572,10 +1571,6 @@
   .mc-retry-btn,
   .mc-stream-jump {
     transition: none;
-  }
-
-  .mc-stream {
-    scroll-behavior: auto;
   }
 
   /* Suppress highlight flash for users who prefer reduced motion */

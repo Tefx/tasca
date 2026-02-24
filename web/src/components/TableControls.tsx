@@ -11,6 +11,7 @@ import { useState, useCallback } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import {
   closeTable,
+  getExportUrl,
   type Table as TableType,
   type TableStatus,
 } from '../api/tables'
@@ -80,6 +81,7 @@ export function TableControls({
 
   const isAdmin = mode === 'admin' && hasToken
   const isOperating = operation !== 'idle'
+  const exportMarkdownUrl = getExportUrl(table.id, 'markdown')
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -125,9 +127,18 @@ export function TableControls({
           </span>
         </div>
 
-        {/* Close button — only visible in admin mode */}
-        {isAdmin && canClose(table.status) && (
-          <div className="mc-table-controls-actions">
+        <div className="mc-table-controls-actions">
+          <a
+            href={exportMarkdownUrl}
+            download
+            className="mc-control-btn mc-control-btn--download"
+            title="Download table transcript as Markdown"
+          >
+            Download
+          </a>
+
+          {/* Close button — only visible in admin mode */}
+          {isAdmin && canClose(table.status) && (
             <button
               type="button"
               className="mc-control-btn mc-control-btn--close"
@@ -137,8 +148,8 @@ export function TableControls({
             >
               {operation === 'closing' ? 'Closing...' : 'End Meeting'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Closed timestamp */}
         {table.status === 'closed' && (

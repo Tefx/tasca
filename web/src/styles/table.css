@@ -1647,6 +1647,9 @@
 
 /* Control button base styles */
 .mc-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
   font-weight: 500;
@@ -1656,6 +1659,7 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   font-family: inherit;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .mc-control-btn:focus-visible {
@@ -1700,6 +1704,18 @@
 }
 
 .mc-control-btn--summary:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.25);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+/* Download button */
+.mc-control-btn--download {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: var(--mc-accent);
+}
+
+.mc-control-btn--download:hover {
   background: rgba(96, 165, 250, 0.25);
   border-color: rgba(96, 165, 250, 0.4);
 }

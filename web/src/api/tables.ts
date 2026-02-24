@@ -8,6 +8,8 @@
 
 import { apiClient, ApiError } from './client'
 
+const API_BASE = '/api/v1'
+
 // =============================================================================
 // Domain Types (mirror backend Table pydantic model)
 // =============================================================================
@@ -111,6 +113,13 @@ export function searchTables(
     params.set('status', status)
   }
   return apiClient<SearchResponse>(`/search?${params.toString()}`)
+}
+
+/** Build export URL for table transcript downloads. */
+export function getExportUrl(tableId: string, format: string): string {
+  const encodedTableId = encodeURIComponent(tableId)
+  const encodedFormat = encodeURIComponent(format)
+  return `${API_BASE}/tables/${encodedTableId}/export/${encodedFormat}?download=true`
 }
 
 // =============================================================================

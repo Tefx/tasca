@@ -3,6 +3,10 @@ Authentication for admin operations.
 
 This module provides token validation for admin-protected endpoints
 and exports the OpenAPI security scheme for Bearer token authentication.
+
+Escape Hatch Convention (shell_result):
+    Auth helpers return bool or raise HTTPException, not Result[T, E].
+    Use "HTTP auth" as the escape reason for these patterns.
 """
 
 import hmac
@@ -12,8 +16,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from tasca.config import settings
 
-# @invar:allow shell_result: Pure predicate — returns bool, not Result; callers own error handling
-# @invar:allow shell_pure_logic: Co-located with verify_admin_token for cohesion; no I/O but tightly coupled to auth.py
+
+# @invar:allow shell_result: HTTP auth
+# @invar:allow shell_pure_logic: Token validation co-located with verify_admin_token for cohesion
 def validate_bearer_token(token: str, expected: str) -> bool:
     """Compare a Bearer token against the expected value using constant-time comparison.
 

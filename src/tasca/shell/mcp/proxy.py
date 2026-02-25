@@ -14,6 +14,10 @@ MCP HTTP Transport Session Management:
     - When switching to remote mode, it initializes an MCP session with upstream
     - The session_id is stored in UpstreamConfig
     - All forwarded requests include the mcp-session-id header
+
+Escape Hatch Convention (shell_result):
+    MCP proxy helpers return primitive dicts or use MCP protocol patterns.
+    See server.py module docstring for MCP protocol rationale.
 """
 
 from __future__ import annotations
@@ -42,7 +46,8 @@ MCP_CLIENT_NAME = "tasca-proxy"
 MCP_CLIENT_VERSION = "0.1.0"
 
 
-# @invar:allow shell_result: Pure parsing helper, not a shell operation
+# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_pure_logic: SSE/JSON parsing helper for MCP HTTP transport
 # @shell_complexity: 4 branches for SSE format detection + JSON fallback + multi-line parsing
 def _parse_sse_or_json(
     text: str,
@@ -84,7 +89,7 @@ def _parse_sse_or_json(
     return json.loads(text)
 
 
-# @invar:allow shell_result: Validation helper returns optional error dict, not Result
+# @invar:allow shell_result: MCP protocol
 # @shell_complexity: Multiple validation branches for JSON-RPC spec compliance
 # @shell_orchestration: Pure validation logic used by forward_jsonrpc_request
 def _validate_jsonrpc_response(data: Any, expected_id: str) -> dict[str, Any] | None:
@@ -465,7 +470,8 @@ def get_upstream_config() -> Result[UpstreamConfig, ProxyConfigError]:
     return Success(_config)
 
 
-# @invar:allow shell_pure_logic: Updates module-level config state; no I/O
+# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_pure_logic: Updates module-level config state for proxy mode switching
 def switch_to_remote(url: str, token: str | None = None) -> None:
     """Switch the global config to remote upstream mode.
 
@@ -483,7 +489,7 @@ def switch_to_remote(url: str, token: str | None = None) -> None:
     _config.switch_to_remote(url, token)
 
 
-# @invar:allow shell_pure_logic: Updates module-level config state; no I/O
+# @invar:allow shell_pure_logic: Updates module-level config state for proxy mode switching
 def switch_to_local() -> None:
     """Switch the global config to local mode.
 
@@ -543,7 +549,7 @@ async def switch_to_remote_with_session(
 
 
 # @shell_complexity: Upstream proxying requires distinct branches for auth, HTTP status mapping, and network failures
-# @invar:allow shell_result: MCP response envelopes return primitives, not Result[T, E]
+# @invar:allow shell_result: MCP protocol
 async def forward_jsonrpc_request(
     config: UpstreamConfig, method: str, params: dict[str, Any]
 ) -> dict[str, Any]:

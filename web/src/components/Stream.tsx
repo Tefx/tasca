@@ -404,7 +404,7 @@ function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps)
       aria-label={`Saying ${saying.sequence} by ${saying.speaker.name} (${kind})`}
     >
       {/* Header: sequence, speaker name, pin marker, timestamp */}
-      <div className="mc-log-header" style={palette ? { background: palette.headerBg } : undefined}>
+      <div className="mc-log-header">
         <span className="mc-log-seq" aria-label="Sequence number">
           #{saying.sequence}
         </span>

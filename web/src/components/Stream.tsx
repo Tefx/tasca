@@ -164,14 +164,14 @@ function useDebouncedAnnouncement(count: number): string {
  * Index is derived deterministically from patron_id via FNV-1a hash.
  */
 const AGENT_PALETTE = [
-  { color: '#60a5fa', bg: 'rgba(96,  165, 250, 0.15)' }, // Sky Blue
-  { color: '#34d399', bg: 'rgba(52,  211, 153, 0.15)' }, // Emerald
-  { color: '#f472b6', bg: 'rgba(244, 114, 182, 0.15)' }, // Pink
-  { color: '#fbbf24', bg: 'rgba(251, 191,  36, 0.15)' }, // Amber
-  { color: '#a78bfa', bg: 'rgba(167, 139, 250, 0.15)' }, // Violet
-  { color: '#fb923c', bg: 'rgba(251, 146,  60, 0.15)' }, // Orange
-  { color: '#2dd4bf', bg: 'rgba(45,  212, 191, 0.15)' }, // Teal
-  { color: '#e879f9', bg: 'rgba(232, 121, 249, 0.15)' }, // Fuchsia
+  { color: '#60a5fa', bg: 'rgba(96,  165, 250, 0.15)', blockBg: 'rgba(96,  165, 250, 0.04)', headerBg: 'rgba(96,  165, 250, 0.09)' }, // Sky Blue
+  { color: '#34d399', bg: 'rgba(52,  211, 153, 0.15)', blockBg: 'rgba(52,  211, 153, 0.04)', headerBg: 'rgba(52,  211, 153, 0.09)' }, // Emerald
+  { color: '#f472b6', bg: 'rgba(244, 114, 182, 0.15)', blockBg: 'rgba(244, 114, 182, 0.04)', headerBg: 'rgba(244, 114, 182, 0.09)' }, // Pink
+  { color: '#fbbf24', bg: 'rgba(251, 191,  36, 0.15)', blockBg: 'rgba(251, 191,  36, 0.04)', headerBg: 'rgba(251, 191,  36, 0.09)' }, // Amber
+  { color: '#a78bfa', bg: 'rgba(167, 139, 250, 0.15)', blockBg: 'rgba(167, 139, 250, 0.04)', headerBg: 'rgba(167, 139, 250, 0.09)' }, // Violet
+  { color: '#fb923c', bg: 'rgba(251, 146,  60, 0.15)', blockBg: 'rgba(251, 146,  60, 0.04)', headerBg: 'rgba(251, 146,  60, 0.09)' }, // Orange
+  { color: '#2dd4bf', bg: 'rgba(45,  212, 191, 0.15)', blockBg: 'rgba(45,  212, 191, 0.04)', headerBg: 'rgba(45,  212, 191, 0.09)' }, // Teal
+  { color: '#e879f9', bg: 'rgba(232, 121, 249, 0.15)', blockBg: 'rgba(232, 121, 249, 0.04)', headerBg: 'rgba(232, 121, 249, 0.09)' }, // Fuchsia
 ] as const
 
 /** FNV-1a 32-bit hash — fast, uniform distribution for UUID strings. */
@@ -185,7 +185,7 @@ function hashPatronId(id: string): number {
 }
 
 /** Map a patron_id to a palette entry, or null for humans/unknown. */
-function agentPaletteEntry(patronId: string | null): { color: string; bg: string } | null {
+function agentPaletteEntry(patronId: string | null): { color: string; bg: string; blockBg: string; headerBg: string } | null {
   if (!patronId) return null
   return AGENT_PALETTE[hashPatronId(patronId) % AGENT_PALETTE.length]
 }
@@ -399,12 +399,12 @@ function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps)
   return (
     <article
       className={`mc-log-block mc-log-block--${speakerKindClass(kind)}${isNew ? ' mc-log-block--new' : ''}${isFocused ? ' mc-log-block--focused' : ''}`}
-      style={palette ? { borderLeftColor: palette.color } : undefined}
+      style={palette ? { borderLeftColor: palette.color, background: palette.blockBg } : undefined}
       data-saying-index={sayingIndex}
       aria-label={`Saying ${saying.sequence} by ${saying.speaker.name} (${kind})`}
     >
       {/* Header: sequence, speaker name, pin marker, timestamp */}
-      <div className="mc-log-header">
+      <div className="mc-log-header" style={palette ? { background: palette.headerBg } : undefined}>
         <span className="mc-log-seq" aria-label="Sequence number">
           #{saying.sequence}
         </span>

@@ -217,7 +217,7 @@
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--mc-border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   border-left: 4px solid transparent;
   transition: background 0.1s;
   overflow: hidden;
@@ -228,9 +228,9 @@
 }
 
 /* Speaker-kind borders and tints */
-/* Agent: border-left-color set via inline style (per-patron-id palette) */
+/* Agent: blockBg tint + border-left-color both set via inline style */
 .mc-log-block--agent:hover {
-  background: rgba(255, 255, 255, 0.025);
+  filter: brightness(1.15);
 }
 
 .mc-log-block--human {

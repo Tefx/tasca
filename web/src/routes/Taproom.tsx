@@ -1,10 +1,10 @@
 /**
- * Watchtower - Table index page.
+ * Taproom - Table index page.
  *
  * Displays all discussion tables with search, status filter,
  * and join-by-invite-code functionality.
  *
- * Design source: docs/tasca-web-uiux-v0.1.md (Watchtower spec)
+ * Design source: docs/tasca-web-uiux-v0.1.md (Taproom spec)
  */
 
 import {
@@ -18,7 +18,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { listTables, searchTables, type Table, type TableStatus } from '../api/tables'
 import { ModeIndicator } from '../components/ModeIndicator'
-import '../styles/watchtower.css'
+import '../styles/taproom.css'
 
 // =============================================================================
 // Constants
@@ -128,7 +128,7 @@ interface StatusPillProps {
 function StatusPill({ status }: StatusPillProps) {
   return (
     <span
-      className={`wt-status-pill wt-status-pill--${status}`}
+      className={`tr-status-pill tr-status-pill--${status}`}
       aria-label={`Status: ${status}`}
     >
       {status}
@@ -155,7 +155,7 @@ function CopyButton({ text }: CopyButtonProps) {
 
   return (
     <button
-      className="wt-copy-btn"
+      className="tr-copy-btn"
       onClick={(e) => {
         e.stopPropagation()
         handleCopy()
@@ -174,7 +174,7 @@ function CopyButton({ text }: CopyButtonProps) {
 // =============================================================================
 
 /**
- * Watchtower - Table index page.
+ * Taproom - Table index page.
  *
  * Displays all discussion tables with search, status filter,
  * and join-by-invite-code functionality.
@@ -182,13 +182,13 @@ function CopyButton({ text }: CopyButtonProps) {
  * @example
  * ```tsx
  * // In router
- * <Route path="/" element={<Watchtower />} />
+ * <Route path="/" element={<Taproom />} />
  *
  * // Or standalone
- * <Watchtower />
+ * <Taproom />
  * ```
  */
-export function Watchtower() {
+export function Taproom() {
   const navigate = useNavigate()
   const { tables, loading, error, refetch } = useTables()
 
@@ -304,46 +304,46 @@ export function Watchtower() {
   )
 
   return (
-    <div className="wt">
-      <header className="wt-header">
-        <div className="wt-header-row">
-          <div className="wt-header-title">
-            <h1 className="wt-title">Watchtower</h1>
-            <p className="wt-subtitle">Discussion tables overview</p>
+    <div className="tr">
+      <header className="tr-header">
+        <div className="tr-header-row">
+          <div className="tr-header-title">
+            <h1 className="tr-title">Taproom</h1>
+            <p className="tr-subtitle">Discussion tables overview</p>
           </div>
           <ModeIndicator />
         </div>
       </header>
 
       {/* Toolbar: search + filter + join */}
-      <div className="wt-toolbar">
-        <div className="wt-toolbar-left">
+      <div className="tr-toolbar">
+        <div className="tr-toolbar-left">
           {/* Search input */}
-          <div className="wt-search">
-            <label htmlFor="wt-search-input" className="sr-only">
+          <div className="tr-search">
+            <label htmlFor="tr-search-input" className="sr-only">
               Search tables
             </label>
             <input
-              id="wt-search-input"
+              id="tr-search-input"
               type="search"
-              className="wt-search-input"
+              className="tr-search-input"
               placeholder="Search tables..."
               value={searchQuery}
               onChange={handleSearchChange}
               aria-label="Search tables by title or content"
             />
             {searchLoading && (
-              <span className="wt-search-spinner" aria-label="Searching" />
+              <span className="tr-search-spinner" aria-label="Searching" />
             )}
           </div>
 
           {/* Status filter pills */}
-          <div className="wt-filters" role="group" aria-label="Filter by status">
+          <div className="tr-filters" role="group" aria-label="Filter by status">
             {STATUS_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
-                className={`wt-filter-pill ${statusFilter === opt.value ? 'wt-filter-pill--active' : ''}`}
+                className={`tr-filter-pill ${statusFilter === opt.value ? 'tr-filter-pill--active' : ''}`}
                 onClick={() => setStatusFilter(opt.value)}
                 aria-pressed={statusFilter === opt.value}
               >
@@ -354,14 +354,14 @@ export function Watchtower() {
         </div>
 
         {/* Join by invite code */}
-        <form className="wt-join" onSubmit={handleJoin}>
-          <label htmlFor="wt-join-input" className="sr-only">
+        <form className="tr-join" onSubmit={handleJoin}>
+          <label htmlFor="tr-join-input" className="sr-only">
             Join by invite code
           </label>
           <input
-            id="wt-join-input"
+            id="tr-join-input"
             type="text"
-            className="wt-join-input"
+            className="tr-join-input"
             placeholder="Paste invite code..."
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value)}
@@ -369,7 +369,7 @@ export function Watchtower() {
           />
           <button
             type="submit"
-            className="wt-join-btn"
+            className="tr-join-btn"
             disabled={!joinCode.trim()}
           >
             Join
@@ -378,7 +378,7 @@ export function Watchtower() {
       </div>
 
       {/* Content area */}
-      <main className="wt-content">
+      <main className="tr-content">
         {loading && <LoadingState />}
         {error && <ErrorState message={error} onRetry={refetch} />}
         {!loading && !error && filteredTables.length === 0 && (
@@ -402,8 +402,8 @@ export function Watchtower() {
 
 function LoadingState() {
   return (
-    <div className="wt-state" role="status" aria-label="Loading tables">
-      <div className="wt-spinner" />
+    <div className="tr-state" role="status" aria-label="Loading tables">
+      <div className="tr-spinner" />
       <p>Loading tables...</p>
     </div>
   )
@@ -416,10 +416,10 @@ interface ErrorStateProps {
 
 function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
-    <div className="wt-state wt-state--error" role="alert">
-      <p className="wt-state-title">Failed to load tables</p>
-      <p className="wt-state-detail">{message}</p>
-      <button type="button" className="wt-retry-btn" onClick={onRetry}>
+    <div className="tr-state tr-state--error" role="alert">
+      <p className="tr-state-title">Failed to load tables</p>
+      <p className="tr-state-detail">{message}</p>
+      <button type="button" className="tr-retry-btn" onClick={onRetry}>
         Retry
       </button>
     </div>
@@ -442,7 +442,7 @@ function EmptyState({ hasSearch, hasFilter }: EmptyStateProps) {
   }
 
   return (
-    <div className="wt-state wt-state--empty">
+    <div className="tr-state tr-state--empty">
       <p>{message}</p>
     </div>
   )
@@ -460,7 +460,7 @@ interface TableListProps {
 
 function TableList({ tables, onRowClick, onRowKeyDown }: TableListProps) {
   return (
-    <table className="wt-table" role="grid" aria-label="Discussion tables">
+    <table className="tr-table" role="grid" aria-label="Discussion tables">
       <thead>
         <tr>
           <th scope="col">Title</th>
@@ -475,30 +475,30 @@ function TableList({ tables, onRowClick, onRowKeyDown }: TableListProps) {
         {tables.map((table) => (
           <tr
             key={table.id}
-            className="wt-table-row"
+            className="tr-table-row"
             onClick={() => onRowClick(table.id)}
             onKeyDown={(e) => onRowKeyDown(table.id, e)}
             tabIndex={0}
             role="row"
             aria-label={`Table: ${table.question}`}
           >
-            <td className="wt-cell-title">
-              <div className="wt-cell-title-inner">
-                <span className="wt-table-question">{table.question}</span>
+            <td className="tr-cell-title">
+              <div className="tr-cell-title-inner">
+                <span className="tr-table-question">{table.question}</span>
                 {table.context && (
-                  <span className="wt-table-context">{table.context}</span>
+                  <span className="tr-table-context">{table.context}</span>
                 )}
               </div>
             </td>
             <td>
               <StatusPill status={table.status} />
             </td>
-            <td className="wt-cell-muted">&mdash;</td>
-            <td className="wt-cell-muted">&mdash;</td>
-            <td className="wt-cell-time">{formatTime(table.updated_at)}</td>
-            <td className="wt-cell-code">
-              <div className="wt-cell-code-inner">
-                <code className="wt-invite-code">{shortCode(table.id)}</code>
+            <td className="tr-cell-muted">&mdash;</td>
+            <td className="tr-cell-muted">&mdash;</td>
+            <td className="tr-cell-time">{formatTime(table.updated_at)}</td>
+            <td className="tr-cell-code">
+              <div className="tr-cell-code-inner">
+                <code className="tr-invite-code">{shortCode(table.id)}</code>
                 <CopyButton text={shortCode(table.id)} />
               </div>
             </td>

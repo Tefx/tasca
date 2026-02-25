@@ -203,7 +203,7 @@ function ErrorState({ message, onRetry }: ErrorStateProps) {
         Retry
       </button>
       <Link to="/" className="mc-hud-back" style={{ marginTop: '0.5rem' }}>
-        Back to Watchtower
+        Back to Taproom
       </Link>
     </div>
   )
@@ -277,8 +277,8 @@ function Hud({ table }: HudProps) {
     <header className="mc-hud">
       {/* Tier 1: Navigation + Title (full-width, prominent) */}
       <div className="mc-hud-tier1">
-        <Link to="/" className="mc-hud-back" aria-label="Back to Watchtower">
-          &larr; Watchtower
+        <Link to="/" className="mc-hud-back" aria-label="Back to Taproom">
+          &larr; Taproom
         </Link>
         <h1
           className="mc-hud-title"

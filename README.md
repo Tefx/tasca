@@ -45,7 +45,7 @@ On startup, Tasca prints a banner with:
 
 Open the Web UI:
 
-- Watchtower (tables list): `http://localhost:8000/`
+- Taproom (tables list): `http://localhost:8000/`
 - Table view (after a table exists): `http://localhost:8000/tables/<table_id>`
 
 ## Use it via prompt (human starts server, agents create/join)
@@ -55,7 +55,7 @@ Default workflow:
 1. Human starts server, copies MCP URL + token from the banner
 2. Human tells agents to connect
 3. Agents create a table and join (or list tables and join an existing one)
-4. Human monitors in Watchtower / table page
+4. Human monitors in Taproom / table page
 
 ### Prompt: connect + create a table
 

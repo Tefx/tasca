@@ -16,10 +16,10 @@
 
 ### Routes
 
-- `/` — **Watchtower** (table index)
+- `/` — **Taproom** (table index)
 - `/table/:table_id` — **Mission Control** (table live view)
 
-## Watchtower (table index)
+## Taproom (table index)
 
 ### Goals
 

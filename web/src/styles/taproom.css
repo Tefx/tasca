@@ -1,5 +1,5 @@
 /**
- * Watchtower page styles.
+ * Taproom page styles.
  *
  * Dark theme, functional/observability-optimized.
  * Uses CSS variables from index.css :root where possible.
@@ -7,30 +7,30 @@
  */
 
 /* =============================================================================
-   Design Tokens (Watchtower-specific)
+   Design Tokens (Taproom-specific)
    ============================================================================= */
 
 :root {
-  --wt-bg: #1a1a1a;
-  --wt-surface: #2a2a2a;
-  --wt-surface-hover: #333;
-  --wt-border: #3a3a3a;
-  --wt-text: rgba(255, 255, 255, 0.87);
-  --wt-text-muted: rgba(255, 255, 255, 0.45);
-  --wt-text-dim: rgba(255, 255, 255, 0.6);
-  --wt-accent: #60a5fa;
-  --wt-accent-hover: #3b82f6;
+  --tr-bg: #1a1a1a;
+  --tr-surface: #2a2a2a;
+  --tr-surface-hover: #333;
+  --tr-border: #3a3a3a;
+  --tr-text: rgba(255, 255, 255, 0.87);
+  --tr-text-muted: rgba(255, 255, 255, 0.45);
+  --tr-text-dim: rgba(255, 255, 255, 0.6);
+  --tr-accent: #60a5fa;
+  --tr-accent-hover: #3b82f6;
 
   /* Status pill colors */
-  --wt-status-open: #22c55e;
-  --wt-status-open-bg: rgba(34, 197, 94, 0.15);
-  --wt-status-paused: #eab308;
-  --wt-status-paused-bg: rgba(234, 179, 8, 0.15);
-  --wt-status-closed: #6b7280;
-  --wt-status-closed-bg: rgba(107, 114, 128, 0.15);
+  --tr-status-open: #22c55e;
+  --tr-status-open-bg: rgba(34, 197, 94, 0.15);
+  --tr-status-paused: #eab308;
+  --tr-status-paused-bg: rgba(234, 179, 8, 0.15);
+  --tr-status-closed: #6b7280;
+  --tr-status-closed-bg: rgba(107, 114, 128, 0.15);
 
-  --wt-radius: 6px;
-  --wt-radius-sm: 4px;
+  --tr-radius: 6px;
+  --tr-radius-sm: 4px;
 }
 
 /* =============================================================================
@@ -61,12 +61,12 @@
   gap: 1.5rem;
 }
 
-.wt-header {
+.tr-header {
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--wt-border);
+  border-bottom: 1px solid var(--tr-border);
 }
 
-.wt-header-row {
+.tr-header-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -74,21 +74,21 @@
   flex-wrap: wrap;
 }
 
-.wt-header-title {
+.tr-header-title {
   display: flex;
   flex-direction: column;
 }
 
-.wt-title {
+.tr-title {
   font-size: 1.5rem;
   font-weight: 600;
   margin: 0;
-  color: var(--wt-text);
+  color: var(--tr-text);
 }
 
-.wt-subtitle {
+.tr-subtitle {
   font-size: 0.875rem;
-  color: var(--wt-text-muted);
+  color: var(--tr-text-muted);
   margin: 0.25rem 0 0;
 }
 
@@ -96,7 +96,7 @@
    Toolbar (search + filters + join)
    ============================================================================= */
 
-.wt-toolbar {
+.tr-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -104,7 +104,7 @@
   flex-wrap: wrap;
 }
 
-.wt-toolbar-left {
+.tr-toolbar-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -113,59 +113,59 @@
 }
 
 /* Search */
-.wt-search {
+.tr-search {
   position: relative;
   flex: 1;
   max-width: 360px;
 }
 
-.wt-search-input {
+.tr-search-input {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  background: var(--wt-surface);
-  border: 1px solid var(--wt-border);
-  border-radius: var(--wt-radius);
-  color: var(--wt-text);
+  background: var(--tr-surface);
+  border: 1px solid var(--tr-border);
+  border-radius: var(--tr-radius);
+  color: var(--tr-text);
   font-size: 0.875rem;
   outline: none;
   transition: border-color 0.15s;
   box-sizing: border-box;
 }
 
-.wt-search-input::placeholder {
-  color: var(--wt-text-muted);
+.tr-search-input::placeholder {
+  color: var(--tr-text-muted);
 }
 
-.wt-search-input:focus {
-  border-color: var(--wt-accent);
+.tr-search-input:focus {
+  border-color: var(--tr-accent);
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
 }
 
-.wt-search-spinner {
+.tr-search-spinner {
   position: absolute;
   right: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
   width: 14px;
   height: 14px;
-  border: 2px solid var(--wt-border);
-  border-top-color: var(--wt-accent);
+  border: 2px solid var(--tr-border);
+  border-top-color: var(--tr-accent);
   border-radius: 50%;
-  animation: wt-spin 0.6s linear infinite;
+  animation: tr-spin 0.6s linear infinite;
 }
 
 /* Status filter pills */
-.wt-filters {
+.tr-filters {
   display: flex;
   gap: 0.25rem;
 }
 
-.wt-filter-pill {
+.tr-filter-pill {
   padding: 0.375rem 0.75rem;
   background: transparent;
-  border: 1px solid var(--wt-border);
+  border: 1px solid var(--tr-border);
   border-radius: 999px;
-  color: var(--wt-text-dim);
+  color: var(--tr-text-dim);
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s;
@@ -173,43 +173,43 @@
   white-space: nowrap;
 }
 
-.wt-filter-pill:hover {
-  border-color: var(--wt-text-dim);
-  color: var(--wt-text);
+.tr-filter-pill:hover {
+  border-color: var(--tr-text-dim);
+  color: var(--tr-text);
 }
 
-.wt-filter-pill:focus-visible {
-  outline: 2px solid var(--wt-accent);
+.tr-filter-pill:focus-visible {
+  outline: 2px solid var(--tr-accent);
   outline-offset: 2px;
 }
 
-.wt-filter-pill--active {
-  background: var(--wt-accent);
-  border-color: var(--wt-accent);
+.tr-filter-pill--active {
+  background: var(--tr-accent);
+  border-color: var(--tr-accent);
   color: #000;
   font-weight: 500;
 }
 
-.wt-filter-pill--active:hover {
-  background: var(--wt-accent-hover);
-  border-color: var(--wt-accent-hover);
+.tr-filter-pill--active:hover {
+  background: var(--tr-accent-hover);
+  border-color: var(--tr-accent-hover);
   color: #000;
 }
 
 /* Join by invite code */
-.wt-join {
+.tr-join {
   display: flex;
   gap: 0.5rem;
   align-items: center;
   flex-shrink: 0;
 }
 
-.wt-join-input {
+.tr-join-input {
   padding: 0.5rem 0.75rem;
-  background: var(--wt-surface);
-  border: 1px solid var(--wt-border);
-  border-radius: var(--wt-radius);
-  color: var(--wt-text);
+  background: var(--tr-surface);
+  border: 1px solid var(--tr-border);
+  border-radius: var(--tr-radius);
+  color: var(--tr-text);
   font-size: 0.875rem;
   width: 180px;
   outline: none;
@@ -217,21 +217,21 @@
   font-family: monospace;
 }
 
-.wt-join-input::placeholder {
-  color: var(--wt-text-muted);
+.tr-join-input::placeholder {
+  color: var(--tr-text-muted);
   font-family: inherit;
 }
 
-.wt-join-input:focus {
-  border-color: var(--wt-accent);
+.tr-join-input:focus {
+  border-color: var(--tr-accent);
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
 }
 
-.wt-join-btn {
+.tr-join-btn {
   padding: 0.5rem 1rem;
-  background: var(--wt-accent);
+  background: var(--tr-accent);
   border: none;
-  border-radius: var(--wt-radius);
+  border-radius: var(--tr-radius);
   color: #000;
   font-size: 0.875rem;
   font-weight: 500;
@@ -241,17 +241,17 @@
   white-space: nowrap;
 }
 
-.wt-join-btn:hover:not(:disabled) {
-  background: var(--wt-accent-hover);
+.tr-join-btn:hover:not(:disabled) {
+  background: var(--tr-accent-hover);
 }
 
-.wt-join-btn:disabled {
+.tr-join-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.wt-join-btn:focus-visible {
-  outline: 2px solid var(--wt-accent);
+.tr-join-btn:focus-visible {
+  outline: 2px solid var(--tr-accent);
   outline-offset: 2px;
 }
 
@@ -259,7 +259,7 @@
    Content Area
    ============================================================================= */
 
-.wt-content {
+.tr-content {
   flex: 1;
 }
 
@@ -267,41 +267,41 @@
    State displays (loading, error, empty)
    ============================================================================= */
 
-.wt-state {
+.tr-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 3rem 1rem;
   text-align: center;
-  color: var(--wt-text-muted);
+  color: var(--tr-text-muted);
   gap: 0.5rem;
 }
 
-.wt-state p {
+.tr-state p {
   margin: 0;
 }
 
-.wt-state--error {
+.tr-state--error {
   color: #ef4444;
 }
 
-.wt-state-title {
+.tr-state-title {
   font-weight: 600;
   font-size: 1rem;
 }
 
-.wt-state-detail {
+.tr-state-detail {
   font-size: 0.875rem;
   opacity: 0.7;
 }
 
-.wt-retry-btn {
+.tr-retry-btn {
   margin-top: 0.75rem;
   padding: 0.5rem 1.25rem;
   background: transparent;
   border: 1px solid #ef4444;
-  border-radius: var(--wt-radius);
+  border-radius: var(--tr-radius);
   color: #ef4444;
   font-size: 0.875rem;
   cursor: pointer;
@@ -309,26 +309,26 @@
   font-family: inherit;
 }
 
-.wt-retry-btn:hover {
+.tr-retry-btn:hover {
   background: rgba(239, 68, 68, 0.1);
 }
 
-.wt-retry-btn:focus-visible {
+.tr-retry-btn:focus-visible {
   outline: 2px solid #ef4444;
   outline-offset: 2px;
 }
 
 /* Loading spinner */
-.wt-spinner {
+.tr-spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid var(--wt-border);
-  border-top-color: var(--wt-accent);
+  border: 3px solid var(--tr-border);
+  border-top-color: var(--tr-accent);
   border-radius: 50%;
-  animation: wt-spin 0.6s linear infinite;
+  animation: tr-spin 0.6s linear infinite;
 }
 
-@keyframes wt-spin {
+@keyframes tr-spin {
   to {
     transform: rotate(360deg);
   }
@@ -338,66 +338,66 @@
    Table
    ============================================================================= */
 
-.wt-table {
+.tr-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
 }
 
-.wt-table thead th {
+.tr-table thead th {
   text-align: left;
   padding: 0.625rem 0.75rem;
-  color: var(--wt-text-muted);
+  color: var(--tr-text-muted);
   font-weight: 500;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--wt-border);
+  border-bottom: 1px solid var(--tr-border);
   white-space: nowrap;
   user-select: none;
 }
 
-.wt-table tbody td {
+.tr-table tbody td {
   padding: 0.75rem;
-  border-bottom: 1px solid var(--wt-border);
+  border-bottom: 1px solid var(--tr-border);
   vertical-align: middle;
 }
 
-.wt-table-row {
+.tr-table-row {
   cursor: pointer;
   transition: background 0.1s;
 }
 
-.wt-table-row:hover {
-  background: var(--wt-surface-hover);
+.tr-table-row:hover {
+  background: var(--tr-surface-hover);
 }
 
-.wt-table-row:focus-visible {
-  outline: 2px solid var(--wt-accent);
+.tr-table-row:focus-visible {
+  outline: 2px solid var(--tr-accent);
   outline-offset: -2px;
 }
 
 /* Cell: Title */
-.wt-cell-title {
+.tr-cell-title {
   max-width: 400px;
 }
 
-.wt-cell-title-inner {
+.tr-cell-title-inner {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
 }
 
-.wt-table-question {
-  color: var(--wt-text);
+.tr-table-question {
+  color: var(--tr-text);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.wt-table-context {
-  color: var(--wt-text-muted);
+.tr-table-context {
+  color: var(--tr-text-muted);
   font-size: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -405,41 +405,41 @@
 }
 
 /* Cell: Muted placeholder */
-.wt-cell-muted {
-  color: var(--wt-text-muted);
+.tr-cell-muted {
+  color: var(--tr-text-muted);
 }
 
 /* Cell: Time */
-.wt-cell-time {
-  color: var(--wt-text-dim);
+.tr-cell-time {
+  color: var(--tr-text-dim);
   white-space: nowrap;
 }
 
 /* Cell: Invite code */
-.wt-cell-code {
+.tr-cell-code {
   white-space: nowrap;
 }
 
-.wt-cell-code-inner {
+.tr-cell-code-inner {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.wt-invite-code {
+.tr-invite-code {
   font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
   font-size: 0.8125rem;
-  color: var(--wt-text-dim);
-  background: var(--wt-surface);
+  color: var(--tr-text-dim);
+  background: var(--tr-surface);
   padding: 0.125rem 0.375rem;
-  border-radius: var(--wt-radius-sm);
+  border-radius: var(--tr-radius-sm);
 }
 
 /* =============================================================================
    Status Pills
    ============================================================================= */
 
-.wt-status-pill {
+.tr-status-pill {
   display: inline-flex;
   align-items: center;
   padding: 0.125rem 0.5rem;
@@ -450,31 +450,31 @@
   white-space: nowrap;
 }
 
-.wt-status-pill--open {
-  color: var(--wt-status-open);
-  background: var(--wt-status-open-bg);
+.tr-status-pill--open {
+  color: var(--tr-status-open);
+  background: var(--tr-status-open-bg);
 }
 
-.wt-status-pill--paused {
-  color: var(--wt-status-paused);
-  background: var(--wt-status-paused-bg);
+.tr-status-pill--paused {
+  color: var(--tr-status-paused);
+  background: var(--tr-status-paused-bg);
 }
 
-.wt-status-pill--closed {
-  color: var(--wt-status-closed);
-  background: var(--wt-status-closed-bg);
+.tr-status-pill--closed {
+  color: var(--tr-status-closed);
+  background: var(--tr-status-closed-bg);
 }
 
 /* =============================================================================
    Copy Button
    ============================================================================= */
 
-.wt-copy-btn {
+.tr-copy-btn {
   padding: 0.125rem 0.375rem;
   background: transparent;
-  border: 1px solid var(--wt-border);
-  border-radius: var(--wt-radius-sm);
-  color: var(--wt-text-muted);
+  border: 1px solid var(--tr-border);
+  border-radius: var(--tr-radius-sm);
+  color: var(--tr-text-muted);
   font-size: 0.6875rem;
   cursor: pointer;
   transition: all 0.15s;
@@ -482,13 +482,13 @@
   text-transform: lowercase;
 }
 
-.wt-copy-btn:hover {
-  border-color: var(--wt-text-dim);
-  color: var(--wt-text-dim);
+.tr-copy-btn:hover {
+  border-color: var(--tr-text-dim);
+  color: var(--tr-text-dim);
 }
 
-.wt-copy-btn:focus-visible {
-  outline: 2px solid var(--wt-accent);
+.tr-copy-btn:focus-visible {
+  outline: 2px solid var(--tr-accent);
   outline-offset: 2px;
 }
 
@@ -497,39 +497,39 @@
    ============================================================================= */
 
 @media (max-width: 768px) {
-  .wt-toolbar {
+  .tr-toolbar {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .wt-toolbar-left {
+  .tr-toolbar-left {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .wt-search {
+  .tr-search {
     max-width: none;
   }
 
-  .wt-filters {
+  .tr-filters {
     overflow-x: auto;
   }
 
-  .wt-join {
+  .tr-join {
     width: 100%;
   }
 
-  .wt-join-input {
+  .tr-join-input {
     flex: 1;
     width: auto;
   }
 
-  .wt-table {
+  .tr-table {
     display: block;
     overflow-x: auto;
   }
 
-  .wt-cell-title {
+  .tr-cell-title {
     max-width: 200px;
   }
 }
@@ -539,18 +539,18 @@
    ============================================================================= */
 
 @media (prefers-reduced-motion: reduce) {
-  .wt-spinner,
-  .wt-search-spinner {
+  .tr-spinner,
+  .tr-search-spinner {
     animation: none;
     opacity: 0.5;
   }
 
-  .wt-table-row,
-  .wt-filter-pill,
-  .wt-copy-btn,
-  .wt-join-btn,
-  .wt-search-input,
-  .wt-join-input {
+  .tr-table-row,
+  .tr-filter-pill,
+  .tr-copy-btn,
+  .tr-join-btn,
+  .tr-search-input,
+  .tr-join-input {
     transition: none;
   }
 }
@@ -559,47 +559,47 @@
    Mode Indicator (Dark Theme Override)
    ============================================================================= */
 
-.wt-header .mode-indicator {
-  background-color: var(--wt-surface);
+.tr-header .mode-indicator {
+  background-color: var(--tr-surface);
 }
 
-.wt-header .mode-badge--viewer {
+.tr-header .mode-badge--viewer {
   background-color: rgba(96, 165, 250, 0.15);
-  color: var(--wt-accent);
+  color: var(--tr-accent);
 }
 
-.wt-header .mode-badge--admin {
+.tr-header .mode-badge--admin {
   background-color: rgba(251, 191, 36, 0.15);
   color: #fbbf24;
 }
 
-.wt-header .mode-btn--enter-admin {
+.tr-header .mode-btn--enter-admin {
   background-color: rgba(251, 191, 36, 0.15);
   color: #fbbf24;
   border-color: rgba(251, 191, 36, 0.3);
 }
 
-.wt-header .mode-btn--enter-admin:hover {
+.tr-header .mode-btn--enter-admin:hover {
   background-color: rgba(251, 191, 36, 0.25);
 }
 
-.wt-header .mode-btn--viewer {
+.tr-header .mode-btn--viewer {
   background-color: rgba(96, 165, 250, 0.15);
-  color: var(--wt-accent);
+  color: var(--tr-accent);
   border-color: rgba(96, 165, 250, 0.3);
 }
 
-.wt-header .mode-btn--viewer:hover {
+.tr-header .mode-btn--viewer:hover {
   background-color: rgba(96, 165, 250, 0.25);
 }
 
-.wt-header .mode-btn--logout {
+.tr-header .mode-btn--logout {
   background-color: transparent;
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.3);
 }
 
-.wt-header .mode-btn--logout:hover {
+.tr-header .mode-btn--logout:hover {
   background-color: rgba(239, 68, 68, 0.1);
 }
 
@@ -609,51 +609,51 @@
 }
 
 .token-dialog {
-  background-color: var(--wt-surface, #2a2a2a);
-  border: 1px solid var(--wt-border, #3a3a3a);
+  background-color: var(--tr-surface, #2a2a2a);
+  border: 1px solid var(--tr-border, #3a3a3a);
 }
 
 .token-dialog-title {
-  color: var(--wt-text, rgba(255, 255, 255, 0.87));
+  color: var(--tr-text, rgba(255, 255, 255, 0.87));
 }
 
 .token-dialog-hint {
-  color: var(--wt-text-muted, rgba(255, 255, 255, 0.45));
+  color: var(--tr-text-muted, rgba(255, 255, 255, 0.45));
 }
 
 .token-label {
-  color: var(--wt-text, rgba(255, 255, 255, 0.87));
+  color: var(--tr-text, rgba(255, 255, 255, 0.87));
 }
 
 .token-input {
-  background-color: var(--wt-bg, #1a1a1a);
-  border-color: var(--wt-border, #3a3a3a);
-  color: var(--wt-text, rgba(255, 255, 255, 0.87));
+  background-color: var(--tr-bg, #1a1a1a);
+  border-color: var(--tr-border, #3a3a3a);
+  color: var(--tr-text, rgba(255, 255, 255, 0.87));
 }
 
 .token-input:focus {
-  border-color: var(--wt-accent, #60a5fa);
+  border-color: var(--tr-accent, #60a5fa);
   box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
 }
 
 .token-input::placeholder {
-  color: var(--wt-text-muted, rgba(255, 255, 255, 0.45));
+  color: var(--tr-text-muted, rgba(255, 255, 255, 0.45));
 }
 
 .token-btn--cancel {
-  background-color: var(--wt-surface, #2a2a2a);
-  color: var(--wt-text-dim, rgba(255, 255, 255, 0.6));
-  border: 1px solid var(--wt-border, #3a3a3a);
+  background-color: var(--tr-surface, #2a2a2a);
+  color: var(--tr-text-dim, rgba(255, 255, 255, 0.6));
+  border: 1px solid var(--tr-border, #3a3a3a);
 }
 
 .token-btn--cancel:hover {
-  background-color: var(--wt-surface-hover, #333);
+  background-color: var(--tr-surface-hover, #333);
 }
 
 .token-btn--submit {
-  background-color: var(--wt-accent, #3b82f6);
+  background-color: var(--tr-accent, #3b82f6);
 }
 
 .token-btn--submit:hover {
-  background-color: var(--wt-accent-hover, #2563eb);
+  background-color: var(--tr-accent-hover, #2563eb);
 }

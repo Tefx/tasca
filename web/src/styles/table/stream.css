@@ -218,7 +218,7 @@
   gap: 0.25rem;
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--mc-border);
-  border-left: 3px solid transparent;
+  border-left: 4px solid transparent;
   transition: background 0.1s;
   overflow: hidden;
 }
@@ -228,13 +228,9 @@
 }
 
 /* Speaker-kind borders and tints */
-.mc-log-block--agent {
-  background: var(--mc-speaker-agent-bg);
-  border-left-color: var(--mc-speaker-agent-border);
-}
-
+/* Agent: border-left-color set via inline style (per-patron-id palette) */
 .mc-log-block--agent:hover {
-  background: rgba(96, 165, 250, 0.12);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .mc-log-block--human {
@@ -268,7 +264,24 @@
 
 .mc-log-speaker {
   font-weight: 600;
-  color: var(--mc-text);
+  color: var(--mc-text); /* overridden via inline style for agents */
+}
+
+/* Avatar initials chip — shown in log header for agent sayings */
+.mc-log-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  font-family: var(--mc-font-mono);
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  user-select: none;
 }
 
 .mc-log-pin {

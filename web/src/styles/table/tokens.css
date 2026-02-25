@@ -25,8 +25,7 @@
   --mc-status-closed-bg: rgba(107, 114, 128, 0.15);
 
   /* Speaker colors */
-  --mc-speaker-agent-bg: rgba(96, 165, 250, 0.08);
-  --mc-speaker-agent-border: rgba(96, 165, 250, 0.4);
+  /* Agent colors are per-patron-id, applied via inline style in Stream.tsx */
   --mc-speaker-human-border: rgba(255, 255, 255, 0.7);
   --mc-speaker-patron-bg: rgba(168, 85, 247, 0.08);
   --mc-speaker-patron-border: rgba(168, 85, 247, 0.4);

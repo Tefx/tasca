@@ -155,6 +155,52 @@ function useDebouncedAnnouncement(count: number): string {
 }
 
 // =============================================================================
+// Per-Agent Color Palette
+// =============================================================================
+
+/**
+ * 8-color palette for per-agent chromatic identity.
+ * Colors are tuned for dark backgrounds (#1a1a1a) — all pass WCAG AA.
+ * Index is derived deterministically from patron_id via FNV-1a hash.
+ */
+const AGENT_PALETTE = [
+  { color: '#60a5fa', bg: 'rgba(96,  165, 250, 0.15)' }, // Sky Blue
+  { color: '#34d399', bg: 'rgba(52,  211, 153, 0.15)' }, // Emerald
+  { color: '#f472b6', bg: 'rgba(244, 114, 182, 0.15)' }, // Pink
+  { color: '#fbbf24', bg: 'rgba(251, 191,  36, 0.15)' }, // Amber
+  { color: '#a78bfa', bg: 'rgba(167, 139, 250, 0.15)' }, // Violet
+  { color: '#fb923c', bg: 'rgba(251, 146,  60, 0.15)' }, // Orange
+  { color: '#2dd4bf', bg: 'rgba(45,  212, 191, 0.15)' }, // Teal
+  { color: '#e879f9', bg: 'rgba(232, 121, 249, 0.15)' }, // Fuchsia
+] as const
+
+/** FNV-1a 32-bit hash — fast, uniform distribution for UUID strings. */
+function hashPatronId(id: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h
+}
+
+/** Map a patron_id to a palette entry, or null for humans/unknown. */
+function agentPaletteEntry(patronId: string | null): { color: string; bg: string } | null {
+  if (!patronId) return null
+  return AGENT_PALETTE[hashPatronId(patronId) % AGENT_PALETTE.length]
+}
+
+/** Derive 1–2 uppercase initials from a display name. "SE Expert" → "SE" */
+function speakerInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0] ?? '')
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -348,10 +394,12 @@ interface LogBlockProps {
 function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps) {
   const kind = saying.speaker.kind
   const isMonospace = kind === 'agent' || kind === 'patron'
+  const palette = kind === 'agent' ? agentPaletteEntry(saying.speaker.patron_id) : null
 
   return (
     <article
       className={`mc-log-block mc-log-block--${speakerKindClass(kind)}${isNew ? ' mc-log-block--new' : ''}${isFocused ? ' mc-log-block--focused' : ''}`}
+      style={palette ? { borderLeftColor: palette.color } : undefined}
       data-saying-index={sayingIndex}
       aria-label={`Saying ${saying.sequence} by ${saying.speaker.name} (${kind})`}
     >
@@ -365,7 +413,21 @@ function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps)
             ↩ #{saying.reply_to}
           </span>
         )}
-        <span className="mc-log-speaker">{saying.speaker.name}</span>
+        {palette && (
+          <span
+            className="mc-log-avatar"
+            style={{ background: palette.bg, color: palette.color }}
+            aria-hidden="true"
+          >
+            {speakerInitials(saying.speaker.name)}
+          </span>
+        )}
+        <span
+          className="mc-log-speaker"
+          style={palette ? { color: palette.color } : undefined}
+        >
+          {saying.speaker.name}
+        </span>
         {saying.pinned && (
           <span className="mc-log-pin" aria-label="Pinned" title="Pinned">
             📌

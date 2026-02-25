@@ -125,18 +125,31 @@ function useStaticTableData(tableId: string | undefined) {
 interface CopyButtonProps {
   text: string
   label: string
+  buttonText?: string
 }
 
-function CopyButton({ text, label }: CopyButtonProps) {
+function CopyButton({ text, label, buttonText = 'copy' }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(text)
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        // Fallback for non-HTTPS contexts (http://0.0.0.0, http://localhost)
+        const el = document.createElement('textarea')
+        el.value = text
+        el.style.position = 'fixed'
+        el.style.opacity = '0'
+        document.body.appendChild(el)
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+      }
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      // Clipboard API may fail in non-HTTPS contexts; acceptable for v0.1
+      // Copy failed — silently ignore
     }
   }, [text])
 
@@ -148,7 +161,7 @@ function CopyButton({ text, label }: CopyButtonProps) {
       title={copied ? 'Copied!' : `Copy ${label}`}
       type="button"
     >
-      {copied ? 'done' : 'copy'}
+      {copied ? 'copied' : buttonText}
     </button>
   )
 }
@@ -291,10 +304,10 @@ function Hud({ table }: HudProps) {
         <div className="mc-hud-actions">
           <span className="mc-hud-action">
             <code>{shortCode(table.id)}</code>
-            <CopyButton text={shortCode(table.id)} label="invite code" />
+            <CopyButton text={shortCode(table.id)} label="invite code" buttonText="copy code" />
           </span>
           <span className="mc-hud-action">
-            <CopyButton text={shareUrl(table.id)} label="share URL" />
+            <CopyButton text={shareUrl(table.id)} label="share URL" buttonText="copy url" />
           </span>
         </div>
         <ModeIndicator />

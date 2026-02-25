@@ -87,7 +87,7 @@ function formatHeartbeat(iso: string, now: Date): string {
   if (diffMinutes < 60) return `${diffMinutes}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
 
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 /**

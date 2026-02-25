@@ -26,7 +26,7 @@ interface BoardProps {
 /** Format an ISO date string to a locale-friendly display. */
 function formatDate(iso: string): string {
   const date = new Date(iso)
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

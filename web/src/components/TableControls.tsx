@@ -114,7 +114,7 @@ export function TableControls({ table }: TableControlsProps) {
 /** Format the closed timestamp. */
 function formatClosedTime(iso: string): string {
   const date = new Date(iso)
-  return date.toLocaleString('en-US', {
+  return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

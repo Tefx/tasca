@@ -287,7 +287,7 @@ function formatTime(iso: string, now: Date): string {
   if (diffMinutes < 60) return `${diffMinutes}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
 
-  return date.toLocaleTimeString('en-US', {
+  return date.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     month: 'short',

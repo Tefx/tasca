@@ -375,12 +375,12 @@
 .mc-meta-list {
   list-style: none;
   margin: 0.5rem 0 0;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 1rem;
   background: var(--mc-surface);
   border: 1px solid var(--mc-border);
   border-radius: var(--mc-radius);
   font-size: 0.75rem;
-  min-width: 180px;
+  min-width: 320px;
   position: absolute;
   z-index: 50;
 }
@@ -396,6 +396,20 @@
 
 .mc-meta-item:last-child {
   border-bottom: none;
+}
+
+/* Context row: label above, prose left-aligned */
+.mc-meta-item--block {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.mc-meta-item--block .mc-meta-value {
+  text-align: left;
+  color: var(--mc-text-dim);
+  line-height: 1.55;
+  word-break: break-word;
 }
 
 .mc-meta-label {

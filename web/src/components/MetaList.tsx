@@ -30,15 +30,15 @@ export interface MetaListProps {
 // Helpers
 // =============================================================================
 
-/** Format an ISO date string to a locale-friendly display. */
+/** Format an ISO date string to a compact locale-friendly display. */
 function formatDate(iso: string): string {
   const date = new Date(iso)
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   })
 }
 
@@ -97,7 +97,7 @@ export function MetaList({
         <span className="mc-meta-value mc-meta-value--mono">v{version}</span>
       </li>
       {context && (
-        <li className="mc-meta-item">
+        <li className="mc-meta-item mc-meta-item--block">
           <span className="mc-meta-label">Context</span>
           <span className="mc-meta-value">{context}</span>
         </li>

@@ -168,12 +168,12 @@ function trustHandler(context: { command: string }): boolean {
   if (process.env.NODE_ENV === 'development') {
     const category = getBlockedCommandCategory(command)
     if (category) {
-      // eslint-disable-next-line no-console
+       
       console.warn(
         `[KaTeX Security] Blocked command '\\${command}' (${category} category)`
       )
     } else {
-      // eslint-disable-next-line no-console
+       
       console.warn(
         `[KaTeX Security] Blocked unknown command '\\${command}' (not in allowlist)`
       )

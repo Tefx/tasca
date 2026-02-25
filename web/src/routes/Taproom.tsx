@@ -18,6 +18,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { listTables, searchTables, type Table, type TableStatus } from '../api/tables'
 import { ModeIndicator } from '../components/ModeIndicator'
+import { CopyButton } from '../components/CopyButton'
 import '../styles/taproom.css'
 
 // =============================================================================
@@ -136,38 +137,6 @@ function StatusPill({ status }: StatusPillProps) {
   )
 }
 
-interface CopyButtonProps {
-  text: string
-}
-
-function CopyButton({ text }: CopyButtonProps) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Fallback: select text approach not needed for v0.1
-    }
-  }, [text])
-
-  return (
-    <button
-      className="tr-copy-btn"
-      onClick={(e) => {
-        e.stopPropagation()
-        handleCopy()
-      }}
-      aria-label={copied ? 'Copied' : `Copy code ${text}`}
-      title={copied ? 'Copied!' : 'Copy to clipboard'}
-      type="button"
-    >
-      {copied ? 'done' : 'copy'}
-    </button>
-  )
-}
 
 // =============================================================================
 // Main Component
@@ -499,7 +468,7 @@ function TableList({ tables, onRowClick, onRowKeyDown }: TableListProps) {
             <td className="tr-cell-code">
               <div className="tr-cell-code-inner">
                 <code className="tr-invite-code">{shortCode(table.id)}</code>
-                <CopyButton text={shortCode(table.id)} />
+                <CopyButton text={shortCode(table.id)} label="invite code" className="tr-copy-btn" />
               </div>
             </td>
           </tr>

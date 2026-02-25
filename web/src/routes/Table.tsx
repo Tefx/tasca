@@ -25,6 +25,7 @@ import { MetaList } from '../components/MetaList'
 import { TableControls } from '../components/TableControls'
 import { CommandConsole, type CommandConsoleRef } from '../components/CommandConsole'
 import { useKeyboardNav } from '../hooks/useKeyboardNav'
+import { CopyButton } from '../components/CopyButton'
 import '../styles/table.css'
 
 // =============================================================================
@@ -122,49 +123,6 @@ function useStaticTableData(tableId: string | undefined) {
 // Sub-Components
 // =============================================================================
 
-interface CopyButtonProps {
-  text: string
-  label: string
-  buttonText?: string
-}
-
-function CopyButton({ text, label, buttonText = 'copy' }: CopyButtonProps) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = useCallback(async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text)
-      } else {
-        // Fallback for non-HTTPS contexts (http://0.0.0.0, http://localhost)
-        const el = document.createElement('textarea')
-        el.value = text
-        el.style.position = 'fixed'
-        el.style.opacity = '0'
-        document.body.appendChild(el)
-        el.select()
-        document.execCommand('copy')
-        document.body.removeChild(el)
-      }
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Copy failed — silently ignore
-    }
-  }, [text])
-
-  return (
-    <button
-      className="mc-copy-btn"
-      onClick={handleCopy}
-      aria-label={copied ? 'Copied' : `Copy ${label}`}
-      title={copied ? 'Copied!' : `Copy ${label}`}
-      type="button"
-    >
-      {copied ? 'copied' : buttonText}
-    </button>
-  )
-}
 
 /** Get the first 8 characters of a table ID as a placeholder invite code. */
 function shortCode(id: string): string {
@@ -304,10 +262,10 @@ function Hud({ table }: HudProps) {
         <div className="mc-hud-actions">
           <span className="mc-hud-action">
             <code>{shortCode(table.id)}</code>
-            <CopyButton text={shortCode(table.id)} label="invite code" buttonText="copy code" />
+            <CopyButton text={shortCode(table.id)} label="invite code" buttonText="copy code" className="mc-copy-btn" />
           </span>
           <span className="mc-hud-action">
-            <CopyButton text={shareUrl(table.id)} label="share URL" buttonText="copy url" />
+            <CopyButton text={shareUrl(table.id)} label="share URL" buttonText="copy url" className="mc-copy-btn" />
           </span>
         </div>
         <ModeIndicator />

@@ -30,6 +30,13 @@ function makeTable(overrides: Partial<TableType> = {}): TableType {
   }
 }
 
+/**
+ * Mock useAuth to return admin mode for testing.
+ * @example
+ * // In a test
+ * asAdmin()
+ * render(<TableControls table={mockTable} />)
+ */
 function asAdmin() {
   ;(useAuth as Mock).mockReturnValue({
     mode: 'admin',

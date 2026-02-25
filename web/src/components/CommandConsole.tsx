@@ -7,7 +7,7 @@
  * Design source: docs/tasca-web-uiux-v0.1.md (Table View / Mission Control spec §E Controls)
  */
 
-import { useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useState, useCallback, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
 import { postSaying, type Saying, type Seat } from '../api/sayings'
 import { pauseTable, resumeTable, closeTable, type Table as TableType } from '../api/tables'
 import { MentionInput, type MentionInputRef } from './MentionInput'
@@ -59,6 +59,22 @@ function canClose(status: string): boolean {
 // CommandConsole
 // =============================================================================
 
+/**
+ * CommandConsole — Bottom command bar for the Table view.
+ *
+ * @example
+ * // Basic usage with table and seats
+ * <CommandConsole
+ *   table={tableData}
+ *   seats={seatsArray}
+ *   onPosted={(saying) => console.log('Posted:', saying)}
+ * />
+ *
+ * @example
+ * // With keyboard nav ref
+ * const consoleRef = useRef<CommandConsoleRef>(null)
+ * <CommandConsole ref={consoleRef} table={tableData} seats={[]} />
+ */
 export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>(
   function CommandConsole({ table, seats, patrons, onPosted, onStatusChange, onError }, ref) {
     const { mode, hasToken } = useAuth()
@@ -71,6 +87,7 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
 
     const isAdmin = mode === 'admin' && hasToken
     const isOperating = controlState !== 'idle'
+    const isClosed = table.status === 'closed'
 
     // Expose focus() to parent via forwardRef (keyboard nav '/' binding)
     useImperativeHandle(ref, () => ({
@@ -135,6 +152,8 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
       try {
         const updated = await closeTable(table)
         onStatusChange?.(updated)
+        // Reset to idle after successful close (parent will re-render with closed table)
+        setCloseState('idle')
       } catch (err) {
         onError?.(err instanceof Error ? err : new Error('Failed to close table'))
         setCloseState('idle')
@@ -145,6 +164,35 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
     const cancelClose = useCallback(() => {
       setCloseState('idle')
     }, [])
+
+    // Escape key cancels confirmation
+    useEffect(() => {
+      if (closeState !== 'confirming') return
+
+      const handleDocumentKeydown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          cancelClose()
+        }
+      }
+
+      document.addEventListener('keydown', handleDocumentKeydown)
+      return () => {
+        document.removeEventListener('keydown', handleDocumentKeydown)
+      }
+    }, [closeState, cancelClose])
+
+    // Auto-revert timer: cancel confirmation after 5s idle
+    useEffect(() => {
+      if (closeState !== 'confirming') return
+
+      const timerId = window.setTimeout(() => {
+        setCloseState('idle')
+      }, 5000)
+
+      return () => {
+        window.clearTimeout(timerId)
+      }
+    }, [closeState])
 
     const handleInsertSummaryRequest = useCallback((text: string) => {
       setValue(text)
@@ -235,12 +283,18 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
               onChange={setValue}
               seats={seats}
               patrons={patrons}
-              disabled={!isAdmin}
+              disabled={!isAdmin || isClosed}
               onSubmit={handleSubmit}
-              placeholder={isAdmin ? 'Say something…' : 'Viewer mode — enter admin to post'}
+              placeholder={
+                isClosed
+                  ? 'Meeting ended — no further messages'
+                  : isAdmin
+                    ? 'Say something…'
+                    : 'Viewer mode — enter admin to post'
+              }
               className="mc-console-input"
             />
-            {isAdmin && (
+            {isAdmin && !isClosed && (
               <button
                 type="button"
                 className="mc-console-send-btn"

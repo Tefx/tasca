@@ -14,6 +14,7 @@ import {
   countMermaidInitDirectives,
   hasMermaidInitDirectives,
 } from './mermaid'
+import { sanitizeSvg } from './svg-sanitizer'
 
 describe('stripMermaidInitDirectives', () => {
   /**
@@ -227,13 +228,10 @@ describe('hasMermaidInitDirectives', () => {
 describe('MermaidRenderer component integration', () => {
   // Note: These tests verify the sanitization pipeline.
 
-  it('sanitizes input code in the rendering pipeline', async () => {
-    // Import the sanitization function that MermaidRenderer uses internally
-    const { stripMermaidInitDirectives: sanitize } = await import('./mermaid')
-
+  it('sanitizes input code in the rendering pipeline', () => {
     // This test ensures the sanitization is applied correctly
     const maliciousCode = '%%{init: {"theme": "dark"}}%%\ngraph TD; A-->B'
-    const sanitized = sanitize(maliciousCode)
+    const sanitized = stripMermaidInitDirectives(maliciousCode)
 
     // Verify the sanitization removes the directive
     expect(sanitized).not.toContain('%%{init')
@@ -246,17 +244,13 @@ describe('MermaidRenderer Security Pipeline', () => {
    * Verify that MermaidRenderer calls sanitizeSvg on output.
    * This test verifies the security flow without DOM mocking.
    */
-  it('validates the sanitizeSvg import in the mermaid module', async () => {
-    // We verify that the module imports and uses sanitizeSvg correctly
-    const mermaidModule = await import('./mermaid')
-
-    // Verify the exported functions exist
-    expect(mermaidModule.stripMermaidInitDirectives).toBeDefined()
-    expect(mermaidModule.MermaidRenderer).toBeDefined()
+  it('validates the sanitizeSvg import in the mermaid module', () => {
+    // Verify the exported functions exist (using statically imported functions)
+    expect(stripMermaidInitDirectives).toBeDefined()
 
     // Test that stripMermaidInitDirectives works correctly
     const attack = '%%{init: {"securityLevel": "loose"}}%%graph TD; A-->B'
-    const result = mermaidModule.stripMermaidInitDirectives(attack)
+    const result = stripMermaidInitDirectives(attack)
 
     expect(result).not.toContain('securityLevel')
     expect(result).toContain('graph TD')
@@ -265,10 +259,8 @@ describe('MermaidRenderer Security Pipeline', () => {
   /**
    * Verify the SVG sanitizer is imported and available.
    */
-  it('verifies sanitizeSvg is available for MermaidRenderer', async () => {
-    const { sanitizeSvg } = await import('./svg-sanitizer')
-
-    // Verify the function exists and works
+  it('verifies sanitizeSvg is available for MermaidRenderer', () => {
+    // Verify the function exists and works (using statically imported function)
     expect(sanitizeSvg).toBeDefined()
 
     // Test it removes dangerous content

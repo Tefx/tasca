@@ -1,0 +1,45 @@
+/**
+ * Mission Control Design Tokens
+ *
+ * CSS custom properties for Mission Control components.
+ * Design source: docs/tasca-web-uiux-v0.1.md
+ */
+
+:root {
+  --mc-bg: #1a1a1a;
+  --mc-surface: #2a2a2a;
+  --mc-surface-hover: #333;
+  --mc-border: #3a3a3a;
+  --mc-text: rgba(255, 255, 255, 0.87);
+  --mc-text-muted: rgba(255, 255, 255, 0.45);
+  --mc-text-dim: rgba(255, 255, 255, 0.6);
+  --mc-accent: #60a5fa;
+  --mc-accent-hover: #3b82f6;
+
+  /* Status pill colors — shared with watchtower */
+  --mc-status-open: #22c55e;
+  --mc-status-open-bg: rgba(34, 197, 94, 0.15);
+  --mc-status-paused: #eab308;
+  --mc-status-paused-bg: rgba(234, 179, 8, 0.15);
+  --mc-status-closed: #6b7280;
+  --mc-status-closed-bg: rgba(107, 114, 128, 0.15);
+
+  /* Speaker colors */
+  --mc-speaker-agent-bg: rgba(96, 165, 250, 0.08);
+  --mc-speaker-agent-border: rgba(96, 165, 250, 0.4);
+  --mc-speaker-human-border: rgba(255, 255, 255, 0.7);
+  --mc-speaker-patron-bg: rgba(168, 85, 247, 0.08);
+  --mc-speaker-patron-border: rgba(168, 85, 247, 0.4);
+
+  /* Seat state colors */
+  --mc-seat-joined: #22c55e;
+  --mc-seat-joined-bg: rgba(34, 197, 94, 0.15);
+  --mc-seat-left: #6b7280;
+  --mc-seat-left-bg: rgba(107, 114, 128, 0.15);
+
+  --mc-radius: 6px;
+  --mc-radius-sm: 4px;
+
+  /* Monospace font stack */
+  --mc-font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+}

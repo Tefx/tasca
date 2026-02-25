@@ -1,0 +1,239 @@
+/**
+ * Mission Control Shared Styles
+ *
+ * Shared utilities, page layout, and base styles.
+ */
+
+/* =============================================================================
+   Screen Reader Only (shared utility — redeclared for independence)
+   ============================================================================= */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* =============================================================================
+   Page Layout
+   ============================================================================= */
+
+/**
+ * Mission Control Container
+ *
+ * Full viewport height, flexible column layout with HUD header at top
+ * and content columns below. Root sizing overrides are in index.css.
+ */
+.mc {
+  width: 100%;
+  max-width: 100vw;
+  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Ensure all direct children use border-box for proper sizing */
+.mc > *,
+.mc-hud > * {
+  box-sizing: border-box;
+}
+
+/* =============================================================================
+   State Displays (loading, error)
+   ============================================================================= */
+
+.mc-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--mc-text-muted);
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.mc-state p {
+  margin: 0;
+}
+
+.mc-state--error {
+  color: #ef4444;
+}
+
+.mc-state-title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.mc-state-detail {
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.mc-retry-btn {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  background: transparent;
+  border: 1px solid #ef4444;
+  border-radius: var(--mc-radius);
+  color: #ef4444;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.mc-retry-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.mc-retry-btn:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+/* Loading spinner */
+.mc-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--mc-border);
+  border-top-color: var(--mc-accent);
+  border-radius: 50%;
+  animation: mc-spin 0.6s linear infinite;
+}
+
+@keyframes mc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =============================================================================
+   Mode Indicator (Dark Theme Override)
+   ============================================================================= */
+
+.mc-hud .mode-indicator {
+  background-color: var(--mc-surface);
+  margin-left: auto;
+}
+
+.mc-hud .mode-badge--viewer {
+  background-color: rgba(96, 165, 250, 0.15);
+  color: var(--mc-accent);
+}
+
+.mc-hud .mode-badge--admin {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.mc-hud .mode-btn--enter-admin {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.mc-hud .mode-btn--enter-admin:hover {
+  background-color: rgba(251, 191, 36, 0.25);
+}
+
+.mc-hud .mode-btn--viewer {
+  background-color: rgba(96, 165, 250, 0.15);
+  color: var(--mc-accent);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.mc-hud .mode-btn--viewer:hover {
+  background-color: rgba(96, 165, 250, 0.25);
+}
+
+.mc-hud .mode-btn--logout {
+  background-color: transparent;
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.mc-hud .mode-btn--logout:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* =============================================================================
+   Token Dialog — Dark Theme Override for Mission Control
+   ============================================================================= */
+
+.mc .token-dialog-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.mc .token-dialog {
+  background-color: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.mc .token-dialog-title {
+  color: var(--mc-text);
+}
+
+.mc .token-dialog-hint {
+  color: var(--mc-text-muted);
+}
+
+.mc .token-label {
+  color: var(--mc-text-dim);
+}
+
+.mc .token-input {
+  background-color: var(--mc-bg);
+  border-color: var(--mc-border);
+  color: var(--mc-text);
+}
+
+.mc .token-input:focus {
+  border-color: var(--mc-accent);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+}
+
+.mc .token-input::placeholder {
+  color: var(--mc-text-muted);
+}
+
+.mc .token-error {
+  color: #f87171;
+}
+
+.mc .token-btn--cancel {
+  background-color: var(--mc-surface);
+  color: var(--mc-text-dim);
+  border: 1px solid var(--mc-border);
+}
+
+.mc .token-btn--cancel:hover {
+  background-color: var(--mc-surface-hover);
+}
+
+.mc .token-btn--submit {
+  background-color: var(--mc-accent);
+  color: #fff;
+}
+
+.mc .token-btn--submit:hover {
+  background-color: var(--mc-accent-hover);
+}
+
+.mc .token-btn--submit:disabled {
+  background-color: var(--mc-border);
+  color: var(--mc-text-muted);
+}

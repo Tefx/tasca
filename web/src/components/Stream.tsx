@@ -34,6 +34,12 @@ import { useNow } from '../hooks/useNow'
 const ANNOUNCEMENT_DEBOUNCE_MS = 2000
 
 /**
+ * Keep live-region text stable long enough for DOM/assertion observability.
+ * Source: ux_a11y.a11y-live-region-fix blocker report.
+ */
+const ANNOUNCEMENT_MIN_VISIBLE_MS = 4000
+
+/**
  * Hook to debounce aria-live announcements based on count changes.
  * Returns announcement text after a settle period.
  *
@@ -47,49 +53,102 @@ const ANNOUNCEMENT_DEBOUNCE_MS = 2000
  */
 function useDebouncedAnnouncement(count: number): string {
   const [announcement, setAnnouncement] = useState('')
-  const prevCountRef = useRef(count)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastAnnouncedCountRef = useRef(count)
+  const pendingCountRef = useRef(count)
+  const previousCountRef = useRef(count)
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     // Clear pending timeout on cleanup
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
+      if (clearTimeoutRef.current) {
+        clearTimeout(clearTimeoutRef.current)
       }
     }
   }, [])
 
   useEffect(() => {
-    // Only announce when count increases
-    if (count <= prevCountRef.current) {
-      prevCountRef.current = count
+    // Reset tracking if stream empties.
+    if (count === 0) {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+        debounceTimeoutRef.current = null
+      }
+      if (clearTimeoutRef.current) {
+        clearTimeout(clearTimeoutRef.current)
+        clearTimeoutRef.current = null
+      }
+      setAnnouncement('')
+      lastAnnouncedCountRef.current = 0
+      pendingCountRef.current = 0
+      previousCountRef.current = 0
       return
     }
 
-    // Clear any pending announcement from a previous burst
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
+    const previousCount = previousCountRef.current
+    previousCountRef.current = count
+
+    // Rebaseline after decreases so rebound increases are not suppressed.
+    if (count < previousCount) {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+        debounceTimeoutRef.current = null
+      }
+      if (clearTimeoutRef.current) {
+        clearTimeout(clearTimeoutRef.current)
+        clearTimeoutRef.current = null
+      }
+      setAnnouncement('')
+      lastAnnouncedCountRef.current = count
+      pendingCountRef.current = count
+      return
     }
 
-    // Debounce: wait 2 seconds after count stabilizes
-    timeoutRef.current = setTimeout(() => {
-      // Announce the current count, not per-message spam
-      const text = count === 1
-        ? '1 saying in stream'
-        : `${count} sayings in stream`
+    // Only announce when count increases beyond the current baseline.
+    if (count <= lastAnnouncedCountRef.current) {
+      pendingCountRef.current = count
+      return
+    }
+
+    pendingCountRef.current = count
+
+    // Clear any pending debounce from a previous burst.
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current)
+    }
+
+    // Debounce: wait after arrivals settle, then announce aggregate delta.
+    debounceTimeoutRef.current = setTimeout(() => {
+      const latestCount = pendingCountRef.current
+      const previousCount = lastAnnouncedCountRef.current
+      const newSayings = latestCount - previousCount
+
+      if (newSayings <= 0) {
+        debounceTimeoutRef.current = null
+        return
+      }
+
+      const text =
+        newSayings === 1
+          ? '1 new saying in stream'
+          : `${newSayings} new sayings in stream`
       setAnnouncement(text)
 
-      // Clear announcement text after a short delay so the live region
-      // is ready for the next update (screen readers won't re-announce empty)
-      setTimeout(() => setAnnouncement(''), 100)
+      if (clearTimeoutRef.current) {
+        clearTimeout(clearTimeoutRef.current)
+      }
+      clearTimeoutRef.current = setTimeout(() => {
+        setAnnouncement('')
+        clearTimeoutRef.current = null
+      }, ANNOUNCEMENT_MIN_VISIBLE_MS)
 
-      // Update the reference count after announcement
-      prevCountRef.current = count
-      timeoutRef.current = null
+      lastAnnouncedCountRef.current = latestCount
+      debounceTimeoutRef.current = null
     }, ANNOUNCEMENT_DEBOUNCE_MS)
-
-    // Don't update prevCountRef yet — the timeout needs to see the delta
-    // prevCountRef is updated inside the timeout after announcement
   }, [count])
 
   return announcement
@@ -265,6 +324,27 @@ function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps)
 // Main Component
 // =============================================================================
 
+/**
+ * Stream component — Saying log display for Mission Control.
+ *
+ * @example
+ * // Basic usage
+ * <Stream
+ *   sayings={sayingsArray}
+ *   connectionStatus="live"
+ *   tableStatus="open"
+ * />
+ *
+ * @example
+ * // With keyboard nav focus
+ * <Stream
+ *   sayings={sayingsArray}
+ *   connectionStatus="live"
+ *   tableStatus="open"
+ *   focusedIndex={2}
+ *   containerRef={streamRef}
+ * />
+ */
 export function Stream({ sayings, connectionStatus, tableStatus, focusedIndex, containerRef }: StreamProps) {
   const now = useNow()
   const internalRef = useRef<HTMLDivElement>(null)
@@ -400,7 +480,7 @@ export function Stream({ sayings, connectionStatus, tableStatus, focusedIndex, c
           Accessibility note: sr-only class makes this invisible to sighted
           users while remaining accessible to screen readers.
         */}
-        <div className="sr-only" aria-live="polite" aria-atomic="true">
+        <div className="sr-only" aria-live="polite" aria-atomic="true" data-testid="stream-live-region">
           {announcement}
         </div>
 

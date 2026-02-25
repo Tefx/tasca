@@ -1,0 +1,706 @@
+/**
+ * Mission Control Stream
+ *
+ * Center column with stream panel, log blocks, connection status,
+ * mention picker, and related components.
+ */
+
+/* =============================================================================
+   Two-Column Layout
+   ============================================================================= */
+
+.mc-columns {
+  display: grid;
+  grid-template-columns: 1fr minmax(180px, 260px);
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  padding: 0 0.75rem;
+  box-sizing: border-box;
+}
+
+/* Prevent horizontal overflow at any viewport width */
+.mc-columns > * {
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* =============================================================================
+   Center Column — Stream + Console
+   ============================================================================= */
+
+.mc-col-center {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Stream panel — fills remaining space within the center column */
+.mc-stream-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Header row: label left, connection badge right */
+.mc-stream-header {
+  padding: 0.75rem 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mc-text-muted);
+  border-bottom: 1px solid var(--mc-border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* Connection status badge — design source: task spec web.long_poll_stream */
+.mc-stream-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem 0.125rem 0.375rem;
+  flex-shrink: 0;
+}
+
+.mc-stream-conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mc-stream-conn--live {
+  color: var(--mc-status-open);
+  background: var(--mc-status-open-bg);
+}
+
+.mc-stream-conn--live .mc-stream-conn-dot {
+  background: var(--mc-status-open);
+}
+
+.mc-stream-conn--connecting {
+  color: var(--mc-status-paused);
+  background: var(--mc-status-paused-bg);
+}
+
+.mc-stream-conn--connecting .mc-stream-conn-dot {
+  background: var(--mc-status-paused);
+  opacity: 0.7;
+}
+
+.mc-stream-conn--offline {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.mc-stream-conn--offline .mc-stream-conn-dot {
+  background: #ef4444;
+}
+
+/* Stream body: wraps the scrollable list and the floating jump button */
+.mc-stream-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mc-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;                          /* Firefox */
+  scrollbar-color: var(--mc-border) transparent;  /* Firefox */
+}
+
+.mc-stream::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mc-stream::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mc-stream::-webkit-scrollbar-thumb {
+  background: var(--mc-border);
+  border-radius: 3px;
+}
+
+.mc-stream::-webkit-scrollbar-thumb:hover {
+  background: var(--mc-text-muted);
+}
+
+/* Stream empty/no sayings state */
+.mc-stream-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: var(--mc-text-muted);
+  font-size: 0.875rem;
+  text-align: center;
+  flex: 1;
+}
+
+/* Floating "N new sayings" button — shown when user has scrolled up */
+.mc-stream-jump {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.375rem 0.875rem;
+  background: var(--mc-accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: background 0.15s, transform 0.15s;
+  z-index: 10;
+}
+
+.mc-stream-jump:hover {
+  background: var(--mc-accent-hover);
+}
+
+.mc-stream-jump:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 3px;
+}
+
+/* New-entry highlight animation — briefly fades out a blue tint */
+@keyframes mc-log-new-flash {
+  from {
+    background-color: rgba(96, 165, 250, 0.18);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.mc-log-block--new {
+  animation: mc-log-new-flash 1.4s ease-out forwards;
+}
+
+/* =============================================================================
+   Log Block (single saying)
+   ============================================================================= */
+
+.mc-log-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--mc-border);
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+  overflow: hidden;
+}
+
+.mc-log-block:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Speaker-kind borders and tints */
+.mc-log-block--agent {
+  background: var(--mc-speaker-agent-bg);
+  border-left-color: var(--mc-speaker-agent-border);
+}
+
+.mc-log-block--agent:hover {
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.mc-log-block--human {
+  border-left-color: var(--mc-speaker-human-border);
+}
+
+.mc-log-block--patron {
+  background: var(--mc-speaker-patron-bg);
+  border-left-color: var(--mc-speaker-patron-border);
+}
+
+.mc-log-block--patron:hover {
+  background: rgba(168, 85, 247, 0.12);
+}
+
+/* Log block header row: seq + speaker + badges + timestamp */
+.mc-log-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mc-log-seq {
+  font-family: var(--mc-font-mono);
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  min-width: 2rem;
+}
+
+.mc-log-speaker {
+  font-weight: 600;
+  color: var(--mc-text);
+}
+
+.mc-log-pin {
+  font-size: 0.8125rem;
+  color: var(--mc-status-paused);
+  font-weight: 600;
+}
+
+.mc-log-time {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  white-space: nowrap;
+}
+
+/* Log block content */
+.mc-log-content {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--mc-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.mc-log-content--mono {
+  font-family: var(--mc-font-mono);
+  font-size: 0.8125rem;
+}
+
+/* =============================================================================
+   Log Block — Reply anchor + Mention chips
+   ============================================================================= */
+
+.mc-log-reply-anchor {
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--mc-accent);
+  background: rgba(96, 165, 250, 0.1);
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--mc-radius-sm);
+  text-decoration: none;
+  cursor: default;
+}
+
+.mc-log-mentions-warn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.375rem;
+  background: rgba(234, 179, 8, 0.08);
+  border-left: 2px solid rgba(234, 179, 8, 0.5);
+  border-radius: 0 var(--mc-radius-sm) var(--mc-radius-sm) 0;
+}
+
+.mc-log-mentions-warn-icon {
+  font-size: 0.75rem;
+  color: #eab308;
+  flex-shrink: 0;
+}
+
+.mc-log-mention-chip {
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.375rem;
+  border-radius: 999px;
+}
+
+.mc-log-mention-chip--unresolved {
+  color: #eab308;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+/* Markdown content inside log blocks */
+.mc-log-content p {
+  margin: 0 0 0.25em;
+}
+
+.mc-log-content p:last-child {
+  margin-bottom: 0;
+}
+
+.mc-log-content code {
+  font-family: var(--mc-font-mono);
+  font-size: 0.8125em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.125em 0.3em;
+  border-radius: 3px;
+}
+
+.mc-log-content pre {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.625rem;
+  border-radius: var(--mc-radius-sm);
+  overflow-x: auto;
+  margin: 0.25rem 0;
+}
+
+.mc-log-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.mc-log-content ul,
+.mc-log-content ol {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.mc-log-content li {
+  margin: 0.125rem 0;
+}
+
+.mc-log-content blockquote {
+  border-left: 3px solid var(--mc-border);
+  margin: 0.25rem 0;
+  padding-left: 0.625rem;
+  color: var(--mc-text-muted);
+}
+
+.mc-log-content table {
+  overflow-x: auto;
+  display: block;
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+/* Keyboard-focused saying (j/k navigation) */
+.mc-log-block--focused {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: -2px;
+}
+
+/* =============================================================================
+   Mention Picker
+   ============================================================================= */
+
+.mc-mention-picker-wrapper {
+  position: absolute;
+  z-index: 100;
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.mc-mention-picker {
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.mc-mention-picker--empty {
+  padding: 0.75rem;
+}
+
+.mc-mention-picker-empty {
+  font-size: 0.8125rem;
+  color: var(--mc-text-muted);
+  text-align: center;
+  padding: 0.75rem;
+}
+
+.mc-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--mc-border);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.mc-mention-item:last-child {
+  border-bottom: none;
+}
+
+.mc-mention-item:hover {
+  background: var(--mc-surface-hover);
+}
+
+.mc-mention-item:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: -2px;
+}
+
+.mc-mention-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.625rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.mc-mention-avatar--agent {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--mc-accent);
+}
+
+.mc-mention-avatar--human {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.mc-mention-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.mc-mention-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--mc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-mention-meta {
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mc-mention-presence {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mc-mention-presence--offline {
+  background: var(--mc-status-closed);
+}
+
+/* Offline mention item - visible but disabled */
+.mc-mention-item--offline {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mc-mention-item--offline:hover {
+  background: transparent;
+}
+
+/* =============================================================================
+   Mention Input
+   ============================================================================= */
+
+.mc-mention-input-container {
+  position: relative;
+  width: 100%;
+}
+
+.mc-mention-input-wrapper {
+  position: relative;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  transition: border-color 0.15s;
+}
+
+.mc-mention-input-wrapper:focus-within {
+  border-color: var(--mc-accent);
+}
+
+.mc-mention-input {
+  width: 100%;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--mc-text);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.mc-mention-input::placeholder {
+  color: var(--mc-text-muted);
+}
+
+.mc-mention-input:focus {
+  outline: none;
+}
+
+.mc-mention-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mc-mention-input-disabled-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(26, 26, 26, 0.9);
+  border-radius: var(--mc-radius);
+  z-index: 1;
+  padding: 0.75rem;
+}
+
+.mc-mention-input-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+}
+
+.mc-mention-input-readonly {
+  font-size: 0.8125rem;
+  color: var(--mc-text-muted);
+  font-style: italic;
+}
+
+/* =============================================================================
+   Mention Error
+   ============================================================================= */
+
+.mc-mention-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--mc-radius);
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.mc-mention-error-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mc-mention-error-icon {
+  font-size: 1rem;
+}
+
+.mc-mention-error-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f87171;
+}
+
+.mc-mention-error-dismiss {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--mc-text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  border-radius: var(--mc-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mc-mention-error-dismiss:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--mc-text);
+}
+
+.mc-mention-error-body {
+  margin-top: 0.5rem;
+}
+
+.mc-mention-error-help {
+  font-size: 0.8125rem;
+  color: var(--mc-text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.mc-mention-error-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.mc-mention-error-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.mc-mention-error-candidate:hover {
+  background: var(--mc-surface-hover);
+}
+
+.mc-mention-error-candidate-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--mc-text);
+}
+
+.mc-mention-error-candidate-kind {
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  text-transform: uppercase;
+}

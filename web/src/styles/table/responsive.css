@@ -1,0 +1,181 @@
+/**
+ * Mission Control Responsive Styles
+ *
+ * Media queries for tablet, mobile, reduced motion, and desktop tab bar.
+ */
+
+/* =============================================================================
+   Responsive — Desktop (1025px+)
+   ============================================================================= */
+
+/* At desktop: tab bar hidden, all panels visible (grid layout) */
+@media (min-width: 1025px) {
+  .mc-tab-bar {
+    display: none !important;
+  }
+
+  .mc-tab-panel {
+    display: contents;
+  }
+
+  .mc-tab-panel--active {
+    display: contents;
+  }
+}
+
+/* =============================================================================
+   Responsive — Tablet (768px to 1024px)
+   ============================================================================= */
+
+@media (max-width: 1024px) {
+  .mc-columns {
+    grid-template-columns: 1fr;
+    height: auto;
+    flex: none;
+    padding: 0 0.625rem;
+  }
+
+  .mc-col-center {
+    min-height: 50vh;
+  }
+
+  .mc-col-right {
+    border-left: none;
+    border-top: 1px solid var(--mc-border);
+    padding-left: 0;
+    padding-top: 0.75rem;
+  }
+
+  /* HUD tier adjustments for medium screens */
+  .mc-hud-tier2 {
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  /* Tab bar shown on tablet/mobile */
+  .mc-tab-bar {
+    display: flex;
+  }
+
+  .mc-columns {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* =============================================================================
+   Responsive — Mobile (640px and below)
+   ============================================================================= */
+
+@media (max-width: 640px) {
+  /* Two-tier HUD mobile adjustments */
+  .mc-hud {
+    gap: 0;
+  }
+
+  /* Tier 1: Nav + title - allow title to wrap on very long titles */
+  .mc-hud-tier1 {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.625rem 0.625rem;
+  }
+
+  .mc-hud-back {
+    flex-shrink: 0;
+  }
+
+  .mc-hud-title {
+    /* On mobile: allow multi-line for long titles instead of truncation */
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    font-size: 0.9375rem;
+    line-height: 1.35;
+    max-width: 100%;
+    flex-basis: 100%;
+    /* Clear text-overflow for wrapped text */
+    text-overflow: clip;
+  }
+
+  /* Tier 2: Compact controls with graceful wrap */
+  .mc-hud-tier2 {
+    width: 100%;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    padding: 0.5rem 0.625rem;
+  }
+
+  /* Metadata dropdown on mobile - full width */
+  .mc-hud-meta-details {
+    width: 100%;
+  }
+
+  .mc-hud-meta-details .mc-meta-list {
+    left: 0;
+    right: 0;
+    min-width: auto;
+    width: max-content;
+    max-width: 100%;
+  }
+
+  /* Horizontal meta list wraps gracefully */
+  .mc-hud-meta-list {
+    width: 100%;
+  }
+
+  .mc-hud-actions {
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  /* Columns tighter padding on mobile */
+  .mc-columns {
+    padding: 0 0.5rem;
+  }
+
+  .mc-col-right {
+    padding-left: 0;
+    padding-top: 0.625rem;
+  }
+
+  .mc-stream-header {
+    padding: 0.625rem 0 0.5rem;
+  }
+
+  .mc-log-header {
+    gap: 0.375rem;
+  }
+
+  .mc-log-time {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+
+  .mc-console {
+    padding: 0.5rem 0;
+  }
+}
+
+/* =============================================================================
+   Reduced Motion
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-spinner {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .mc-log-block,
+  .mc-hud-back,
+  .mc-copy-btn,
+  .mc-retry-btn,
+  .mc-stream-jump {
+    transition: none;
+  }
+
+  /* Suppress highlight flash for users who prefer reduced motion */
+  .mc-log-block--new {
+    animation: none;
+  }
+}

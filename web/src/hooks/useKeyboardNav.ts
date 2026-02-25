@@ -16,15 +16,25 @@ interface UseKeyboardNavResult {
  * Keyboard navigation hook for the Stream saying list.
  *
  * Key bindings (only active when no input/textarea is focused):
- * - j: Move focus to the next saying
- * - k: Move focus to the previous saying
+ * - ArrowDown / j: Move focus to the next saying
+ * - ArrowUp / k: Move focus to the previous saying
  * - g: Jump to the first saying
  * - G: Jump to the last saying
- * - /: Focus the command console input
+ * - /: Focus the command console input and clear focus index
  *
  * @param sayingsCount - Total number of sayings currently rendered
  * @param streamRef - Ref to the scrollable stream container
  * @param inputRef - Ref to the command console textarea
+ *
+ * @example
+ * // Basic usage in a table view
+ * const streamRef = useRef<HTMLDivElement>(null)
+ * const consoleRef = useRef<CommandConsoleRef>(null)
+ * const { focusedIndex, setFocusedIndex } = useKeyboardNav({
+ *   sayingsCount: sayings.length,
+ *   streamRef,
+ *   inputRef: consoleRef,
+ * })
  */
 export function useKeyboardNav({
   sayingsCount,
@@ -66,6 +76,7 @@ export function useKeyboardNav({
       }
 
       switch (e.key) {
+        case 'ArrowDown':
         case 'j': {
           e.preventDefault()
           setFocusedIndex((prev) => {
@@ -75,6 +86,7 @@ export function useKeyboardNav({
           })
           break
         }
+        case 'ArrowUp':
         case 'k': {
           e.preventDefault()
           setFocusedIndex((prev) => {
@@ -97,6 +109,8 @@ export function useKeyboardNav({
         case '/': {
           e.preventDefault()
           inputRef.current?.focus()
+          // Clear saying highlight when transitioning from stream nav to console
+          setFocusedIndex(null)
           break
         }
       }

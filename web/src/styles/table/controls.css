@@ -1,0 +1,271 @@
+/**
+ * Mission Control Table Controls
+ *
+ * Control buttons for pause/resume/close and summary picker.
+ */
+
+/* =============================================================================
+   Table Controls
+   ============================================================================= */
+
+.mc-table-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mc-table-controls-status {
+  display: flex;
+  align-items: center;
+}
+
+.mc-table-controls-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.mc-table-controls-closed {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--mc-text-muted);
+}
+
+.mc-table-closed-label {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mc-table-closed-time {
+  font-family: var(--mc-font-mono);
+  font-size: 0.6875rem;
+}
+
+/* Control button base styles */
+.mc-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: var(--mc-radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.mc-control-btn:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+.mc-control-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pause button */
+.mc-control-btn--pause {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.3);
+  color: #eab308;
+}
+
+.mc-control-btn--pause:hover:not(:disabled) {
+  background: rgba(234, 179, 8, 0.25);
+  border-color: rgba(234, 179, 8, 0.4);
+}
+
+/* Resume button */
+.mc-control-btn--resume {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.mc-control-btn--resume:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+/* Request Summary button */
+.mc-control-btn--summary {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: var(--mc-accent);
+}
+
+.mc-control-btn--summary:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.25);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+/* Download button */
+.mc-control-btn--download {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: var(--mc-accent);
+}
+
+.mc-control-btn--download:hover {
+  background: rgba(96, 165, 250, 0.25);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+/* Close button */
+.mc-control-btn--close {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.mc-control-btn--close:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* End Meeting ghost button — low-profile until hover */
+.mc-control-btn--end-ghost {
+  background: transparent;
+  border-color: var(--mc-border);
+  color: var(--mc-text-muted);
+}
+
+.mc-control-btn--end-ghost:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+/* End Meeting confirm button — red, fills on hover */
+.mc-control-btn--end-confirm {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+}
+
+.mc-control-btn--end-confirm:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.28);
+  border-color: rgba(239, 68, 68, 0.7);
+}
+
+/* Cancel button — neutral */
+.mc-control-btn--cancel {
+  background: transparent;
+  border-color: var(--mc-border);
+  color: var(--mc-text-muted);
+}
+
+.mc-control-btn--cancel:hover:not(:disabled) {
+  background: var(--mc-surface-hover);
+  color: var(--mc-text);
+}
+
+/* Inline confirmation group */
+.mc-inline-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.mc-inline-confirm-label {
+  font-size: 0.6875rem;
+  color: var(--mc-text-muted);
+  white-space: nowrap;
+}
+
+/* =============================================================================
+   Request Summary Patron Picker
+   ============================================================================= */
+
+.mc-summary-picker-wrapper {
+  position: relative;
+}
+
+.mc-summary-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.375rem;
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 200px;
+  max-width: 280px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.mc-summary-picker-header {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mc-text-muted);
+  border-bottom: 1px solid var(--mc-border);
+}
+
+.mc-summary-picker-empty {
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--mc-text-muted);
+  text-align: center;
+}
+
+.mc-summary-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--mc-border);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.mc-summary-picker-item:last-child {
+  border-bottom: none;
+}
+
+.mc-summary-picker-item:hover {
+  background: var(--mc-surface-hover);
+}
+
+.mc-summary-picker-item:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: -2px;
+}
+
+.mc-summary-picker-item--default {
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.mc-summary-picker-item--default:hover {
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.mc-summary-picker-item-badge {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mc-accent);
+  background: rgba(96, 165, 250, 0.15);
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  margin-left: auto;
+}

@@ -57,6 +57,17 @@ function statusLabel(status: TableStatus): string {
 // Component
 // =============================================================================
 
+/**
+ * TableControls — Status indicator and download control for table HUD header.
+ *
+ * @example
+ * // Basic usage
+ * <TableControls table={tableData} />
+ *
+ * @example
+ * // With closed table
+ * <TableControls table={{ ...tableData, status: 'closed' }} />
+ */
 export function TableControls({ table }: TableControlsProps) {
   const exportMarkdownUrl = getExportUrl(table.id, 'markdown')
 

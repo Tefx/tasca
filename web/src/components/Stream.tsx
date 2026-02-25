@@ -185,6 +185,94 @@ interface StreamProps {
 const AT_BOTTOM_THRESHOLD_PX = 48
 
 // =============================================================================
+// Stream Scroll Hook
+// =============================================================================
+
+interface UseStreamScrollResult {
+  /** Whether user is at/near the bottom of the stream. */
+  isAtBottom: boolean
+  /** Count of unread sayings while scrolled up. */
+  unreadCount: number
+  /** Index threshold for "new" saying highlight. */
+  initialCount: number
+  /** Scroll event handler. */
+  handleScroll: () => void
+  /** Jump to bottom action. */
+  jumpToBottom: () => void
+}
+
+/**
+ * Hook to manage stream scroll behavior: auto-scroll, unread tracking, and jump-to-bottom.
+ * Encapsulates all scroll-related state and effects for the Stream component.
+ */
+function useStreamScroll(
+  streamRef: RefObject<HTMLDivElement>,
+  sayingsLength: number
+): UseStreamScrollResult {
+  const initialCountRef = useRef(0)
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const countAtScrollUpRef = useRef(0)
+
+  // On mount with data, mark all existing sayings as "seen"
+  if (initialCountRef.current === 0 && sayingsLength > 0) {
+    initialCountRef.current = sayingsLength
+  }
+
+  const handleScroll = useCallback(() => {
+    const el = streamRef.current
+    if (!el) return
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    const atBottom = distanceFromBottom <= AT_BOTTOM_THRESHOLD_PX
+    setIsAtBottom(atBottom)
+
+    if (atBottom) {
+      setUnreadCount(0)
+      countAtScrollUpRef.current = 0
+      initialCountRef.current = sayingsLength
+    }
+  }, [streamRef, sayingsLength])
+
+  // Auto-scroll when new sayings arrive
+  useEffect(() => {
+    const el = streamRef.current
+    if (!el || sayingsLength === 0) return
+
+    if (isAtBottom) {
+      el.scrollTop = el.scrollHeight
+      initialCountRef.current = sayingsLength
+    } else {
+      const newSinceScrollUp = sayingsLength - countAtScrollUpRef.current
+      if (countAtScrollUpRef.current === 0) {
+        countAtScrollUpRef.current = sayingsLength
+      } else if (newSinceScrollUp > 0) {
+        setUnreadCount(newSinceScrollUp)
+      }
+    }
+  }, [streamRef, sayingsLength, isAtBottom])
+
+  const jumpToBottom = useCallback(() => {
+    const el = streamRef.current
+    if (!el) return
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion ? 'auto' : 'smooth' })
+    setIsAtBottom(true)
+    setUnreadCount(0)
+    countAtScrollUpRef.current = 0
+    initialCountRef.current = sayingsLength
+  }, [streamRef, sayingsLength])
+
+  return {
+    isAtBottom,
+    unreadCount,
+    initialCount: initialCountRef.current,
+    handleScroll,
+    jumpToBottom,
+  }
+}
+
+// =============================================================================
 // Utility
 // =============================================================================
 
@@ -348,117 +436,11 @@ function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps)
 export function Stream({ sayings, connectionStatus, tableStatus, focusedIndex, containerRef }: StreamProps) {
   const now = useNow()
   const internalRef = useRef<HTMLDivElement>(null)
-  // Use external containerRef if provided (shared with keyboard nav hook for scrollToIndex)
   const streamRef = containerRef ?? internalRef
 
-  /**
-   * ID of the oldest "new" saying visible after the initial load.
-   * sayings arriving after this point are marked isNew=true for the
-   * highlight animation.
-   *
-   * Updated when user scrolls to bottom (they've "seen" all sayings).
-   */
-  const initialCountRef = useRef<number>(0)
-
-  /**
-   * Whether the user is at (or near) the stream bottom.
-   * Starts true so the first load auto-scrolls to the tail.
-   */
-  const [isAtBottom, setIsAtBottom] = useState(true)
-
-  /** Count of sayings received while the user was scrolled up. */
-  const [unreadCount, setUnreadCount] = useState(0)
-
-  /** Snapshot of the saying count when the user last scrolled up. */
-  const countAtScrollUpRef = useRef(0)
-
-  /**
-   * Debounced aria-live announcement for screen readers.
-   * Announces count-based summary after settle period, not per-message spam.
-   * Accessibility: Prevents overwhelming bursts during rapid saying arrival.
-   */
   const announcement = useDebouncedAnnouncement(sayings.length)
-
-  // ---------------------------------------------------------------------------
-  // Track "initial" count — everything before the first render with data is
-  // considered pre-existing; sayings after that get the highlight animation.
-  // IMPORTANT: Reset when user is at bottom and has seen all sayings.
-  // ---------------------------------------------------------------------------
-  
-  // On mount with data, mark all existing sayings as "seen"
-  if (initialCountRef.current === 0 && sayings.length > 0) {
-    initialCountRef.current = sayings.length
-  }
-
-  // ---------------------------------------------------------------------------
-  // Scroll detection — update isAtBottom when user scrolls.
-  // ---------------------------------------------------------------------------
-  const handleScroll = useCallback(() => {
-    const el = streamRef.current
-    if (!el) return
-
-    const distanceFromBottom =
-      el.scrollHeight - el.scrollTop - el.clientHeight
-    const atBottom = distanceFromBottom <= AT_BOTTOM_THRESHOLD_PX
-
-    setIsAtBottom(atBottom)
-
-    if (atBottom) {
-      // User scrolled back to bottom — clear unread badge and mark all sayings as "seen"
-      setUnreadCount(0)
-      countAtScrollUpRef.current = 0
-      // Update initial count so new sayings after this point get highlighted properly
-      // This prevents "new" markers from appearing on sayings user has already seen
-      initialCountRef.current = sayings.length
-    }
-  }, [sayings.length])
-
-  // ---------------------------------------------------------------------------
-  // Auto-scroll when new sayings arrive.
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    const el = streamRef.current
-    if (!el || sayings.length === 0) return
-
-    if (isAtBottom) {
-      // Follow the tail
-      el.scrollTop = el.scrollHeight
-      // Mark all sayings as seen since we're auto-following
-      initialCountRef.current = sayings.length
-    } else {
-      // Accumulate unread count while user is scrolled up.
-      const newSinceScrollUp = sayings.length - countAtScrollUpRef.current
-      if (countAtScrollUpRef.current === 0) {
-        // Record the count at the moment the user first scrolled up.
-        countAtScrollUpRef.current = sayings.length
-      } else if (newSinceScrollUp > 0) {
-        setUnreadCount(newSinceScrollUp)
-      }
-    }
-  }, [sayings.length, isAtBottom])
-
-  // ---------------------------------------------------------------------------
-  // "Jump to bottom" action — scroll to tail and resume auto-scroll.
-  // ---------------------------------------------------------------------------
-  const jumpToBottom = useCallback(() => {
-    const el = streamRef.current
-    if (!el) return
-    // Respect prefers-reduced-motion: instant scroll if user prefers reduced motion
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    el.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion ? 'auto' : 'smooth' })
-    setIsAtBottom(true)
-    setUnreadCount(0)
-    countAtScrollUpRef.current = 0
-    // Mark all current sayings as seen
-    initialCountRef.current = sayings.length
-  }, [sayings.length])
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-  // Only mark sayings as "new" if they came after the current initialCount
-  // This prevents flash effects when user is at bottom and sayings arrive
-  const initialCount = initialCountRef.current
+  const { isAtBottom, unreadCount, initialCount, handleScroll, jumpToBottom } =
+    useStreamScroll(streamRef, sayings.length)
 
   return (
     <div className="mc-stream-panel">

@@ -78,6 +78,26 @@ async function slicedDelay(totalMs: number, signal: AbortSignal): Promise<void> 
   }
 }
 
+/** Compute backoff delay based on consecutive error count. */
+function getBackoffDelay(errorCount: number): number {
+  const backoffIndex = Math.min(errorCount - 1, BACKOFF_DELAYS_MS.length - 1)
+  return BACKOFF_DELAYS_MS[backoffIndex]
+}
+
+/** Determine connection status based on error count. */
+function getStatusForError(errorCount: number): ConnectionStatus {
+  return errorCount >= OFFLINE_THRESHOLD ? 'offline' : 'connecting'
+}
+
+/** Deduplicate new sayings against existing ones. */
+function dedupeSayings(
+  existing: Saying[],
+  incoming: Saying[]
+): Saying[] {
+  const existingIds = new Set(existing.map((s) => s.id))
+  return incoming.filter((s) => !existingIds.has(s.id))
+}
+
 // =============================================================================
 // Hook
 // =============================================================================
@@ -87,6 +107,23 @@ async function slicedDelay(totalMs: number, signal: AbortSignal): Promise<void> 
  *
  * Starts with a full GET /sayings load, then enters a long-poll loop via
  * GET /sayings/wait. Cleans up in-flight requests on unmount via AbortController.
+ *
+ * @example
+ * ```tsx
+ * function TableStream({ tableId }: { tableId: string }) {
+ *   const { sayings, connectionStatus, appendSaying } = useSayingsStream(tableId)
+ *
+ *   if (connectionStatus === 'offline') {
+ *     return <div>Connection lost. Reconnecting...</div>
+ *   }
+ *
+ *   return (
+ *     <div>
+ *       {sayings.map(s => <SayingCard key={s.id} saying={s} />)}
+ *     </div>
+ *   )
+ * }
+ * ```
  */
 export function useSayingsStream(
   tableId: string | undefined
@@ -114,14 +151,11 @@ export function useSayingsStream(
     const controller = new AbortController()
     const { signal } = controller
 
-    async function loop(): Promise<void> {
-      // -----------------------------------------------------------------------
-      // Phase 1: Initial load — GET /sayings
-      // -----------------------------------------------------------------------
+    /** Phase 1: Initial load — GET /sayings. Returns true on success. */
+    async function loadInitial(): Promise<boolean> {
       try {
         const initial = await listSayings(tableId as string)
-
-        if (signal.aborted) return
+        if (signal.aborted) return false
 
         setSayings(initial.sayings)
         updateNextSequence(initial.next_sequence)
@@ -136,15 +170,29 @@ export function useSayingsStream(
             initial.next_sequence
           )
         }
-      } catch (err) {
-        if (signal.aborted) return
-        handleError(err, signal, loop)
-        return
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    /** Handle backoff after an error with retry. */
+    async function backoffAndRetry(retry: () => Promise<void>): Promise<void> {
+      consecutiveErrorsRef.current += 1
+      const errorCount = consecutiveErrorsRef.current
+      setConnectionStatus(getStatusForError(errorCount))
+
+      const delayMs = getBackoffDelay(errorCount)
+      if (import.meta.env.DEV) {
+        console.log('[stream] backoff:', delayMs, 'ms (error #', errorCount, ')')
       }
 
-      // -----------------------------------------------------------------------
-      // Phase 2: Long-poll loop — GET /sayings/wait
-      // -----------------------------------------------------------------------
+      await slicedDelay(delayMs, signal)
+      if (!signal.aborted) await retry()
+    }
+
+    /** Phase 2: Long-poll loop — GET /sayings/wait */
+    async function pollLoop(): Promise<void> {
       while (!signal.aborted) {
         try {
           const response = await waitForSayings(
@@ -153,101 +201,43 @@ export function useSayingsStream(
             signal,
             10_000
           )
-
           if (signal.aborted) return
 
-          const newSayings = response.sayings
-          const nextSeq = response.next_sequence
-
-          // Append only genuinely new sayings (guard against server duplication).
-          if (newSayings.length > 0) {
+          if (response.sayings.length > 0) {
             setSayings((prev) => {
-              const existingIds = new Set(prev.map((s) => s.id))
-              const deduped = newSayings.filter((s) => !existingIds.has(s.id))
+              const deduped = dedupeSayings(prev, response.sayings)
               return deduped.length > 0 ? [...prev, ...deduped] : prev
             })
           }
 
-          updateNextSequence(nextSeq)
-
-          // Update table state if the server returned a fresh snapshot.
-          if (response.table) {
-            setTable(response.table)
-          }
-
+          updateNextSequence(response.next_sequence)
+          if (response.table) setTable(response.table)
           consecutiveErrorsRef.current = 0
           setConnectionStatus('live')
 
           if (import.meta.env.DEV) {
             console.log(
               '[stream] new sayings:',
-              newSayings.length,
+              response.sayings.length,
               'next_sequence:',
-              nextSeq
+              response.next_sequence
             )
           }
-        } catch (err) {
+        } catch {
           if (signal.aborted) return
-
-          consecutiveErrorsRef.current += 1
-          const errorCount = consecutiveErrorsRef.current
-
-          // Transition status based on error count.
-          if (errorCount >= OFFLINE_THRESHOLD) {
-            setConnectionStatus('offline')
-          } else {
-            setConnectionStatus('connecting')
-          }
-
-          // Exponential backoff — cap at the last entry in the schedule.
-          const backoffIndex = Math.min(
-            errorCount - 1,
-            BACKOFF_DELAYS_MS.length - 1
-          )
-          const delayMs = BACKOFF_DELAYS_MS[backoffIndex]
-
-          if (import.meta.env.DEV) {
-            console.log('[stream] backoff:', delayMs, 'ms (error #', errorCount, ')')
-          }
-
-          // Wait before retrying, in small slices so abort is responsive.
-          await slicedDelay(delayMs, signal)
+          await backoffAndRetry(pollLoop)
         }
       }
     }
 
-    /**
-     * Handle an error during Phase 1 initial load with backoff + retry.
-     * Uses the same backoff schedule as the poll loop.
-     */
-    async function handleError(
-      _err: unknown,
-      abortSignal: AbortSignal,
-      retry: () => Promise<void>
-    ): Promise<void> {
-      consecutiveErrorsRef.current += 1
-      const errorCount = consecutiveErrorsRef.current
-
-      if (errorCount >= OFFLINE_THRESHOLD) {
-        setConnectionStatus('offline')
+    /** Main stream runner: initial load then poll. */
+    async function runStream(): Promise<void> {
+      const success = await loadInitial()
+      if (signal.aborted) return
+      if (success) {
+        await pollLoop()
       } else {
-        setConnectionStatus('connecting')
-      }
-
-      const backoffIndex = Math.min(
-        errorCount - 1,
-        BACKOFF_DELAYS_MS.length - 1
-      )
-      const delayMs = BACKOFF_DELAYS_MS[backoffIndex]
-
-      if (import.meta.env.DEV) {
-        console.log('[stream] initial load backoff:', delayMs, 'ms')
-      }
-
-      await slicedDelay(delayMs, abortSignal)
-
-      if (!abortSignal.aborted) {
-        await retry()
+        await backoffAndRetry(runStream)
       }
     }
 
@@ -258,7 +248,7 @@ export function useSayingsStream(
     consecutiveErrorsRef.current = 0
     setConnectionStatus('connecting')
 
-    loop()
+    runStream()
 
     return () => {
       controller.abort()

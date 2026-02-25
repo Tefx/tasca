@@ -13,6 +13,11 @@ MCP tools are shell-layer handlers that:
 
 The MCP protocol handles error propagation, so tools return primitive types
 that can be serialized to JSON. Internal service calls use Result[T, E].
+
+Escape Hatch Convention (shell_result):
+    All MCP tool functions use the escape reason "MCP protocol" to indicate
+    they return serializable primitives per MCP specification, not Result[T, E].
+    See lines 12-15 above for rationale.
 """
 
 from __future__ import annotations
@@ -305,7 +310,7 @@ def _silence_next_action(empty_waits: int, next_sequence: int) -> str:
 # =============================================================================
 
 
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 # @invar:allow shell_pure_logic: Simple dict construction is pure
 def _limits_config_from_settings() -> LimitsConfig:
     """Get limits configuration from application settings.
@@ -316,7 +321,8 @@ def _limits_config_from_settings() -> LimitsConfig:
     return settings_to_limits_config(settings)
 
 
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_pure_logic: Pure error-to-response mapping
 def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
     """Convert a LimitError to an MCP error response.
 
@@ -338,12 +344,270 @@ def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
 
 
 # =============================================================================
+# Response Building Helpers (reduce function size)
+# =============================================================================
+
+
+def _build_patron_response_data(patron: Patron, *, is_new: bool) -> dict[str, Any]:
+    """Build response data for patron registration/lookup.
+
+    Args:
+        patron: The patron entity.
+        is_new: Whether this is a newly created patron.
+
+    Returns:
+        Response data dict with spec-compliant and backward-compatible fields.
+    """
+    return {
+        # Spec-compliant fields
+        "patron_id": patron.id,
+        "display_name": patron.name,
+        "alias": patron.alias,
+        "server_ts": patron.created_at.isoformat(),
+        "is_new": is_new,
+        # Backward-compatible fields (not in spec)
+        "id": patron.id,
+        "name": patron.name,
+        "kind": patron.kind,
+        "created_at": patron.created_at.isoformat(),
+        "meta": patron.meta,
+    }
+
+
+def _build_table_dict(table: Table) -> dict[str, Any]:
+    """Build table dict for MCP responses.
+
+    Args:
+        table: The table entity.
+
+    Returns:
+        Dict with table fields formatted for JSON serialization.
+    """
+    return {
+        "id": table.id,
+        "question": table.question,
+        "context": table.context,
+        "status": table.status.value,
+        "version": table.version,
+        "created_at": table.created_at.isoformat(),
+        "updated_at": table.updated_at.isoformat(),
+    }
+
+
+def _format_saying_dict(saying: Any) -> dict[str, Any]:
+    """Format a saying entity for MCP response.
+
+    Args:
+        saying: Saying entity with id, table_id, sequence, speaker, content, pinned, created_at.
+
+    Returns:
+        Dict formatted for JSON serialization.
+    """
+    return {
+        "id": saying.id,
+        "table_id": saying.table_id,
+        "sequence": saying.sequence,
+        "speaker": {
+            "kind": saying.speaker.kind.value,
+            "name": saying.speaker.name,
+            "patron_id": saying.speaker.patron_id,
+        },
+        "content": saying.content,
+        "pinned": saying.pinned,
+        "created_at": saying.created_at.isoformat(),
+    }
+
+
+def _build_seat_dict(seat: Seat, expires_at: datetime) -> dict[str, Any]:
+    """Build seat dict for MCP responses.
+
+    Args:
+        seat: The seat entity.
+        expires_at: Calculated expiry time.
+
+    Returns:
+        Dict with seat fields formatted for JSON serialization.
+    """
+    return {
+        "id": seat.id,
+        "table_id": seat.table_id,
+        "patron_id": seat.patron_id,
+        "state": seat.state.value,
+        "last_heartbeat": seat.last_heartbeat.isoformat(),
+        "joined_at": seat.joined_at.isoformat(),
+        "expires_at": expires_at.isoformat(),
+    }
+
+
+def _validate_speaker_constraints(
+    speaker_kind: str, patron_id: str | None
+) -> dict[str, Any] | None:
+    """Validate speaker_kind and patron_id constraints.
+
+    Args:
+        speaker_kind: "agent" or "human".
+        patron_id: Optional patron UUID.
+
+    Returns:
+        Error response dict if validation fails, None if valid.
+    """
+    if speaker_kind == "agent":
+        if patron_id is None:
+            return error_response(
+                "INVALID_REQUEST",
+                "patron_id is required when speaker_kind is 'agent'",
+                {"speaker_kind": speaker_kind},
+            )
+    elif speaker_kind == "human":
+        if patron_id is not None:
+            return error_response(
+                "INVALID_REQUEST",
+                "patron_id must be null or omitted when speaker_kind is 'human'",
+                {"speaker_kind": speaker_kind, "patron_id": patron_id},
+            )
+    return None
+
+
+def _validate_control_action(
+    action: str, current_status: TableStatus
+) -> tuple[TableStatus | None, dict[str, Any] | None]:
+    """Validate control action and compute new status.
+
+    Args:
+        action: Control action ("pause", "resume", "close").
+        current_status: Current table status.
+
+    Returns:
+        Tuple of (new_status or None, error_response or None).
+        On success: (new_status, None).
+        On failure: (None, error_response).
+    """
+    if action == "pause":
+        if not can_transition_to_paused(current_status):
+            return None, error_response(
+                "OPERATION_NOT_ALLOWED",
+                f"Cannot pause table with status '{current_status.value}'. Only OPEN tables can be paused.",
+                {"table_status": current_status.value},
+            )
+        return transition_to_paused(current_status), None
+    elif action == "resume":
+        if not can_transition_to_open(current_status):
+            return None, error_response(
+                "OPERATION_NOT_ALLOWED",
+                f"Cannot resume table with status '{current_status.value}'. Only PAUSED tables can be resumed.",
+                {"table_status": current_status.value},
+            )
+        return transition_to_open(current_status), None
+    elif action == "close":
+        if not can_transition_to_closed(current_status):
+            return None, error_response(
+                "OPERATION_NOT_ALLOWED",
+                f"Cannot close table with status '{current_status.value}'.",
+                {"table_status": current_status.value},
+            )
+        return transition_to_closed(current_status), None
+    else:
+        return None, error_response("INVALID_ACTION", f"Unknown action: {action}")
+
+
+def _build_control_response(new_status: TableStatus, control_sequence: int) -> dict[str, Any]:
+    """Build response data for table_control.
+
+    Args:
+        new_status: The new table status.
+        control_sequence: Sequence number of the control saying.
+
+    Returns:
+        Response data dict with next_action guidance.
+    """
+    if new_status == TableStatus.OPEN:
+        next_action = (
+            "Table resumed. IMMEDIATELY call tasca.table_wait. Your response = tool_call, not text."
+        )
+    else:
+        next_action = (
+            f"Table is now {new_status.value}. Call tasca.table_leave, then report to the user."
+        )
+    return {
+        "table_status": new_status.value,
+        "control_saying_sequence": control_sequence,
+        "_next_action": next_action,
+    }
+
+
+def _build_join_next_action(has_history: bool, next_sequence: int) -> str:
+    """Build next_action guidance for table_join response.
+
+    Args:
+        has_history: Whether the table has existing sayings.
+        next_sequence: The next sequence number for polling.
+
+    Returns:
+        Next action guidance string.
+    """
+    if not has_history:
+        return (
+            "The table has a question but no discussion yet. "
+            "IMMEDIATELY call tasca.table_say to share your opening perspective "
+            "on the table's question. You are starting the discussion. "
+            "After speaking, call tasca.table_wait(since_sequence=...). "
+            "Your response must be a tool_call — not text."
+        )
+    return (
+        "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
+        "Your response must be a tool_call — not text. "
+        "Loop: wait → think → say/skip → heartbeat → wait. "
+        "Exit only when: human says stop, consensus, table closed, "
+        "or consecutive_empty_waits=30 with nothing to add."
+    ).format(seq=next_sequence)
+
+
+def _apply_table_patch(
+    current_table: Table, patch: dict[str, Any]
+) -> tuple[TableUpdate, dict[str, Any] | None]:
+    """Apply patch to table and create TableUpdate.
+
+    Args:
+        current_table: Current table state.
+        patch: Partial update data with question, context, and/or status.
+
+    Returns:
+        Tuple of (TableUpdate, error_response or None).
+        On success: (TableUpdate, None).
+        On failure: (TableUpdate with defaults, error_response).
+    """
+    new_question = patch.get("question", current_table.question)
+    new_context = patch.get("context", current_table.context)
+    new_status = current_table.status
+
+    if "status" in patch:
+        status_value = patch["status"]
+        try:
+            new_status = TableStatus(status_value)
+        except ValueError:
+            return TableUpdate(
+                question=current_table.question,
+                context=current_table.context,
+                status=current_table.status,
+            ), error_response(
+                "INVALID_STATUS",
+                f"Invalid status value: {status_value}. Must be one of: open, paused, closed",
+            )
+
+    return TableUpdate(
+        question=new_question,
+        context=new_context,
+        status=new_status,
+    ), None
+
+
+# =============================================================================
 # Patron Tools
 # =============================================================================
 
 
 # @shell_complexity: 10 branches for patron dedup check + create + idempotency store + error paths + backward compat
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def patron_register(
     display_name: str | None = None,
@@ -433,20 +697,7 @@ def patron_register(
     existing = existing_result.unwrap()
     if existing is not None:
         # Return existing patron (return_existing semantics)
-        response_data = {
-            # Spec-compliant fields
-            "patron_id": existing.id,
-            "display_name": existing.name,
-            "alias": existing.alias,
-            "server_ts": existing.created_at.isoformat(),
-            "is_new": False,
-            # Backward-compatible fields (not in spec)
-            "id": existing.id,
-            "name": existing.name,
-            "kind": existing.kind,
-            "created_at": existing.created_at.isoformat(),
-            "meta": existing.meta,
-        }
+        response_data = _build_patron_response_data(existing, is_new=False)
         # Store in idempotency cache if dedup_id provided
         if dedup_id is not None:
             _ = store_idempotency_key(
@@ -474,20 +725,7 @@ def patron_register(
         return error_response("DATABASE_ERROR", f"Failed to create patron: {error}")
 
     created = result.unwrap()
-    response_data = {
-        # Spec-compliant fields
-        "patron_id": created.id,
-        "display_name": created.name,
-        "alias": created.alias,
-        "server_ts": created.created_at.isoformat(),
-        "is_new": True,
-        # Backward-compatible fields (not in spec)
-        "id": created.id,
-        "name": created.name,
-        "kind": created.kind,
-        "created_at": created.created_at.isoformat(),
-        "meta": created.meta,
-    }
+    response_data = _build_patron_response_data(created, is_new=True)
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
         _ = store_idempotency_key(
@@ -496,7 +734,7 @@ def patron_register(
     return success_response(response_data)
 
 
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def patron_get(patron_id: str) -> dict[str, Any]:
     """Get patron details by ID.
@@ -571,7 +809,7 @@ def patron_get(patron_id: str) -> dict[str, Any]:
 
 
 # @shell_complexity: 5 branches for table creation + dedup store + idempotency + error handling
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_create(
     question: str,
@@ -683,8 +921,51 @@ DEFAULT_HISTORY_LIMIT = 10
 DEFAULT_HISTORY_MAX_BYTES = 65536  # 64 KiB
 
 
-# @shell_complexity: 8 branches for table lookup + can_join guard + seat creation + history fetch + error paths
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+def _create_seat_for_join(
+    conn: Any, table_id: str, patron_id: str
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Create a seat for a patron joining a table.
+
+    Args:
+        conn: Database connection.
+        table_id: ID of the table.
+        patron_id: ID of the patron.
+
+    Returns:
+        Tuple of (seat_data dict or None, error_response or None).
+    """
+    patron_result = get_patron(conn, PatronId(patron_id))
+    if isinstance(patron_result, Failure):
+        error = patron_result.failure()
+        if isinstance(error, PatronNotFoundError):
+            return None, error_response("NOT_FOUND", f"Patron not found: {patron_id}")
+        return None, error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+
+    now = datetime.now(UTC)
+    seat_id = SeatId(str(uuid.uuid4()))
+
+    seat = Seat(
+        id=seat_id,
+        table_id=table_id,
+        patron_id=patron_id,
+        state=SeatState.JOINED,
+        last_heartbeat=now,
+        joined_at=now,
+    )
+
+    seat_result = create_seat(conn, seat)
+    if isinstance(seat_result, Failure):
+        error = seat_result.failure()
+        return None, error_response("DATABASE_ERROR", f"Failed to create seat: {error}")
+
+    created_seat = seat_result.unwrap()
+    expires_at = calculate_expiry_time(created_seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
+    return _build_seat_dict(created_seat, expires_at), None
+
+
+# @shell_complexity: table lookup + can_join guard + seat creation + history fetch + error paths
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_join(
     table_id: str | None = None,
@@ -808,100 +1089,27 @@ def table_join(
     # Create seat if patron_id provided (optional - allows human join without seat)
     seat_data = None
     if patron_id is not None:
-        # Verify patron exists
-        patron_result = get_patron(conn, PatronId(patron_id))
-        if isinstance(patron_result, Failure):
-            error = patron_result.failure()
-            if isinstance(error, PatronNotFoundError):
-                return error_response("NOT_FOUND", f"Patron not found: {patron_id}")
-            return error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
-
-        now = datetime.now(UTC)
-        seat_id = SeatId(str(uuid.uuid4()))
-
-        seat = Seat(
-            id=seat_id,
-            table_id=resolved_table_id,
-            patron_id=patron_id,
-            state=SeatState.JOINED,
-            last_heartbeat=now,
-            joined_at=now,
-        )
-
-        seat_result = create_seat(conn, seat)
-        if isinstance(seat_result, Failure):
-            error = seat_result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to create seat: {error}")
-
-        created_seat = seat_result.unwrap()
-        expires_at = calculate_expiry_time(created_seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
-
-        seat_data = {
-            "id": created_seat.id,
-            "table_id": created_seat.table_id,
-            "patron_id": created_seat.patron_id,
-            "state": created_seat.state.value,
-            "last_heartbeat": created_seat.last_heartbeat.isoformat(),
-            "joined_at": created_seat.joined_at.isoformat(),
-            "expires_at": expires_at.isoformat(),
-        }
+        seat_data, seat_error = _create_seat_for_join(conn, resolved_table_id, patron_id)
+        if seat_error is not None:
+            return seat_error
 
     return success_response(
         {
-            "table": {
-                "id": table.id,
-                "question": table.question,
-                "context": table.context,
-                "status": table.status.value,
-                "version": table.version,
-                "created_at": table.created_at.isoformat(),
-                "updated_at": table.updated_at.isoformat(),
-            },
+            "table": _build_table_dict(table),
             "sequence_latest": sequence_latest,
             "history_sequence": history_sequence,
             "initial_sayings": {
-                "sayings": [
-                    {
-                        "id": s.id,
-                        "table_id": s.table_id,
-                        "sequence": s.sequence,
-                        "speaker": {
-                            "kind": s.speaker.kind.value,
-                            "name": s.speaker.name,
-                            "patron_id": s.speaker.patron_id,
-                        },
-                        "content": s.content,
-                        "pinned": s.pinned,
-                        "created_at": s.created_at.isoformat(),
-                    }
-                    for s in history_sayings
-                ],
+                "sayings": [_format_saying_dict(s) for s in history_sayings],
                 "next_sequence": next_sequence,
                 "has_more": has_more_history,
             },
             **({"seat": seat_data} if seat_data is not None else {}),
-            "_next_action": (
-                (
-                    "The table has a question but no discussion yet. "
-                    "IMMEDIATELY call tasca.table_say to share your opening perspective "
-                    "on the table's question. You are starting the discussion. "
-                    "After speaking, call tasca.table_wait(since_sequence=...). "
-                    "Your response must be a tool_call — not text."
-                )
-                if not history_sayings
-                else (
-                    "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
-                    "Your response must be a tool_call — not text. "
-                    "Loop: wait → think → say/skip → heartbeat → wait. "
-                    "Exit only when: human says stop, consensus, table closed, "
-                    "or consecutive_empty_waits=30 with nothing to add."
-                ).format(seq=next_sequence)
-            ),
+            "_next_action": _build_join_next_action(bool(history_sayings), next_sequence),
         }
     )
 
 
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_get(table_id: str) -> dict[str, Any]:
     """Get table details by ID.
@@ -951,7 +1159,7 @@ def table_get(table_id: str) -> dict[str, Any]:
     )
 
 
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_list(status: Literal["open"] = "open") -> dict[str, Any]:
     """List discussion tables with active seat counts.
@@ -1021,7 +1229,7 @@ VALID_EXPORT_FORMATS = ("markdown", "jsonl")
 
 
 # @shell_complexity: 6 branches for format validation + table lookup + sayings fetch + format dispatch + error paths
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_export(
     table_id: str,
@@ -1103,8 +1311,247 @@ def table_export(
     )
 
 
-# @shell_complexity: 12 branches for table lookup + can_say guard + limits enforcement + dedup + mention resolution + validation + error paths
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP helper - performs I/O, returns patron_id or None
+def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | None:
+    """Auto-register patron if not exists, returning patron_id.
+
+    Args:
+        conn: Database connection.
+        speaker_name: Optional speaker name to use.
+
+    Returns:
+        Patron ID if registration succeeded, None otherwise.
+    """
+    auto_name = speaker_name or "Anonymous Agent"
+    existing_result = find_patron_by_name(conn, auto_name)
+    if isinstance(existing_result, Success):
+        existing_patron = existing_result.unwrap()
+        if existing_patron is not None:
+            return existing_patron.id
+    # Create new patron
+    new_id = PatronId(str(uuid.uuid4()))
+    now = datetime.now(UTC)
+    patron = Patron(
+        id=new_id,
+        name=auto_name,
+        kind="agent",
+        alias=None,
+        meta=None,
+        created_at=now,
+    )
+    create_result = create_patron(conn, patron)
+    if isinstance(create_result, Success):
+        created = create_result.unwrap()
+        return created.id
+    return new_id  # Use the generated ID even if store failed
+
+
+# @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+def _resolve_speaker_for_say(
+    conn: Any,
+    actual_speaker_kind: str,
+    patron_id: str | None,
+    speaker_name: str | None,
+) -> tuple[Speaker, str, dict[str, Any] | None]:
+    """Resolve speaker and return Speaker object with speaker_key.
+
+    Args:
+        conn: Database connection.
+        actual_speaker_kind: "agent" or "human".
+        patron_id: Optional patron ID.
+        speaker_name: Optional speaker name.
+
+    Returns:
+        Tuple of (Speaker, speaker_key, error_response or None).
+    """
+    resolved_name = speaker_name
+    if resolved_name is None:
+        if patron_id is not None:
+            patron_result = get_patron(conn, PatronId(patron_id))
+            if isinstance(patron_result, Failure):
+                error = patron_result.failure()
+                if isinstance(error, PatronNotFoundError):
+                    return (
+                        Speaker(
+                            kind=SpeakerKind.AGENT,
+                            name="Unknown",
+                            patron_id=None,
+                        ),
+                        "",
+                        error_response("NOT_FOUND", f"Patron not found: {patron_id}"),
+                    )
+                return (
+                    Speaker(
+                        kind=SpeakerKind.AGENT,
+                        name="Unknown",
+                        patron_id=None,
+                    ),
+                    "",
+                    error_response("DATABASE_ERROR", f"Failed to get patron: {error}"),
+                )
+            patron = patron_result.unwrap()
+            resolved_name = patron.name
+        else:
+            resolved_name = "Human"
+
+    if actual_speaker_kind == "agent":
+        assert patron_id is not None  # validated earlier
+        return (
+            Speaker(kind=SpeakerKind.AGENT, name=resolved_name, patron_id=PatronId(patron_id)),
+            patron_id,
+            None,
+        )
+    else:
+        return (
+            Speaker(kind=SpeakerKind.HUMAN, name=resolved_name, patron_id=None),
+            "human",
+            None,
+        )
+
+
+# @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+def _resolve_mentions_for_say(
+    conn: Any, mentions: list[str] | None
+) -> tuple[bool, list[str], list[str], dict[str, Any] | None]:
+    """Resolve mentions if provided.
+
+    Args:
+        conn: Database connection.
+        mentions: List of mention handles.
+
+    Returns:
+        Tuple of (mentions_all, mentions_resolved, mentions_unresolved, error_response or None).
+    """
+    mentions_all = False
+    mentions_resolved: list[str] = []
+    mentions_unresolved: list[str] = []
+
+    if not mentions:
+        return mentions_all, mentions_resolved, mentions_unresolved, None
+
+    patrons_result = list_patrons(conn)
+    if isinstance(patrons_result, Failure):
+        get_logger(__name__).warning(
+            "Failed to fetch patrons for mention resolution",
+            extra={"error": str(patrons_result.failure())},
+        )
+        return mentions_all, mentions_resolved, mentions_unresolved, None
+
+    patrons = patrons_result.unwrap()
+    patron_matches = [
+        PatronMatch(patron_id=p.id, alias=p.alias, display_name=p.name) for p in patrons
+    ]
+    mentions_result = resolve_mentions(mentions, patron_matches)
+
+    if has_ambiguous_mentions(mentions_result):
+        return (
+            mentions_all,
+            mentions_resolved,
+            mentions_unresolved,
+            error_response(
+                "AMBIGUOUS_MENTION",
+                "Multiple patrons match the provided mention handle(s)",
+                {
+                    "ambiguous": [
+                        {
+                            "handle": am.handle,
+                            "candidates": [c.patron_id for c in am.candidates],
+                        }
+                        for am in mentions_result.ambiguous
+                    ],
+                },
+            ),
+        )
+
+    mentions_all = mentions_result.mentions_all
+    mentions_resolved = [r.patron_id for r in mentions_result.resolved]
+    mentions_unresolved = [u.handle for u in mentions_result.unresolved]
+    return mentions_all, mentions_resolved, mentions_unresolved, None
+
+
+# @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+def _check_say_idempotency(
+    conn: Any, resource_key: str, dedup_id: str | None, logger: Any
+) -> tuple[dict[str, Any] | None, bool]:
+    """Check idempotency key for table_say.
+
+    Args:
+        conn: Database connection.
+        resource_key: Resource key for idempotency scope.
+        dedup_id: Optional idempotency key.
+        logger: Logger instance.
+
+    Returns:
+        Tuple of (cached_response or None, should_return).
+        If cached_response is not None, should_return is True and caller should return it.
+    """
+    if dedup_id is None:
+        return None, False
+
+    idempotency_result = check_idempotency_key(conn, resource_key, "table_say", dedup_id)
+    if isinstance(idempotency_result, Failure):
+        return (
+            error_response(
+                "DATABASE_ERROR", f"Failed to check idempotency key: {idempotency_result.failure()}"
+            ),
+            True,
+        )
+
+    cached_response = idempotency_result.unwrap()
+    if cached_response is not None:
+        log_dedup_hit(logger, "table_say", resource_key, dedup_id)
+        cached_data = cached_response["data"]
+        cached_data["_next_action"] = (
+            "Already sent (dedup). IMMEDIATELY call tasca.table_wait. "
+            "Your response = tool_call, not text."
+        )
+        return success_response(cached_data), True
+
+    return None, False
+
+
+# @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+def _build_say_response(
+    saying: Any, mentions_all: bool, mentions_resolved: list[str], mentions_unresolved: list[str]
+) -> dict[str, Any]:
+    """Build response data for table_say.
+
+    Args:
+        saying: The created Saying object.
+        mentions_all: Whether @all was mentioned.
+        mentions_resolved: List of resolved patron IDs.
+        mentions_unresolved: List of unresolved handles.
+
+    Returns:
+        Response data dict.
+    """
+    return {
+        # Spec fields
+        "saying_id": saying.id,
+        "sequence": saying.sequence,
+        "created_at": saying.created_at.isoformat(),
+        "mentions_all": mentions_all,
+        "mentions_resolved": mentions_resolved,
+        "mentions_unresolved": mentions_unresolved,
+        # Backward-compatible fields
+        "id": saying.id,
+        "table_id": saying.table_id,
+        "speaker": {
+            "kind": saying.speaker.kind.value,
+            "name": saying.speaker.name,
+            "patron_id": saying.speaker.patron_id,
+        },
+        "content": saying.content,
+        "pinned": saying.pinned,
+        "_next_action": (
+            f"IMMEDIATELY call tasca.table_wait(since_sequence={saying.sequence}). "
+            "Your response = tool_call, not text."
+        ),
+    }
+
+
+# @shell_complexity: table lookup + can_say guard + limits enforcement + error paths
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_say(
     table_id: str,
@@ -1168,46 +1615,14 @@ def table_say(
     conn = next(get_mcp_db())
 
     # Auto-register patron if agent calls table_say without patron_id.
-    # This prevents agents that skip patron_register from appearing as "human".
     actual_speaker_kind = speaker_kind
     if speaker_kind == "agent" and patron_id is None:
-        auto_name = speaker_name or "Anonymous Agent"
-        # Reuse existing patron if name matches, otherwise create new
-        existing_result = find_patron_by_name(conn, auto_name)
-        if isinstance(existing_result, Success) and existing_result.unwrap() is not None:
-            patron_id = existing_result.unwrap().id
-        else:
-            new_id = PatronId(str(uuid.uuid4()))
-            now = datetime.now(UTC)
-            patron = Patron(
-                id=new_id,
-                name=auto_name,
-                kind="agent",
-                alias=None,
-                meta=None,
-                created_at=now,
-            )
-            create_result = create_patron(conn, patron)
-            if isinstance(create_result, Success):
-                patron_id = create_result.unwrap().id
-            else:
-                patron_id = new_id  # Use the generated ID even if store failed
+        patron_id = _auto_register_patron_for_say(conn, speaker_name)
 
     # Validate speaker_kind + patron_id constraints
-    if actual_speaker_kind == "agent":
-        if patron_id is None:
-            return error_response(
-                "INVALID_REQUEST",
-                "patron_id is required when speaker_kind is 'agent'",
-                {"speaker_kind": actual_speaker_kind},
-            )
-    elif actual_speaker_kind == "human":
-        if patron_id is not None:
-            return error_response(
-                "INVALID_REQUEST",
-                "patron_id must be null or omitted when speaker_kind is 'human'",
-                {"speaker_kind": actual_speaker_kind, "patron_id": patron_id},
-            )
+    validation_error = _validate_speaker_constraints(actual_speaker_kind, patron_id)
+    if validation_error is not None:
+        return validation_error
 
     # Verify table exists
     table_result = get_table(conn, TableId(table_id))
@@ -1227,62 +1642,20 @@ def table_say(
             {"table_status": table.status.value},
         )
 
-    # Resolve speaker name: if not provided, look up patron or use default
-    resolved_name = speaker_name
-    if resolved_name is None:
-        if patron_id is not None:
-            # Look up patron name
-            patron_result = get_patron(conn, PatronId(patron_id))
-            if isinstance(patron_result, Failure):
-                error = patron_result.failure()
-                if isinstance(error, PatronNotFoundError):
-                    return error_response("NOT_FOUND", f"Patron not found: {patron_id}")
-                return error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
-            patron = patron_result.unwrap()
-            resolved_name = patron.name
-        else:
-            # Human speaker without name - use default
-            resolved_name = "Human"
-
-    # Create speaker
-    if actual_speaker_kind == "agent":
-        # patron_id is guaranteed non-None due to validation above
-        assert patron_id is not None  # for type checker
-        speaker = Speaker(
-            kind=SpeakerKind.AGENT,
-            name=resolved_name,
-            patron_id=PatronId(patron_id),
-        )
-        speaker_key = patron_id
-    else:  # actual_speaker_kind == "human"
-        speaker = Speaker(
-            kind=SpeakerKind.HUMAN,
-            name=resolved_name,
-            patron_id=None,
-        )
-        speaker_key = "human"
+    # Resolve speaker
+    speaker, speaker_key, speaker_error = _resolve_speaker_for_say(
+        conn, actual_speaker_kind, patron_id, speaker_name
+    )
+    if speaker_error is not None:
+        return speaker_error
 
     # Resource key for idempotency scope: {table_id, speaker_key}
     resource_key = f"saying:{table_id}:{speaker_key}"
 
     # Check idempotency key if provided
-    if dedup_id is not None:
-        idempotency_result = check_idempotency_key(conn, resource_key, "table_say", dedup_id)
-        if isinstance(idempotency_result, Failure):
-            error = idempotency_result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
-
-        cached_response = idempotency_result.unwrap()
-        if cached_response is not None:
-            # Log dedup hit
-            log_dedup_hit(logger, "table_say", resource_key, dedup_id)
-            # Return cached response (return_existing semantics)
-            cached_data = cached_response["data"]
-            cached_data["_next_action"] = (
-                "Already sent (dedup). IMMEDIATELY call tasca.table_wait. "
-                "Your response = tool_call, not text."
-            )
-            return success_response(cached_data)
+    cached_response, should_return = _check_say_idempotency(conn, resource_key, dedup_id, logger)
+    if should_return and cached_response is not None:
+        return cached_response
 
     # Get limits configuration and append with limits check
     limits = _limits_config_from_settings()
@@ -1290,7 +1663,6 @@ def table_say(
 
     if isinstance(result, Failure):
         error = result.failure()
-        # Handle LimitError specifically
         if isinstance(error, LimitError):
             return _limit_error_to_response(error)
         return error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
@@ -1298,45 +1670,11 @@ def table_say(
     saying = result.unwrap()
 
     # Resolve mentions if provided
-    mentions_all = False
-    mentions_resolved: list[str] = []
-    mentions_unresolved: list[str] = []
-
-    if mentions:
-        # Get all patrons for mention resolution
-        patrons_result = list_patrons(conn)
-        if isinstance(patrons_result, Failure):
-            # Log but don't fail - mentions are optional enhancement
-            logger.warning(
-                "Failed to fetch patrons for mention resolution",
-                extra={"error": str(patrons_result.failure())},
-            )
-        else:
-            patrons = patrons_result.unwrap()
-            patron_matches = [
-                PatronMatch(patron_id=p.id, alias=p.alias, display_name=p.name) for p in patrons
-            ]
-            mentions_result = resolve_mentions(mentions, patron_matches)
-
-            # Check for ambiguous mentions (error condition per spec)
-            if has_ambiguous_mentions(mentions_result):
-                return error_response(
-                    "AMBIGUOUS_MENTION",
-                    "Multiple patrons match the provided mention handle(s)",
-                    {
-                        "ambiguous": [
-                            {
-                                "handle": am.handle,
-                                "candidates": [c.patron_id for c in am.candidates],
-                            }
-                            for am in mentions_result.ambiguous
-                        ],
-                    },
-                )
-
-            mentions_all = mentions_result.mentions_all
-            mentions_resolved = [r.patron_id for r in mentions_result.resolved]
-            mentions_unresolved = [u.handle for u in mentions_result.unresolved]
+    mentions_all, mentions_resolved, mentions_unresolved, mentions_error = (
+        _resolve_mentions_for_say(conn, mentions)
+    )
+    if mentions_error is not None:
+        return mentions_error
 
     # Log saying append
     log_say(
@@ -1348,32 +1686,11 @@ def table_say(
         patron_id=saying.speaker.patron_id,
     )
 
-    # Build response per spec, with backward-compatible fields
-    # Spec output: saying_id, sequence, created_at, mentions_all, mentions_resolved, mentions_unresolved
-    # Backward-compatible: id, table_id, speaker, content, pinned
-    response_data = {
-        # Spec fields
-        "saying_id": saying.id,
-        "sequence": saying.sequence,
-        "created_at": saying.created_at.isoformat(),
-        "mentions_all": mentions_all,
-        "mentions_resolved": mentions_resolved,
-        "mentions_unresolved": mentions_unresolved,
-        # Backward-compatible fields (not in spec but maintained for existing clients)
-        "id": saying.id,
-        "table_id": saying.table_id,
-        "speaker": {
-            "kind": saying.speaker.kind.value,
-            "name": saying.speaker.name,
-            "patron_id": saying.speaker.patron_id,
-        },
-        "content": saying.content,
-        "pinned": saying.pinned,
-        "_next_action": (
-            "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
-            "Your response = tool_call, not text."
-        ).format(seq=saying.sequence),
-    }
+    # Build response
+    response_data = _build_say_response(
+        saying, mentions_all, mentions_resolved, mentions_unresolved
+    )
+
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
         _ = store_idempotency_key(
@@ -1424,7 +1741,7 @@ def _compute_next_sequence(sayings: list[Any], since_sequence: int) -> int:
 
 
 # @shell_complexity: 5 branches for table lookup + long-poll loop + timeout + backoff + error handling
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_listen(
     table_id: str,
@@ -1534,8 +1851,60 @@ MAX_WAIT_MS = 10000
 POLL_INTERVAL_MS = 500
 
 
-# @shell_complexity: 12 branches for table lookup + state machine validation + status update + CONTROL saying append + dedup + error paths
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+def _create_control_speaker(speaker_name: str, patron_id: str | None) -> Speaker:
+    """Create a Speaker for control operations.
+
+    Args:
+        speaker_name: Name of the speaker.
+        patron_id: Optional patron ID (agent speakers).
+
+    Returns:
+        Speaker object.
+    """
+    if patron_id is not None:
+        return Speaker(
+            kind=SpeakerKind.AGENT,
+            name=speaker_name,
+            patron_id=PatronId(patron_id),
+        )
+    return Speaker(
+        kind=SpeakerKind.HUMAN,
+        name=speaker_name,
+        patron_id=None,
+    )
+
+
+# @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+def _append_control_saying(
+    conn: Any, table_id: str, action: str, reason: str | None, speaker: Speaker
+) -> tuple[Any | None, dict[str, Any] | None]:
+    """Append a CONTROL saying to the table.
+
+    Args:
+        conn: Database connection.
+        table_id: ID of the table.
+        action: Control action ("pause", "resume", "close").
+        reason: Optional reason for the action.
+        speaker: Speaker performing the action.
+
+    Returns:
+        Tuple of (saying object or None, error_response or None).
+    """
+    control_content = f"**CONTROL: {action.upper()}**"
+    if reason:
+        control_content += f"\n\nReason: {reason}"
+
+    saying_result = append_saying(conn, table_id, speaker, control_content)
+    if isinstance(saying_result, Failure):
+        error = saying_result.failure()
+        return None, error_response("DATABASE_ERROR", f"Failed to append control saying: {error}")
+
+    return saying_result.unwrap(), None
+
+
+# @shell_complexity: table lookup + state machine validation + status update + error paths
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_control(
     table_id: str,
@@ -1612,60 +1981,17 @@ def table_control(
         )
 
     # Validate and compute new status
-    if action == "pause":
-        if not can_transition_to_paused(current_table.status):
-            return error_response(
-                "OPERATION_NOT_ALLOWED",
-                f"Cannot pause table with status '{current_table.status.value}'. Only OPEN tables can be paused.",
-                {"table_status": current_table.status.value},
-            )
-        new_status = transition_to_paused(current_table.status)
-    elif action == "resume":
-        if not can_transition_to_open(current_table.status):
-            return error_response(
-                "OPERATION_NOT_ALLOWED",
-                f"Cannot resume table with status '{current_table.status.value}'. Only PAUSED tables can be resumed.",
-                {"table_status": current_table.status.value},
-            )
-        new_status = transition_to_open(current_table.status)
-    elif action == "close":
-        if not can_transition_to_closed(current_table.status):
-            return error_response(
-                "OPERATION_NOT_ALLOWED",
-                f"Cannot close table with status '{current_table.status.value}'.",
-                {"table_status": current_table.status.value},
-            )
-        new_status = transition_to_closed(current_table.status)
-    else:
-        return error_response("INVALID_ACTION", f"Unknown action: {action}")
+    new_status, validation_error = _validate_control_action(action, current_table.status)
+    if validation_error is not None:
+        return validation_error
+    assert new_status is not None  # Guaranteed by no validation error
 
-    # Create speaker
-    if patron_id is not None:
-        speaker = Speaker(
-            kind=SpeakerKind.AGENT,
-            name=speaker_name,
-            patron_id=PatronId(patron_id),
-        )
-    else:
-        speaker = Speaker(
-            kind=SpeakerKind.HUMAN,
-            name=speaker_name,
-            patron_id=None,
-        )
-
-    # Create CONTROL saying content
-    # Note: Current schema lacks saying_type field, so we encode control actions in content
-    control_content = f"**CONTROL: {action.upper()}**"
-    if reason:
-        control_content += f"\n\nReason: {reason}"
-
-    # Append CONTROL saying
-    saying_result = append_saying(conn, table_id, speaker, control_content)
-    if isinstance(saying_result, Failure):
-        error = saying_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to append control saying: {error}")
-
-    control_saying = saying_result.unwrap()
+    # Create speaker and append CONTROL saying
+    speaker = _create_control_speaker(speaker_name, patron_id)
+    control_saying, saying_error = _append_control_saying(conn, table_id, action, reason, speaker)
+    if saying_error is not None:
+        return saying_error
+    assert control_saying is not None  # Guaranteed by no saying_error
 
     # Update table status
     now = datetime.now(UTC)
@@ -1684,8 +2010,6 @@ def table_control(
     )
     if isinstance(update_result, Failure):
         error = update_result.failure()
-        # Note: VersionConflict should not happen here since we just read the table
-        # and this is a single-threaded operation, but handle it gracefully
         if isinstance(error, VersionConflictError):
             return error_response(
                 "VERSION_CONFLICT",
@@ -1697,21 +2021,7 @@ def table_control(
             )
         return error_response("DATABASE_ERROR", f"Failed to update table status: {error}")
 
-    # Context-dependent next action based on control operation
-    if new_status == TableStatus.OPEN:
-        next_action = (
-            "Table resumed. IMMEDIATELY call tasca.table_wait. Your response = tool_call, not text."
-        )
-    else:
-        next_action = (
-            f"Table is now {new_status.value}. Call tasca.table_leave, then report to the user."
-        )
-
-    response_data = {
-        "table_status": new_status.value,
-        "control_saying_sequence": control_saying.sequence,
-        "_next_action": next_action,
-    }
+    response_data = _build_control_response(new_status, control_saying.sequence)
 
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
@@ -1723,7 +2033,7 @@ def table_control(
 
 
 # @shell_complexity: 8 branches for table lookup + version check + update + dedup + error paths
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_update(
     table_id: str,
@@ -1800,27 +2110,9 @@ def table_update(
     current_table = table_result.unwrap()
 
     # Apply patch to create update (only supported fields)
-    # Note: question and context are required in TableUpdate
-    new_question = patch.get("question", current_table.question)
-    new_context = patch.get("context", current_table.context)
-    new_status = current_table.status
-
-    # Handle status update with state machine validation
-    if "status" in patch:
-        status_value = patch["status"]
-        try:
-            new_status = TableStatus(status_value)
-        except ValueError:
-            return error_response(
-                "INVALID_STATUS",
-                f"Invalid status value: {status_value}. Must be one of: open, paused, closed",
-            )
-
-    table_update = TableUpdate(
-        question=new_question,
-        context=new_context,
-        status=new_status,
-    )
+    table_update, patch_error = _apply_table_patch(current_table, patch)
+    if patch_error is not None:
+        return patch_error
 
     # Perform optimistic concurrency update
     now = datetime.now(UTC)
@@ -1843,32 +2135,13 @@ def table_update(
                 {
                     "expected_version": error.expected_version,
                     "actual_version": error.current_version,
-                    "table": {
-                        "id": current_table.id,
-                        "question": current_table.question,
-                        "context": current_table.context,
-                        "status": current_table.status.value,
-                        "version": current_table.version,
-                        "created_at": current_table.created_at.isoformat(),
-                        "updated_at": current_table.updated_at.isoformat(),
-                    },
+                    "table": _build_table_dict(current_table),
                 },
             )
         return error_response("DATABASE_ERROR", f"Failed to update table: {error}")
 
     updated_table = update_result.unwrap()
-
-    response_data = {
-        "table": {
-            "id": updated_table.id,
-            "question": updated_table.question,
-            "context": updated_table.context,
-            "status": updated_table.status.value,
-            "version": updated_table.version,
-            "created_at": updated_table.created_at.isoformat(),
-            "updated_at": updated_table.updated_at.isoformat(),
-        }
-    }
+    response_data = {"table": _build_table_dict(updated_table)}
 
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
@@ -1880,7 +2153,7 @@ def table_update(
 
 
 # @shell_complexity: 10 branches for table lookup + long-poll loop + timeout + backoff + error handling
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 # Note: FastMCP supports async tools - using async def for blocking wait
 @mcp.tool
 async def table_wait(
@@ -1961,37 +2234,14 @@ async def table_wait(
             loop = _record_wait_result(table_id, got_sayings=True)
 
             response_data: dict[str, Any] = {
-                "sayings": [
-                    {
-                        "id": s.id,
-                        "table_id": s.table_id,
-                        "sequence": s.sequence,
-                        "speaker": {
-                            "kind": s.speaker.kind.value,
-                            "name": s.speaker.name,
-                            "patron_id": s.speaker.patron_id,
-                        },
-                        "content": s.content,
-                        "pinned": s.pinned,
-                        "created_at": s.created_at.isoformat(),
-                    }
-                    for s in sayings
-                ],
+                "sayings": [_format_saying_dict(s) for s in sayings],
                 "next_sequence": next_sequence,
                 "timeout": False,
                 "_loop_state": loop,
             }
 
             if include_table:
-                response_data["table"] = {
-                    "id": table.id,
-                    "question": table.question,
-                    "context": table.context,
-                    "status": table.status.value,
-                    "version": table.version,
-                    "created_at": table.created_at.isoformat(),
-                    "updated_at": table.updated_at.isoformat(),
-                }
+                response_data["table"] = _build_table_dict(table)
 
             response_data["_next_action"] = (
                 "New sayings received. Decide internally whether to speak. "
@@ -2021,15 +2271,7 @@ async def table_wait(
     }
 
     if include_table:
-        response_data["table"] = {
-            "id": table.id,
-            "question": table.question,
-            "context": table.context,
-            "status": table.status.value,
-            "version": table.version,
-            "created_at": table.created_at.isoformat(),
-            "updated_at": table.updated_at.isoformat(),
-        }
+        response_data["table"] = _build_table_dict(table)
 
     return success_response(response_data)
 
@@ -2040,7 +2282,7 @@ async def table_wait(
 
 
 # @shell_complexity: 8 branches for patron/seat lookup + state mapping + TTL handling + idempotency + error paths
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def seat_heartbeat(
     table_id: str,
@@ -2169,7 +2411,7 @@ def seat_heartbeat(
     return success_response(response_data)
 
 
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def seat_list(
     table_id: str,
@@ -2236,7 +2478,7 @@ def seat_list(
 
 
 # @shell_complexity: 5 branches for session init + config state + error paths
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 async def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
     """Switch between local and remote MCP mode with session initialization.
@@ -2330,7 +2572,7 @@ async def connect(url: str | None = None, token: str | None = None) -> dict[str,
     )
 
 
-# @invar:allow shell_result: MCP tools return serializable primitives, not Result
+# @invar:allow shell_result: MCP protocol
 @mcp.tool
 def connection_status() -> dict[str, Any]:
     """Get the current proxy connection status.
@@ -2532,6 +2774,10 @@ class ProxyMiddleware(Middleware):
         # Convert MCP content blocks to ToolResult content
         # MCP content blocks have {type: "text", text: "..."} format
         content_blocks = []
+        # Type ignore note: mcp_content may contain dict or content block objects.
+        # When appending non-TextContent blocks (dict or other content types),
+        # the list[TextContent | ImageContent | EmbeddedResource] type doesn't
+        # match exactly, but the runtime behavior is correct per MCP spec.
         for block in mcp_content:
             if isinstance(block, dict):
                 if block.get("type") == "text":

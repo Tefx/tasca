@@ -3,6 +3,10 @@ Search repository - FTS5 full-text search implementation.
 
 This module handles I/O operations for searching sayings using SQLite FTS5.
 All database operations use Result[T, E] for error handling.
+
+Escape Hatch Convention (shell_result):
+    Repository functions perform database I/O and return Result[T, E].
+    Use "repo I/O" as the escape reason for database operations.
 """
 
 import sqlite3
@@ -62,7 +66,7 @@ class TableSearchHit:
     updated_at: str
 
 
-# @invar:allow shell_result: Shell layer - database I/O
+# @invar:allow shell_result: repo I/O
 # @shell_complexity: 4 branches for FTS query with optional table_id filter + error handling
 def search_sayings(
     conn: sqlite3.Connection,
@@ -144,7 +148,7 @@ def search_sayings(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: Shell layer - database I/O
+# @invar:allow shell_result: repo I/O
 # @shell_complexity: 4 branches for count query with optional table_id filter + error handling
 def count_search_results(
     conn: sqlite3.Connection,
@@ -191,7 +195,7 @@ def count_search_results(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: Shell layer - database I/O
+# @invar:allow shell_result: repo I/O
 def rebuild_fts_index(conn: sqlite3.Connection) -> Result[int, SearchError]:
     """Rebuild the FTS5 index from the sayings table.
 
@@ -221,7 +225,7 @@ def rebuild_fts_index(conn: sqlite3.Connection) -> Result[int, SearchError]:
         return Failure(SearchError(f"Failed to rebuild FTS index: {e}"))
 
 
-# @invar:allow shell_result: Shell helper - database row format conversion
+# @invar:allow shell_result: repo helper
 # @shell_orchestration: Private helper for DB row -> domain object conversion
 def _row_to_search_result(row: tuple) -> SearchResult:
     """Convert a database row to a SearchResult.
@@ -275,9 +279,128 @@ def _row_to_search_result(row: tuple) -> SearchResult:
 # =============================================================================
 
 
-# @invar:allow shell_result: Shell layer - database I/O
-# @shell_complexity: 15 branches for FTS query + LIKE fallback + status filter + pagination + deduplication
-# @function_size: Complex search orchestration required for combining FTS and LIKE searches
+def _execute_fts_search(
+    conn: sqlite3.Connection,
+    query_param: str,
+    status: str | None,
+) -> list[TableSearchHit]:
+    """Execute FTS5 search on saying content.
+
+    Args:
+        conn: Database connection.
+        query_param: Search query string.
+        status: Optional status filter.
+
+    Returns:
+        List of TableSearchHit from FTS5 matches.
+    """
+    fts_status_clause = "AND t.status = ?" if status else ""
+    fts_sql = f"""
+        SELECT DISTINCT
+            t.id as table_id,
+            t.question,
+            t.context,
+            t.status,
+            fts.rank,
+            snippet(sayings_fts, -1, '...', '...', '...', 32) as snippet,
+            'saying' as match_type,
+            t.created_at,
+            t.updated_at
+        FROM sayings_fts fts
+        JOIN sayings s ON fts.rowid = s.rowid
+        JOIN tables t ON s.table_id = t.id
+        WHERE sayings_fts MATCH ?
+        {fts_status_clause}
+        ORDER BY fts.rank
+    """
+
+    if status:
+        rows = conn.execute(fts_sql, (query_param, status)).fetchall()
+    else:
+        rows = conn.execute(fts_sql, (query_param,)).fetchall()
+
+    return [_row_to_table_hit(row) for row in rows]
+
+
+def _execute_like_search(
+    conn: sqlite3.Connection,
+    query_param: str,
+    status: str | None,
+    seen_tables: set[str],
+) -> list[TableSearchHit]:
+    """Execute LIKE search on table question and context.
+
+    Args:
+        conn: Database connection.
+        query_param: Search query string.
+        status: Optional status filter.
+        seen_tables: Set of already-seen table IDs (for deduplication).
+
+    Returns:
+        List of TableSearchHit from LIKE matches (excluding already seen).
+    """
+    like_status_clause = "AND status = ?" if status else ""
+    like_pattern = f"%{query_param}%"
+    like_sql = f"""
+        SELECT
+            id as table_id,
+            question,
+            context,
+            status,
+            0.0 as rank,
+            '' as snippet,
+            '' as match_type,
+            created_at,
+            updated_at
+        FROM tables
+        WHERE (question LIKE ? OR context LIKE ?)
+        {like_status_clause}
+        ORDER BY created_at DESC
+    """
+
+    if status:
+        rows = conn.execute(like_sql, (like_pattern, like_pattern, status)).fetchall()
+    else:
+        rows = conn.execute(like_sql, (like_pattern, like_pattern)).fetchall()
+
+    hits: list[TableSearchHit] = []
+    for row in rows:
+        table_id = row[0]
+        if table_id in seen_tables:
+            continue
+
+        question = row[1] or ""
+        context = row[2] or ""
+
+        # Determine match type and generate snippet
+        if query_param.lower() in question.lower():
+            match_type = "question"
+            snippet = _truncate_snippet(question, query_param)
+        elif context and query_param.lower() in context.lower():
+            match_type = "context"
+            snippet = _truncate_snippet(context, query_param)
+        else:
+            continue  # Should not happen, but be safe
+
+        hit = TableSearchHit(
+            table_id=table_id,
+            question=question,
+            context=context,
+            status=row[3],
+            rank=0.0,
+            snippet=snippet,
+            match_type=match_type,
+            created_at=row[7],
+            updated_at=row[8],
+        )
+        hits.append(hit)
+        seen_tables.add(table_id)
+
+    return hits
+
+
+# @invar:allow shell_result: repo I/O
+# @shell_complexity: FTS query + LIKE fallback + status filter + pagination
 def search_tables(
     conn: sqlite3.Connection,
     query: str,
@@ -313,112 +436,22 @@ def search_tables(
     try:
         query_param = query.strip()
 
-        # Build status filter clauses (different for FTS and LIKE queries)
-        fts_status_clause = "AND t.status = ?" if status else ""
-        like_status_clause = "AND status = ?" if status else ""
+        # Priority 1: FTS5 search on saying content (BM25 ranking)
+        fts_hits = _execute_fts_search(conn, query_param, status)
 
-        # Priority 1: Search in saying content via FTS5 (BM25 ranking)
-        # This gives us relevance-scored saying matches
-        fts_sql = f"""
-            SELECT DISTINCT
-                t.id as table_id,
-                t.question,
-                t.context,
-                t.status,
-                fts.rank,
-                snippet(sayings_fts, -1, '...', '...', '...', 32) as snippet,
-                'saying' as match_type,
-                t.created_at,
-                t.updated_at
-            FROM sayings_fts fts
-            JOIN sayings s ON fts.rowid = s.rowid
-            JOIN tables t ON s.table_id = t.id
-            WHERE sayings_fts MATCH ?
-            {fts_status_clause}
-            ORDER BY fts.rank
-        """
-
-        if status:
-            fts_rows = conn.execute(fts_sql, (query_param, status)).fetchall()
-        else:
-            fts_rows = conn.execute(fts_sql, (query_param,)).fetchall()
-
-        # Track seen tables for deduplication
+        # Deduplicate FTS hits (same table may have multiple matching sayings)
         seen_tables: set[str] = set()
-        hits: list[TableSearchHit] = []
-
-        # Add FTS5 (saying) matches first - these have BM25 ranking
-        for row in fts_rows:
-            table_id = row[0]
-            if table_id not in seen_tables:
-                hits.append(_row_to_table_hit(row))
-                seen_tables.add(table_id)
+        unique_fts_hits: list[TableSearchHit] = []
+        for hit in fts_hits:
+            if hit.table_id not in seen_tables:
+                unique_fts_hits.append(hit)
+                seen_tables.add(hit.table_id)
 
         # Priority 2 & 3: LIKE search for question and context
-        # These don't have BM25 ranking, so we add them after FTS results
-        like_pattern = f"%{query_param}%"
+        like_hits = _execute_like_search(conn, query_param, status, seen_tables)
 
-        # Build LIKE query for question and context
-        like_sql = f"""
-            SELECT
-                id as table_id,
-                question,
-                context,
-                status,
-                0.0 as rank,
-                '' as snippet,
-                '' as match_type,
-                created_at,
-                updated_at
-            FROM tables
-            WHERE (question LIKE ? OR context LIKE ?)
-            {like_status_clause}
-            ORDER BY created_at DESC
-        """
-
-        if status:
-            like_rows = conn.execute(like_sql, (like_pattern, like_pattern, status)).fetchall()
-        else:
-            like_rows = conn.execute(like_sql, (like_pattern, like_pattern)).fetchall()
-
-        # Process LIKE matches - question takes priority over context
-        for row in like_rows:
-            table_id = row[0]
-            if table_id in seen_tables:
-                continue
-
-            question = row[1] or ""
-            context = row[2] or ""
-
-            # Determine match type and generate snippet
-            if query_param.lower() in question.lower():
-                match_type = "question"
-                snippet = _truncate_snippet(question, query_param)
-            elif context and query_param.lower() in context.lower():
-                match_type = "context"
-                snippet = _truncate_snippet(context, query_param)
-            else:
-                continue  # Should not happen, but be safe
-
-            # Create hit with proper fields
-            hit = TableSearchHit(
-                table_id=table_id,
-                question=question,
-                context=context,
-                status=row[3],
-                rank=0.0,
-                snippet=snippet,
-                match_type=match_type,
-                created_at=row[7],
-                updated_at=row[8],
-            )
-            hits.append(hit)
-            seen_tables.add(table_id)
-
-        # Sort by rank (lower is better for BM25, so FTS hits come first)
-        # Then by match_type priority: question > context > saying
-        # For LIKE hits (rank=0), maintain order as added
-        total = len(hits)
+        # Combine: FTS hits first (have rank), then LIKE hits
+        hits = unique_fts_hits + like_hits
 
         # Apply pagination
         paginated_hits = hits[offset : offset + limit]
@@ -433,7 +466,7 @@ def search_tables(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: Shell layer - database I/O
+# @invar:allow shell_result: repo I/O
 # @shell_complexity: 8 branches for count query with FTS + LIKE + status filter
 def count_table_search_results(
     conn: sqlite3.Connection,
@@ -505,7 +538,7 @@ def count_table_search_results(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: Shell helper - database row format conversion
+# @invar:allow shell_result: repo helper
 # @shell_orchestration: Private helper for DB row format conversion
 def _row_to_table_hit(row: tuple) -> TableSearchHit:
     """Convert a database row to a TableSearchHit.
@@ -541,7 +574,7 @@ def _row_to_table_hit(row: tuple) -> TableSearchHit:
     )
 
 
-# @invar:allow shell_result: Pure helper function, no I/O
+# @invar:allow shell_result: repo helper
 # @shell_orchestration: Private helper for snippet truncation
 # @shell_complexity: 4 branches for text truncation logic
 def _truncate_snippet(text: str, query: str, max_len: int = 200) -> str:

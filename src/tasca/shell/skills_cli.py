@@ -13,7 +13,7 @@ import pathlib
 import sys
 
 
-# @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
+# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 def cmd_skills_list(_args: argparse.Namespace) -> int:
     """List all bundled skill names.
 
@@ -37,7 +37,7 @@ def cmd_skills_list(_args: argparse.Namespace) -> int:
     return 0
 
 
-# @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
+# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 def cmd_skills_show(args: argparse.Namespace) -> int:
     """Print the SKILL.md content for a named skill to stdout.
 
@@ -60,7 +60,7 @@ def cmd_skills_show(args: argparse.Namespace) -> int:
         return 1
 
 
-# @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
+# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 def cmd_skills_install(args: argparse.Namespace) -> int:
     """Install a bundled skill's SKILL.md to a user-specified target directory.
 

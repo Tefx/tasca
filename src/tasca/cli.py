@@ -516,7 +516,7 @@ def create_table_via_mcp(
         raise SystemExit(1) from e
 
 
-# @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
+# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_orchestration: Start server in foreground, create table directly, print banner
 # @shell_complexity: 5 branches for table creation error handling, token selection, and server startup
 def cmd_new(args: argparse.Namespace) -> int:
@@ -600,7 +600,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
-# @invar:allow shell_result: CLI entry points return exit codes, not Result[T, E]
+# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_orchestration: Argument parsing and command dispatch is orchestration, not business logic
 # @invar:allow shell_result: CLI command, delegates to MCP server entry point
 def cmd_mcp(_args: argparse.Namespace) -> int:

@@ -47,10 +47,7 @@ function fireKeyDown(key: string, shiftKey = false): KeyboardEvent {
 }
 
 /** Helper to render hook with standard options, reducing boilerplate. */
-function renderKeyboardNav(
-  sayingsCount: number,
-  refs: MockRefs
-): ReturnType<typeof renderHook<typeof useKeyboardNav>> {
+function renderKeyboardNav(sayingsCount: number, refs: MockRefs) {
   return renderHook(() =>
     useKeyboardNav({
       sayingsCount,

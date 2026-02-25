@@ -56,64 +56,27 @@ function canClose(status: string): boolean {
 }
 
 // =============================================================================
-// ConsoleToolbar Component
+// Close Confirmation Hook
 // =============================================================================
 
-interface ConsoleToolbarProps {
-  table: TableType
-  seats: Seat[]
-  patrons?: Map<string, PatronInfo>
-  isSubmitting: boolean
-  onInsertSummary: (text: string) => void
-  onStatusChange?: (table: TableType) => void
-  onError?: (error: Error) => void
+type CloseState = 'idle' | 'confirming' | 'closing'
+
+interface UseCloseConfirmationResult {
+  closeState: CloseState
+  canTriggerClose: boolean
+  handleClose: () => void
+  confirmClose: () => Promise<void>
+  cancelClose: () => void
 }
 
-/**
- * ConsoleToolbar — Admin controls for table operations.
- * Renders pause/resume/close buttons and summary request.
- */
-function ConsoleToolbar({
-  table,
-  seats,
-  patrons,
-  isSubmitting,
-  onInsertSummary,
-  onStatusChange,
-  onError,
-}: ConsoleToolbarProps) {
-  const [controlState, setControlState] = useState<'idle' | 'pausing' | 'resuming'>('idle')
-  const [closeState, setCloseState] = useState<'idle' | 'confirming' | 'closing'>('idle')
-
-  const isOperating = controlState !== 'idle'
-
-  const handlePause = useCallback(async () => {
-    if (!canPause(table.status) || isOperating) return
-
-    setControlState('pausing')
-    try {
-      const updated = await pauseTable(table)
-      onStatusChange?.(updated)
-    } catch (err) {
-      onError?.(err instanceof Error ? err : new Error('Failed to pause table'))
-    } finally {
-      setControlState('idle')
-    }
-  }, [table, isOperating, onStatusChange, onError])
-
-  const handleResume = useCallback(async () => {
-    if (!canResume(table.status) || isOperating) return
-
-    setControlState('resuming')
-    try {
-      const updated = await resumeTable(table)
-      onStatusChange?.(updated)
-    } catch (err) {
-      onError?.(err instanceof Error ? err : new Error('Failed to resume table'))
-    } finally {
-      setControlState('idle')
-    }
-  }, [table, isOperating, onStatusChange, onError])
+/** Hook to manage close confirmation state with escape key and auto-timeout. */
+function useCloseConfirmation(
+  table: TableType,
+  onStatusChange?: (table: TableType) => void,
+  onError?: (error: Error) => void,
+  isOperating?: boolean
+): UseCloseConfirmationResult {
+  const [closeState, setCloseState] = useState<CloseState>('idle')
 
   const handleClose = useCallback(() => {
     if (!canClose(table.status) || isOperating || closeState !== 'idle') return
@@ -133,38 +96,126 @@ function ConsoleToolbar({
     }
   }, [table, closeState, onStatusChange, onError])
 
-  const cancelClose = useCallback(() => {
-    setCloseState('idle')
-  }, [])
+  const cancelClose = useCallback(() => setCloseState('idle'), [])
 
   // Escape key cancels confirmation
   useEffect(() => {
     if (closeState !== 'confirming') return
-
-    const handleDocumentKeydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        cancelClose()
-      }
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelClose()
     }
-
-    document.addEventListener('keydown', handleDocumentKeydown)
-    return () => {
-      document.removeEventListener('keydown', handleDocumentKeydown)
-    }
+    document.addEventListener('keydown', handleKeydown)
+    return () => document.removeEventListener('keydown', handleKeydown)
   }, [closeState, cancelClose])
 
-  // Auto-revert timer: cancel confirmation after 5s idle
+  // Auto-revert after 5s idle
   useEffect(() => {
     if (closeState !== 'confirming') return
-
-    const timerId = window.setTimeout(() => {
-      setCloseState('idle')
-    }, 5000)
-
-    return () => {
-      window.clearTimeout(timerId)
-    }
+    const timer = window.setTimeout(() => setCloseState('idle'), 5000)
+    return () => window.clearTimeout(timer)
   }, [closeState])
+
+  return {
+    closeState,
+    canTriggerClose: canClose(table.status) && !isOperating,
+    handleClose,
+    confirmClose,
+    cancelClose,
+  }
+}
+
+// =============================================================================
+// Close Confirmation UI
+// =============================================================================
+
+interface CloseConfirmationProps {
+  closeState: CloseState
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+/** Inline confirmation UI for end meeting action. */
+function CloseConfirmation({ closeState, onConfirm, onCancel }: CloseConfirmationProps) {
+  return (
+    <span className="mc-inline-confirm" role="group" aria-label="Confirm end meeting">
+      <span className="mc-inline-confirm-label">End meeting?</span>
+      <button
+        type="button"
+        className="mc-control-btn mc-control-btn--end-confirm"
+        onClick={onConfirm}
+        disabled={closeState === 'closing'}
+        aria-label="Confirm end meeting"
+      >
+        {closeState === 'closing' ? 'Closing...' : 'Confirm'}
+      </button>
+      <button
+        type="button"
+        className="mc-control-btn mc-control-btn--cancel"
+        onClick={onCancel}
+        disabled={closeState === 'closing'}
+        aria-label="Cancel end meeting"
+      >
+        Cancel
+      </button>
+    </span>
+  )
+}
+
+// =============================================================================
+// ConsoleToolbar Component
+// =============================================================================
+
+interface ConsoleToolbarProps {
+  table: TableType
+  seats: Seat[]
+  patrons?: Map<string, PatronInfo>
+  isSubmitting: boolean
+  onInsertSummary: (text: string) => void
+  onStatusChange?: (table: TableType) => void
+  onError?: (error: Error) => void
+}
+
+/** ConsoleToolbar — Admin controls for table operations. */
+function ConsoleToolbar({
+  table,
+  seats,
+  patrons,
+  isSubmitting,
+  onInsertSummary,
+  onStatusChange,
+  onError,
+}: ConsoleToolbarProps) {
+  const [controlState, setControlState] = useState<'idle' | 'pausing' | 'resuming'>('idle')
+  const isOperating = controlState !== 'idle'
+
+  const { closeState, canTriggerClose, handleClose, confirmClose, cancelClose } =
+    useCloseConfirmation(table, onStatusChange, onError, isOperating)
+
+  const handlePause = useCallback(async () => {
+    if (!canPause(table.status) || isOperating) return
+    setControlState('pausing')
+    try {
+      const updated = await pauseTable(table)
+      onStatusChange?.(updated)
+    } catch (err) {
+      onError?.(err instanceof Error ? err : new Error('Failed to pause table'))
+    } finally {
+      setControlState('idle')
+    }
+  }, [table, isOperating, onStatusChange, onError])
+
+  const handleResume = useCallback(async () => {
+    if (!canResume(table.status) || isOperating) return
+    setControlState('resuming')
+    try {
+      const updated = await resumeTable(table)
+      onStatusChange?.(updated)
+    } catch (err) {
+      onError?.(err instanceof Error ? err : new Error('Failed to resume table'))
+    } finally {
+      setControlState('idle')
+    }
+  }, [table, isOperating, onStatusChange, onError])
 
   return (
     <div className="mc-console-toolbar">
@@ -197,39 +248,22 @@ function ConsoleToolbar({
           {controlState === 'resuming' ? 'Resuming...' : 'Resume'}
         </button>
       )}
-      {canClose(table.status) && closeState === 'idle' && (
+      {canTriggerClose && closeState === 'idle' && (
         <button
           type="button"
           className="mc-control-btn mc-control-btn--end-ghost"
           onClick={handleClose}
-          disabled={isOperating}
           title="End meeting — close table permanently"
         >
           End Meeting
         </button>
       )}
-      {canClose(table.status) && closeState !== 'idle' && (
-        <span className="mc-inline-confirm" role="group" aria-label="Confirm end meeting">
-          <span className="mc-inline-confirm-label">End meeting?</span>
-          <button
-            type="button"
-            className="mc-control-btn mc-control-btn--end-confirm"
-            onClick={confirmClose}
-            disabled={closeState === 'closing'}
-            aria-label="Confirm end meeting"
-          >
-            {closeState === 'closing' ? 'Closing...' : 'Confirm'}
-          </button>
-          <button
-            type="button"
-            className="mc-control-btn mc-control-btn--cancel"
-            onClick={cancelClose}
-            disabled={closeState === 'closing'}
-            aria-label="Cancel end meeting"
-          >
-            Cancel
-          </button>
-        </span>
+      {canTriggerClose && closeState !== 'idle' && (
+        <CloseConfirmation
+          closeState={closeState}
+          onConfirm={confirmClose}
+          onCancel={cancelClose}
+        />
       )}
     </div>
   )

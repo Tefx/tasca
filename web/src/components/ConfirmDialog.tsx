@@ -37,6 +37,24 @@ interface ConfirmDialogProps {
 // Component
 // =============================================================================
 
+/**
+ * ConfirmDialog — A modal dialog for confirming destructive actions.
+ *
+ * Accessible confirmation dialog with focus trap and keyboard support.
+ *
+ * @example
+ * ```tsx
+ * <ConfirmDialog
+ *   isOpen={showConfirm}
+ *   title="Delete Table"
+ *   message="Are you sure you want to delete this table? This action cannot be undone."
+ *   variant="danger"
+ *   confirmLabel="Delete"
+ *   onConfirm={handleDelete}
+ *   onCancel={() => setShowConfirm(false)}
+ * />
+ * ```
+ */
 export function ConfirmDialog({
   isOpen,
   title,

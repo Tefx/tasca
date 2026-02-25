@@ -92,6 +92,15 @@ function formatHeartbeat(iso: string, now: Date): string {
 
 /**
  * Determine presence status based on last heartbeat.
+ *
+ * @example
+ * ```typescript
+ * const status = getPresenceStatus(seat.last_heartbeat)
+ * // Returns: 'active' | 'idle' | 'offline'
+ *
+ * // With custom reference time
+ * const status = getPresenceStatus(seat.last_heartbeat, new Date('2024-01-01'))
+ * ```
  */
 export function getPresenceStatus(lastHeartbeat: string, now?: Date): SeatPresenceStatus {
   const date = new Date(lastHeartbeat)
@@ -235,6 +244,33 @@ function SeatCard({ seat, patron, isCurrentUser, onSelect, showPosition, positio
 // Main Component
 // =============================================================================
 
+/**
+ * SeatDeck component — Participant presence display for Mission Control.
+ *
+ * Shows participant cards with name, status badge, and presence indicator.
+ * Supports human and agent participants with different visual treatment.
+ *
+ * @example
+ * ```tsx
+ * // Basic usage
+ * <SeatDeck seats={seats} patrons={patronsMap} />
+ *
+ * // With current user highlight
+ * <SeatDeck
+ *   seats={seats}
+ *   patrons={patronsMap}
+ *   currentPatronId={myPatronId}
+ * />
+ *
+ * // As mention picker
+ * <SeatDeck
+ *   seats={seats}
+ *   patrons={patronsMap}
+ *   mentionableOnly
+ *   onSelect={(seat) => insertMention(seat.patron)}
+ * />
+ * ```
+ */
 export function SeatDeck({
   seats,
   patrons,
@@ -363,6 +399,16 @@ export interface MentionPickerProps {
  *
  * Shows filtered list of participants that can be mentioned.
  * Supports fuzzy search filtering by name or patron ID.
+ *
+ * @example
+ * ```tsx
+ * <MentionPicker
+ *   seats={joinedSeats}
+ *   patrons={patronsMap}
+ *   filter={mentionFilter}
+ *   onSelect={(p) => insertMention(p.displayName)}
+ * />
+ * ```
  */
 export function MentionPicker({
   seats,

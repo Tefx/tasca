@@ -109,9 +109,15 @@ const BLOCKED_COMMAND_CATEGORIES = {
 
 /**
  * Check if a LaTeX command is in our safe allowlist.
- * 
+ *
  * @param command - The LaTeX command name (without backslash)
  * @returns true if the command is safe and allowed
+ *
+ * @example
+ * ```typescript
+ * isCommandAllowed('frac')  // true - safe math command
+ * isCommandAllowed('input') // false - file access blocked
+ * ```
  */
 export function isCommandAllowed(command: string): boolean {
   return SAFE_MATH_COMMANDS.has(command)
@@ -119,9 +125,16 @@ export function isCommandAllowed(command: string): boolean {
 
 /**
  * Check if a command is explicitly dangerous (for error reporting).
- * 
+ *
  * @param command - The LaTeX command name (without backslash)
  * @returns The category of the blocked command, or null if not categorized
+ *
+ * @example
+ * ```typescript
+ * getBlockedCommandCategory('includegraphics') // 'EXTERNAL_RESOURCES'
+ * getBlockedCommandCategory('input')           // 'FILE_ACCESS'
+ * getBlockedCommandCategory('frac')            // null (safe)
+ * ```
  */
 export function getBlockedCommandCategory(command: string): string | null {
   for (const [category, commands] of Object.entries(BLOCKED_COMMAND_CATEGORIES)) {
@@ -299,10 +312,22 @@ export function MathRenderer({
 /**
  * Hook to render math and get the result/error separately.
  * Useful for testing and programmatic use.
- * 
+ *
  * @param latex - The LaTeX math expression to render
  * @param options - Optional KaTeX options
  * @returns Object with rendered HTML or error
+ *
+ * @example
+ * ```tsx
+ * function MathPreview({ latex }: { latex: string }) {
+ *   const { html, error } = useMathRenderer(latex)
+ *
+ *   if (error) return <span className="error">{error.message}</span>
+ *   if (!html) return null
+ *
+ *   return <span dangerouslySetInnerHTML={{ __html: html }} />
+ * }
+ * ```
  */
 export function useMathRenderer(
   latex: string,

@@ -173,6 +173,21 @@ function CopyButton({ text }: CopyButtonProps) {
 // Main Component
 // =============================================================================
 
+/**
+ * Watchtower - Table index page.
+ *
+ * Displays all discussion tables with search, status filter,
+ * and join-by-invite-code functionality.
+ *
+ * @example
+ * ```tsx
+ * // In router
+ * <Route path="/" element={<Watchtower />} />
+ *
+ * // Or standalone
+ * <Watchtower />
+ * ```
+ */
 export function Watchtower() {
   const navigate = useNavigate()
   const { tables, loading, error, refetch } = useTables()

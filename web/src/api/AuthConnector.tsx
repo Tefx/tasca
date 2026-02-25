@@ -10,6 +10,21 @@ import { useEffect } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { setAuthToken } from './client'
 
+/**
+ * Connects AuthContext to the API client.
+ *
+ * Listens to auth state changes and updates the API client's token.
+ * Renders nothing but must be placed inside AuthProvider.
+ *
+ * @example
+ * ```tsx
+ * // Place inside AuthProvider in your app root
+ * <AuthProvider>
+ *   <AuthConnector />
+ *   <App />
+ * </AuthProvider>
+ * ```
+ */
 export function AuthConnector(): null {
   const { getToken } = useAuth()
 

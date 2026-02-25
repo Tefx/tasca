@@ -1,14 +1,19 @@
+import { useState, useCallback, type FormEvent, type ChangeEvent } from 'react'
+import { useAuth } from '../auth/AuthContext'
+import './ModeIndicator.css'
+
 /**
  * ModeIndicator - Visual indicator for Viewer/Admin mode.
  *
  * Shows current mode and allows switching between modes.
  * For admin mode entry, shows a token input dialog.
+ *
+ * @example
+ * ```tsx
+ * // Place in header or toolbar
+ * <ModeIndicator />
+ * ```
  */
-
-import { useState, useCallback, type FormEvent, type ChangeEvent } from 'react'
-import { useAuth } from '../auth/AuthContext'
-import './ModeIndicator.css'
-
 export function ModeIndicator() {
   const { mode, hasToken, setToken, clearToken, enterAdminMode, enterViewerMode } = useAuth()
   const [showTokenInput, setShowTokenInput] = useState(false)

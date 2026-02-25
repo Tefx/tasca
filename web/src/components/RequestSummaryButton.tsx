@@ -40,6 +40,16 @@ export interface RequestSummaryButtonProps {
  * - Opens a picker to select target patron
  * - Defaults to first agent/host
  * - Inserts standardized summary request saying
+ *
+ * @example
+ * ```tsx
+ * <RequestSummaryButton
+ *   seats={seats}
+ *   patrons={patronsMap}
+ *   onInsert={(text) => postSaying(tableId, { content: text })}
+ *   disabled={!isAdmin}
+ * />
+ * ```
  */
 export function RequestSummaryButton({
   seats,

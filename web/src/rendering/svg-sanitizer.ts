@@ -310,6 +310,13 @@ function sanitizeElement(element: Element): void {
  *
  * @param svgString - SVG string to check
  * @returns True if dangerous content is found
+ *
+ * @example
+ * ```typescript
+ * hasDangerousSvgContent('<svg><circle r="5"/></svg>') // false
+ * hasDangerousSvgContent('<svg onload="alert(1)">')    // true
+ * hasDangerousSvgContent('<svg><script>alert(1)</script></svg>') // true
+ * ```
  */
 export function hasDangerousSvgContent(svgString: string): boolean {
   // Dangerous elements per ADR-002 §2 and §4
@@ -345,6 +352,17 @@ export function hasDangerousSvgContent(svgString: string): boolean {
  *
  * @param svgString - Raw SVG string
  * @returns Sanitized SVG string
+ *
+ * @example
+ * ```typescript
+ * // Remove script tags
+ * const clean = sanitizeSvgRegex('<svg><script>alert(1)</script></svg>')
+ * // Returns: '<svg></svg>'
+ *
+ * // Remove event handlers
+ * const safe = sanitizeSvgRegex('<svg onload="alert(1)">')
+ * // Returns: '<svg >' (handler removed)
+ * ```
  */
 export function sanitizeSvgRegex(svgString: string): string {
   let result = svgString

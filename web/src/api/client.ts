@@ -14,6 +14,15 @@ let authToken: string | null = null
  * Set the auth token for subsequent API requests.
  * Called by AuthContext when token changes.
  * Token should NEVER be logged here.
+ *
+ * @example
+ * ```typescript
+ * // Set token on login
+ * setAuthToken('admin-secret-token')
+ *
+ * // Clear token on logout
+ * setAuthToken(null)
+ * ```
  */
 export function setAuthToken(token: string | null): void {
   authToken = token
@@ -22,6 +31,14 @@ export function setAuthToken(token: string | null): void {
 /**
  * Get the current auth token (for debugging/inspection).
  * Returns 'set' or 'not set' - never returns the actual token.
+ *
+ * @example
+ * ```typescript
+ * const status = getAuthTokenStatus()
+ * if (status === 'set') {
+ *   console.log('Token is configured')
+ * }
+ * ```
  */
 export function getAuthTokenStatus(): 'set' | 'not set' {
   return authToken ? 'set' : 'not set'
@@ -32,6 +49,18 @@ export function getAuthTokenStatus(): 'set' | 'not set' {
  *
  * Automatically includes Authorization header when token is set.
  * Handles common error cases including 401 (auth failure).
+ *
+ * @example
+ * ```typescript
+ * // GET request
+ * const tables = await apiClient<Table[]>('/tables')
+ *
+ * // POST request
+ * const newTable = await apiClient<Table>('/tables', {
+ *   method: 'POST',
+ *   body: JSON.stringify({ question: 'What to discuss?' })
+ * })
+ * ```
  */
 export async function apiClient<T>(
   path: string,

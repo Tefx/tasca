@@ -88,12 +88,28 @@ export interface SearchResponse {
 // API Functions
 // =============================================================================
 
-/** Fetch a single table by ID. Backend endpoint: GET /tables/{tableId} */
+/** 
+ * Fetch a single table by ID. Backend endpoint: GET /tables/{tableId}
+ *
+ * @example
+ * ```typescript
+ * const table = await getTable('550e8400-e29b-41d4-a716-446655440000')
+ * console.log(table.question, table.status)
+ * ```
+ */
 export function getTable(tableId: string): Promise<Table> {
   return apiClient<Table>(`/tables/${tableId}`)
 }
 
-/** Fetch all tables, ordered by creation date (newest first). */
+/**
+ * Fetch all tables, ordered by creation date (newest first).
+ *
+ * @example
+ * ```typescript
+ * const tables = await listTables()
+ * tables.forEach(t => console.log(t.question, t.status))
+ * ```
+ */
 export function listTables(): Promise<Table[]> {
   return apiClient<Table[]>('/tables')
 }
@@ -103,6 +119,15 @@ export function listTables(): Promise<Table[]> {
  *
  * @param q - Search query string (required, min 1 char)
  * @param status - Optional table status filter
+ *
+ * @example
+ * ```typescript
+ * // Search all tables
+ * const results = await searchTables('project planning')
+ *
+ * // Search only open tables
+ * const openResults = await searchTables('project', 'open')
+ * ```
  */
 export function searchTables(
   q: string,
@@ -115,7 +140,17 @@ export function searchTables(
   return apiClient<SearchResponse>(`/search?${params.toString()}`)
 }
 
-/** Build export URL for table transcript downloads. */
+/**
+ * Build export URL for table transcript downloads.
+ *
+ * @example
+ * ```typescript
+ * const markdownUrl = getExportUrl(tableId, 'markdown')
+ * window.open(markdownUrl, '_blank')
+ *
+ * const jsonUrl = getExportUrl(tableId, 'jsonl')
+ * ```
+ */
 export function getExportUrl(tableId: string, format: string): string {
   const encodedTableId = encodeURIComponent(tableId)
   const encodedFormat = encodeURIComponent(format)
@@ -137,6 +172,21 @@ export function getExportUrl(tableId: string, format: string): string {
  * @returns The updated table with incremented version
  * @throws AuthError if admin token is missing or invalid
  * @throws ApiError with version conflict details if version mismatch (status 409)
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   const updated = await updateTable(tableId, {
+ *     question: 'New question',
+ *     context: 'Updated context',
+ *     status: 'open'
+ *   }, table.version)
+ * } catch (e) {
+ *   if (e instanceof ApiError && e.status === 409) {
+ *     console.log('Version conflict - refresh and retry')
+ *   }
+ * }
+ * ```
  */
 export async function updateTable(
   tableId: string,
@@ -169,6 +219,12 @@ export async function updateTable(
  * @param action - Lifecycle action
  * @param speakerName - Actor display name
  * @param reason - Optional reason for audit trail
+ *
+ * @example
+ * ```typescript
+ * const result = await controlTable(tableId, 'pause', 'human', 'Taking a break')
+ * console.log(result.table_status) // 'paused'
+ * ```
  */
 export function controlTable(
   tableId: string,
@@ -191,6 +247,12 @@ export function controlTable(
  *
  * @param table - Current table state
  * @returns Updated table
+ *
+ * @example
+ * ```typescript
+ * const paused = await pauseTable(table)
+ * console.log(paused.status) // 'paused'
+ * ```
  */
 export function pauseTable(table: Table): Promise<Table> {
   return controlTable(table.id, 'pause', 'human').then(() => getTable(table.id))
@@ -201,6 +263,12 @@ export function pauseTable(table: Table): Promise<Table> {
  *
  * @param table - Current table state
  * @returns Updated table
+ *
+ * @example
+ * ```typescript
+ * const resumed = await resumeTable(pausedTable)
+ * console.log(resumed.status) // 'open'
+ * ```
  */
 export function resumeTable(table: Table): Promise<Table> {
   return controlTable(table.id, 'resume', 'human').then(() => getTable(table.id))
@@ -211,6 +279,12 @@ export function resumeTable(table: Table): Promise<Table> {
  *
  * @param table - Current table state
  * @returns Updated table
+ *
+ * @example
+ * ```typescript
+ * const closed = await closeTable(table)
+ * console.log(closed.status) // 'closed'
+ * ```
  */
 export function closeTable(table: Table): Promise<Table> {
   return controlTable(table.id, 'close', 'human').then(() => getTable(table.id))

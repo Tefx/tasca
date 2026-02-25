@@ -51,6 +51,17 @@ function statusLabel(status: TableStatus): string {
 // Component
 // =============================================================================
 
+/**
+ * Board component — Context rail for Mission Control.
+ *
+ * Displays table metadata and board data (pinned items / agenda).
+ * Board data is a v0.1 placeholder — backend does not serve board keys yet.
+ *
+ * @example
+ * ```tsx
+ * <Board table={table} />
+ * ```
+ */
 export function Board({ table }: BoardProps) {
   return (
     <div className="mc-board" role="complementary" aria-label="Table context">

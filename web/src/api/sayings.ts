@@ -134,6 +134,12 @@ export const SEAT_TTL_SECONDS = 60
  *
  * Returns all sayings (since_sequence=-1) by default.
  * Backend endpoint: GET /tables/{tableId}/sayings
+ *
+ * @example
+ * ```typescript
+ * const { sayings, next_sequence } = await listSayings(tableId)
+ * console.log(`Got ${sayings.length} sayings, next at ${next_sequence}`)
+ * ```
  */
 export function listSayings(tableId: string): Promise<SayingListResponse> {
   return apiClient<SayingListResponse>(`/tables/${tableId}/sayings`)
@@ -148,6 +154,17 @@ export function listSayings(tableId: string): Promise<SayingListResponse> {
  *
  * Backend endpoint: GET /tables/{tableId}/sayings/wait
  * Design source: docs/tasca-http-api-v0.1.md (Long-poll protocol)
+ *
+ * @example
+ * ```typescript
+ * const controller = new AbortController()
+ * const { sayings, next_sequence } = await waitForSayings(
+ *   tableId,
+ *   lastSequence,
+ *   controller.signal,
+ *   5000 // 5 second timeout
+ * )
+ * ```
  */
 export function waitForSayings(
   tableId: string,
@@ -171,6 +188,15 @@ export function waitForSayings(
  *
  * Requires admin authentication (token set via setAuthToken).
  * Backend endpoint: POST /tables/{tableId}/sayings
+ *
+ * @example
+ * ```typescript
+ * const saying = await postSaying(tableId, {
+ *   speaker_name: 'Claude',
+ *   content: 'Hello, world!',
+ *   patron_id: patronId
+ * })
+ * ```
  */
 export function postSaying(tableId: string, data: SayingCreate): Promise<Saying> {
   return apiClient<Saying>(`/tables/${tableId}/sayings`, {
@@ -186,6 +212,12 @@ export function postSaying(tableId: string, data: SayingCreate): Promise<Saying>
  * participants in the mention picker and seat deck. The frontend handles
  * presence status via getPresenceStatus() based on last_heartbeat.
  * Backend endpoint: GET /tables/{tableId}/seats
+ *
+ * @example
+ * ```typescript
+ * const { seats, active_count } = await listSeats(tableId)
+ * console.log(`${active_count} active participants`)
+ * ```
  */
 export function listSeats(tableId: string): Promise<SeatListResponse> {
   return apiClient<SeatListResponse>(`/tables/${tableId}/seats?active_only=false`)
@@ -196,6 +228,12 @@ export function listSeats(tableId: string): Promise<SeatListResponse> {
  *
  * Call periodically to maintain presence at a table.
  * Backend endpoint: POST /tables/{tableId}/seats/{seatId}/heartbeat
+ *
+ * @example
+ * ```typescript
+ * const { seat, expires_at } = await heartbeatSeat(tableId, seatId)
+ * console.log(`Seat expires at ${expires_at}`)
+ * ```
  */
 export function heartbeatSeat(tableId: string, seatId: string): Promise<HeartbeatResponse> {
   return apiClient<HeartbeatResponse>(`/tables/${tableId}/seats/${seatId}/heartbeat`, {

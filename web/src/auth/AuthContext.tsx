@@ -58,6 +58,18 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 /**
  * Access the auth context.
  * Must be used within an AuthProvider.
+ *
+ * @example
+ * ```tsx
+ * function MyComponent() {
+ *   const { mode, hasToken, setToken, clearToken } = useAuth()
+ *
+ *   if (mode === 'admin') {
+ *     return <button onClick={clearToken}>Logout</button>
+ *   }
+ *   return <button onClick={() => setToken('my-token')}>Login</button>
+ * }
+ * ```
  */
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext)
@@ -82,6 +94,15 @@ interface AuthProviderProps {
  * - sessionStorage: Cleared when tab/window closes (not localStorage)
  * - Token never logged or exposed in UI
  * - Mode persisted separately so user can switch easily
+ *
+ * @example
+ * ```tsx
+ * // Wrap your app with AuthProvider
+ * <AuthProvider>
+ *   <AuthConnector />
+ *   <App />
+ * </AuthProvider>
+ * ```
  */
 export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize from sessionStorage on mount

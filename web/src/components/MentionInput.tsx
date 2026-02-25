@@ -350,6 +350,25 @@ export interface MentionErrorProps {
  *
  * - Ambiguous: Multiple patrons match the handle
  * - Unresolved: No patron matches the handle
+ *
+ * @example
+ * ```tsx
+ * // Ambiguous mention (multiple matches)
+ * <MentionError
+ *   type="ambiguous"
+ *   handle="alex"
+ *   candidates={matchingPatrons}
+ *   onDisambiguate={(p) => selectPatron(p)}
+ *   onDismiss={() => clearError()}
+ * />
+ *
+ * // Unresolved mention (no matches)
+ * <MentionError
+ *   type="unresolved"
+ *   handle="unknown"
+ *   onDismiss={() => clearError()}
+ * />
+ * ```
  */
 export function MentionError({
   type,

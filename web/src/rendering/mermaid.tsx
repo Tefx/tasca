@@ -123,6 +123,12 @@ export function stripMermaidInitDirectives(code: string): string {
  *
  * @param code - Mermaid diagram code
  * @returns Number of init directives found
+ *
+ * @example
+ * ```typescript
+ * countMermaidInitDirectives('graph TD; A-->B') // 0
+ * countMermaidInitDirectives('%%{init: {}}%%\ngraph TD') // 1
+ * ```
  */
 export function countMermaidInitDirectives(code: string): number {
   const matches = code.match(MERMAID_INIT_DIRECTIVE_PATTERN)
@@ -134,6 +140,12 @@ export function countMermaidInitDirectives(code: string): number {
  *
  * @param code - Mermaid diagram code
  * @returns True if init directives are present
+ *
+ * @example
+ * ```typescript
+ * hasMermaidInitDirectives('graph TD; A-->B') // false
+ * hasMermaidInitDirectives('%%{init: {}}%%\ngraph TD') // true
+ * ```
  */
 export function hasMermaidInitDirectives(code: string): boolean {
   return countMermaidInitDirectives(code) > 0

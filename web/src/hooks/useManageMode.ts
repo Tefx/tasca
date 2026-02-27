@@ -8,8 +8,6 @@ import { useState, useCallback, useEffect } from 'react'
 import { batchDeleteTables, controlTable, type Table } from '../api/tables'
 import { ApiError } from '../api/client'
 
-const MAX_BATCH_SIZE = 100
-
 /** Parse per-ID rejection details from a 409 batch delete error. */
 function parseBatchDeleteError(err: unknown): string {
   if (err instanceof ApiError && err.status === 409) {
@@ -97,7 +95,6 @@ export function useManageMode(
       if (next.has(tableId)) {
         next.delete(tableId)
       } else {
-        if (next.size >= MAX_BATCH_SIZE) return prev
         next.add(tableId)
       }
       return next
@@ -110,7 +107,7 @@ export function useManageMode(
       if (allSelected) {
         return new Set()
       }
-      const ids = visibleTables.slice(0, MAX_BATCH_SIZE).map((t) => t.id)
+      const ids = visibleTables.map((t) => t.id)
       return new Set(ids)
     })
   }, [])

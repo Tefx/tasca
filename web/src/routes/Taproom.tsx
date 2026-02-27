@@ -11,6 +11,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   useRef,
   type FormEvent,
   type ChangeEvent,
@@ -277,10 +278,22 @@ export function Taproom() {
     [navigate]
   )
 
-  // Manage mode: toggle all closed in current view
+  // Selection breakdown: which selected tables are closable vs deletable
+  const breakdown = useMemo(() => {
+    const closable: string[] = []
+    const deletable: string[] = []
+    for (const id of manage.selectedIds) {
+      const t = filteredTables.find((table) => table.id === id)
+      if (!t) continue
+      if (t.status === 'closed') deletable.push(id)
+      else closable.push(id)
+    }
+    return { closable, deletable }
+  }, [manage.selectedIds, filteredTables])
+
+  // Manage mode: toggle all visible tables in current view
   const handleToggleSelectAll = useCallback(() => {
-    const closedInView = filteredTables.filter((t) => t.status === 'closed')
-    manage.toggleSelectAll(closedInView)
+    manage.toggleSelectAll(filteredTables)
   }, [filteredTables, manage])
 
   return (
@@ -401,26 +414,52 @@ export function Taproom() {
       {manage.manageMode && manage.selectedIds.size > 0 && (
         <div className="tr-action-bar" role="status">
           <span className="tr-action-bar-count">
-            {manage.selectedIds.size} table{manage.selectedIds.size !== 1 ? 's' : ''} selected
+            {manage.selectedIds.size} selected
           </span>
+          {manage.closeError && (
+            <span className="tr-action-bar-error">{manage.closeError}</span>
+          )}
           {manage.deleteError && (
             <span className="tr-action-bar-error">{manage.deleteError}</span>
           )}
-          <button
-            type="button"
-            className="tr-action-bar-delete"
-            onClick={manage.requestDelete}
-          >
-            Delete
-          </button>
+          {breakdown.closable.length > 0 && (
+            <button
+              type="button"
+              className="tr-action-bar-close"
+              onClick={manage.requestClose}
+            >
+              Close{breakdown.deletable.length > 0 ? ` ${breakdown.closable.length}` : ''}
+            </button>
+          )}
+          {breakdown.deletable.length > 0 && (
+            <button
+              type="button"
+              className="tr-action-bar-delete"
+              onClick={manage.requestDelete}
+            >
+              Delete{breakdown.closable.length > 0 ? ` ${breakdown.deletable.length}` : ''}
+            </button>
+          )}
         </div>
       )}
+
+      {/* Confirm dialog for batch close */}
+      <ConfirmDialog
+        isOpen={manage.showCloseConfirm}
+        title="Close Tables"
+        message={`Close ${breakdown.closable.length} table${breakdown.closable.length !== 1 ? 's' : ''}? This will end their discussions and notify all participants. Closed tables can be deleted later.`}
+        confirmLabel="Close"
+        cancelLabel="Cancel"
+        isLoading={manage.closeLoading}
+        onConfirm={() => manage.confirmClose(breakdown.closable)}
+        onCancel={manage.cancelClose}
+      />
 
       {/* Confirm dialog for batch delete */}
       <ConfirmDialog
         isOpen={manage.showDeleteConfirm}
         title="Delete Tables"
-        message={`Are you sure you want to delete ${manage.selectedIds.size} table${manage.selectedIds.size !== 1 ? 's' : ''}? This will permanently remove the tables and all their sayings. This action cannot be undone.`}
+        message={`Are you sure you want to delete ${breakdown.deletable.length} table${breakdown.deletable.length !== 1 ? 's' : ''}? This will permanently remove the tables and all their sayings. This action cannot be undone.`}
         variant="danger"
         confirmLabel="Delete"
         cancelLabel="Cancel"
@@ -507,8 +546,7 @@ function TableList({
   onToggleSelect,
   onToggleSelectAll,
 }: TableListProps) {
-  const closedTables = tables.filter((t) => t.status === 'closed')
-  const allClosedSelected = closedTables.length > 0 && closedTables.every((t) => selectedIds.has(t.id))
+  const allSelected = tables.length > 0 && tables.every((t) => selectedIds.has(t.id))
 
   return (
     <table className="tr-table" role="grid" aria-label="Discussion tables">
@@ -518,10 +556,10 @@ function TableList({
             <th scope="col" className="tr-cell-checkbox">
               <input
                 type="checkbox"
-                checked={allClosedSelected}
+                checked={allSelected}
                 onChange={onToggleSelectAll}
-                aria-label="Select all closed tables"
-                disabled={closedTables.length === 0}
+                aria-label="Select all tables"
+                disabled={tables.length === 0}
               />
             </th>
           )}
@@ -535,24 +573,22 @@ function TableList({
       </thead>
       <tbody>
         {tables.map((table) => {
-          const isClosed = table.status === 'closed'
           const isSelected = selectedIds.has(table.id)
-          const rowDisabled = manageMode && !isClosed
 
           return (
             <tr
               key={table.id}
-              className={`tr-table-row${rowDisabled ? ' tr-table-row--disabled' : ''}${isSelected ? ' tr-table-row--selected' : ''}`}
+              className={`tr-table-row${isSelected ? ' tr-table-row--selected' : ''}`}
               onClick={() => {
                 if (manageMode) {
-                  if (isClosed) onToggleSelect(table.id)
+                  onToggleSelect(table.id)
                 } else {
                   onRowClick(table.id)
                 }
               }}
               onKeyDown={(e) => {
                 if (manageMode) {
-                  if ((e.key === 'Enter' || e.key === ' ') && isClosed) {
+                  if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
                     onToggleSelect(table.id)
                   }
@@ -560,18 +596,16 @@ function TableList({
                   onRowKeyDown(table.id, e)
                 }
               }}
-              tabIndex={rowDisabled ? -1 : 0}
+              tabIndex={0}
               role="row"
               aria-label={`Table: ${table.question}`}
               aria-selected={manageMode ? isSelected : undefined}
-              aria-disabled={rowDisabled || undefined}
             >
               {manageMode && (
                 <td className="tr-cell-checkbox">
                   <input
                     type="checkbox"
                     checked={isSelected}
-                    disabled={!isClosed}
                     onChange={() => onToggleSelect(table.id)}
                     onClick={(e) => e.stopPropagation()}
                     aria-label={`Select table: ${table.question}`}

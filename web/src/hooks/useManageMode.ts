@@ -1,11 +1,11 @@
 /**
- * Manage mode hook — encapsulates batch delete selection state.
+ * Manage mode hook — encapsulates batch delete and batch close selection state.
  *
  * Extracted from Taproom.tsx to reduce component complexity (S-2).
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { batchDeleteTables, type Table } from '../api/tables'
+import { batchDeleteTables, controlTable, type Table } from '../api/tables'
 import { ApiError } from '../api/client'
 
 const MAX_BATCH_SIZE = 100
@@ -41,17 +41,23 @@ export interface UseManageModeResult {
   enterManageMode: () => void
   exitManageMode: () => void
   toggleSelect: (tableId: string) => void
-  toggleSelectAll: (closedTables: Table[]) => void
+  toggleSelectAll: (visibleTables: Table[]) => void
   requestDelete: () => void
   cancelDelete: () => void
   confirmDelete: () => Promise<void>
+  showCloseConfirm: boolean
+  closeLoading: boolean
+  closeError: string | null
+  requestClose: () => void
+  cancelClose: () => void
+  confirmClose: (closableIds: string[]) => Promise<void>
 }
 
 /**
- * Hook managing batch delete selection state and actions.
+ * Hook managing batch delete and batch close selection state and actions.
  *
  * @param isAdmin - Whether the current user has admin privileges
- * @param onDeleteSuccess - Callback after successful batch delete (e.g. refetch tables)
+ * @param onDeleteSuccess - Callback after successful batch delete or close (e.g. refetch tables)
  */
 export function useManageMode(
   isAdmin: boolean,
@@ -62,6 +68,9 @@ export function useManageMode(
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [closeLoading, setCloseLoading] = useState(false)
+  const [closeError, setCloseError] = useState<string | null>(null)
 
   // Exit manage mode when switching away from admin
   useEffect(() => {
@@ -79,6 +88,7 @@ export function useManageMode(
     setManageMode(false)
     setSelectedIds(new Set())
     setDeleteError(null)
+    setCloseError(null)
   }, [])
 
   const toggleSelect = useCallback((tableId: string) => {
@@ -94,13 +104,13 @@ export function useManageMode(
     })
   }, [])
 
-  const toggleSelectAll = useCallback((closedTables: Table[]) => {
+  const toggleSelectAll = useCallback((visibleTables: Table[]) => {
     setSelectedIds((prev) => {
-      const allSelected = closedTables.length > 0 && closedTables.every((t) => prev.has(t.id))
+      const allSelected = visibleTables.length > 0 && visibleTables.every((t) => prev.has(t.id))
       if (allSelected) {
         return new Set()
       }
-      const ids = closedTables.slice(0, MAX_BATCH_SIZE).map((t) => t.id)
+      const ids = visibleTables.slice(0, MAX_BATCH_SIZE).map((t) => t.id)
       return new Set(ids)
     })
   }, [])
@@ -121,7 +131,6 @@ export function useManageMode(
       await batchDeleteTables(Array.from(selectedIds))
       setSelectedIds(new Set())
       setShowDeleteConfirm(false)
-      setManageMode(false)
       onDeleteSuccess()
     } catch (err) {
       setDeleteError(parseBatchDeleteError(err))
@@ -130,6 +139,61 @@ export function useManageMode(
       setDeleteLoading(false)
     }
   }, [selectedIds, onDeleteSuccess])
+
+  const requestClose = useCallback(() => {
+    setShowCloseConfirm(true)
+  }, [])
+
+  const cancelClose = useCallback(() => {
+    setShowCloseConfirm(false)
+  }, [])
+
+  const confirmClose = useCallback(async (closableIds: string[]) => {
+    if (closableIds.length === 0) return
+    setCloseLoading(true)
+    setCloseError(null)
+    try {
+      const results = await Promise.allSettled(
+        closableIds.map((id) => controlTable(id, 'close', 'human'))
+      )
+      const failedIds: string[] = []
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          failedIds.push(closableIds[index])
+        }
+      })
+      if (failedIds.length === 0) {
+        // Full success: clear selection, stay in manage mode, refetch
+        setSelectedIds(new Set())
+        setShowCloseConfirm(false)
+        onDeleteSuccess()
+      } else if (failedIds.length === closableIds.length) {
+        // Total failure
+        setCloseError(`Failed to close all ${failedIds.length} tables`)
+        setShowCloseConfirm(false)
+      } else {
+        // Partial failure: keep failed IDs selected, clear succeeded ones
+        setSelectedIds((prev) => {
+          const next = new Set(prev)
+          closableIds.forEach((id) => {
+            if (!failedIds.includes(id)) {
+              next.delete(id)
+            }
+          })
+          return next
+        })
+        setCloseError(`Failed to close ${failedIds.length} of ${closableIds.length} tables`)
+        setShowCloseConfirm(false)
+        onDeleteSuccess()
+      }
+    } catch (err) {
+      // Unexpected error (not from allSettled — those are captured as rejections)
+      setCloseError(err instanceof Error ? err.message : 'Failed to close tables')
+      setShowCloseConfirm(false)
+    } finally {
+      setCloseLoading(false)
+    }
+  }, [onDeleteSuccess])
 
   return {
     manageMode,
@@ -144,5 +208,11 @@ export function useManageMode(
     requestDelete,
     cancelDelete,
     confirmDelete,
+    showCloseConfirm,
+    closeLoading,
+    closeError,
+    requestClose,
+    cancelClose,
+    confirmClose,
   }
 }

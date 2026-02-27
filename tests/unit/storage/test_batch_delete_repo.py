@@ -161,6 +161,28 @@ class TestCascadeDelete:
         assert db_conn.execute("SELECT COUNT(*) FROM seats").fetchone()[0] == 0
         assert db_conn.execute("SELECT COUNT(*) FROM sayings").fetchone()[0] == 0
 
+    def test_fts5_index_cleaned_on_cascade(self, db_conn):
+        """S-3: Verify FTS5 index entries are removed when sayings are cascade-deleted."""
+        _insert_patron(db_conn, "p1")
+        create_table(db_conn, _make_table("t1"))
+        speaker = Speaker(kind=SpeakerKind.AGENT, name="test", patron_id="p1")
+        append_saying(db_conn, "t1", speaker, "unique searchable keyword")
+
+        # Verify FTS5 index contains the entry
+        fts_before = db_conn.execute(
+            "SELECT COUNT(*) FROM sayings_fts WHERE sayings_fts MATCH 'unique'",
+        ).fetchone()[0]
+        assert fts_before >= 1
+
+        result = batch_delete_tables(db_conn, ["t1"])
+        assert isinstance(result, Success)
+
+        # FTS5 index should be clean
+        fts_after = db_conn.execute(
+            "SELECT COUNT(*) FROM sayings_fts WHERE sayings_fts MATCH 'unique'",
+        ).fetchone()[0]
+        assert fts_after == 0
+
     def test_other_tables_unaffected(self, db_conn):
         _insert_patron(db_conn, "p1")
         create_table(db_conn, _make_table("t1"))

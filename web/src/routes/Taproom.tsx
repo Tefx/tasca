@@ -16,8 +16,9 @@ import {
   type ChangeEvent,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listTables, searchTables, batchDeleteTables, type Table, type TableStatus } from '../api/tables'
+import { listTables, searchTables, type Table, type TableStatus } from '../api/tables'
 import { useAuth } from '../auth/AuthContext'
+import { useManageMode } from '../hooks/useManageMode'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ModeIndicator } from '../components/ModeIndicator'
 import { CopyButton } from '../components/CopyButton'
@@ -163,6 +164,7 @@ export function Taproom() {
   const navigate = useNavigate()
   const { mode } = useAuth()
   const { tables, loading, error, refetch } = useTables()
+  const manage = useManageMode(mode === 'admin', refetch)
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -175,21 +177,6 @@ export function Taproom() {
 
   // Join-by-code state
   const [joinCode, setJoinCode] = useState('')
-
-  // Manage mode state
-  const [manageMode, setManageMode] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deleteLoading, setDeleteLoading] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
-
-  // Exit manage mode when switching away from admin
-  useEffect(() => {
-    if (mode !== 'admin') {
-      setManageMode(false)
-      setSelectedIds(new Set())
-    }
-  }, [mode])
 
   // Derived: which tables to display
   const displayTables = searchResults ?? tables
@@ -290,56 +277,11 @@ export function Taproom() {
     [navigate]
   )
 
-  // Manage mode: toggle selection
-  const toggleSelect = useCallback((tableId: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(tableId)) {
-        next.delete(tableId)
-      } else {
-        next.add(tableId)
-      }
-      return next
-    })
-  }, [])
-
-  // Manage mode: toggle all closed tables in current view
-  const toggleSelectAll = useCallback(() => {
+  // Manage mode: toggle all closed in current view
+  const handleToggleSelectAll = useCallback(() => {
     const closedInView = filteredTables.filter((t) => t.status === 'closed')
-    const allSelected = closedInView.every((t) => selectedIds.has(t.id))
-    if (allSelected) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(closedInView.map((t) => t.id)))
-    }
-  }, [filteredTables, selectedIds])
-
-  // Manage mode: exit
-  const exitManageMode = useCallback(() => {
-    setManageMode(false)
-    setSelectedIds(new Set())
-    setDeleteError(null)
-  }, [])
-
-  // Manage mode: batch delete
-  const handleBatchDelete = useCallback(async () => {
-    if (selectedIds.size === 0) return
-    setDeleteLoading(true)
-    setDeleteError(null)
-    try {
-      await batchDeleteTables(Array.from(selectedIds))
-      setSelectedIds(new Set())
-      setShowDeleteConfirm(false)
-      setManageMode(false)
-      refetch()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete tables'
-      setDeleteError(message)
-      setShowDeleteConfirm(false)
-    } finally {
-      setDeleteLoading(false)
-    }
-  }, [selectedIds, refetch])
+    manage.toggleSelectAll(closedInView)
+  }, [filteredTables, manage])
 
   return (
     <div className="tr">
@@ -350,20 +292,20 @@ export function Taproom() {
             <p className="tr-subtitle">Discussion tables overview</p>
           </div>
           <div className="tr-header-actions">
-            {mode === 'admin' && !manageMode && (
+            {mode === 'admin' && !manage.manageMode && (
               <button
                 type="button"
                 className="tr-manage-btn"
-                onClick={() => setManageMode(true)}
+                onClick={manage.enterManageMode}
               >
                 Manage
               </button>
             )}
-            {manageMode && (
+            {manage.manageMode && (
               <button
                 type="button"
                 className="tr-manage-btn tr-manage-btn--active"
-                onClick={exitManageMode}
+                onClick={manage.exitManageMode}
               >
                 Done
               </button>
@@ -447,27 +389,27 @@ export function Taproom() {
             tables={filteredTables}
             onRowClick={handleRowClick}
             onRowKeyDown={handleRowKeyDown}
-            manageMode={manageMode}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
-            onToggleSelectAll={toggleSelectAll}
+            manageMode={manage.manageMode}
+            selectedIds={manage.selectedIds}
+            onToggleSelect={manage.toggleSelect}
+            onToggleSelectAll={handleToggleSelectAll}
           />
         )}
       </main>
 
       {/* Floating action bar for manage mode */}
-      {manageMode && selectedIds.size > 0 && (
+      {manage.manageMode && manage.selectedIds.size > 0 && (
         <div className="tr-action-bar" role="status">
           <span className="tr-action-bar-count">
-            {selectedIds.size} table{selectedIds.size !== 1 ? 's' : ''} selected
+            {manage.selectedIds.size} table{manage.selectedIds.size !== 1 ? 's' : ''} selected
           </span>
-          {deleteError && (
-            <span className="tr-action-bar-error">{deleteError}</span>
+          {manage.deleteError && (
+            <span className="tr-action-bar-error">{manage.deleteError}</span>
           )}
           <button
             type="button"
             className="tr-action-bar-delete"
-            onClick={() => setShowDeleteConfirm(true)}
+            onClick={manage.requestDelete}
           >
             Delete
           </button>
@@ -476,15 +418,15 @@ export function Taproom() {
 
       {/* Confirm dialog for batch delete */}
       <ConfirmDialog
-        isOpen={showDeleteConfirm}
+        isOpen={manage.showDeleteConfirm}
         title="Delete Tables"
-        message={`Are you sure you want to delete ${selectedIds.size} table${selectedIds.size !== 1 ? 's' : ''}? This will permanently remove the tables and all their sayings. This action cannot be undone.`}
+        message={`Are you sure you want to delete ${manage.selectedIds.size} table${manage.selectedIds.size !== 1 ? 's' : ''}? This will permanently remove the tables and all their sayings. This action cannot be undone.`}
         variant="danger"
         confirmLabel="Delete"
         cancelLabel="Cancel"
-        isLoading={deleteLoading}
-        onConfirm={handleBatchDelete}
-        onCancel={() => setShowDeleteConfirm(false)}
+        isLoading={manage.deleteLoading}
+        onConfirm={manage.confirmDelete}
+        onCancel={manage.cancelDelete}
       />
     </div>
   )

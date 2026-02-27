@@ -184,6 +184,9 @@ export interface BatchDeleteResponse {
  * ```
  */
 export function batchDeleteTables(ids: string[]): Promise<BatchDeleteResponse> {
+  if (ids.length === 0 || ids.length > 100) {
+    return Promise.reject(new Error(`Batch size must be 1-100, got ${ids.length}`))
+  }
   return apiClient<BatchDeleteResponse>('/tables/actions/batch-delete', {
     method: 'POST',
     body: JSON.stringify({ ids }),

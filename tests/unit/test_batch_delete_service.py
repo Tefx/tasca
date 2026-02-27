@@ -132,6 +132,13 @@ class TestBatchSizeBoundary:
         result = validate_batch_delete_request(tables, ["t1"])
         assert result.is_valid
 
+    def test_duplicate_ids_in_request(self):
+        """SG-1: Duplicate IDs produce duplicate valid_ids (idempotent delete)."""
+        tables = [_make_table("t1")]
+        result = validate_batch_delete_request(tables, ["t1", "t1"])
+        assert result.is_valid
+        assert result.valid_ids == ["t1", "t1"]
+
 
 # =============================================================================
 # Data class behavior

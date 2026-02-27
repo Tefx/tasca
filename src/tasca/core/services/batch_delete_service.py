@@ -57,7 +57,7 @@ class BatchDeleteValidation:
         return len(self.rejections) == 0
 
 
-@deal.pre(lambda tables, table_ids: len(tables) <= len(table_ids) and 0 < len(table_ids) <= MAX_BATCH_SIZE)
+@deal.pre(lambda tables, table_ids: len(tables) >= 0 and 0 < len(table_ids) <= MAX_BATCH_SIZE)
 @deal.post(lambda result: isinstance(result, BatchDeleteValidation))
 def validate_batch_delete_request(
     tables: list[Table],

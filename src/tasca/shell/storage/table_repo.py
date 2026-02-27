@@ -437,7 +437,8 @@ def batch_delete_tables(
     try:
         placeholders = ",".join("?" * len(table_ids))
 
-        # Cascade delete in dependency order
+        # sqlite3 default isolation_level="" auto-begins a transaction on first DML.
+        # All three DELETEs run in one transaction, committed atomically below.
         conn.execute(
             f"DELETE FROM seats WHERE table_id IN ({placeholders})",  # noqa: S608
             table_ids,
@@ -456,7 +457,8 @@ def batch_delete_tables(
         if deleted_count == 0:
             return Failure(TableDatabaseError("No tables were deleted"))
 
-        return Success(table_ids[:deleted_count] if deleted_count < len(table_ids) else table_ids)
+        # Validation gate upstream ensures all IDs exist; return full list
+        return Success(table_ids)
     except sqlite3.Error as e:
         conn.rollback()
         return Failure(TableDatabaseError(f"Failed to batch delete tables: {e}"))

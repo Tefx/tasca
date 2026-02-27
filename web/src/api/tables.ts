@@ -158,6 +158,39 @@ export function getExportUrl(tableId: string, format: string): string {
 }
 
 // =============================================================================
+// Batch Operations
+// =============================================================================
+
+/** Response model for batch delete. Mirrors backend BatchDeleteResponse. */
+export interface BatchDeleteResponse {
+  deleted_ids: string[]
+}
+
+/**
+ * Batch delete closed tables.
+ *
+ * All-or-nothing: if any table is not found or not closed,
+ * the entire batch is rejected (409 with per-ID details).
+ *
+ * @param ids - Table IDs to delete (all must be in 'closed' status)
+ * @returns Deleted table IDs on success
+ * @throws ApiError 409 if any table is not closed or not found
+ * @throws AuthError if admin token is missing or invalid
+ *
+ * @example
+ * ```typescript
+ * const result = await batchDeleteTables(['id1', 'id2'])
+ * console.log(result.deleted_ids) // ['id1', 'id2']
+ * ```
+ */
+export function batchDeleteTables(ids: string[]): Promise<BatchDeleteResponse> {
+  return apiClient<BatchDeleteResponse>('/tables/actions/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  })
+}
+
+// =============================================================================
 // Update Operations
 // =============================================================================
 

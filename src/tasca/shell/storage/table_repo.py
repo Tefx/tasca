@@ -410,6 +410,59 @@ def delete_table(conn: sqlite3.Connection, table_id: TableId) -> Result[None, Ta
 
 
 # =============================================================================
+# Batch Delete
+# =============================================================================
+
+
+# @shell_complexity: 4 branches for empty-check + 3-step cascade SQL + try/except error handling
+# @invar:allow shell_pure_logic: Batch cascade delete orchestrates 3 SQL statements in a transaction
+def batch_delete_tables(
+    conn: sqlite3.Connection, table_ids: list[str]
+) -> Result[list[str], TableError]:
+    """Delete multiple tables and their associated data in a single transaction.
+
+    Cascade order: seats → sayings → tables.
+    FTS5 delete triggers fire naturally from sayings deletion.
+
+    Args:
+        conn: Database connection.
+        table_ids: List of table IDs to delete.
+
+    Returns:
+        Success with list of deleted table IDs, or Failure with TableError.
+    """
+    if not table_ids:
+        return Success([])
+
+    try:
+        placeholders = ",".join("?" * len(table_ids))
+
+        # Cascade delete in dependency order
+        conn.execute(
+            f"DELETE FROM seats WHERE table_id IN ({placeholders})",  # noqa: S608
+            table_ids,
+        )
+        conn.execute(
+            f"DELETE FROM sayings WHERE table_id IN ({placeholders})",  # noqa: S608
+            table_ids,
+        )
+        cursor = conn.execute(
+            f"DELETE FROM tables WHERE id IN ({placeholders})",  # noqa: S608
+            table_ids,
+        )
+        conn.commit()
+
+        deleted_count = cursor.rowcount
+        if deleted_count == 0:
+            return Failure(TableDatabaseError("No tables were deleted"))
+
+        return Success(table_ids[:deleted_count] if deleted_count < len(table_ids) else table_ids)
+    except sqlite3.Error as e:
+        conn.rollback()
+        return Failure(TableDatabaseError(f"Failed to batch delete tables: {e}"))
+
+
+# =============================================================================
 # Helper to create schema (for testing)
 # =============================================================================
 

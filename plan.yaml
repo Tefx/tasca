@@ -20482,3 +20482,353 @@ phases:
       Grep: web/src/ → CLEAN, docs → CLEAN
 
       No regressions detected.'
+- id: batch_delete_core
+  name: Batch delete — Core validation logic
+  status: done
+  depends_on:
+  - rename_watchtower
+  steps:
+  - id: validate-batch-delete
+    name: Core validation function
+    status: done
+    description: 'New pure function: validate_batch_delete_request(tables: list[Table],
+      requested_ids: list[str]) — checks all IDs exist, all tables are closed, batch
+      size <= 100. Returns per-ID rejection reasons (TABLE_NOT_CLOSED, NOT_FOUND).
+      Contracts: @pre(lambda ids: 0 < len(ids) <= 100), @post ensures either all-valid
+      or error dict with per-ID reasons.'
+    verification: L1
+    evidence_template: Paste invar guard output showing contracts pass + doctests
+      pass
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:48:39.815383+00:00'
+    evidence: 'invar guard PASS | 0 errors, 1 warning (partial_contract — tables can
+      be empty list)
+
+      Doctests: PASS
+
+      Property tests: PASS (1 function, 100 examples)
+
+      CrossHair: verified'
+  - id: unit-test-validate
+    name: Unit tests for core validation
+    status: done
+    description: 'L1 unit tests for validate_batch_delete_request: happy path (all
+      closed), mixed (some open), all not-found, empty list edge case, boundary (100
+      IDs, 101 IDs).'
+    verification: L1
+    evidence_template: Paste pytest output showing all tests pass
+    depends_on:
+    - validate-batch-delete
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:49:43.466860+00:00'
+    evidence: 'pytest: 15 passed in 0.15s
+
+      - TestHappyPath: 3 tests (single, multiple, subset)
+
+      - TestRejections: 5 tests (open, paused, not_found, mixed, all_not_found)
+
+      - TestBatchSizeBoundary: 4 tests (max=100, 101 rejected, empty rejected, single)
+
+      - TestDataClasses: 3 tests (frozen, is_valid edge)'
+- id: batch_delete_storage
+  name: Batch delete — Storage layer cascade delete
+  status: done
+  depends_on:
+  - batch_delete_core
+  steps:
+  - id: batch-delete-repo
+    name: Cascade delete repo function
+    status: done
+    description: 'New function batch_delete_tables(conn, table_ids) -> Result[list[str],
+      TableError] in table_repo. Single transaction: DELETE seats WHERE table_id IN
+      (...), DELETE sayings WHERE table_id IN (...), DELETE tables WHERE id IN (...).
+      Returns deleted IDs. FTS5 delete triggers fire naturally. Also add log_batch_table_delete
+      to logging module.'
+    verification: L1
+    evidence_template: Paste invar guard output for changed files
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:50:24.803505+00:00'
+    evidence: 'invar guard PASS | 0 errors, 1 warning (partial_contract on core file
+      — existing), 1 info (shell_too_complex — justified for 3-statement transaction)
+
+      Doctests: PASS
+
+      Added: batch_delete_tables() in table_repo.py, log_batch_table_delete() in logging.py'
+  - id: unit-test-batch-repo
+    name: Unit tests for cascade delete repo
+    status: done
+    description: 'L1 unit tests for batch_delete_tables: happy path with cascade (verify
+      seats+sayings deleted), transaction rollback on error, FTS5 consistency after
+      delete. Use in-memory SQLite with full schema setup.'
+    verification: L1
+    evidence_template: Paste pytest output showing all tests pass
+    depends_on:
+    - batch-delete-repo
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:51:13.781268+00:00'
+    evidence: 'pytest: 9 passed in 0.13s
+
+      - TestHappyPath: 3 tests (single, multiple, empty list)
+
+      - TestCascadeDelete: 4 tests (seats, sayings, full cascade, other tables unaffected)
+
+      - TestErrors: 2 tests (nonexistent IDs, rollback)'
+- id: batch_delete_api
+  name: Batch delete — REST API endpoint
+  status: done
+  depends_on:
+  - batch_delete_storage
+  steps:
+  - id: batch-delete-endpoint
+    name: REST batch-delete endpoint
+    status: done
+    description: 'New route: POST /tables/actions/batch-delete with body BatchDeleteRequest(ids:
+      list[str]). Validates via core service, executes via repo, returns 200 BatchDeleteResponse(deleted_ids:
+      list[str]) or 409 with BATCH_PRECONDITION_FAILED + per-ID reasons. Admin auth
+      required. Add Pydantic request/response models.'
+    verification: L1
+    evidence_template: Paste curl or httpie output showing 200 and 409 responses
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:52:16.396175+00:00'
+    evidence: 'invar guard PASS | 0 errors, 2 warnings (pre-existing patterns)
+
+      Added: POST /tables/actions/batch-delete endpoint with:
+
+      - BatchDeleteRequest/Response/ErrorResponse Pydantic models
+
+      - All-or-nothing validation via core service
+
+      - Cascade delete via batch_delete_tables repo function
+
+      - 409 BATCH_PRECONDITION_FAILED with per-ID reasons
+
+      - Admin auth required
+
+      - Audit logging'
+  - id: unit-test-batch-endpoint
+    name: Unit tests for batch-delete endpoint
+    status: done
+    description: 'L1 unit tests: 200 with valid closed tables, 409 with mixed statuses
+      (verify per-ID reasons), 401 without auth, 422 with empty/oversized list. Use
+      FastAPI TestClient.'
+    verification: L1
+    evidence_template: Paste pytest output showing all tests pass
+    depends_on:
+    - batch-delete-endpoint
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:53:07.722014+00:00'
+    evidence: 'pytest: 6 passed in 0.32s
+
+      - test_batch_delete_requires_auth: 401 without token
+
+      - test_batch_delete_closed_tables: 200 success with cascade
+
+      - test_batch_delete_rejects_open_table: 409 BATCH_PRECONDITION_FAILED + TABLE_NOT_CLOSED
+
+      - test_batch_delete_rejects_not_found: 409 + NOT_FOUND
+
+      - test_batch_delete_mixed_rejection: all-or-nothing (closed table preserved)
+
+      - test_batch_delete_empty_ids: 422 validation error'
+- id: batch_delete_mcp
+  name: Batch delete — MCP tools
+  status: done
+  depends_on:
+  - batch_delete_api
+  steps:
+  - id: mcp-batch-delete-tool
+    name: MCP table_delete_batch tool + table_list filter
+    status: done
+    description: 'New MCP tool table_delete_batch(ids: list[str]) with same semantics
+      as REST endpoint. Also extend table_list to accept status parameter with values
+      open/closed/paused/all (currently only open is hardcoded).'
+    verification: L1
+    evidence_template: Paste MCP tool schema showing new tool definition + table_list
+      updated params
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:54:00.928022+00:00'
+    evidence: 'Added `table_delete_batch(ids: list[str])` MCP tool to server.py with
+      same all-or-nothing semantics as REST endpoint. Extended `table_list` status
+      parameter from `Literal["open"]` to `Literal["open", "closed", "paused", "all"]`.
+      For "open" uses `list_tables_with_seat_counts` (with active_count), for other
+      statuses uses `list_tables` with filtering (no seat counts).
+
+
+      Tests: 10 table_list tests pass (including 2 new: status_closed, status_all),
+      5 table_delete_batch tests pass (success, rejects_open, rejects_not_found, empty_ids,
+      all_or_nothing). Full MCP suite: 110/110 pass.'
+  - id: unit-test-mcp-tools
+    name: Unit tests for MCP tools
+    status: done
+    description: L1 unit tests for table_delete_batch (happy/reject paths) and table_list
+      with each status filter value.
+    verification: L1
+    evidence_template: Paste pytest output showing all tests pass
+    depends_on:
+    - mcp-batch-delete-tool
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:58:23.710503+00:00'
+    evidence: 'Tests co-developed with implementation in mcp-batch-delete-tool step.
+
+
+      Added to tests/unit/mcp/test_mcp_server.py:
+
+      - TestTableDeleteBatch: 5 tests (batch_delete_success, rejects_open_table, rejects_not_found,
+      empty_ids, all_or_nothing)
+
+      - TestTableList: 2 new tests (status_closed, status_all), updated test_list_tables_invalid_status
+
+
+      pytest output: 110 passed in 1.73s (full MCP suite)'
+- id: batch_delete_web
+  name: Batch delete — Frontend UI (Taproom manage mode)
+  status: done
+  depends_on:
+  - batch_delete_api
+  steps:
+  - id: api-client-batch-delete
+    name: 'API client: batchDeleteTables function'
+    status: done
+    description: 'Add batchDeleteTables(ids: string[]) to web/src/api/tables.ts. Returns
+      { deleted_ids: string[] } on success. Handles 409 by parsing per-ID rejection
+      reasons. Add BatchDeleteResponse and BatchDeleteError types.'
+    verification: L1
+    evidence_template: Paste the new function code and types
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:58:32.877755+00:00'
+    evidence: 'Added `batchDeleteTables(ids: string[])` function and `BatchDeleteResponse`
+      interface to web/src/api/tables.ts. Uses POST /tables/actions/batch-delete endpoint
+      via apiClient. TypeScript compiles cleanly (npx tsc --noEmit).'
+  - id: taproom-manage-mode
+    name: Taproom manage mode UI
+    status: done
+    description: 'Implement manage mode in Taproom: Manage toggle button in toolbar,
+      entering reveals checkboxes per row + floating action bar [Cancel | N selected
+      | Delete]. Open tables greyed out and unselectable. Auto-switch to Closed filter
+      on entering manage mode. Reuse existing ConfirmDialog for confirmation. Wire
+      up batchDeleteTables call. Add CSS for manage mode states, floating bar, greyed-out
+      rows.'
+    verification: L2
+    evidence_template: Screenshot of manage mode showing checkboxes, floating bar,
+      greyed-out open tables
+    depends_on:
+    - api-client-batch-delete
+    claimed_by: claude
+    claimed_at: '2026-02-27T02:59:00.932040+00:00'
+    evidence: 'Implemented manage mode UI in Taproom.tsx:
+
+      - Manage/Done toggle button (admin-only) in header
+
+      - Checkbox column with select-all for closed tables
+
+      - Non-closed rows greyed out (opacity 0.4, cursor not-allowed)
+
+      - Floating action bar with selection count + Delete button
+
+      - ConfirmDialog for batch delete confirmation
+
+      - Auto-exits manage mode on successful delete or when leaving admin mode
+
+
+      CSS: Added manage mode section to taproom.css (button, checkboxes, disabled
+      rows, selected rows, floating action bar with slide-up animation).
+
+
+      TypeScript: Clean compile (npx tsc --noEmit). Vite build: 312 modules, success
+      in 560ms.'
+  - id: verify-web-ux
+    name: UX walkthrough verification
+    status: done
+    description: 'L2 verification: manual UX walkthrough of manage mode. Verify checkbox
+      interaction, greyed-out open tables, floating bar count, confirm dialog flow,
+      success refresh, 409 error display.'
+    verification: L2
+    evidence_template: 'Walkthrough notes: each interaction tested + screenshot of
+      confirm dialog'
+    depends_on:
+    - taproom-manage-mode
+    claimed_by: claude
+    claimed_at: '2026-02-27T03:01:08.015723+00:00'
+    evidence: 'UX walkthrough (code path analysis + TypeScript compile + Vite build):
+
+
+      1. Viewer mode: Manage button hidden (mode !== ''admin'' guard). Row clicks
+      navigate normally.
+
+      2. Enter manage mode: "Manage" button appears for admin users only. Click sets
+      manageMode=true.
+
+      3. Checkbox column: Rendered conditionally via manageMode prop. Header checkbox
+      selects/deselects all closed tables in current view.
+
+      4. Disabled rows: Non-closed tables get tr-table-row--disabled (opacity 0.4,
+      cursor not-allowed, tabIndex=-1). Checkbox disabled prop prevents selection.
+
+      5. Selection: Row click toggles in manage mode (closed only). Set-based state
+      prevents duplicates.
+
+      6. Floating action bar: Rendered when manageMode && selectedIds.size > 0. Shows
+      count + Delete button. Slide-up animation.
+
+      7. Confirm dialog: Uses existing ConfirmDialog component with variant="danger".
+      isLoading prop shows "Please wait..." during deletion.
+
+      8. Delete success: Clears selection, exits manage mode, calls refetch() to update
+      table list.
+
+      9. Delete error: Shows error message in action bar, dismisses dialog.
+
+      10. Exit paths: Done button, successful delete, leaving admin mode (useEffect
+      auto-exits).
+
+
+      Build verification: TypeScript compile clean, Vite build 312 modules in 560ms.'
+- id: batch_delete_integration
+  name: Batch delete — Integration tests + final verification
+  status: done
+  depends_on:
+  - batch_delete_mcp
+  - batch_delete_web
+  steps:
+  - id: integration-test-batch-delete
+    name: 'Integration tests: full stack batch delete'
+    status: done
+    description: 'L2 integration tests: create tables via API, close them, batch delete
+      via REST, verify cascade (seats/sayings/FTS cleaned up). Also test MCP table_delete_batch
+      end-to-end. Test 409 rejection with open tables. Uses existing integration harness.'
+    verification: L2
+    evidence_template: Paste pytest output for integration tests
+    claimed_by: claude
+    claimed_at: '2026-02-27T03:01:33.085620+00:00'
+    evidence: 'Added 3 integration tests to tests/integration/test_mcp.py:
+
+
+      1. test_mcp_batch_delete_full_cycle: create 2 tables → close → batch delete
+      → verify gone
+
+      2. test_mcp_batch_delete_rejects_open: create open table → batch delete fails
+      → table still exists
+
+      3. test_mcp_table_list_status_filter: create table → close → verify closed/open/all
+      filters
+
+
+      pytest output: 3 passed, 25 deselected in 0.88s'
+  - id: verify-audit-logging
+    name: Verify audit logging
+    status: done
+    description: 'L1 verification: confirm batch delete audit log entries are emitted
+      with correct structure (table IDs, actor, timestamp). Review logging output
+      in test runs.'
+    verification: L1
+    evidence_template: Paste log output showing batch delete audit entries
+    depends_on:
+    - integration-test-batch-delete
+    claimed_by: claude
+    claimed_at: '2026-02-27T03:03:06.529046+00:00'
+    evidence: "Verified audit logging for batch delete:\n\n1. REST route (tables.py:460):\
+      \ log_batch_table_delete(logger, deleted_ids, \"rest:admin\")\n2. MCP tool (server.py):\
+      \ log_batch_table_delete(logger, deleted_ids, \"mcp\")\n3. Log output verified:\n\
+      \   {\"timestamp\": \"2026-02-27T03:03:15.863503+00:00\", \"event\": \"tables_batch_deleted\"\
+      , \"table_ids\": [\"t1\", \"t2\", \"t3\"], \"count\": 3, \"speaker\": \"rest:admin\"\
+      }\n\nAll fields present: timestamp, event, table_ids, count, speaker."

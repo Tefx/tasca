@@ -75,6 +75,7 @@ from tasca.core.table_state_machine import (
 )
 from tasca.shell.logging import (
     get_logger,
+    log_batch_table_delete,
     log_dedup_hit,
     log_say,
     log_table_create,
@@ -125,11 +126,17 @@ from tasca.shell.storage.seat_repo import (
 from tasca.shell.storage.seat_repo import (
     heartbeat_seat as repo_heartbeat_seat,
 )
+from tasca.core.services.batch_delete_service import (
+    MAX_BATCH_SIZE,
+    validate_batch_delete_request,
+)
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     VersionConflictError,
+    batch_delete_tables,
     create_table,
     get_table,
+    list_tables,
     list_tables_with_seat_counts,
     update_table,
 )
@@ -1159,17 +1166,22 @@ def table_get(table_id: str) -> dict[str, Any]:
     )
 
 
+# Valid status filters for table_list
+VALID_TABLE_STATUS_FILTERS = ("open", "closed", "paused", "all")
+
+
+# @shell_complexity: 5 branches for status validation + open-with-seats vs filtered-list dispatch + error paths
 # @invar:allow shell_result: MCP protocol
 @mcp.tool
-def table_list(status: Literal["open"] = "open") -> dict[str, Any]:
-    """List discussion tables with active seat counts.
+def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> dict[str, Any]:
+    """List discussion tables, optionally filtered by status.
 
-    Returns tables matching the status filter with their active seat counts.
-    Currently only 'open' status is supported.
+    For 'open' status, returns tables with active seat counts.
+    For other statuses, returns tables without seat counts.
 
     Args:
-        status: Filter by table status. Only 'open' is currently supported.
-            Defaults to 'open'.
+        status: Filter by table status. Supported values: 'open' (default),
+            'closed', 'paused', 'all'.
 
     Returns:
         Success envelope with tables list and total count:
@@ -1196,32 +1208,127 @@ def table_list(status: Literal["open"] = "open") -> dict[str, Any]:
         - INVALID_REQUEST: Invalid status filter value
         - DATABASE_ERROR: Failed to list tables
     """
-    # Currently only 'open' status is supported; guard kept for untyped callers
-    if status != "open":  # type: ignore[comparison-overlap]
+    if status not in VALID_TABLE_STATUS_FILTERS:
         return error_response(
             "INVALID_REQUEST",
-            f"Invalid status filter: '{status}'. Currently only 'open' status is supported.",
-            {"status": status, "supported": ["open"]},
+            f"Invalid status filter: '{status}'. Supported values: {', '.join(VALID_TABLE_STATUS_FILTERS)}.",
+            {"status": status, "supported": list(VALID_TABLE_STATUS_FILTERS)},
         )
 
     conn = next(get_mcp_db())
-    now = datetime.now(UTC)
-    ttl = DEFAULT_SEAT_TTL_SECONDS
 
-    result = list_tables_with_seat_counts(conn, ttl, now)
+    # For 'open' status, use the optimized query with seat counts
+    if status == "open":
+        now = datetime.now(UTC)
+        ttl = DEFAULT_SEAT_TTL_SECONDS
+        result = list_tables_with_seat_counts(conn, ttl, now)
+
+        if isinstance(result, Failure):
+            error = result.failure()
+            return error_response("DATABASE_ERROR", f"Failed to list tables: {error}")
+
+        tables = result.unwrap()
+        return success_response({"tables": tables, "total": len(tables)})
+
+    # For other statuses, use list_tables and filter
+    result = list_tables(conn)
 
     if isinstance(result, Failure):
         error = result.failure()
         return error_response("DATABASE_ERROR", f"Failed to list tables: {error}")
 
-    tables = result.unwrap()
+    all_tables = result.unwrap()
 
-    return success_response(
+    if status == "all":
+        filtered = all_tables
+    else:
+        filtered = [t for t in all_tables if t.status.value == status]
+
+    tables_data = [
         {
-            "tables": tables,
-            "total": len(tables),
+            "id": t.id,
+            "question": t.question,
+            "context": t.context,
+            "status": t.status.value,
+            "version": t.version,
+            "created_at": t.created_at.isoformat(),
+            "updated_at": t.updated_at.isoformat(),
         }
-    )
+        for t in filtered
+    ]
+
+    return success_response({"tables": tables_data, "total": len(tables_data)})
+
+
+# @shell_complexity: 5 branches for input validation + per-ID fetch loop + validation gate + delete result + error paths
+# @invar:allow shell_result: MCP protocol
+@mcp.tool
+def table_delete_batch(ids: list[str]) -> dict[str, Any]:
+    """Batch delete closed tables with cascade (seats, sayings).
+
+    All-or-nothing semantics: if any table is not found or not in CLOSED
+    status, the entire batch is rejected with per-ID error details.
+
+    Args:
+        ids: List of table IDs to delete (1 to 100).
+
+    Returns:
+        Success envelope with deleted IDs:
+        {
+            "ok": true,
+            "data": {
+                "deleted_ids": ["id1", "id2"]
+            }
+        }
+
+    Error codes:
+        - INVALID_REQUEST: Empty list or exceeds batch size limit
+        - BATCH_PRECONDITION_FAILED: One or more tables not found or not closed
+        - DATABASE_ERROR: Failed to execute batch delete
+    """
+    if not ids or len(ids) > MAX_BATCH_SIZE:
+        return error_response(
+            "INVALID_REQUEST",
+            f"ids must contain 1 to {MAX_BATCH_SIZE} table IDs.",
+            {"count": len(ids), "max": MAX_BATCH_SIZE},
+        )
+
+    conn = next(get_mcp_db())
+
+    # Fetch all requested tables for validation
+    tables_for_validation = []
+    for tid in ids:
+        result = get_table(conn, TableId(tid))
+        if isinstance(result, Success):
+            tables_for_validation.append(result.unwrap())
+
+    # Validate: all must exist and be closed
+    validation = validate_batch_delete_request(tables_for_validation, ids)
+
+    if not validation.is_valid:
+        return error_response(
+            "BATCH_PRECONDITION_FAILED",
+            "One or more tables cannot be deleted.",
+            {
+                "details": [
+                    {"id": r.table_id, "reason": r.reason}
+                    for r in validation.rejections
+                ],
+            },
+        )
+
+    # Execute cascade delete
+    delete_result = batch_delete_tables(conn, validation.valid_ids)
+
+    if isinstance(delete_result, Failure):
+        error = delete_result.failure()
+        return error_response("DATABASE_ERROR", f"Failed to batch delete tables: {error}")
+
+    deleted_ids = delete_result.unwrap()
+
+    log_batch_table_delete(logger, deleted_ids, "mcp")
+
+    return success_response({"deleted_ids": deleted_ids})
 
 
 # Valid export formats

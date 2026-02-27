@@ -18,7 +18,17 @@ from tasca.core.domain.table import Table, TableCreate, TableId, TableStatus, Ta
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
 from tasca.shell.api.routes import tables_control
-from tasca.shell.logging import get_logger, log_table_create, log_table_delete, log_table_update
+from tasca.core.services.batch_delete_service import (
+    MAX_BATCH_SIZE,
+    validate_batch_delete_request,
+)
+from tasca.shell.logging import (
+    get_logger,
+    log_batch_table_delete,
+    log_table_create,
+    log_table_delete,
+    log_table_update,
+)
 from tasca.shell.services.table_id_generator import (
     TableIdGenerationError,
     generate_table_id,
@@ -26,6 +36,7 @@ from tasca.shell.services.table_id_generator import (
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     VersionConflictError,
+    batch_delete_tables,
     create_table,
     delete_table,
     get_table,
@@ -48,6 +59,37 @@ class DeleteResponse(BaseModel):
 
     status: str
     table_id: str
+
+
+class BatchDeleteRequest(BaseModel):
+    """Request model for batch delete operations."""
+
+    ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=MAX_BATCH_SIZE,
+        description=f"Table IDs to delete (1-{MAX_BATCH_SIZE})",
+    )
+
+
+class BatchDeleteResponse(BaseModel):
+    """Response model for successful batch delete."""
+
+    deleted_ids: list[str]
+
+
+class BatchDeleteRejectionDetail(BaseModel):
+    """Per-ID rejection detail for batch delete failures."""
+
+    id: str
+    reason: str
+
+
+class BatchDeleteErrorResponse(BaseModel):
+    """Response model for batch delete precondition failure."""
+
+    error: str = "BATCH_PRECONDITION_FAILED"
+    details: list[BatchDeleteRejectionDetail]
 
 
 # =============================================================================
@@ -343,3 +385,78 @@ async def delete_table_endpoint(
     log_table_delete(logger, table_id, "rest:admin")
 
     return DeleteResponse(status="deleted", table_id=table_id)
+
+
+# =============================================================================
+# POST /tables/actions/batch-delete - Batch delete tables (Admin required)
+# =============================================================================
+
+
+# @invar:allow entry_point_too_thick: FastAPI route with validation + cascade delete orchestration
+@router.post("/actions/batch-delete", response_model=BatchDeleteResponse)
+async def batch_delete_tables_endpoint(
+    data: BatchDeleteRequest,
+    _auth: None = Depends(verify_admin_token),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> BatchDeleteResponse:
+    """Batch delete tables with all-or-nothing semantics.
+
+    All requested tables must exist and be in CLOSED status.
+    If any table fails validation, the entire batch is rejected.
+
+    Cascade: deletes associated seats and sayings in a single transaction.
+
+    Requires admin authentication via Bearer token.
+
+    Args:
+        data: Batch delete request with table IDs.
+        _auth: Admin authentication (injected via dependency).
+        conn: Database connection (injected via dependency).
+
+    Returns:
+        BatchDeleteResponse with deleted_ids on success.
+
+    Raises:
+        HTTPException: 401 if not authenticated.
+        HTTPException: 409 if any table is not closed or not found.
+        HTTPException: 422 if ids list is empty or exceeds limit.
+        HTTPException: 500 if database operation fails.
+    """
+    # Fetch all requested tables for validation
+    tables_for_validation = []
+    for tid in data.ids:
+        result = get_table(conn, TableId(tid))
+        if isinstance(result, Success):
+            tables_for_validation.append(result.unwrap())
+
+    # Validate all IDs: must exist and be closed
+    validation = validate_batch_delete_request(tables_for_validation, data.ids)
+
+    if not validation.is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "BATCH_PRECONDITION_FAILED",
+                "details": [
+                    {"id": r.table_id, "reason": r.reason}
+                    for r in validation.rejections
+                ],
+            },
+        )
+
+    # Execute cascade delete
+    delete_result = batch_delete_tables(conn, validation.valid_ids)
+
+    if isinstance(delete_result, Failure):
+        error = delete_result.failure()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to batch delete tables: {error}",
+        )
+
+    deleted_ids = delete_result.unwrap()
+
+    # Log batch deletion
+    log_batch_table_delete(logger, deleted_ids, "rest:admin")
+
+    return BatchDeleteResponse(deleted_ids=deleted_ids)

@@ -144,6 +144,31 @@ def log_table_delete(
     log_event(logger, "table_deleted", table_id=table_id, speaker=speaker)
 
 
+def log_batch_table_delete(
+    logger: logging.Logger,
+    table_ids: list[str],
+    speaker: str,
+) -> None:
+    """Log batch table deletion event.
+
+    Args:
+        logger: Logger instance.
+        table_ids: List of deleted table IDs.
+        speaker: Speaker identifier.
+
+    Example:
+        >>> logger = get_logger(__name__)
+        >>> log_batch_table_delete(logger, ["t1", "t2"], "rest:admin")
+    """
+    log_event(
+        logger,
+        "tables_batch_deleted",
+        table_ids=table_ids,
+        count=len(table_ids),
+        speaker=speaker,
+    )
+
+
 def log_say(
     logger: logging.Logger,
     table_id: str,

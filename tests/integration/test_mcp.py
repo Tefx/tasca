@@ -1169,6 +1169,129 @@ def test_mcp_error_invalid_request(mcp_session: "MCPSession") -> None:
 
 
 # =============================================================================
+# Batch Delete Integration Tests
+# =============================================================================
+
+
+def test_mcp_batch_delete_full_cycle(mcp_session: "MCPSession") -> None:
+    """Test full batch delete cycle: create tables → close → batch delete.
+
+    Scenario: Full Batch Delete Lifecycle
+    1. Create two tables
+    2. Close both tables via table_control
+    3. Verify both are closed
+    4. Batch delete both
+    5. Verify tables are gone
+    """
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_strict)
+
+    # 1. Create two tables
+    t1 = call_tool("table_create", {"question": "Batch delete test 1"})
+    assert t1.get("ok") is True
+    t1_id = t1["data"]["id"]
+
+    t2 = call_tool("table_create", {"question": "Batch delete test 2"})
+    assert t2.get("ok") is True
+    t2_id = t2["data"]["id"]
+
+    # 2. Close both tables
+    close1 = call_tool(
+        "table_control",
+        {"table_id": t1_id, "action": "close", "speaker_name": "test"},
+    )
+    assert close1.get("ok") is True
+
+    close2 = call_tool(
+        "table_control",
+        {"table_id": t2_id, "action": "close", "speaker_name": "test"},
+    )
+    assert close2.get("ok") is True
+
+    # 3. Batch delete both
+    delete_result = call_tool("table_delete_batch", {"ids": [t1_id, t2_id]})
+    assert delete_result.get("ok") is True, f"batch delete failed: {delete_result}"
+    assert set(delete_result["data"]["deleted_ids"]) == {t1_id, t2_id}
+
+    # 4. Verify tables are gone
+    call_tool_lenient = make_call_tool(
+        mcp_session, request_counter, _extract_tool_result_lenient
+    )
+    get1 = call_tool_lenient("table_get", {"table_id": t1_id})
+    assert get1.get("ok") is False, "Deleted table should not be found"
+
+    get2 = call_tool_lenient("table_get", {"table_id": t2_id})
+    assert get2.get("ok") is False, "Deleted table should not be found"
+
+
+def test_mcp_batch_delete_rejects_open(mcp_session: "MCPSession") -> None:
+    """Test batch delete rejects open (non-closed) tables.
+
+    Scenario: Batch Delete Precondition Failure
+    Verifies all-or-nothing semantics: if any table is not closed,
+    the entire batch is rejected.
+    """
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_strict)
+    call_tool_lenient = make_call_tool(
+        mcp_session, request_counter, _extract_tool_result_lenient
+    )
+
+    # Create one open table
+    t1 = call_tool("table_create", {"question": "Should stay open"})
+    assert t1.get("ok") is True
+    t1_id = t1["data"]["id"]
+
+    # Try to batch delete the open table
+    delete_result = call_tool_lenient("table_delete_batch", {"ids": [t1_id]})
+    assert delete_result.get("ok") is False, "Should reject open table"
+    assert delete_result["error"]["code"] == "BATCH_PRECONDITION_FAILED"
+
+    # Verify table still exists
+    get_result = call_tool("table_get", {"table_id": t1_id})
+    assert get_result.get("ok") is True, "Open table should still exist"
+
+
+def test_mcp_table_list_status_filter(mcp_session: "MCPSession") -> None:
+    """Test table_list with different status filters.
+
+    Scenario: Table List Status Filtering
+    Verifies that table_list returns correct results for
+    open, closed, and all status filters.
+    """
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_strict)
+
+    # Create a table and close it
+    t1 = call_tool("table_create", {"question": "Filter test table"})
+    assert t1.get("ok") is True
+    t1_id = t1["data"]["id"]
+
+    close1 = call_tool(
+        "table_control",
+        {"table_id": t1_id, "action": "close", "speaker_name": "test"},
+    )
+    assert close1.get("ok") is True
+
+    # List closed tables
+    closed_list = call_tool("table_list", {"status": "closed"})
+    assert closed_list.get("ok") is True
+    closed_ids = {t["id"] for t in closed_list["data"]["tables"]}
+    assert t1_id in closed_ids, "Closed table should appear in closed list"
+
+    # List all tables
+    all_list = call_tool("table_list", {"status": "all"})
+    assert all_list.get("ok") is True
+    assert all_list["data"]["total"] >= 1
+
+    # List open tables (closed table should not appear)
+    open_list = call_tool("table_list", {"status": "open"})
+    assert open_list.get("ok") is True
+    open_ids = {t["id"] for t in open_list["data"]["tables"]}
+    assert t1_id not in open_ids, "Closed table should not appear in open list"
+
+
+# =============================================================================
 # Scenario Documentation
 # =============================================================================
 

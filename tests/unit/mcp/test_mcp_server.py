@@ -24,6 +24,7 @@ from tasca.shell.mcp.server import (
     seat_list,
     table_control,
     table_create,
+    table_delete_batch,
     table_export,
     table_get,
     table_join,
@@ -276,11 +277,10 @@ class TestTableList:
 
     def test_list_tables_invalid_status(self) -> None:
         """List tables with unsupported status returns error."""
-        result = table_list(status="closed")  # type: ignore[arg-type]
+        result = table_list(status="invalid")  # type: ignore[arg-type]
 
         assert result["ok"] is False
         assert result["error"]["code"] == "INVALID_REQUEST"
-        assert "open" in result["error"]["message"].lower()
 
     def test_list_tables_with_active_seats(self) -> None:
         """List tables includes active seat counts."""
@@ -416,6 +416,122 @@ class TestTableList:
         assert our_table is not None
         # Only the active seat should be counted (expired seat excluded)
         assert our_table["active_count"] == 1
+
+    def test_list_tables_status_closed(self, test_db: sqlite3.Connection) -> None:
+        """List tables with status='closed' returns only closed tables."""
+        now = datetime.now(UTC)
+
+        # Create open table and a table to close
+        table_create(question="Open table")
+        result_to_close = table_create(question="Closed table")
+        closed_id = result_to_close["data"]["id"]
+
+        # Close the table via direct DB update
+        close_update = TableUpdate(
+            question="Closed table", context=None, status=TableStatus.CLOSED
+        )
+        update_table(test_db, TableId(closed_id), close_update, Version(1), now)
+
+        result = table_list(status="closed")
+
+        assert result["ok"] is True
+        tables = result["data"]["tables"]
+        assert len(tables) == 1
+        assert tables[0]["id"] == closed_id
+        assert tables[0]["status"] == "closed"
+        # Non-open statuses don't include active_count
+        assert "active_count" not in tables[0]
+
+    def test_list_tables_status_all(self, test_db: sqlite3.Connection) -> None:
+        """List tables with status='all' returns all tables."""
+        now = datetime.now(UTC)
+
+        table_create(question="Open table")
+        result_to_close = table_create(question="Closed table")
+        closed_id = result_to_close["data"]["id"]
+
+        close_update = TableUpdate(
+            question="Closed table", context=None, status=TableStatus.CLOSED
+        )
+        update_table(test_db, TableId(closed_id), close_update, Version(1), now)
+
+        result = table_list(status="all")
+
+        assert result["ok"] is True
+        assert result["data"]["total"] == 2
+        statuses = {t["status"] for t in result["data"]["tables"]}
+        assert "open" in statuses
+        assert "closed" in statuses
+
+
+class TestTableDeleteBatch:
+    """Tests for table_delete_batch MCP tool."""
+
+    def _create_closed_table(self, test_db: sqlite3.Connection, question: str = "Test") -> str:
+        """Helper: create a table and close it. Returns table ID."""
+        now = datetime.now(UTC)
+        result = table_create(question=question)
+        table_id = result["data"]["id"]
+        close_update = TableUpdate(
+            question=question, context=None, status=TableStatus.CLOSED
+        )
+        update_table(test_db, TableId(table_id), close_update, Version(1), now)
+        return table_id
+
+    def test_batch_delete_success(self, test_db: sqlite3.Connection) -> None:
+        """Batch delete closed tables succeeds."""
+        id1 = self._create_closed_table(test_db, "Table 1")
+        id2 = self._create_closed_table(test_db, "Table 2")
+
+        result = table_delete_batch(ids=[id1, id2])
+
+        assert result["ok"] is True
+        assert set(result["data"]["deleted_ids"]) == {id1, id2}
+
+    def test_batch_delete_rejects_open_table(self, test_db: sqlite3.Connection) -> None:
+        """Batch delete rejects tables that are not closed."""
+        open_result = table_create(question="Still open")
+        open_id = open_result["data"]["id"]
+
+        result = table_delete_batch(ids=[open_id])
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "BATCH_PRECONDITION_FAILED"
+        details = result["error"]["details"]["details"]
+        assert len(details) == 1
+        assert details[0]["id"] == open_id
+        assert details[0]["reason"] == "TABLE_NOT_CLOSED"
+
+    def test_batch_delete_rejects_not_found(self) -> None:
+        """Batch delete rejects non-existent table IDs."""
+        result = table_delete_batch(ids=["nonexistent-id"])
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "BATCH_PRECONDITION_FAILED"
+        details = result["error"]["details"]["details"]
+        assert details[0]["reason"] == "NOT_FOUND"
+
+    def test_batch_delete_empty_ids(self) -> None:
+        """Batch delete with empty list returns INVALID_REQUEST."""
+        result = table_delete_batch(ids=[])
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "INVALID_REQUEST"
+
+    def test_batch_delete_all_or_nothing(self, test_db: sqlite3.Connection) -> None:
+        """Batch delete rejects entire batch if any table is invalid."""
+        closed_id = self._create_closed_table(test_db, "Closed table")
+        open_result = table_create(question="Open table")
+        open_id = open_result["data"]["id"]
+
+        result = table_delete_batch(ids=[closed_id, open_id])
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "BATCH_PRECONDITION_FAILED"
+
+        # Verify the closed table was NOT deleted (all-or-nothing)
+        get_result = table_get(table_id=closed_id)
+        assert get_result["ok"] is True
 
 
 class TestTableJoin:

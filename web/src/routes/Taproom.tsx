@@ -16,7 +16,9 @@ import {
   type ChangeEvent,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listTables, searchTables, type Table, type TableStatus } from '../api/tables'
+import { listTables, searchTables, batchDeleteTables, type Table, type TableStatus } from '../api/tables'
+import { useAuth } from '../auth/AuthContext'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ModeIndicator } from '../components/ModeIndicator'
 import { CopyButton } from '../components/CopyButton'
 import '../styles/taproom.css'
@@ -159,6 +161,7 @@ function StatusPill({ status }: StatusPillProps) {
  */
 export function Taproom() {
   const navigate = useNavigate()
+  const { mode } = useAuth()
   const { tables, loading, error, refetch } = useTables()
 
   // Search state
@@ -172,6 +175,21 @@ export function Taproom() {
 
   // Join-by-code state
   const [joinCode, setJoinCode] = useState('')
+
+  // Manage mode state
+  const [manageMode, setManageMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  // Exit manage mode when switching away from admin
+  useEffect(() => {
+    if (mode !== 'admin') {
+      setManageMode(false)
+      setSelectedIds(new Set())
+    }
+  }, [mode])
 
   // Derived: which tables to display
   const displayTables = searchResults ?? tables
@@ -272,6 +290,57 @@ export function Taproom() {
     [navigate]
   )
 
+  // Manage mode: toggle selection
+  const toggleSelect = useCallback((tableId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(tableId)) {
+        next.delete(tableId)
+      } else {
+        next.add(tableId)
+      }
+      return next
+    })
+  }, [])
+
+  // Manage mode: toggle all closed tables in current view
+  const toggleSelectAll = useCallback(() => {
+    const closedInView = filteredTables.filter((t) => t.status === 'closed')
+    const allSelected = closedInView.every((t) => selectedIds.has(t.id))
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(closedInView.map((t) => t.id)))
+    }
+  }, [filteredTables, selectedIds])
+
+  // Manage mode: exit
+  const exitManageMode = useCallback(() => {
+    setManageMode(false)
+    setSelectedIds(new Set())
+    setDeleteError(null)
+  }, [])
+
+  // Manage mode: batch delete
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return
+    setDeleteLoading(true)
+    setDeleteError(null)
+    try {
+      await batchDeleteTables(Array.from(selectedIds))
+      setSelectedIds(new Set())
+      setShowDeleteConfirm(false)
+      setManageMode(false)
+      refetch()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete tables'
+      setDeleteError(message)
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleteLoading(false)
+    }
+  }, [selectedIds, refetch])
+
   return (
     <div className="tr">
       <header className="tr-header">
@@ -280,7 +349,27 @@ export function Taproom() {
             <h1 className="tr-title">Taproom</h1>
             <p className="tr-subtitle">Discussion tables overview</p>
           </div>
-          <ModeIndicator />
+          <div className="tr-header-actions">
+            {mode === 'admin' && !manageMode && (
+              <button
+                type="button"
+                className="tr-manage-btn"
+                onClick={() => setManageMode(true)}
+              >
+                Manage
+              </button>
+            )}
+            {manageMode && (
+              <button
+                type="button"
+                className="tr-manage-btn tr-manage-btn--active"
+                onClick={exitManageMode}
+              >
+                Done
+              </button>
+            )}
+            <ModeIndicator />
+          </div>
         </div>
       </header>
 
@@ -358,9 +447,45 @@ export function Taproom() {
             tables={filteredTables}
             onRowClick={handleRowClick}
             onRowKeyDown={handleRowKeyDown}
+            manageMode={manageMode}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={toggleSelectAll}
           />
         )}
       </main>
+
+      {/* Floating action bar for manage mode */}
+      {manageMode && selectedIds.size > 0 && (
+        <div className="tr-action-bar" role="status">
+          <span className="tr-action-bar-count">
+            {selectedIds.size} table{selectedIds.size !== 1 ? 's' : ''} selected
+          </span>
+          {deleteError && (
+            <span className="tr-action-bar-error">{deleteError}</span>
+          )}
+          <button
+            type="button"
+            className="tr-action-bar-delete"
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
+      {/* Confirm dialog for batch delete */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete Tables"
+        message={`Are you sure you want to delete ${selectedIds.size} table${selectedIds.size !== 1 ? 's' : ''}? This will permanently remove the tables and all their sayings. This action cannot be undone.`}
+        variant="danger"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isLoading={deleteLoading}
+        onConfirm={handleBatchDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   )
 }
@@ -425,13 +550,39 @@ interface TableListProps {
   tables: Table[]
   onRowClick: (tableId: string) => void
   onRowKeyDown: (tableId: string, e: React.KeyboardEvent) => void
+  manageMode: boolean
+  selectedIds: Set<string>
+  onToggleSelect: (tableId: string) => void
+  onToggleSelectAll: () => void
 }
 
-function TableList({ tables, onRowClick, onRowKeyDown }: TableListProps) {
+function TableList({
+  tables,
+  onRowClick,
+  onRowKeyDown,
+  manageMode,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+}: TableListProps) {
+  const closedTables = tables.filter((t) => t.status === 'closed')
+  const allClosedSelected = closedTables.length > 0 && closedTables.every((t) => selectedIds.has(t.id))
+
   return (
     <table className="tr-table" role="grid" aria-label="Discussion tables">
       <thead>
         <tr>
+          {manageMode && (
+            <th scope="col" className="tr-cell-checkbox">
+              <input
+                type="checkbox"
+                checked={allClosedSelected}
+                onChange={onToggleSelectAll}
+                aria-label="Select all closed tables"
+                disabled={closedTables.length === 0}
+              />
+            </th>
+          )}
           <th scope="col">Title</th>
           <th scope="col">Status</th>
           <th scope="col">Tags</th>
@@ -441,38 +592,73 @@ function TableList({ tables, onRowClick, onRowKeyDown }: TableListProps) {
         </tr>
       </thead>
       <tbody>
-        {tables.map((table) => (
-          <tr
-            key={table.id}
-            className="tr-table-row"
-            onClick={() => onRowClick(table.id)}
-            onKeyDown={(e) => onRowKeyDown(table.id, e)}
-            tabIndex={0}
-            role="row"
-            aria-label={`Table: ${table.question}`}
-          >
-            <td className="tr-cell-title">
-              <div className="tr-cell-title-inner">
-                <span className="tr-table-question">{table.question}</span>
-                {table.context && (
-                  <span className="tr-table-context">{table.context}</span>
-                )}
-              </div>
-            </td>
-            <td>
-              <StatusPill status={table.status} />
-            </td>
-            <td className="tr-cell-muted">&mdash;</td>
-            <td className="tr-cell-muted">&mdash;</td>
-            <td className="tr-cell-time">{formatTime(table.updated_at)}</td>
-            <td className="tr-cell-code">
-              <div className="tr-cell-code-inner">
-                <code className="tr-invite-code">{shortCode(table.id)}</code>
-                <CopyButton text={shortCode(table.id)} label="invite code" className="tr-copy-btn" />
-              </div>
-            </td>
-          </tr>
-        ))}
+        {tables.map((table) => {
+          const isClosed = table.status === 'closed'
+          const isSelected = selectedIds.has(table.id)
+          const rowDisabled = manageMode && !isClosed
+
+          return (
+            <tr
+              key={table.id}
+              className={`tr-table-row${rowDisabled ? ' tr-table-row--disabled' : ''}${isSelected ? ' tr-table-row--selected' : ''}`}
+              onClick={() => {
+                if (manageMode) {
+                  if (isClosed) onToggleSelect(table.id)
+                } else {
+                  onRowClick(table.id)
+                }
+              }}
+              onKeyDown={(e) => {
+                if (manageMode) {
+                  if ((e.key === 'Enter' || e.key === ' ') && isClosed) {
+                    e.preventDefault()
+                    onToggleSelect(table.id)
+                  }
+                } else {
+                  onRowKeyDown(table.id, e)
+                }
+              }}
+              tabIndex={rowDisabled ? -1 : 0}
+              role="row"
+              aria-label={`Table: ${table.question}`}
+              aria-selected={manageMode ? isSelected : undefined}
+              aria-disabled={rowDisabled || undefined}
+            >
+              {manageMode && (
+                <td className="tr-cell-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    disabled={!isClosed}
+                    onChange={() => onToggleSelect(table.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select table: ${table.question}`}
+                  />
+                </td>
+              )}
+              <td className="tr-cell-title">
+                <div className="tr-cell-title-inner">
+                  <span className="tr-table-question">{table.question}</span>
+                  {table.context && (
+                    <span className="tr-table-context">{table.context}</span>
+                  )}
+                </div>
+              </td>
+              <td>
+                <StatusPill status={table.status} />
+              </td>
+              <td className="tr-cell-muted">&mdash;</td>
+              <td className="tr-cell-muted">&mdash;</td>
+              <td className="tr-cell-time">{formatTime(table.updated_at)}</td>
+              <td className="tr-cell-code">
+                <div className="tr-cell-code-inner">
+                  <code className="tr-invite-code">{shortCode(table.id)}</code>
+                  <CopyButton text={shortCode(table.id)} label="invite code" className="tr-copy-btn" />
+                </div>
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )

@@ -477,6 +477,104 @@ class TestDeleteTable:
 
 
 # =============================================================================
+# POST /tables/actions/batch-delete - Batch Delete Tests
+# =============================================================================
+
+
+def _close_table(admin_client: TestClient, table_id: str) -> None:
+    """Helper to close a table via the control endpoint."""
+    admin_client.post(
+        f"/tables/{table_id}/control",
+        json={"action": "close", "speaker_name": "test"},
+    )
+
+
+class TestBatchDeleteTables:
+    """Tests for POST /tables/actions/batch-delete endpoint."""
+
+    def test_batch_delete_requires_auth(self, client: TestClient) -> None:
+        response = client.post(
+            "/tables/actions/batch-delete",
+            json={"ids": ["some-id"]},
+        )
+        assert response.status_code == 401
+
+    def test_batch_delete_closed_tables(self, admin_client: TestClient) -> None:
+        """Batch delete succeeds for closed tables."""
+        # Create and close 2 tables
+        ids = []
+        for _ in range(2):
+            r = admin_client.post("/tables", json={"question": "To delete?"})
+            tid = r.json()["id"]
+            _close_table(admin_client, tid)
+            ids.append(tid)
+
+        # Batch delete
+        response = admin_client.post(
+            "/tables/actions/batch-delete",
+            json={"ids": ids},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert set(data["deleted_ids"]) == set(ids)
+
+        # Verify tables are gone
+        for tid in ids:
+            assert admin_client.get(f"/tables/{tid}").status_code == 404
+
+    def test_batch_delete_rejects_open_table(self, admin_client: TestClient) -> None:
+        """Batch delete fails with 409 if any table is not closed."""
+        r = admin_client.post("/tables", json={"question": "Still open"})
+        tid = r.json()["id"]
+
+        response = admin_client.post(
+            "/tables/actions/batch-delete",
+            json={"ids": [tid]},
+        )
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["error"] == "BATCH_PRECONDITION_FAILED"
+        assert any(d["id"] == tid and d["reason"] == "TABLE_NOT_CLOSED" for d in detail["details"])
+
+    def test_batch_delete_rejects_not_found(self, admin_client: TestClient) -> None:
+        """Batch delete fails with 409 if any table ID doesn't exist."""
+        response = admin_client.post(
+            "/tables/actions/batch-delete",
+            json={"ids": ["nonexistent-id"]},
+        )
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["error"] == "BATCH_PRECONDITION_FAILED"
+        assert detail["details"][0]["reason"] == "NOT_FOUND"
+
+    def test_batch_delete_mixed_rejection(self, admin_client: TestClient) -> None:
+        """All-or-nothing: closed + open in same batch → entire batch rejected."""
+        r_closed = admin_client.post("/tables", json={"question": "Closed"})
+        closed_id = r_closed.json()["id"]
+        _close_table(admin_client, closed_id)
+
+        r_open = admin_client.post("/tables", json={"question": "Open"})
+        open_id = r_open.json()["id"]
+
+        response = admin_client.post(
+            "/tables/actions/batch-delete",
+            json={"ids": [closed_id, open_id]},
+        )
+        assert response.status_code == 409
+
+        # Closed table should still exist (nothing deleted)
+        assert admin_client.get(f"/tables/{closed_id}").status_code == 200
+
+    def test_batch_delete_empty_ids(self, admin_client: TestClient) -> None:
+        """Empty ids list returns 422 validation error."""
+        response = admin_client.post(
+            "/tables/actions/batch-delete",
+            json={"ids": []},
+        )
+        assert response.status_code == 422
+
+
+# =============================================================================
 # Integration Flow Tests
 # =============================================================================
 

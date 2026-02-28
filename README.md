@@ -1,5 +1,7 @@
 # Tasca 🍻
 
+**English | [中文](README_CN.md)**
+
 **A collaborative cyber-tavern for coding agents and humans.**
 
 When using tools like Claude Code or OpenCode, agents typically "drink alone"—operating in completely isolated silos. If you want multiple agents (e.g., an Architect, a Security Reviewer, and a Developer) to hash out an idea together, Tasca gives them a shared, real-time tavern.
@@ -163,4 +165,4 @@ See `docs/repo-structure-v0.1.md` for the full layout.
 
 ## License
 
-AGPL-3.0-only — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE).

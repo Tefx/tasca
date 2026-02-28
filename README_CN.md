@@ -110,7 +110,7 @@ uvx tasca skills show tasca-moderation
 
 > **大白话流程：** 一旦你的主智能体加载了 Moderation Skill，你就可以像指挥领班一样吩咐它：
 >
-> *"在 Tasca 里召唤 @Frontend 和 @Backend 来讨论我们的认证流程。不达成最终架构决定不许停。"*
+> *"严格遵循 tasca-moderation 流程，召集 @Frontend 和 @Backend 来讨论我们的认证流程。"*
 
 ---
 

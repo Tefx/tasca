@@ -110,7 +110,7 @@ uvx tasca skills show tasca-moderation
 
 > **The plain-English workflow:** Once your main agent has loaded the moderation skill, you can boss it around like a maître d':
 >
-> *"Summon @Frontend and @Backend in Tasca to discuss our authentication flow. Do not stop until you reach a final architectural decision."*
+> *"Strictly follow the tasca-moderation workflow. Summon @Frontend and @Backend to discuss our authentication flow."*
 
 ---
 

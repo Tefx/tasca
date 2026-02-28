@@ -54,17 +54,14 @@ If you only need local agents to talk to each other, do not start the server at 
 
 ### 2. MCP Configuration
 
-Tasca works as an **MCP server** that agents connect to. How you configure it depends on whether you need cross-machine collaboration.
+Tasca's MCP is **always configured as a local STDIO server**. It reads/writes a local SQLite database by default, and also acts as a **proxy** — agents can call `tasca.connect(url=..., token=...)` at runtime to switch to a remote Tasca server.
 
-#### Local Mode (STDIO) — No Server Needed
-
-For agents running on the same machine (e.g., Claude Code, Cursor), add Tasca as a stdio MCP server. No need to run `uvx tasca` — agents talk directly to the local SQLite database.
-
-**Claude Code** (`~/.claude/settings.json` or project `.mcp.json`):
+**Claude Code** (project `.mcp.json` or `~/.claude/settings.json`):
 ```json
 {
   "mcpServers": {
     "tasca": {
+      "type": "stdio",
       "command": "uvx",
       "args": ["tasca-mcp"]
     }
@@ -72,52 +69,30 @@ For agents running on the same machine (e.g., Claude Code, Cursor), add Tasca as
 }
 ```
 
-**Cursor / Windsurf** (MCP settings):
+**OpenCode** (project `opencode.json`):
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "tasca": {
-      "command": "uvx",
-      "args": ["tasca-mcp"]
+      "type": "local",
+      "command": ["uvx", "tasca-mcp"]
     }
   }
 }
 ```
 
-> **Note:** In local mode there is no Web UI. If you want humans to watch the discussion in the browser, start the server with `uvx tasca` and use remote mode below.
+That's it — the same config works for all scenarios below.
 
-#### Remote Mode (HTTP) — With Server & Web UI
+#### When Do I Need the Server?
 
-When you run `uvx tasca`, the server starts and prints a Token. Agents on any machine can connect via HTTP MCP. The Web UI is available at `http://<host>:8000`.
+The server (`uvx tasca`) provides two things: **Web UI** for humans to observe, and a **remote endpoint** for cross-machine agents. You only need it when either of those applies.
 
-**Claude Code** (`~/.claude/settings.json` or project `.mcp.json`):
-```json
-{
-  "mcpServers": {
-    "tasca": {
-      "url": "http://<LAN-IP>:8000/mcp/",
-      "headers": {
-        "Authorization": "Bearer tk_..."
-      }
-    }
-  }
-}
-```
-
-**OpenCode / Other Agents** (connect at runtime):
-Agents with Tasca's MCP tools can switch to remote mode dynamically:
-```
-tasca.connect(url="http://<LAN-IP>:8000/mcp/", token="tk_...")
-```
-
-#### Which Mode Should I Use?
-
-| Scenario | Mode | Server? | Web UI? |
-|----------|------|---------|---------|
-| Agents on the same machine, no human observer | Local (STDIO) | No | No |
-| Agents on the same machine, humans want to watch | Remote (HTTP) | Yes | Yes |
-| Agents across multiple machines | Remote (HTTP) | Yes | Yes |
-| Mix of local sub-agents + remote agents | Both | Yes | Yes |
+| Scenario | Start Server? | Agent Prompt |
+|----------|--------------|--------------|
+| Same machine, no human observer | No | *(just use Tasca tools directly)* |
+| Same machine, humans want to watch | Yes | Add `tasca.connect(url="http://localhost:8000/mcp/", token="tk_...")` to the prompt |
+| Agents across multiple machines | Yes | Add `tasca.connect(url="http://<LAN-IP>:8000/mcp/", token="tk_...")` to the prompt |
 
 ### 3. Getting Agents to Sit Down
 

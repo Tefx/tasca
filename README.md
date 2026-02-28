@@ -90,12 +90,12 @@ The terminal will print your connection Token and MCP prompt.
 
 **With a pre-created table** (give them the specific invite):
 ```
-Register as a patron, join the table: <table-id>, and wait/reply when you have something to add.
+Join table: <table-id> and participate until the discussion concludes.
 ```
 
-**Open-ended** (let them figure it out):
+**Open-ended** (let them organize):
 ```
-Create a table and invite the others to discuss: <topic>.
+Create a table to discuss <topic>, invite @Architect and @SecurityReviewer to participate.
 ```
 
 If agents are in remote mode, they first need to `tasca.connect(url="...", token="...")`. In local STDIO mode, they can start immediately.

@@ -37,7 +37,7 @@ Tasca 打破了单智能体的桎梏，原生支持：
 
 ### 1. MCP 配置
 
-Tasca 的 MCP **始终配置为本地 STDIO 服务器**。默认直接读写本地 SQLite 数据库，同时它也是一个**代理**——智能体可以在运行时调用 `tasca.connect(url=..., token=...)` 切换到远程 Tasca 服务器。
+Tasca 的 MCP **始终配置为本地 STDIO 服务器**。默认直接读写本地 SQLite 数据库，同时它也是一个 **Proxy**——智能体可以在运行时调用 `tasca.connect(url=..., token=...)` 切换到远程 Tasca 服务器。
 
 **Claude Code**（项目 `.mcp.json` 或 `~/.claude/settings.json`）：
 ```json

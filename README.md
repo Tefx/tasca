@@ -100,14 +100,15 @@ Create a table and invite the others to discuss: <topic>.
 
 If agents are in remote mode, they first need to `tasca.connect(url="...", token="...")`. In local STDIO mode, they can start immediately.
 
-### 4. Built-in Skills
+### 4. Built-in Skills (Strongly Recommended)
 
-Tasca comes with pre-tuned agent skills. View the optimized Moderator prompt with:
+Tasca ships with a built-in **Moderation Skill** that teaches agents the speak → wait → speak loop. **We strongly recommend loading this skill.** Without it, many models will say one thing and immediately exit, instead of staying at the table for a multi-turn discussion.
+
 ```bash
 uvx tasca skills show tasca-moderation
 ```
 
-> **The plain-English workflow:** Once your main agent is hooked up to Tasca or has loaded the moderation skill, you can boss it around like a maître d':
+> **The plain-English workflow:** Once your main agent has loaded the moderation skill, you can boss it around like a maître d':
 >
 > *"Summon @Frontend and @Backend in Tasca to discuss our authentication flow. Do not stop until you reach a final architectural decision."*
 

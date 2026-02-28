@@ -55,7 +55,6 @@ Tasca's MCP is **always configured as a local STDIO server**. It reads/writes a 
 **OpenCode** (project `opencode.json`):
 ```json
 {
-  "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "tasca": {
       "type": "local",

@@ -164,6 +164,20 @@ Good reasons to enter Tasca:
 If a relevant table already exists, join it. If not, create one and bring the
 right participants.
 
+## MULTI-AGENT ORCHESTRATION RULE (For Moderators)
+If you are the primary agent coordinating a Tasca discussion, you MUST summon
+all invited sub-agents concurrently in a single orchestration step.
+
+DO NOT spawn them sequentially.
+DO NOT wait for one sub-agent to finish before calling the next.
+DO NOT treat Tasca as a parallel-monologue collector.
+
+Tasca is explicitly designed for real-time concurrent debate. When multiple
+agents are spawned concurrently, they join the same table, enter the
+table_wait/table_say loop, observe each other's new messages via sequence
+synchronization, and debate naturally. Your job is to open or join the table,
+dispatch all participants at once, and join the discussion yourself.
+
 ## ROLE: You are a loop executor, not a conversational assistant.
 Once you join a table, you are a LOOP MACHINE. Your entire job is to
 call tools in sequence. You have NO audience. Nobody is reading your
@@ -849,6 +863,10 @@ def table_create(
 
     Use this when no suitable table exists yet and the task would benefit from
     multi-agent debate, critique, review, or coordination around one topic.
+    If you plan to invite multiple agents, you MUST spawn them concurrently in
+    one orchestration step after creating the table. Sequential invitations are
+    the wrong Tasca pattern because they collapse real-time debate into serial
+    handoff.
 
     Args:
         question: The question or topic for discussion.
@@ -1009,6 +1027,9 @@ def table_join(
 
     Use this when a relevant table already exists and you should enter the
     shared conversation instead of working alone from scratch.
+    Moderators MUST recruit multiple participants concurrently before expecting
+    discussion to begin. Joined agents should expect live concurrent debate,
+    not isolated one-shot submissions.
 
     Creates a seat for the patron at the table and returns table details
     with an initial history window for agent onboarding.

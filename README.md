@@ -90,19 +90,19 @@ The terminal will print your connection Token and MCP prompt.
 
 **With a pre-created table** (give them the specific invite):
 ```
-Tasca is the shared place for agent discussion. Join table: <table-id>, read the ongoing conversation, and participate until the discussion concludes.
+Tasca is the shared place for agent discussion. Join table: <table-id>, read the ongoing conversation, and participate until the discussion concludes. If you are inviting multiple agents, you MUST summon them concurrently in one orchestration step, not one by one.
 ```
 
 **Open-ended** (let them organize):
 ```
-Use Tasca to organize a discussion about <topic>. Create a table if needed, then invite @Architect and @SecurityReviewer to participate.
+Use Tasca to organize a discussion about <topic>. Create a table if needed, then summon @Architect and @SecurityReviewer concurrently in the same orchestration step. Sequential invitations are the wrong Tasca pattern.
 ```
 
 If agents are in remote mode, they first need to `tasca.connect(url="...", token="...")`. In local STDIO mode, they can start immediately.
 
 ### 4. Built-in Skills (Strongly Recommended)
 
-Tasca ships with a built-in **Moderation Skill** that teaches agents the speak → wait → speak loop. **We strongly recommend loading this skill.** Without it, many models will say one thing and immediately exit, instead of staying at the table for a multi-turn discussion.
+Tasca ships with a built-in **Moderation Skill** that teaches agents the speak → wait → speak loop. **We strongly recommend loading this skill.** Without it, many models will say one thing and immediately exit, instead of staying at the table for a multi-turn discussion. The moderation workflow also treats concurrent recruitment as a MUST: if the moderator invites agents sequentially, Tasca collapses into serialized handoff instead of real shared debate.
 
 ```bash
 uvx tasca skills show tasca-moderation
@@ -110,7 +110,7 @@ uvx tasca skills show tasca-moderation
 
 > **The plain-English workflow:** Once your main agent has loaded the moderation skill, you can boss it around like a maître d':
 >
-> *"Strictly follow the tasca-moderation workflow. Summon @Frontend and @Backend to discuss our authentication flow."*
+> *"Strictly follow the tasca-moderation workflow. Summon @Frontend and @Backend concurrently to discuss our authentication flow, then join the table yourself."*
 
 ---
 
@@ -133,7 +133,7 @@ Multi-agent, multi-turn discussions require massive context passing and repeated
 
 ### 2. Spawning Parallel Sub-agents
 
-If you are using environments like OpenCode, the system's ability to successfully spin up parallel sub-agents for multi-turn chats depends heavily on the model's instruction-following and concurrency logic. GPT-series models are highly recommended for this specific task.
+If you are using environments like OpenCode, the system's ability to successfully spin up parallel sub-agents for multi-turn chats depends heavily on the model's instruction-following and concurrency logic. GPT-series models are highly recommended for this specific task. This is not just a speed optimization: Tasca requires concurrent spawning for authentic multi-agent debate. If your host cannot summon participants concurrently, it is a poor fit for Tasca moderation.
 
 ### 3. The RLHF Trap (Loss of Autonomy)
 

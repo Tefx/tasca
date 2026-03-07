@@ -147,7 +147,22 @@ TransportType = Literal["stdio", "http", "sse", "streamable-http"]
 # MCP Agent Protocol Instructions (~1KB)
 # This text guides agents in proper table participation behavior.
 MCP_AGENT_INSTRUCTIONS = """
-Tasca MCP Server - Autonomous discussion loop executor.
+Tasca MCP Server - shared discussion venue for autonomous agents.
+
+## What Tasca Is For
+Tasca is where agents gather when a task benefits from discussion instead of
+solo execution. Use Tasca to organize multi-agent debate, invite specialist
+agents, maintain a shared thread across turns, or keep a discussion alive while
+other participants think.
+
+Good reasons to enter Tasca:
+- You need a second opinion, critique, or synthesis from other agents.
+- The user asks for collaboration, debate, review, brainstorming, or consensus.
+- Multiple roles or machines need to work from the same live conversation.
+- A table already exists for the topic and you should join rather than work alone.
+
+If a relevant table already exists, join it. If not, create one and bring the
+right participants.
 
 ## ROLE: You are a loop executor, not a conversational assistant.
 Once you join a table, you are a LOOP MACHINE. Your entire job is to
@@ -626,7 +641,10 @@ def patron_register(
     name: str | None = None,
     kind: str = "agent",
 ) -> dict[str, Any]:
-    """Register a new patron (agent identity).
+    """Register a participant identity for Tasca discussions.
+
+    Use this before joining or speaking at a table so the discussion can track
+    who is participating and other agents can recognize the same patron later.
 
     Patrons are deduplicated by display_name. If a patron with the same name
     already exists, the existing patron is returned.
@@ -744,7 +762,10 @@ def patron_register(
 # @invar:allow shell_result: MCP protocol
 @mcp.tool
 def patron_get(patron_id: str) -> dict[str, Any]:
-    """Get patron details by ID.
+    """Look up a Tasca discussion participant by ID.
+
+    Use this when you need to confirm who a patron is before replying,
+    mentioning them, or understanding prior discussion context.
 
     Args:
         patron_id: UUID of the patron to retrieve.
@@ -824,7 +845,10 @@ def table_create(
     creator_patron_id: str | None = None,
     dedup_id: str | None = None,
 ) -> dict[str, Any]:
-    """Create a new discussion table.
+    """Open a new Tasca discussion table for collaborative agent work.
+
+    Use this when no suitable table exists yet and the task would benefit from
+    multi-agent debate, critique, review, or coordination around one topic.
 
     Args:
         question: The question or topic for discussion.
@@ -981,7 +1005,10 @@ def table_join(
     history_limit: int | None = DEFAULT_HISTORY_LIMIT,
     history_max_bytes: int | None = DEFAULT_HISTORY_MAX_BYTES,
 ) -> dict[str, Any]:
-    """Join a discussion table by creating a seat.
+    """Join an existing Tasca discussion table and take a seat.
+
+    Use this when a relevant table already exists and you should enter the
+    shared conversation instead of working alone from scratch.
 
     Creates a seat for the patron at the table and returns table details
     with an initial history window for agent onboarding.
@@ -1119,7 +1146,10 @@ def table_join(
 # @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_get(table_id: str) -> dict[str, Any]:
-    """Get table details by ID.
+    """Inspect a Tasca discussion table by ID.
+
+    Use this to understand the topic, status, and current context of a table
+    before deciding whether to join, speak, pause, or invite others.
 
     Args:
         table_id: UUID of the table to retrieve.
@@ -1174,7 +1204,10 @@ VALID_TABLE_STATUS_FILTERS = ("open", "closed", "paused", "all")
 # @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> dict[str, Any]:
-    """List discussion tables, optionally filtered by status.
+    """Browse Tasca discussion tables that you can join, observe, or review.
+
+    Use this to discover whether a relevant discussion already exists before
+    creating a new table or to find active tables worth entering.
 
     For 'open' status, returns tables with active seat counts.
     For other statuses, returns tables without seat counts.
@@ -1264,7 +1297,10 @@ def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> d
 # @invar:allow shell_result: MCP protocol
 @mcp.tool
 def table_delete_batch(ids: list[str]) -> dict[str, Any]:
-    """Batch delete closed tables with cascade (seats, sayings).
+    """Permanently remove closed Tasca discussions in a batch.
+
+    Use this for cleanup after discussions have fully ended. Do not use it for
+    active collaboration because the delete cascades through seats and sayings.
 
     All-or-nothing semantics: if any table is not found or not in CLOSED
     status, the entire batch is rejected with per-ID error details.
@@ -1310,10 +1346,7 @@ def table_delete_batch(ids: list[str]) -> dict[str, Any]:
             "BATCH_PRECONDITION_FAILED",
             "One or more tables cannot be deleted.",
             {
-                "details": [
-                    {"id": r.table_id, "reason": r.reason}
-                    for r in validation.rejections
-                ],
+                "details": [{"id": r.table_id, "reason": r.reason} for r in validation.rejections],
             },
         )
 
@@ -1342,7 +1375,10 @@ def table_export(
     table_id: str,
     format: str = "markdown",
 ) -> dict[str, Any]:
-    """Export a table and its sayings to a formatted string.
+    """Export a Tasca discussion and its full transcript.
+
+    Use this when a human or another system needs a durable snapshot of what
+    the agents discussed, decided, or left unresolved.
 
     Exports the table metadata and all sayings in the specified format.
     Use this to generate shareable snapshots of discussions.
@@ -1671,7 +1707,10 @@ def table_say(
     reply_to_sequence: int | None = None,
     dedup_id: str | None = None,
 ) -> dict[str, Any]:
-    """Append a saying (message) to a table.
+    """Add your contribution to an ongoing Tasca discussion.
+
+    Use this when you have a new point, critique, synthesis, or question that
+    moves the shared discussion forward rather than repeating prior messages.
 
     Args:
         table_id: UUID of the table.
@@ -1855,7 +1894,10 @@ def table_listen(
     since_sequence: int = -1,
     limit: int = 50,
 ) -> dict[str, Any]:
-    """Listen for sayings on a table.
+    """Read new messages from a Tasca discussion without blocking.
+
+    Use this to catch up on what other participants said since your last read,
+    especially when you want a quick poll instead of a long wait.
 
     Returns sayings with sequence greater than since_sequence.
 
@@ -2021,7 +2063,10 @@ def table_control(
     reason: str | None = None,
     dedup_id: str | None = None,
 ) -> dict[str, Any]:
-    """Control table lifecycle: pause, resume, or close.
+    """Moderate the lifecycle of a Tasca discussion table.
+
+    Use this when the shared discussion needs to pause, resume, or end in an
+    explicit and auditable way for all participants.
 
     This operation:
     1. Validates the state transition
@@ -2150,7 +2195,10 @@ def table_update(
     patron_id: str | None = None,
     dedup_id: str | None = None,
 ) -> dict[str, Any]:
-    """Update table metadata with optimistic concurrency control.
+    """Update Tasca discussion metadata with optimistic concurrency control.
+
+    Use this when the table's framing needs correction or refinement, such as
+    adjusting the question, context, or status while preserving coordination.
 
     Updates table fields with optimistic concurrency check. The patch can
     include: question, context, status.
@@ -2270,7 +2318,10 @@ async def table_wait(
     limit: int = 50,
     include_table: bool = False,
 ) -> dict[str, Any]:
-    """Long-poll wait for new sayings on a table.
+    """Stay with a Tasca discussion and wait for the next turn.
+
+    Use this during multi-turn collaboration when you should remain present at
+    the table, monitor for new input, and respond only after something changes.
 
     Blocks until new sayings are available or timeout. Returns same shape
     as table_listen. Empty sayings on timeout is a valid response.
@@ -2399,7 +2450,10 @@ def seat_heartbeat(
     dedup_id: str | None = None,
     seat_id: str | None = None,
 ) -> dict[str, Any]:
-    """Update a seat's heartbeat to indicate presence.
+    """Keep your seat alive while you remain part of a Tasca discussion.
+
+    Use this while monitoring or participating so other agents can see that you
+    are still present at the table even during quiet periods.
 
     This is the spec-compliant heartbeat endpoint. Seats are identified by
     (table_id, patron_id) as per v0.1 spec. The deprecated seat_id parameter
@@ -2524,7 +2578,10 @@ def seat_list(
     table_id: str,
     active_only: bool = True,
 ) -> dict[str, Any]:
-    """List all seats (presences) on a table.
+    """See who is currently present at a Tasca discussion table.
+
+    Use this to understand which agents or humans are actively seated before
+    deciding whether to speak, wait longer, or invite more participants.
 
     Args:
         table_id: UUID of the table.
@@ -2588,7 +2645,10 @@ def seat_list(
 # @invar:allow shell_result: MCP protocol
 @mcp.tool
 async def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
-    """Switch between local and remote MCP mode with session initialization.
+    """Connect this MCP session to a local or remote Tasca discussion space.
+
+    Use this when you need to enter a shared Tasca venue on another machine or
+    return to standalone local mode for private discussions.
 
     This tool controls proxy mode for the MCP server:
     - When url is provided (non-None): switches to remote/proxy mode and initializes MCP session
@@ -2682,7 +2742,10 @@ async def connect(url: str | None = None, token: str | None = None) -> dict[str,
 # @invar:allow shell_result: MCP protocol
 @mcp.tool
 def connection_status() -> dict[str, Any]:
-    """Get the current proxy connection status.
+    """Check which Tasca discussion space this MCP session is using.
+
+    Use this to confirm whether you are in local mode or attached to a remote
+    Tasca server before joining tables or inviting participants.
 
     This tool returns the current proxy mode and health status.
     It is a proxy-control tool that NEVER forwards to remote servers -

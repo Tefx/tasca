@@ -17,6 +17,16 @@ from typing import TYPE_CHECKING
 
 import deal
 
+# Hypothesis optional - for property-based testing
+try:
+    from hypothesis import strategies as st
+    from hypothesis.strategies import SearchStrategy, register_type_strategy
+
+    _HYPOTHESIS_AVAILABLE = True
+except ImportError:
+    st = SearchStrategy = register_type_strategy = None  # type: ignore[assignment]
+    _HYPOTHESIS_AVAILABLE = False
+
 if TYPE_CHECKING:
     from tasca.config import Settings
 
@@ -76,22 +86,18 @@ class LimitsConfig:
 # @invar:allow missing_contract: Module-level initialization function, not a core operation
 def _register_hypothesis_strategies() -> None:
     """Register custom Hypothesis strategies for this module's types."""
-    try:
-        from hypothesis import strategies as st
-        from hypothesis.strategies import SearchStrategy, register_type_strategy
+    if not _HYPOTHESIS_AVAILABLE:
+        return
 
-        # Strategy for valid LimitsConfig: positive integers for limits, non-negative for mentions
-        limits_config_strategy: SearchStrategy[LimitsConfig] = st.builds(
-            LimitsConfig,
-            max_sayings_per_table=st.one_of(st.none(), st.integers(min_value=1)),
-            max_content_length=st.one_of(st.none(), st.integers(min_value=1)),
-            max_bytes_per_table=st.one_of(st.none(), st.integers(min_value=1)),
-            max_mentions_per_saying=st.one_of(st.none(), st.integers(min_value=0)),
-        )
-        register_type_strategy(LimitsConfig, limits_config_strategy)
-    except ImportError:
-        # Hypothesis not installed, skip strategy registration
-        pass
+    # Strategy for valid LimitsConfig: positive integers for limits, non-negative for mentions
+    limits_config_strategy: SearchStrategy[LimitsConfig] = st.builds(  # type: ignore[truthy-function]
+        LimitsConfig,
+        max_sayings_per_table=st.one_of(st.none(), st.integers(min_value=1)),  # type: ignore[truthy-function]
+        max_content_length=st.one_of(st.none(), st.integers(min_value=1)),  # type: ignore[truthy-function]
+        max_bytes_per_table=st.one_of(st.none(), st.integers(min_value=1)),  # type: ignore[truthy-function]
+        max_mentions_per_saying=st.one_of(st.none(), st.integers(min_value=0)),  # type: ignore[truthy-function]
+    )
+    register_type_strategy(LimitsConfig, limits_config_strategy)  # type: ignore[truthy-function]
 
 
 _register_hypothesis_strategies()

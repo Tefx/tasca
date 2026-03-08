@@ -23584,7 +23584,8 @@ phases:
 
       - Record `git status` and confirm the intended freeze state
 
-      - Declare the environment and exact verification commands used in this phase
+      - Declare the environment and exact verification commands used in this phase,
+      including the reporting re-test
 
       - State that no code changes are allowed between freeze capture and the gate
       review result'
@@ -23594,6 +23595,7 @@ phases:
       - No code changes occur after freeze capture until gate review completes'
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-retest
     agent: integration-verifier
   - id: guard_followup2_correctness.gate
     name: gate

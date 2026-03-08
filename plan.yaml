@@ -23644,7 +23644,7 @@ phases:
       recorded caveats.'
   - id: guard_followup2_correctness.gate
     name: gate
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
       `guard_followup2_correctness` phase meets the quality bar for proceeding.
 
@@ -23702,6 +23702,8 @@ phases:
     - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     - guard_followup2_correctness.freeze
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-03-08T19:26:29.792788+00:00'
   - id: guard_followup2_correctness.entrypoints-integration-proof-fix
     name: entrypoints-integration-proof.fix
     status: done

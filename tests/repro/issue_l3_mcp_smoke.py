@@ -366,7 +366,7 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
     """Test TableClosed error path (if table_control exists).
 
     Returns:
-        tuple: (client, status) where status is "PASS", "PARTIAL", or "FAIL"
+        tuple: (client, status, has_table_control) where status is "PASS", "PARTIAL", or "FAIL"
     """
     print("\n" + "=" * 70)
     print("TEST: Error Path - TableClosed")
@@ -381,10 +381,11 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
         result = client.call("tools/list")
         tools = [t["name"] for t in result["result"]["tools"]]
 
-        if "table_control" not in tools:
+        has_table_control = "table_control" in tools
+        if not has_table_control:
             print("  ⚠ table_control tool not found - cannot test TableClosed error")
             print("    Note: Spec requires table_control for pause/resume/close")
-            return client, status
+            return client, status, has_table_control
 
         # Close the table
         print("\n[1] TABLE_CONTROL (close)")
@@ -446,7 +447,7 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
             print(f"  ✗ Failed to close table: {result.get('error')}")
             status = "FAIL"
 
-        return client, status
+        return client, status, has_table_control
 
     finally:
         client.stop()
@@ -632,6 +633,8 @@ def main():
             "error_version_conflict": None,
             "error_wait_timeout": None,
         }
+        has_table_control = False
+        table_closed_status = "N/A"
 
         # Run tests
         try:
@@ -647,7 +650,9 @@ def main():
             results["error_not_found"] = "PASS"
 
             # Error: TableClosed
-            client, table_closed_status = test_table_closed(db_path, patron_id, table_id)
+            client, table_closed_status, has_table_control = test_table_closed(
+                db_path, patron_id, table_id
+            )
             if client:
                 client.print_transcript("TableClosed Error")
             results["error_table_closed"] = table_closed_status
@@ -701,24 +706,33 @@ def main():
         print(f"\n{'=' * 70}")
         print("SPEC CONFORMANCE NOTES:")
         print("=" * 70)
-        print("""
-Missing tools per spec v0.1:
-- table_control (pause/resume/close) - required for TableClosed error
-- table_wait (blocking wait with timeout) - required for wait timeout
-- table_update (optimistic concurrency) - required for VersionConflict error
+        print("Missing tools per spec v0.1:")
+        if has_table_control:
+            print("- table_control (pause/resume/close): present")
+        else:
+            print("- table_control (pause/resume/close): missing (required for TableClosed error)")
+        print("- table_wait (blocking wait with timeout) - required for wait timeout")
+        print("- table_update (optimistic concurrency) - required for VersionConflict error")
 
-Signature deviations from spec:
-- table_create: uses question/context vs spec's created_by/title/host_ids
-- table_join: uses table_id vs spec's invite_code
-- seat_heartbeat: uses seat_id vs spec's patron_id/state/ttl_ms
+        print("\nSignature deviations from spec:")
+        print("- table_create: uses question/context vs spec's created_by/title/host_ids")
+        print("- table_join: uses table_id vs spec's invite_code")
+        print("- seat_heartbeat: uses seat_id vs spec's patron_id/state/ttl_ms")
 
-Error codes tested:
-- NOT_FOUND: ✓ Working
-- TableClosed: ⚠ Cannot test (table_control missing)
-- VersionConflict: ⚠ Cannot test (table_update missing)
-- WaitTimeout: ⚠ Cannot test (table_wait missing)
-- AmbiguousMention: Not tested (depends on mention resolution)
-""")
+        print("\nError codes tested:")
+        print("- NOT_FOUND: ✓ Working")
+        if has_table_control:
+            table_closed_note = {
+                "PASS": "✓ Working",
+                "PARTIAL": "⚠ Partially working",
+                "FAIL": "✗ Failed",
+            }.get(table_closed_status, f"⚠ {table_closed_status}")
+            print(f"- TableClosed: {table_closed_note}")
+        else:
+            print("- TableClosed: ⚠ Cannot test (table_control missing)")
+        print("- VersionConflict: ⚠ Cannot test (table_update missing)")
+        print("- WaitTimeout: ⚠ Cannot test (table_wait missing)")
+        print("- AmbiguousMention: Not tested (depends on mention resolution)")
 
         print(f"\n{'=' * 70}")
         print("TRANSCRIPT COMPLETE")

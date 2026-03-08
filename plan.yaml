@@ -23160,6 +23160,77 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-symbol-cleanup
     agent: python-executor
+  - id: guard_followup2_correctness.entrypoints-integration-proof
+    name: entrypoints-integration-proof
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      repaired MCP entrypoint seam from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Spec refs: guard follow-up for MCP entrypoints.
+
+      Touch paths under review: `src/tasca/shell/mcp/entrypoints.py`, any helper extracted
+      under `src/tasca/shell/mcp/`, and direct limits-service seam changes.
+
+      Harness refs: `tests/integration/test_mcp.py`, `tests/unit/mcp/test_mcp_server.py`,
+      `tests/repro/issue_l3_mcp_smoke.py` (read-only).
+
+
+      Test for:
+
+      - Happy path: existing MCP tool flows still traverse the entrypoint seam correctly.
+
+      - Edge cases: transformed payloads and limits-related branches still match current
+      contracts.
+
+      - Error scenarios: boundary adapters still return expected envelopes when inputs
+      are invalid.
+
+
+      Integration evidence is required; compile-only or unit-only proof is insufficient.'
+    verification: '- Main path: `invar guard --changed` (or equivalent changed-file
+      guard run) is clean for the repaired seam
+
+      - Main path: run existing read-only MCP tests/smokes that exercise source ->
+      entrypoints -> server flow
+
+      - Failure path: at least one invalid-input or limits-path execution is included
+      in the evidence
+
+      - Proof: actual command output is pasted, not summarized'
+    evidence_template: '## Integration Evidence
+
+
+      **Command or test exercising the full path**:
+
+      ```
+
+      <paste exact guard and MCP smoke/test commands>
+
+      ```
+
+
+      **Actual output**:
+
+      ```
+
+      <paste stdout/stderr or test runner output>
+
+      ```
+
+
+      **Path exercised**: limits_service -> mcp.entrypoints -> MCP tool surface
+
+
+      **Issues Found**:
+
+      - blocker/should_fix/suggestion/tech_debt entries if discovered'
+    depends_on:
+    - guard_followup2_correctness.limits-service-guard-cleanup
+    agent: integration-verifier
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: pending

@@ -388,14 +388,16 @@ def get_unresolved_handles(
     return [u.handle for u in result.unresolved]
 
 
-# @invar:allow redundant_type_contract: accessor function - no semantic constraint beyond type annotation
-@deal.pre(lambda result: isinstance(result, MentionsResult))
-@deal.post(lambda result: isinstance(result, list) and len(result) >= 0)
-def get_resolved_patron_ids(result: MentionsResult) -> list[PatronId]:
+@deal.pre(
+    lambda mentions_result: all(len(mention.handle) > 0 for mention in mentions_result.resolved)
+)
+@deal.ensure(lambda mentions_result, result: len(result) == len(mentions_result.resolved))
+@deal.post(lambda result: all(len(patron_id) > 0 for patron_id in result))
+def get_resolved_patron_ids(mentions_result: MentionsResult) -> list[PatronId]:
     """Extract patron IDs from a MentionsResult.
 
     Args:
-        result: The mentions resolution result.
+        mentions_result: The mentions resolution result.
 
     Returns:
         List of resolved patron IDs.
@@ -409,17 +411,21 @@ def get_resolved_patron_ids(result: MentionsResult) -> list[PatronId]:
         >>> pids[0]
         'p-001'
     """
-    return [r.patron_id for r in result.resolved]
+    return [resolved_mention.patron_id for resolved_mention in mentions_result.resolved]
 
 
-# @invar:allow redundant_type_contract: accessor function - no semantic constraint beyond type annotation
-@deal.pre(lambda result: isinstance(result, MentionsResult))
-@deal.post(lambda result: isinstance(result, list) and len(result) >= 0)
-def get_unresolved_handles_from_result(result: MentionsResult) -> list[str]:
+@deal.pre(
+    lambda mentions_result: all(
+        len(unresolved_mention.handle) > 0 for unresolved_mention in mentions_result.unresolved
+    )
+)
+@deal.ensure(lambda mentions_result, result: len(result) == len(mentions_result.unresolved))
+@deal.post(lambda result: all(len(handle) > 0 for handle in result))
+def get_unresolved_handles_from_result(mentions_result: MentionsResult) -> list[str]:
     """Extract unresolved handles from a MentionsResult.
 
     Args:
-        result: The mentions resolution result.
+        mentions_result: The mentions resolution result.
 
     Returns:
         List of unresolved handles.
@@ -431,16 +437,20 @@ def get_unresolved_handles_from_result(result: MentionsResult) -> list[str]:
         >>> handles
         ['charlie']
     """
-    return [u.handle for u in result.unresolved]
+    return [unresolved_mention.handle for unresolved_mention in mentions_result.unresolved]
 
 
-@deal.pre(lambda result: isinstance(result, MentionsResult))
-@deal.post(lambda result: isinstance(result, bool) and result in (True, False))
-def has_ambiguous_mentions(result: MentionsResult) -> bool:
+@deal.pre(
+    lambda mentions_result: all(
+        len(ambiguous_mention.handle) > 0 for ambiguous_mention in mentions_result.ambiguous
+    )
+)
+@deal.ensure(lambda mentions_result, result: result == (len(mentions_result.ambiguous) > 0))
+def has_ambiguous_mentions(mentions_result: MentionsResult) -> bool:
     """Check if there are any ambiguous mentions.
 
     Args:
-        result: The mentions resolution result.
+        mentions_result: The mentions resolution result.
 
     Returns:
         True if any mentions are ambiguous.
@@ -457,4 +467,4 @@ def has_ambiguous_mentions(result: MentionsResult) -> bool:
         >>> has_ambiguous_mentions(result2)
         False
     """
-    return len(result.ambiguous) > 0
+    return len(mentions_result.ambiguous) > 0

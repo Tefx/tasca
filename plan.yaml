@@ -23840,3 +23840,26 @@ phases:
     depends_on:
     - guard_followup2_debt.file-size-and-complexity-trim
     agent: integration-verifier
+  - id: guard_followup2_debt.freeze
+    name: freeze
+    status: pending
+    description: 'Freeze snapshot for guard_followup2_debt gate review.
+
+
+      Requirements:
+
+      - Record `git rev-parse HEAD`
+
+      - Record `git status` and confirm the intended freeze state
+
+      - Declare the environment and exact verification commands used in this phase
+
+      - State that no code changes are allowed between freeze capture and the gate
+      review result'
+    verification: '- Freeze evidence contains commit SHA, worktree status, environment
+      note, and command list
+
+      - No code changes occur after freeze capture until gate review completes'
+    depends_on:
+    - guard_followup2_debt.final-guard-regression
+    agent: integration-verifier

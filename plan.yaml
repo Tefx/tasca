@@ -23631,6 +23631,58 @@ phases:
     - guard_followup2_correctness.entrypoints-integration-proof
     - guard_followup2_correctness.freeze
     agent: gate-reviewer
+  - id: guard_followup2_correctness.entrypoints-integration-proof-fix
+    name: entrypoints-integration-proof.fix
+    status: pending
+    description: 'Fix the focused MCP smoke compatibility issue in `tests/repro/issue_l3_mcp_smoke.py`.
+
+
+      Issue:
+
+      - The `TableClosed` section uses an outdated `table_control` invocation and
+      no longer matches the current MCP contract requiring `speaker_name`.
+
+      - Current smoke output includes: `✗ Failed to close table: None`.
+
+
+      Scope:
+
+      - Update only the reproduction/smoke flow needed to match the current MCP close-table
+      contract.
+
+      - Keep this step focused to the compatibility gap in the smoke script; do not
+      broaden into unrelated MCP entrypoint refactors.
+
+
+      Touch paths:
+
+      - `tests/repro/issue_l3_mcp_smoke.py`
+
+      - Read current MCP control contract only as needed to align the smoke invocation.
+
+
+      Suggested agent:
+
+      - `python-executor` (clear, localized Python compatibility fix)
+
+
+      Verification intent:
+
+      - The reproduction script''s `TableClosed` close-table path uses the current
+      required arguments, including `speaker_name`.
+
+      - The failure message above is no longer reproduced for this compatibility path.'
+    verification: '- Update the smoke script so the `TableClosed` section calls the
+      MCP `table_control` tool with the current required arguments
+
+      - Run a focused reproduction command such as `python tests/repro/issue_l3_mcp_smoke.py`
+      or the repo-standard equivalent
+
+      - Evidence must show the close-table call succeeds or, at minimum, no longer
+      fails because `speaker_name` is missing'
+    depends_on:
+    - guard_followup2_correctness.entrypoints-integration-proof
+    agent: python-executor
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

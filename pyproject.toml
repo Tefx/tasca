@@ -106,7 +106,7 @@ indent-style = "space"
 [tool.invar.guard]
 core_paths = ["src/tasca/core"]
 shell_paths = ["src/tasca/shell"]
-exclude = ["web/", "tests/", "data/"]
+exclude = ["web/", "tests/", "data/", ".vectl/worktrees/"]
 max_file_lines = 500
 max_function_lines = 50
 require_contracts = true

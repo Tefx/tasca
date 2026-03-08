@@ -661,9 +661,10 @@ wheels = [
 
 [[package]]
 name = "invar-tools"
-version = "1.17.32"
+version = "1.19.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "coverage" },
     { name = "crosshair-tool" },
     { name = "hypothesis" },
     { name = "invar-runtime" },
@@ -679,9 +680,9 @@ dependencies = [
     { name = "rich" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/87/f934058df00573d05b34513af3bab31f0ac9cc336949a10ea86c6284f275/invar_tools-1.17.32.tar.gz", hash = "sha256:2f31cef4e4212fa37f9f25104cebbb21d7e37842bbc8910f3de9a1bd7a5a265c", size = 9975281, upload-time = "2026-02-17T17:44:11.121Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/ae/020175c18f0976f5898f7adbead76433e2786a6a5bd674d5e0bc2be027ce/invar_tools-1.19.6.tar.gz", hash = "sha256:14d9bfdb780b18e0f36b793524c0f5217d8e5af951794c072391c59f172f3e43", size = 10082376, upload-time = "2026-03-08T16:27:07.054Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/54/9eff08653487fa207307cdfeae3b57da1cd27a8abf3181cc32e52932cd08/invar_tools-1.17.32-py3-none-any.whl", hash = "sha256:84b60c2c407ef250a56a11bf5f78ee0782191ce8ffc9df07d3ccd9e9059384d1", size = 10390524, upload-time = "2026-02-17T17:44:08.937Z" },
+    { url = "https://files.pythonhosted.org/packages/42/fc/bc5062a2a939ec7eb526e399b01d25a98b65be9783f24630d14879647f02/invar_tools-1.19.6-py3-none-any.whl", hash = "sha256:31aec3591c7809186e2206b7db4fb0c5b40bdc2f619ee2436a47dab3170da861", size = 10433071, upload-time = "2026-03-08T16:27:04.477Z" },
 ]
 
 [[package]]

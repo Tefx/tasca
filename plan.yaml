@@ -24087,7 +24087,7 @@ phases:
       - Unrelated smoke scenarios and MCP behavior unchanged.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     name: entrypoints-integration-proof.reporting-authority-retest
-    status: claimed
+    status: done
     description: 'Re-test the consolidated smoke reporting correction from a fresh,
       independent verification pass.
 
@@ -24128,6 +24128,33 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-08T19:21:50.721342+00:00'
+    done_at: '2026-03-08T19:23:16.778339+00:00'
+    evidence: 'Artifact:
+
+      - Commit hash(es): none
+
+      - Files changed: none
+
+
+      Verification:
+
+      - Run: uv run python tests/repro/issue_l3_mcp_smoke.py -> exit 0.
+
+      - TableClosed path output consistent: Got TableClosed error OPERATION_NOT_ALLOWED;
+      summary shows error_table_closed PASS; notes show TableClosed Working.
+
+      - No contradictory TableClosed missing/cannot-test lines found.
+
+
+      Spec link:
+
+      - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
+
+
+      Gaps/Notes:
+
+      - Unrelated partials remain for other error classes (VersionConflict, WaitTimeout)
+      and are out-of-scope for this retest.'
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

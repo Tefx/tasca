@@ -23215,7 +23215,7 @@ phases:
   steps:
   - id: guard_followup2_correctness.entrypoints-pure-logic-split
     name: entrypoints-pure-logic-split
-    status: claimed
+    status: done
     description: 'Micro remediation for `src/tasca/shell/mcp/entrypoints.py`.
 
 
@@ -23265,6 +23265,52 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-08T18:10:21.814149+00:00'
+    done_at: '2026-03-08T18:26:01.258961+00:00'
+    evidence: 'Artifact:
+
+      - Commit hash(es): 75483c0 (worktree), 72604a5 (squash merge on main)
+
+      - Files changed: src/tasca/shell/mcp/entrypoints.py, src/tasca/shell/mcp/entrypoint_logic.py
+
+
+      Verification:
+
+      - Run: uvx invar-tools guard src/tasca/shell/mcp/entrypoints.py --static --human
+      -> PASS (0 errors, 27 warnings), escape hatches in entrypoints reduced 42->28
+      and prior _compute_next_sequence pure-logic block removed from entrypoints.
+
+      - Run: uvx invar-tools guard --changed --static --human -> PASS (0 errors, 31
+      warnings) on touched files.
+
+      - Run: uv run pytest tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py
+      -q -> PASS (138 passed, 0 failed).
+
+      - Run: uv run python tests/repro/issue_l3_mcp_smoke.py -> executes MCP flows;
+      reports pre-existing failing TableClosed scenario (out of scope).
+
+
+      Spec link:
+
+      - guard_followup2_correctness.entrypoints-pure-logic-split
+
+
+      Gaps/Notes:
+
+      - Moved pure helper logic from entrypoints.py to entrypoint_logic.py: limit_error_to_response,
+      build_patron_response_data, build_table_dict, format_saying_dict, build_seat_dict,
+      validate_speaker_constraints, validate_control_action, build_control_response,
+      build_join_next_action, apply_table_patch, build_say_response, compute_next_sequence,
+      silence_next_action.
+
+      - MCP tool surface/signatures unchanged; only internal helper destinations/imports
+      changed.
+
+      - Added contracts to extracted helpers; adjusted contract completeness and error-envelope
+      postconditions.
+
+      - Discovered issue: tests/repro/issue_l3_mcp_smoke.py is not pytest-runnable
+      in this environment and script mode reports a pre-existing TableClosed error-path
+      failure unrelated to this step.'
   - id: guard_followup2_correctness.entrypoints-symbol-cleanup
     name: entrypoints-symbol-cleanup
     status: pending

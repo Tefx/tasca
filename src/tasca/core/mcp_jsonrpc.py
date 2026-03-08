@@ -36,7 +36,7 @@ def _is_parseable_payload(text: str) -> bool:
 
 
 @deal.pre(lambda text: _is_parseable_payload(text))
-@deal.post(lambda result: result is not None)
+@deal.post(lambda result: isinstance(result, (dict, list, str, int, float, bool, type(None))))
 def parse_sse_or_json(text: str) -> Any:
     """Parse response body that may be SSE or plain JSON.
 

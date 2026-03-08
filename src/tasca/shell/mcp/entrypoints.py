@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 import uuid
 from datetime import UTC, datetime
@@ -12,7 +11,6 @@ from typing import Any, Literal
 
 from returns.result import Failure, Success
 
-from tasca.config import settings
 from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.seat import SPEC_STATE_TO_INTERNAL, Seat, SeatId, SeatState
@@ -45,26 +43,50 @@ from tasca.shell.logging import (
 from tasca.shell.mcp.database import get_mcp_db
 from tasca.shell.mcp.entrypoint_logic import (
     apply_table_patch as _apply_table_patch,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     build_control_response as _build_control_response,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     build_join_next_action as _build_join_next_action,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     build_patron_response_data as _build_patron_response_data,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     build_say_response as _build_say_response,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     build_seat_dict as _build_seat_dict,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     build_table_dict as _build_table_dict,
+)
+from tasca.shell.mcp.entrypoint_logic import (
+    build_table_say_compat_metadata as _build_table_say_compat_metadata,
+)
+from tasca.shell.mcp.entrypoint_logic import (
+    build_table_update_actor_metadata as _build_table_update_actor_metadata,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     compute_next_sequence as _compute_next_sequence,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     format_saying_dict as _format_saying_dict,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     limit_error_to_response as _limit_error_to_response,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     silence_next_action as _silence_next_action,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     validate_control_action as _validate_control_action,
+)
+from tasca.shell.mcp.entrypoint_logic import (
     validate_speaker_constraints as _validate_speaker_constraints,
 )
-from tasca.shell.mcp.proxy import (
-    ProxyConfigError,
-    SessionInitError,
-    get_upstream_config,
-    switch_to_local,
-    switch_to_remote,
-)
+from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local
 from tasca.shell.mcp.responses import error_response, success_response
 from tasca.shell.services.limited_saying_service import append_saying_with_limits
 from tasca.shell.services.table_id_generator import generate_table_id
@@ -201,7 +223,7 @@ def patron_register(
         response_data = _build_patron_response_data(existing, is_new=False)
         # Store in idempotency cache if dedup_id provided
         if dedup_id is not None:
-            _ = store_idempotency_key(
+            store_idempotency_key(
                 conn, resource_key, "patron_register", dedup_id, {"data": response_data}
             )
         return success_response(response_data)
@@ -229,7 +251,7 @@ def patron_register(
     response_data = _build_patron_response_data(created, is_new=True)
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
-        _ = store_idempotency_key(
+        store_idempotency_key(
             conn, resource_key, "patron_register", dedup_id, {"data": response_data}
         )
     return success_response(response_data)
@@ -344,9 +366,7 @@ def table_create(
     }
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
-        _ = store_idempotency_key(
-            conn, resource_key, "table_create", dedup_id, {"data": response_data}
-        )
+        store_idempotency_key(conn, resource_key, "table_create", dedup_id, {"data": response_data})
     return success_response(response_data)
 
 
@@ -852,6 +872,12 @@ def table_say(
 ) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
+    table_say_compat_metadata = _build_table_say_compat_metadata(saying_type, reply_to_sequence)
+    if table_say_compat_metadata:
+        logger.debug(
+            "Ignoring unsupported optional table_say fields",
+            extra=table_say_compat_metadata,
+        )
 
     # Auto-register patron if agent calls table_say without patron_id.
     actual_speaker_kind = speaker_kind
@@ -932,9 +958,7 @@ def table_say(
 
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
-        _ = store_idempotency_key(
-            conn, resource_key, "table_say", dedup_id, {"data": response_data}
-        )
+        store_idempotency_key(conn, resource_key, "table_say", dedup_id, {"data": response_data})
     return success_response(response_data)
 
 
@@ -988,9 +1012,9 @@ def table_listen(
             ],
             "next_sequence": next_sequence,
             "_next_action": (
-                "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
+                f"IMMEDIATELY call tasca.table_wait(since_sequence={next_sequence}). "
                 "Your response = tool_call, not text."
-            ).format(seq=next_sequence),
+            ),
         }
     )
 
@@ -1133,7 +1157,7 @@ def table_control(
 
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
-        _ = store_idempotency_key(
+        store_idempotency_key(
             conn, resource_key, "table_control", dedup_id, {"data": response_data}
         )
 
@@ -1152,6 +1176,7 @@ def table_update(
 ) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
+    table_update_actor_metadata = _build_table_update_actor_metadata(speaker_name, patron_id)
 
     # Resource key for idempotency scope
     resource_key = f"update:{table_id}"
@@ -1211,12 +1236,11 @@ def table_update(
 
     updated_table = update_result.unwrap()
     response_data = {"table": _build_table_dict(updated_table)}
+    logger.debug("table_update actor metadata", extra=table_update_actor_metadata)
 
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
-        _ = store_idempotency_key(
-            conn, resource_key, "table_update", dedup_id, {"data": response_data}
-        )
+        store_idempotency_key(conn, resource_key, "table_update", dedup_id, {"data": response_data})
 
     return success_response(response_data)
 
@@ -1281,9 +1305,9 @@ async def table_wait(
             response_data["_next_action"] = (
                 "New sayings received. Decide internally whether to speak. "
                 "Your next response MUST be a tool_call: either "
-                "tasca.table_say(...) or tasca.table_wait(since_sequence={seq}). "
+                f"tasca.table_say(...) or tasca.table_wait(since_sequence={next_sequence}). "
                 "Do not emit text."
-            ).format(seq=next_sequence)
+            )
 
             return success_response(response_data)
 
@@ -1408,7 +1432,7 @@ def seat_heartbeat(
 
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
-        _ = store_idempotency_key(
+        store_idempotency_key(
             conn, resource_key, "seat_heartbeat", dedup_id, {"data": response_data}
         )
     return success_response(response_data)

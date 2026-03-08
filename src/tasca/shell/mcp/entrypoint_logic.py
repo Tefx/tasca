@@ -296,6 +296,32 @@ def build_say_response(
     }
 
 
+@deal.post(lambda result: isinstance(result, dict))
+def build_table_say_compat_metadata(
+    saying_type: str | None,
+    reply_to_sequence: int | None,
+) -> dict[str, Any]:
+    """Build debug metadata for optional table_say compatibility fields."""
+    metadata: dict[str, Any] = {}
+    if saying_type is not None:
+        metadata["saying_type"] = saying_type
+    if reply_to_sequence is not None:
+        metadata["reply_to_sequence"] = reply_to_sequence
+    return metadata
+
+
+@deal.post(lambda result: isinstance(result, dict) and "speaker_name" in result)
+def build_table_update_actor_metadata(
+    speaker_name: str,
+    patron_id: str | None,
+) -> dict[str, Any]:
+    """Build debug metadata for table_update actor identity."""
+    return {
+        "speaker_name": speaker_name,
+        "patron_id": patron_id,
+    }
+
+
 # @invar:allow shell_result: Helper builds MCP next-action guidance string for wait loop.
 def _silence_nudge(empty_waits: int, threshold: int, next_sequence: int) -> str:
     return (

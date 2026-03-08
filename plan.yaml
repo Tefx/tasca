@@ -23211,7 +23211,7 @@ phases:
     agent: gate-reviewer
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
-  status: in_progress
+  status: done
   steps:
   - id: guard_followup2_correctness.entrypoints-pure-logic-split
     name: entrypoints-pure-logic-split
@@ -24390,7 +24390,7 @@ phases:
       \ reproducible raw evidence."
   - id: guard_followup2_correctness.freeze-gate-retest
     name: freeze-gate-retest
-    status: claimed
+    status: done
     description: 'Re-test the freeze and evidence package from a fresh independent
       pass before re-running the phase gate.
 
@@ -24428,9 +24428,39 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-08T19:42:00.085277+00:00'
+    done_at: '2026-03-08T20:00:56.352408+00:00'
+    evidence: "Verification:\n- Dispatched `gate-reviewer` in isolated worktree `.vectl/worktrees/guard_followup2_correctness.freeze-gate-retest`\
+      \ and performed independent retest pass.\n- Guard path executed and raw artifacts\
+      \ captured:\n  - `uv run --group dev invar guard --changed src/tasca/core/services/limits_service.py`\
+      \ (raw: `evidence/guard_followup2_correctness/freeze-gate-retest/10_uv_invar_guard_changed_limits_service.txt`,\
+      \ exit marker `.exit` file)\n  - `uv run pytest -q tests/unit/test_limits_service.py`\
+      \ (raw: `.../11_uv_pytest_unit_limits_service.txt`)\n  - `uv run pytest -q tests/unit/mcp/test_mcp_server.py\
+      \ tests/integration/test_mcp.py -k \"test_mcp_stdio_list_tools or test_mcp_error_invalid_request\"\
+      ` (raw: `.../12_uv_pytest_mcp_list_tools_invalid_request.txt`)\n  - `uv run\
+      \ python tests/repro/issue_l3_mcp_smoke.py` (raw: `.../13_uv_python_issue_l3_mcp_smoke.txt`)\n\
+      - Freeze completeness artifacts captured:\n  - Environment: `.../00_env.txt`\n\
+      \  - Exact command list: `.../01_commands.txt`\n  - Git state capture: `.../20_git_status_precommit.txt`\n\
+      \  - Pasted SHA/status evidence in reviewer report.\n\nFiles changed:\n- `evidence/guard_followup2_correctness/freeze-gate-retest/00_env.txt`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/01_commands.txt`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/10_uv_invar_guard_changed_limits_service.exit`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/10_uv_invar_guard_changed_limits_service.txt`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/11_uv_pytest_unit_limits_service.exit`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/11_uv_pytest_unit_limits_service.txt`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/12_uv_pytest_mcp_list_tools_invalid_request.exit`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/12_uv_pytest_mcp_list_tools_invalid_request.txt`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/13_uv_python_issue_l3_mcp_smoke.exit`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/13_uv_python_issue_l3_mcp_smoke.txt`\n\
+      - `evidence/guard_followup2_correctness/freeze-gate-retest/20_git_status_precommit.txt`\n\
+      \nWorktree/merge commits:\n- Worker branch commits: `0d9913eb5530a44077fe4c770eef5b35964b5eff`,\
+      \ `bed6891a1245f07381bc5f8d48a1ff33904edae4`\n- Main squash merge commit: `b5b37d2`\n\
+      \nGaps/Notes:\n- Retest explicitly reports that smoke summary still marks VersionConflict/WaitTimeout\
+      \ as PARTIAL and notes inconsistency in spec-conformance text inside the smoke\
+      \ artifact.\n- limits_service guard still reports warnings (`file_size_warning`,\
+      \ `review_suggested`) as recorded in raw output; no out-of-scope remediation\
+      \ performed."
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
-  status: locked
+  status: pending
   depends_on:
   - guard_followup2_correctness
   steps:

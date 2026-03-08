@@ -10,7 +10,7 @@ import sqlite3
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from returns.result import Failure, Success
 

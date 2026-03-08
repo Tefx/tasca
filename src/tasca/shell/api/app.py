@@ -46,8 +46,6 @@ except ImportError:
 
 from tasca.config import settings
 from tasca.shell.api.auth import validate_bearer_token
-from tasca.shell.api.routes import export, health, patrons, sayings, seats, tables
-from tasca.shell.api.routes import search
 from tasca.shell.mcp import mcp
 
 logger = logging.getLogger(__name__)
@@ -189,6 +187,14 @@ def create_app() -> FastAPI:
     - If admin_token is None/empty, authentication is bypassed.
     - STDIO transport (tasca-mcp command) is unaffected by HTTP auth.
     """
+    if FastAPI is None:
+        raise ModuleNotFoundError(
+            "fastapi is required to create the API application. "
+            "Install tasca with API dependencies."
+        )
+
+    from tasca.shell.api.routes import export, health, patrons, sayings, search, seats, tables
+
     # Get MCP HTTP app first - we need its lifespan
     mcp_app = mcp.http_app(path="/")
 

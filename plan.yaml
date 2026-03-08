@@ -24000,7 +24000,7 @@ phases:
     skipped_reason: superseded
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
     name: entrypoints-integration-proof.reporting-authority-fix
-    status: claimed
+    status: done
     description: 'Fix the stale contradictory smoke reporting for the already-passing
       `TableClosed` scenario in `tests/repro/issue_l3_mcp_smoke.py` using a single
       higher-authority remediation step.
@@ -24054,6 +24054,37 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-08T19:15:54.503790+00:00'
+    done_at: '2026-03-08T19:21:36.462660+00:00'
+    evidence: 'Artifact:
+
+      - Commit hash(es): c720f0607f4b1a16afa225c79ee33ec26f70a5e9 (worktree), e4908b0
+      (main)
+
+      - Files changed: tests/repro/issue_l3_mcp_smoke.py
+
+
+      Verification:
+
+      - Run: uv run python tests/repro/issue_l3_mcp_smoke.py > /tmp/issue_l3_mcp_smoke.out
+      2>&1 -> exit 0
+
+      - TableClosed section output shows close success, OPERATION_NOT_ALLOWED on say,
+      and listen works.
+
+      - Final reporting now consistent: error_table_closed PASS; notes report table_control
+      present and TableClosed Working; contradictory missing/cannot-test line removed.
+
+
+      Spec link:
+
+      - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
+
+
+      Gaps/Notes:
+
+      - No files outside tests/repro/issue_l3_mcp_smoke.py modified.
+
+      - Unrelated smoke scenarios and MCP behavior unchanged.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     name: entrypoints-integration-proof.reporting-authority-retest
     status: pending

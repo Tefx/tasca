@@ -23382,6 +23382,55 @@ phases:
 
       - Proof: no new persistence precedence or compatibility semantics introduced'
     agent: python-senior
+  - id: guard_followup2_cleanup.storage-symbol-cleanup
+    name: storage-symbol-cleanup
+    status: pending
+    description: 'Clean up remaining repo-level guard findings across the smaller
+      storage modules after the database split is complete.
+
+
+      Spec refs: same guard follow-up source as the database step.
+
+      Touch paths: `src/tasca/shell/storage/search_repo.py`, `src/tasca/shell/storage/saying_repo.py`,
+      `src/tasca/shell/storage/seat_repo.py`, `src/tasca/shell/storage/dedup_repo.py`,
+      `src/tasca/shell/storage/idempotency_repo.py`, `src/tasca/shell/storage/control_repo.py`.
+
+      Harness refs: `tests/unit/storage/test_search_repo.py`, `tests/unit/storage/test_control_repo.py`,
+      `tests/integration/test_api.py`, `tests/integration/test_mcp.py` (read-only).
+
+
+      Goals:
+
+      - Remove remaining `dead_export`, `dead_param`, `dead_assign`, and repo-local
+      `shell_pure_logic` findings.
+
+      - Prefer deleting stale wrappers and aligning live call signatures over adding
+      suppressions.
+
+      - Keep SQL and repository behavior stable.
+
+
+      `@invar:allow` policy:
+
+      - Usually not acceptable here; repository dead code and pure logic should be
+      fixed directly.
+
+      - If a boundary helper must stay, give it a unique reason and keep it live.
+
+
+      Conflict rationale:
+
+      - Shared storage directory and harnesses with `database.py`; serialize behind
+      the database step.'
+    verification: '- Repository guard findings in the listed files are resolved or
+      explicitly justified as live boundary code
+
+      - Evidence lists removed dead symbols and any call-site alignments
+
+      - No repository interface used by API/MCP layers changes incompatibly'
+    depends_on:
+    - guard_followup2_cleanup.database-pure-logic-split
+    agent: python-executor
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: pending

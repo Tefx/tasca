@@ -23653,7 +23653,7 @@ phases:
     agent: gate-reviewer
   - id: guard_followup2_correctness.entrypoints-integration-proof-fix
     name: entrypoints-integration-proof.fix
-    status: claimed
+    status: done
     description: 'Fix the focused MCP smoke compatibility issue in `tests/repro/issue_l3_mcp_smoke.py`.
 
 
@@ -23705,6 +23705,30 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-08T18:55:53.731595+00:00'
+    done_at: '2026-03-08T19:01:24.501744+00:00'
+    evidence: 'Artifact:
+
+      - Commit hash(es): f9470ef (worktree), f0671c3 (main)
+
+      - Files changed: tests/repro/issue_l3_mcp_smoke.py
+
+
+      Verification:
+
+      - Run: python3 tests/repro/issue_l3_mcp_smoke.py -> TableClosed path now passes:
+      table_control close succeeds, table_say on closed table returns OPERATION_NOT_ALLOWED,
+      table_listen on closed table works.
+
+
+      Spec link:
+
+      - guard_followup2_correctness.entrypoints-integration-proof-fix
+
+
+      Gaps/Notes:
+
+      - Updated close invocation to current table_control contract by passing speaker_name
+      and removing obsolete speaker_kind in smoke script.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-retest
     name: entrypoints-integration-proof.retest
     status: pending

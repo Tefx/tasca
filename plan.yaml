@@ -23574,7 +23574,7 @@ phases:
       - guard_followup2_correctness.entrypoints-integration-proof-retest"
   - id: guard_followup2_correctness.freeze
     name: freeze
-    status: claimed
+    status: done
     description: 'Freeze snapshot for guard_followup2_correctness gate review.
 
 
@@ -23599,6 +23599,49 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-08T19:23:28.000158+00:00'
+    done_at: '2026-03-08T19:26:18.328291+00:00'
+    evidence: 'Artifact:
+
+      - Commit hash(es): none
+
+      - Files changed: none
+
+
+      Verification:
+
+      - Run: uvx invar-tools guard --changed --human src/tasca/shell/mcp/entrypoints.py
+      src/tasca/shell/mcp/entrypoint_logic.py src/tasca/core/services/limits_service.py
+      tests/repro/issue_l3_mcp_smoke.py -> FAIL (tool bootstrap ModuleNotFoundError:
+      invar.shell.commands.hooks).
+
+      - Run: uv run pytest -q tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py
+      tests/unit/test_limits_service.py -> PASS (197 passed).
+
+      - Run: uv run python tests/repro/issue_l3_mcp_smoke.py -> PASS with caveat (happy_path/error_not_found/error_table_closed
+      pass; reporting partials remain for version_conflict/wait_timeout).
+
+
+      Spec link:
+
+      - guard_followup2_correctness.freeze
+
+
+      Gaps/Notes:
+
+      - blocker: invar-tools CLI bootstrap failure in environment prevented guard
+      evidence collection.
+
+      - should_fix: smoke summary inconsistency remains for table_update/table_wait
+      reporting notes despite tool presence.
+
+      - suggestion: add CI preflight for invar tool import/startup and pin known-good
+      version.
+
+      - tech_debt: heavy mock use in unit MCP tests; keep/expand integration coverage
+      to avoid mock drift.
+
+      - Freeze handled in degraded mode due tooling blocker; proceeding to gate with
+      recorded caveats.'
   - id: guard_followup2_correctness.gate
     name: gate
     status: pending

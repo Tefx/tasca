@@ -24000,7 +24000,7 @@ phases:
     skipped_reason: superseded
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
     name: entrypoints-integration-proof.reporting-authority-fix
-    status: pending
+    status: claimed
     description: 'Fix the stale contradictory smoke reporting for the already-passing
       `TableClosed` scenario in `tests/repro/issue_l3_mcp_smoke.py` using a single
       higher-authority remediation step.
@@ -24052,6 +24052,8 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof-retest
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-08T19:15:54.503790+00:00'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     name: entrypoints-integration-proof.reporting-authority-retest
     status: pending

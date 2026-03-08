@@ -23254,6 +23254,62 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof
     agent: integration-verifier
+  - id: guard_followup2_correctness.gate
+    name: gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
+      `guard_followup2_correctness` phase meets the quality bar for proceeding.
+
+
+      Review criteria:
+
+      1. Micro entrypoints remediation actually removed concentrated findings instead
+      of hiding them.
+
+      2. Limits-service seam remains behavior-preserving.
+
+      3. Evidence quality is specific, verifiable, and includes at least one real
+      seam execution.
+
+      4. Any retained `@invar:allow` use is boundary-only and narrowly justified.
+
+
+      Independence: you must not be the same agent as any implementation step in this
+      phase.'
+    verification: '- All phase steps completed
+
+      - Evidence quality acceptable
+
+      - No unresolved blocker remains in `entrypoints.py` or `limits_service.py`
+
+      - Ready to open the cleanup phase'
+    evidence_template: '## Gate Review Report
+
+
+      **Reviewer**: gate-reviewer
+
+      **Phase**: guard_followup2_correctness
+
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      | ------- | ------ | ---------------- | -------- |
+
+      | <step> | ✅/⚠️/❌ | excellent/adequate/insufficient | <notes> |
+
+
+      ### Gate Decision
+
+      - [ ] OPEN
+
+      - [ ] BLOCKED'
+    depends_on:
+    - guard_followup2_correctness.entrypoints-pure-logic-split
+    - guard_followup2_correctness.entrypoints-symbol-cleanup
+    - guard_followup2_correctness.limits-service-guard-cleanup
+    - guard_followup2_correctness.entrypoints-integration-proof
+    - guard_followup2_correctness.freeze
+    agent: gate-reviewer
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: pending

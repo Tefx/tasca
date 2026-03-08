@@ -23431,6 +23431,56 @@ phases:
     depends_on:
     - guard_followup2_cleanup.database-pure-logic-split
     agent: python-executor
+  - id: guard_followup2_cleanup.storage-guard-verify
+    name: storage-guard-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), verify the storage
+      cleanup phase from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Scope:
+
+      - `src/tasca/shell/storage/database.py`
+
+      - `src/tasca/shell/storage/search_repo.py`
+
+      - `src/tasca/shell/storage/saying_repo.py`
+
+      - `src/tasca/shell/storage/seat_repo.py`
+
+      - `src/tasca/shell/storage/dedup_repo.py`
+
+      - `src/tasca/shell/storage/idempotency_repo.py`
+
+      - `src/tasca/shell/storage/control_repo.py`
+
+
+      Use read-only existing harnesses/tests only; do not edit excluded directories.
+
+
+      Test for:
+
+      - Happy path: API/MCP flows still reach the same storage behavior.
+
+      - Edge cases: bootstrap and repo query helpers still behave consistently.
+
+      - Error scenarios: DB setup and repo error handling still surface correctly.
+
+
+      Finding issues is success.'
+    verification: '- Main path: changed-file guard run is clean for the storage files
+
+      - Failure path: at least one bootstrap or error-path smoke is included in the
+      evidence
+
+      - Existing read-only API/MCP/storage tests used for confidence are named with
+      actual output pasted'
+    depends_on:
+    - guard_followup2_cleanup.storage-symbol-cleanup
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: pending

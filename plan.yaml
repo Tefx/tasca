@@ -23063,6 +23063,31 @@ phases:
     depends_on:
     - guard_followup2_boundary.auth-config-boundary-fix
     agent: python-senior
+  - id: guard_followup2_boundary.freeze
+    name: freeze
+    status: pending
+    description: 'Freeze snapshot for L3/boundary verification in `guard_followup2_boundary`.
+
+
+      Requirements:
+
+      - Record `git rev-parse HEAD`
+
+      - Record `git status` and confirm the intended freeze state
+
+      - Declare the environment and exact verification commands used in this phase
+
+      - State that no code changes are allowed between freeze capture and the L3 verification
+      + gate result'
+    verification: '- Freeze evidence contains commit SHA, worktree status, environment
+      note, and command list
+
+      - No code changes occur after freeze capture until L3 verification and gate
+      review complete'
+    depends_on:
+    - guard_followup2_boundary.auth-config-boundary-fix
+    - guard_followup2_boundary.mcp-server-boundary-fix
+    agent: integration-verifier
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: pending

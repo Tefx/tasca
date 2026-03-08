@@ -23505,7 +23505,9 @@ phases:
     agent: gate-reviewer
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
-  status: pending
+  status: locked
+  depends_on:
+  - guard_followup2_correctness
   steps:
   - id: guard_followup2_cleanup.database-pure-logic-split
     name: database-pure-logic-split

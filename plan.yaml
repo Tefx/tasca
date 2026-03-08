@@ -24253,7 +24253,7 @@ phases:
       and are out-of-scope for this retest.'
   - id: guard_followup2_correctness.freeze-tooling-evidence-fix
     name: freeze-tooling-evidence-fix
-    status: pending
+    status: claimed
     description: 'Fix the verification/tooling blocker and harden freeze artifacts
       for the `guard_followup2_correctness` phase.
 
@@ -24303,6 +24303,8 @@ phases:
     - guard_followup2_correctness.freeze
     - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-08T19:32:50.461221+00:00'
   - id: guard_followup2_correctness.evidence-raw-output-fix
     name: evidence-raw-output-fix
     status: pending

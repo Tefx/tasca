@@ -23505,9 +23505,7 @@ phases:
     agent: gate-reviewer
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
-  status: locked
-  depends_on:
-  - guard_followup2_correctness
+  status: pending
   steps:
   - id: guard_followup2_cleanup.database-pure-logic-split
     name: database-pure-logic-split
@@ -23730,7 +23728,9 @@ phases:
     agent: gate-reviewer
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
-  status: pending
+  status: locked
+  depends_on:
+  - guard_followup2_boundary
   steps:
   - id: guard_followup2_debt.allow-policy-normalization
     name: allow-policy-normalization

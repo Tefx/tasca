@@ -23481,7 +23481,7 @@ phases:
       - Worker reported integration auth failures as pre-existing and out-of-scope.'
   - id: guard_followup2_correctness.entrypoints-integration-proof
     name: entrypoints-integration-proof
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       repaired MCP entrypoint seam from a fresh perspective.
 
@@ -23550,6 +23550,8 @@ phases:
     depends_on:
     - guard_followup2_correctness.limits-service-guard-cleanup
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-08T18:51:09.041352+00:00'
   - id: guard_followup2_correctness.freeze
     name: freeze
     status: pending

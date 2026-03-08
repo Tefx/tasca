@@ -23211,11 +23211,11 @@ phases:
     agent: gate-reviewer
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
-  status: pending
+  status: in_progress
   steps:
   - id: guard_followup2_correctness.entrypoints-pure-logic-split
     name: entrypoints-pure-logic-split
-    status: pending
+    status: claimed
     description: 'Micro remediation for `src/tasca/shell/mcp/entrypoints.py`.
 
 
@@ -23263,6 +23263,8 @@ phases:
 
       - Evidence names the helper destinations for every moved logic block'
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-08T18:10:21.814149+00:00'
   - id: guard_followup2_correctness.entrypoints-symbol-cleanup
     name: entrypoints-symbol-cleanup
     status: pending

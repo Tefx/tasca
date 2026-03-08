@@ -166,8 +166,8 @@ class LimitError:
 _MENTION_PATTERN = re.compile(r"(?<!\w)@[^\s@]+")
 
 
-# @invar:allow partial_contract: content can be empty per doctest; both params checked in single lambda
-@deal.pre(lambda content, max_length: max_length is None or max_length > 0)
+# content may be empty per doctests; max_length must be positive when enabled
+@deal.pre(lambda content, max_length: len(content) >= 0 and (max_length is None or max_length > 0))
 @deal.post(lambda result: isinstance(result, bool))
 def validate_content_length(content: str, max_length: int | None) -> bool:
     """Validate that content length does not exceed the limit.
@@ -199,8 +199,10 @@ def validate_content_length(content: str, max_length: int | None) -> bool:
     return len(content) <= max_length
 
 
-# @invar:allow partial_contract: current_count can be 0 per doctest; validated via >= 0 in combined lambda
-@deal.pre(lambda current_count, max_count: max_count is None or max_count > 0)
+# current_count can be 0 per doctests; max_count must be positive when enabled
+@deal.pre(
+    lambda current_count, max_count: current_count >= 0 and (max_count is None or max_count > 0)
+)
 @deal.post(lambda result: isinstance(result, bool))
 def validate_history_count(current_count: int, max_count: int | None) -> bool:
     """Validate that history count does not exceed the limit.
@@ -239,8 +241,8 @@ def validate_history_count(current_count: int, max_count: int | None) -> bool:
     return current_count < max_count
 
 
-# @invar:allow partial_contract: size_bytes can be 0 per doctest; validated via >= 0 in combined lambda
-@deal.pre(lambda size_bytes, max_bytes: max_bytes is None or max_bytes > 0)
+# size_bytes can be 0 per doctests; max_bytes must be positive when enabled
+@deal.pre(lambda size_bytes, max_bytes: size_bytes >= 0 and (max_bytes is None or max_bytes > 0))
 @deal.post(lambda result: isinstance(result, bool))
 def validate_bytes_size(size_bytes: int, max_bytes: int | None) -> bool:
     """Validate that byte size does not exceed the limit.
@@ -272,8 +274,10 @@ def validate_bytes_size(size_bytes: int, max_bytes: int | None) -> bool:
     return size_bytes <= max_bytes
 
 
-# @invar:allow partial_contract: content can be empty per doctest; validated via len(content) >= 0 in combined lambda
-@deal.pre(lambda content, max_mentions: max_mentions is None or max_mentions >= 0)
+# content may be empty per doctests; mentions limit is non-negative when enabled
+@deal.pre(
+    lambda content, max_mentions: len(content) >= 0 and (max_mentions is None or max_mentions >= 0)
+)
 @deal.post(lambda result: isinstance(result, bool))
 def validate_mentions(content: str, max_mentions: int | None) -> bool:
     """Validate that mention count does not exceed the limit.
@@ -319,10 +323,12 @@ def validate_mentions(content: str, max_mentions: int | None) -> bool:
 # =============================================================================
 
 
-# @invar:allow partial_contract: content can be empty; config validated by __post_init__; counters >= 0 in pre
 @deal.pre(
     lambda content, current_saying_count, current_bytes, config: (
-        current_saying_count >= 0 and current_bytes >= 0
+        len(content) >= 0
+        and current_saying_count >= 0
+        and current_bytes >= 0
+        and config is not None
     )
 )
 @deal.post(lambda result: result is None or isinstance(result, LimitError))
@@ -432,7 +438,6 @@ def compute_content_bytes(content: str) -> int:
     return len(content.encode("utf-8"))
 
 
-# @invar:allow partial_contract: config validated by LimitsConfig.__post_init__; counters >= 0 per pre
 @deal.pre(
     lambda current_saying_count, current_bytes, config: (
         current_saying_count >= 0 and current_bytes >= 0 and config is not None

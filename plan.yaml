@@ -24460,13 +24460,13 @@ phases:
       \ performed."
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
-  status: pending
+  status: in_progress
   depends_on:
   - guard_followup2_correctness
   steps:
   - id: guard_followup2_cleanup.database-pure-logic-split
     name: database-pure-logic-split
-    status: pending
+    status: claimed
     description: 'Refactor `src/tasca/shell/storage/database.py` to reduce shell-only
       complexity without changing persistence behavior.
 
@@ -24532,6 +24532,8 @@ phases:
 
       - Proof: no new persistence precedence or compatibility semantics introduced'
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-08T20:01:17.595060+00:00'
   - id: guard_followup2_cleanup.storage-symbol-cleanup
     name: storage-symbol-cleanup
     status: pending

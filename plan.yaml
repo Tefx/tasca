@@ -23407,7 +23407,7 @@ phases:
       - Non-scope warnings remain in shell_pure_logic category.'
   - id: guard_followup2_correctness.limits-service-guard-cleanup
     name: limits-service-guard-cleanup
-    status: pending
+    status: claimed
     description: 'Resolve remaining core-side guard debt in `src/tasca/core/services/limits_service.py`
       without touching excluded directories.
 
@@ -23445,6 +23445,8 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-symbol-cleanup
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-03-08T18:35:37.573946+00:00'
   - id: guard_followup2_correctness.entrypoints-integration-proof
     name: entrypoints-integration-proof
     status: pending

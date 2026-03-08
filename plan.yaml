@@ -23737,7 +23737,7 @@ phases:
       and removing obsolete speaker_kind in smoke script.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-retest
     name: entrypoints-integration-proof.retest
-    status: claimed
+    status: done
     description: 'Re-test the MCP smoke compatibility fix from a fresh, independent
       verification pass.
 
@@ -23816,6 +23816,66 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-08T19:01:42.912915+00:00'
+    done_at: '2026-03-08T19:06:13.193209+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: integration-verifier
+
+      **Scope**: MCP smoke compatibility retest for `TableClosed`
+
+
+      **Command executed**:
+
+      ```
+
+      python3 tests/repro/issue_l3_mcp_smoke.py
+
+      ```
+
+
+      **Relevant output**:
+
+      ```
+
+      TEST: Error Path - TableClosed
+
+      [1] TABLE_CONTROL (close) -> ✓ Table closed
+
+      [2] TABLE_SAY (on closed table) -> ✓ OPERATION_NOT_ALLOWED
+
+      [3] TABLE_LISTEN (on closed table) -> ✓ Listen works
+
+      Prior failure `✗ Failed to close table: None` no longer appears.
+
+      Suite summary still reports `error_table_closed: PARTIAL` (stale/inconsistent
+      reporting behavior).
+
+      ```
+
+
+      **Checks**:
+
+      - [x] Close-table invocation matches current MCP contract
+
+      - [x] speaker_name included where required
+
+      - [x] Prior failure gone
+
+      - [ ] No unrelated smoke regression observed
+
+
+      **Findings**:
+
+      - should_fix: smoke suite summary/status remains inconsistent (`error_table_closed:
+      PARTIAL`) despite passing TableClosed section.
+
+
+      followup_created:
+
+      - guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
+
+      - guard_followup2_correctness.entrypoints-integration-proof-reporting-retest'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
     name: entrypoints-integration-proof.reporting-fix
     status: pending

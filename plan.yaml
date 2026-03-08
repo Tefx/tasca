@@ -23657,16 +23657,23 @@ phases:
       2. Limits-service seam remains behavior-preserving.
 
       3. Evidence quality is specific, verifiable, and includes at least one real
-      seam execution.
+      seam execution with pasted raw output.
 
-      4. Any retained `@invar:allow` use is boundary-only and narrowly justified.
+      4. Freeze evidence includes reproducible artifact details: commit SHA, branch/status
+      output, environment declaration, and exact commands.
+
+      5. Any retained `@invar:allow` use is boundary-only and narrowly justified.
 
 
       Independence: you must not be the same agent as any implementation step in this
       phase.'
     verification: '- All phase steps completed
 
-      - Evidence quality acceptable
+      - Evidence quality acceptable and backed by pasted raw command output for gate-critical
+      claims
+
+      - Freeze artifact includes `git rev-parse HEAD`, `git status --short --branch`,
+      environment declaration, and exact verification commands
 
       - No unresolved blocker remains in `entrypoints.py` or `limits_service.py`
 
@@ -23701,6 +23708,7 @@ phases:
     - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
     - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     - guard_followup2_correctness.freeze
+    - guard_followup2_correctness.freeze-gate-retest
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-08T19:26:29.792788+00:00'

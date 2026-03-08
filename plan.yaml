@@ -24779,6 +24779,89 @@ phases:
     - guard_followup2_cleanup.storage-guard-verify
     - guard_followup2_cleanup.freeze
     agent: gate-reviewer
+  - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
+    name: storage-guard-fix-auth-and-entrypoint
+    status: pending
+    description: 'Fix the issues surfaced by `guard_followup2_cleanup.storage-guard-verify`
+      in the API auth path and guard entrypoint wiring.
+
+
+      Scope:
+
+      - Diagnose why `tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth`
+      now returns `401` instead of `200` and restore the expected authenticated create-table
+      flow.
+
+      - Repair the direct `invar guard` entrypoint/import packaging path so it no
+      longer raises `ModuleNotFoundError: invar.shell.commands.hooks` when invoked
+      through the normal entrypoint.
+
+      - Keep the remediation focused on auth/wiring and packaging boundaries; do not
+      broaden storage cleanup behavior beyond what is needed to restore the verified
+      path.
+
+
+      Implementation expectations:
+
+      - Trace the auth dependency or request-context path exercised by the failing
+      route test and update the affected API/auth wiring accordingly.
+
+      - Trace the guard CLI/import path that differs between direct `invar guard`
+      and `uv run invar guard`, then fix the packaging/module exposure so both entrypoints
+      resolve consistently.
+
+      - Preserve existing storage semantics and test harness expectations outside
+      these regressions.'
+    verification: '- Targeted auth regression is addressed with the named route test
+      passing in local verification
+
+      - Direct `invar guard` entrypoint resolves without the prior `ModuleNotFoundError`
+
+      - Any updated or added regression coverage is named in evidence
+
+      - Scope remains limited to auth/wiring and guard entrypoint packaging surfaces'
+    evidence_template: '## Fix Evidence
+
+
+      **Issues addressed**:
+
+      - `tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth`
+      returned `401` instead of `200`
+
+      - direct `invar guard` failed with `ModuleNotFoundError: invar.shell.commands.hooks`
+
+
+      **Files changed**:
+
+      - <list actual files>
+
+
+      **Root cause**:
+
+      - <auth path cause>
+
+      - <entrypoint packaging cause>
+
+
+      **Local verification commands**:
+
+      ```bash
+
+      <exact commands>
+
+      ```
+
+
+      **Local verification output**:
+
+      ```text
+
+      <paste relevant output>
+
+      ```'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

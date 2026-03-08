@@ -24808,7 +24808,7 @@ phases:
     agent: gate-reviewer
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
     name: storage-guard-fix-auth-and-entrypoint
-    status: pending
+    status: claimed
     description: 'Fix the issues surfaced by `guard_followup2_cleanup.storage-guard-verify`
       in the API auth path and guard entrypoint wiring.
 
@@ -24889,6 +24889,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-08T20:47:09.040781+00:00'
   - id: guard_followup2_cleanup.storage-guard-verify-retest
     name: storage-guard-verify-retest
     status: pending

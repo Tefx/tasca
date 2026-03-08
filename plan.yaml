@@ -10544,3 +10544,159 @@ phases:
     depends_on:
     - regression_run.fix_mcp_server_entrypoint_thickness
     agent: integration-verifier
+  - id: regression_run.fix_fastmcp_doctest_collection
+    name: Fix fastmcp doctest collection compatibility
+    status: pending
+    description: 'Fix: narrow remediation for remaining guard failures surfaced by
+      `regression_run.retest_mcp_server_entrypoint_thickness`.
+
+
+      Issue:
+
+      - `src/tasca/shell/mcp/server.py` now satisfies the entrypoint thickness target.
+
+      - Guard still reports global issues including `ModuleNotFoundError: fastmcp`
+      during doctest collection in some environments.
+
+
+      Scope:
+
+      - Make doctest/guard collection resilient when optional `fastmcp` is unavailable
+      in the environment, limited to the MCP server import/collection path.
+
+      - Touch only the import boundary, optional dependency guard, or collection surface
+      needed to avoid environment-specific doctest collection failure.
+
+      - Do not reopen the server.py thickness refactor or unrelated guard issues.
+
+      - prior_loop: `regression_run.fix_mcp_server_entrypoint_thickness` -> `regression_run.retest_mcp_server_entrypoint_thickness`
+
+      - remaining_blocker: entrypoint thickness is fixed, but guard still trips on
+      optional dependency import during doctest collection.
+
+      - why_new_loop: the prior loop resolved structural thickness only; it did not
+      cover optional dependency availability across verification environments.
+
+      '
+    verification: '- Reproduce the `ModuleNotFoundError: fastmcp` collection failure
+      in the relevant guard/doctest path or demonstrate targeted protection against
+      it
+
+      - Verify doctest/guard collection can proceed in an environment without `fastmcp`
+
+      - Keep evidence focused on the optional dependency boundary rather than unrelated
+      global guard findings'
+    depends_on:
+    - regression_run.retest_mcp_server_entrypoint_thickness
+    agent: python-executor
+  - id: regression_run.retest_fastmcp_doctest_collection
+    name: Retest fastmcp doctest collection compatibility
+    status: pending
+    description: 'Independent retest for the optional dependency collection issue
+      fixed by `regression_run.fix_fastmcp_doctest_collection`.
+
+
+      Goal:
+
+      - Re-run the relevant guard/doctest collection path from a fresh verification
+      perspective.
+
+      - Confirm the MCP optional dependency boundary no longer fails with `ModuleNotFoundError:
+      fastmcp` in environments where that package is absent.
+
+      - Distinguish this resolved issue from any other remaining global guard findings.
+
+
+      Original fingerprint:
+
+      - `ModuleNotFoundError: fastmcp` during doctest collection in some environments.
+
+      '
+    verification: '- Re-run the relevant `invar guard` / doctest collection path that
+      previously surfaced `ModuleNotFoundError: fastmcp`
+
+      - Confirm collection no longer fails on missing `fastmcp` in the affected environment
+      profile
+
+      - If other guard issues remain, list them separately and do not treat them as
+      failures of this retest'
+    depends_on:
+    - regression_run.fix_fastmcp_doctest_collection
+    agent: integration-verifier
+  - id: regression_run.fix_repo_heartbeat_seat_nameerror
+    name: Fix repo heartbeat seat NameError
+    status: pending
+    description: 'Fix: narrow remediation for downstream pytest failures surfaced
+      by `regression_run.retest_pytest_dependency_wiring`.
+
+
+      Issue:
+
+      - `uv run pytest -q` now launches, but 9 tests still fail.
+
+      - First failure fingerprint: `NameError: repo_heartbeat_seat is not defined`
+      at `src/tasca/shell/mcp/entrypoints.py:1689`.
+
+
+      Scope:
+
+      - Repair the missing symbol/reference in `src/tasca/shell/mcp/entrypoints.py`
+      and any directly related helper definition/import wiring required for that call
+      path.
+
+      - Keep scope limited to the first failing fingerprint and its directly affected
+      tests; do not broaden into unrelated pytest failures from the same run.
+
+      - prior_loop: `regression_run.fix_pytest_dependency_wiring` -> `regression_run.retest_pytest_dependency_wiring`
+
+      - remaining_blocker: pytest launches successfully, but MCP entrypoint heartbeat
+      path still fails at runtime with missing symbol wiring.
+
+      - why_new_loop: the prior loop only restored pytest executable availability;
+      it did not address downstream runtime failures revealed after launch.
+
+      '
+    verification: '- Targeted regression covers the `repo_heartbeat_seat` call path
+      in `src/tasca/shell/mcp/entrypoints.py`
+
+      - Run the smallest relevant pytest selection for the failing MCP heartbeat/entrypoint
+      tests first
+
+      - Confirm the NameError at `src/tasca/shell/mcp/entrypoints.py:1689` is eliminated
+
+      - Document whether any of the remaining 9 pytest failures persist after this
+      narrow fix'
+    depends_on:
+    - regression_run.retest_pytest_dependency_wiring
+    agent: python-executor
+  - id: regression_run.retest_repo_heartbeat_seat_nameerror
+    name: Retest repo heartbeat seat NameError fix
+    status: pending
+    description: 'Independent retest for the narrow runtime failure fixed by `regression_run.fix_repo_heartbeat_seat_nameerror`.
+
+
+      Goal:
+
+      - Validate from a fresh verification perspective that the first downstream pytest
+      failure is resolved.
+
+      - Separate this specific runtime fix from any additional pytest failures that
+      may remain in the broader suite.
+
+
+      Original fingerprint:
+
+      - `NameError: repo_heartbeat_seat is not defined` at `src/tasca/shell/mcp/entrypoints.py:1689`
+      during `uv run pytest -q`.
+
+      '
+    verification: '- Re-run the smallest relevant pytest selection covering the prior
+      failure first, then expand only if needed
+
+      - Confirm the prior NameError no longer occurs at `src/tasca/shell/mcp/entrypoints.py:1689`
+
+      - If broader `uv run pytest -q` failures remain, record the next distinct fingerprint
+      separately without conflating it with this resolved issue'
+    depends_on:
+    - regression_run.fix_repo_heartbeat_seat_nameerror
+    agent: integration-verifier

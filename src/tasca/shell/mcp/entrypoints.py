@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import asyncio
-import deal
 import json
 import time
 import uuid
@@ -34,13 +33,7 @@ from tasca.core.services.seat_service import (
 from tasca.core.table_state_machine import (
     can_join,
     can_say,
-    can_transition_to_closed,
-    can_transition_to_open,
-    can_transition_to_paused,
     is_terminal,
-    transition_to_closed,
-    transition_to_open,
-    transition_to_paused,
 )
 from tasca.shell.logging import (
     get_logger,
@@ -50,6 +43,21 @@ from tasca.shell.logging import (
     log_table_create,
 )
 from tasca.shell.mcp.database import get_mcp_db
+from tasca.shell.mcp.entrypoint_logic import (
+    apply_table_patch as _apply_table_patch,
+    build_control_response as _build_control_response,
+    build_join_next_action as _build_join_next_action,
+    build_patron_response_data as _build_patron_response_data,
+    build_say_response as _build_say_response,
+    build_seat_dict as _build_seat_dict,
+    build_table_dict as _build_table_dict,
+    compute_next_sequence as _compute_next_sequence,
+    format_saying_dict as _format_saying_dict,
+    limit_error_to_response as _limit_error_to_response,
+    silence_next_action as _silence_next_action,
+    validate_control_action as _validate_control_action,
+    validate_speaker_constraints as _validate_speaker_constraints,
+)
 from tasca.shell.mcp.proxy import (
     ProxyConfigError,
     SessionInitError,
@@ -100,8 +108,6 @@ logger = get_logger(__name__)
 # is scoped to a single agent's session. Keyed by table_id.
 _loop_state: dict[str, dict[str, int]] = {}
 
-EXIT_EMPTY_WAITS_THRESHOLD = 30
-
 
 # @invar:allow shell_result: Pure in-memory state helper, not I/O
 # @shell_orchestration: Session loop state is MCP runtime orchestration state.
@@ -128,53 +134,6 @@ def _record_wait_result(table_id: str, *, got_sayings: bool) -> dict[str, int]:
     return state
 
 
-# Silence-breaking nudge thresholds for tiered _next_action
-_NUDGE_THRESHOLD = 4
-_URGENCY_THRESHOLD = 11
-
-
-# @invar:allow shell_result: Pure string builder, not I/O
-# @shell_orchestration: Guidance text is coupled to MCP tool-call choreography.
-def _silence_next_action(empty_waits: int, next_sequence: int) -> str:
-    """Implementation detail for MCP tool behavior."""
-    threshold = EXIT_EMPTY_WAITS_THRESHOLD
-
-    if empty_waits < _NUDGE_THRESHOLD:
-        return (
-            f"No new messages ({empty_waits}/{threshold}). "
-            f"IMMEDIATELY call tasca.table_wait(since_sequence={next_sequence}). "
-            "Your response = tool_call, not text."
-        )
-    elif empty_waits < _URGENCY_THRESHOLD:
-        return (
-            f"Silence for {empty_waits} consecutive waits — discussion may be stalling. "
-            "Consider whether the table's question has been fully addressed. "
-            "If not, call tasca.table_say to advance: raise an unaddressed aspect, "
-            "propose a synthesis, or ask a sharpening question. "
-            f"If fully addressed, call tasca.table_wait(since_sequence={next_sequence}). "
-            "Your response = tool_call, not text."
-        )
-    elif empty_waits < threshold:
-        return (
-            f"Extended silence ({empty_waits}/{threshold}). If you have ANY remaining "
-            "perspective on the table's question, call tasca.table_say NOW — "
-            "this is your last chance before the discussion ends. "
-            f"If the topic is genuinely exhausted, call tasca.table_wait(since_sequence={next_sequence}). "
-            f"EXIT at {threshold} if nothing to add. "
-            "Your response = tool_call, not text."
-        )
-    else:
-        return (
-            f"Empty waits reached {threshold}. Discussion is over. "
-            "IMMEDIATELY call tasca.table_leave, then report to the user."
-        )
-
-
-# =============================================================================
-# Helper Functions
-# =============================================================================
-
-
 # @invar:allow shell_result: MCP protocol helper returning value object, not Result
 # @shell_orchestration: Shell-local adapter from settings to MCP limits behavior.
 def _limits_config_from_settings() -> LimitsConfig:
@@ -182,224 +141,6 @@ def _limits_config_from_settings() -> LimitsConfig:
     from tasca.config import settings as _settings  # Lazy import for test monkeypatching
 
     return settings_to_limits_config(_settings)
-
-
-# @invar:allow shell_result: MCP protocol helper returns envelope dict, not Result
-# @shell_orchestration: Maps core limit errors to MCP response envelope shape.
-def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
-    """Implementation detail for MCP tool behavior."""
-    return error_response(
-        "LIMIT_EXCEEDED",
-        error.message,
-        {
-            "limit_kind": error.kind.value,
-            "limit": error.limit,
-            "actual": error.actual,
-        },
-    )
-
-
-# =============================================================================
-# Response Building Helpers (reduce function size)
-# =============================================================================
-
-
-# @invar:allow shell_result: MCP response envelope helper returns dict by design
-# @shell_orchestration: Preserves MCP response envelope/backward-compat field shape.
-def _build_patron_response_data(patron: Patron, *, is_new: bool) -> dict[str, Any]:
-    """Implementation detail for MCP tool behavior."""
-    return {
-        # Spec-compliant fields
-        "patron_id": patron.id,
-        "display_name": patron.name,
-        "alias": patron.alias,
-        "server_ts": patron.created_at.isoformat(),
-        "is_new": is_new,
-        # Backward-compatible fields (not in spec)
-        "id": patron.id,
-        "name": patron.name,
-        "kind": patron.kind,
-        "created_at": patron.created_at.isoformat(),
-        "meta": patron.meta,
-    }
-
-
-# @invar:allow shell_result: MCP response envelope helper returns dict by design
-# @shell_orchestration: Preserves MCP table payload schema expected by clients.
-def _build_table_dict(table: Table) -> dict[str, Any]:
-    """Implementation detail for MCP tool behavior."""
-    return {
-        "id": table.id,
-        "question": table.question,
-        "context": table.context,
-        "status": table.status.value,
-        "version": table.version,
-        "created_at": table.created_at.isoformat(),
-        "updated_at": table.updated_at.isoformat(),
-    }
-
-
-# @invar:allow shell_result: MCP response envelope helper returns dict by design
-# @shell_orchestration: Preserves MCP saying payload schema expected by clients.
-def _format_saying_dict(saying: Any) -> dict[str, Any]:
-    """Implementation detail for MCP tool behavior."""
-    return {
-        "id": saying.id,
-        "table_id": saying.table_id,
-        "sequence": saying.sequence,
-        "speaker": {
-            "kind": saying.speaker.kind.value,
-            "name": saying.speaker.name,
-            "patron_id": saying.speaker.patron_id,
-        },
-        "content": saying.content,
-        "pinned": saying.pinned,
-        "created_at": saying.created_at.isoformat(),
-    }
-
-
-# @invar:allow shell_result: MCP response envelope helper returns dict by design
-# @shell_orchestration: Preserves MCP seat payload schema expected by clients.
-def _build_seat_dict(seat: Seat, expires_at: datetime) -> dict[str, Any]:
-    """Implementation detail for MCP tool behavior."""
-    return {
-        "id": seat.id,
-        "table_id": seat.table_id,
-        "patron_id": seat.patron_id,
-        "state": seat.state.value,
-        "last_heartbeat": seat.last_heartbeat.isoformat(),
-        "joined_at": seat.joined_at.isoformat(),
-        "expires_at": expires_at.isoformat(),
-    }
-
-
-# @shell_complexity: Branches enforce protocol-level agent/human speaker invariants.
-# @invar:allow shell_result: Validation helper returns MCP error envelope dict.
-# @shell_orchestration: Keeps speaker validation and MCP error shaping in shell boundary.
-def _validate_speaker_constraints(
-    speaker_kind: str, patron_id: str | None
-) -> dict[str, Any] | None:
-    """Implementation detail for MCP tool behavior."""
-    if speaker_kind == "agent":
-        if patron_id is None:
-            return error_response(
-                "INVALID_REQUEST",
-                "patron_id is required when speaker_kind is 'agent'",
-                {"speaker_kind": speaker_kind},
-            )
-    elif speaker_kind == "human":
-        if patron_id is not None:
-            return error_response(
-                "INVALID_REQUEST",
-                "patron_id must be null or omitted when speaker_kind is 'human'",
-                {"speaker_kind": speaker_kind, "patron_id": patron_id},
-            )
-    return None
-
-
-# @shell_complexity: Branches encode explicit table-status transition gate checks.
-# @invar:allow shell_result: Validation helper returns MCP error envelope dict.
-def _validate_control_action(
-    action: str, current_status: TableStatus
-) -> tuple[TableStatus | None, dict[str, Any] | None]:
-    """Implementation detail for MCP tool behavior."""
-    if action == "pause":
-        if not can_transition_to_paused(current_status):
-            return None, error_response(
-                "OPERATION_NOT_ALLOWED",
-                f"Cannot pause table with status '{current_status.value}'. Only OPEN tables can be paused.",
-                {"table_status": current_status.value},
-            )
-        return transition_to_paused(current_status), None
-    elif action == "resume":
-        if not can_transition_to_open(current_status):
-            return None, error_response(
-                "OPERATION_NOT_ALLOWED",
-                f"Cannot resume table with status '{current_status.value}'. Only PAUSED tables can be resumed.",
-                {"table_status": current_status.value},
-            )
-        return transition_to_open(current_status), None
-    elif action == "close":
-        if not can_transition_to_closed(current_status):
-            return None, error_response(
-                "OPERATION_NOT_ALLOWED",
-                f"Cannot close table with status '{current_status.value}'.",
-                {"table_status": current_status.value},
-            )
-        return transition_to_closed(current_status), None
-    else:
-        return None, error_response("INVALID_ACTION", f"Unknown action: {action}")
-
-
-# @invar:allow shell_result: MCP response envelope helper returns dict by design
-# @shell_orchestration: Control response stays in shell to preserve protocol guidance text.
-def _build_control_response(new_status: TableStatus, control_sequence: int) -> dict[str, Any]:
-    """Implementation detail for MCP tool behavior."""
-    if new_status == TableStatus.OPEN:
-        next_action = (
-            "Table resumed. IMMEDIATELY call tasca.table_wait. Your response = tool_call, not text."
-        )
-    else:
-        next_action = (
-            f"Table is now {new_status.value}. Call tasca.table_leave, then report to the user."
-        )
-    return {
-        "table_status": new_status.value,
-        "control_saying_sequence": control_sequence,
-        "_next_action": next_action,
-    }
-
-
-# @invar:allow shell_result: MCP response envelope helper returns guidance string
-# @shell_orchestration: Join guidance text is shell-level MCP interaction contract.
-def _build_join_next_action(has_history: bool, next_sequence: int) -> str:
-    """Implementation detail for MCP tool behavior."""
-    if not has_history:
-        return (
-            "The table has a question but no discussion yet. "
-            "IMMEDIATELY call tasca.table_say to share your opening perspective "
-            "on the table's question. You are starting the discussion. "
-            "After speaking, call tasca.table_wait(since_sequence=...). "
-            "Your response must be a tool_call — not text."
-        )
-    return (
-        "IMMEDIATELY call tasca.table_wait(since_sequence={seq}). "
-        "Your response must be a tool_call — not text. "
-        "Loop: wait → think → say/skip → heartbeat → wait. "
-        "Exit only when: human says stop, consensus, table closed, "
-        "or consecutive_empty_waits=30 with nothing to add."
-    ).format(seq=next_sequence)
-
-
-# @invar:allow shell_result: MCP patch helper returns tuple with response dict on error
-# @shell_orchestration: Patch parsing remains shell-local to emit MCP-shaped errors.
-def _apply_table_patch(
-    current_table: Table, patch: dict[str, Any]
-) -> tuple[TableUpdate, dict[str, Any] | None]:
-    """Implementation detail for MCP tool behavior."""
-    new_question = patch.get("question", current_table.question)
-    new_context = patch.get("context", current_table.context)
-    new_status = current_table.status
-
-    if "status" in patch:
-        status_value = patch["status"]
-        try:
-            new_status = TableStatus(status_value)
-        except ValueError:
-            return TableUpdate(
-                question=current_table.question,
-                context=current_table.context,
-                status=current_table.status,
-            ), error_response(
-                "INVALID_STATUS",
-                f"Invalid status value: {status_value}. Must be one of: open, paused, closed",
-            )
-
-    return TableUpdate(
-        question=new_question,
-        context=new_context,
-        status=new_status,
-    ), None
 
 
 # =============================================================================
@@ -1096,37 +837,6 @@ def _check_say_idempotency(
     return None, False
 
 
-# @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
-# @shell_orchestration: MCP response payload assembly is shell-local protocol shaping.
-def _build_say_response(
-    saying: Any, mentions_all: bool, mentions_resolved: list[str], mentions_unresolved: list[str]
-) -> dict[str, Any]:
-    """Implementation detail for MCP tool behavior."""
-    return {
-        # Spec fields
-        "saying_id": saying.id,
-        "sequence": saying.sequence,
-        "created_at": saying.created_at.isoformat(),
-        "mentions_all": mentions_all,
-        "mentions_resolved": mentions_resolved,
-        "mentions_unresolved": mentions_unresolved,
-        # Backward-compatible fields
-        "id": saying.id,
-        "table_id": saying.table_id,
-        "speaker": {
-            "kind": saying.speaker.kind.value,
-            "name": saying.speaker.name,
-            "patron_id": saying.speaker.patron_id,
-        },
-        "content": saying.content,
-        "pinned": saying.pinned,
-        "_next_action": (
-            f"IMMEDIATELY call tasca.table_wait(since_sequence={saying.sequence}). "
-            "Your response = tool_call, not text."
-        ),
-    }
-
-
 # @shell_complexity: table lookup + can_say guard + limits enforcement + error paths
 # @invar:allow shell_result: MCP protocol
 def table_say(
@@ -1226,19 +936,6 @@ def table_say(
             conn, resource_key, "table_say", dedup_id, {"data": response_data}
         )
     return success_response(response_data)
-
-
-# @invar:allow shell_pure_logic: Pure helper co-located with MCP tools for cohesion; avoids
-#   cross-module import for a single computation that is tightly coupled to table_listen/table_wait
-# @invar:allow entry_point_too_thick: Helper function, not a framework entry point; docstring
-#   length inflates line count but logic is 2 lines
-@deal.pre(lambda sayings, since_sequence: since_sequence >= -1)
-@deal.post(lambda result: result >= -1)
-def _compute_next_sequence(sayings: list[Any], since_sequence: int) -> int:
-    """Implementation detail for MCP tool behavior."""
-    if sayings:
-        return max(s.sequence for s in sayings)
-    return since_sequence
 
 
 # @shell_complexity: 5 branches for table lookup + long-poll loop + timeout + backoff + error handling

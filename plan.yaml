@@ -11056,3 +11056,99 @@ phases:
     depends_on:
     - regression_run.fix-fastapi-guard-doctest-import-boundary-escalated
     agent: integration-verifier
+  - id: regression_run.fix-parse-sse-or-json-postcondition-property-failure
+    name: Fix parse_sse_or_json postcondition/property failure
+    status: pending
+    description: "Fix: narrow remediation for the new property/contract blocker surfaced\
+      \ by `regression_run.retest-fastapi-guard-doctest-import-boundary-escalated`.\n\
+      \nIssue:\n- The fastapi import-boundary objective now passes.\n- Guard still\
+      \ reports an unrelated blocker in property tests: `src/tasca/core/mcp_jsonrpc.py::parse_sse_or_json`\
+      \ postcondition failure because the function can return `None`.\n\nScope:\n\
+      - Keep scope strictly limited to `src/tasca/core/mcp_jsonrpc.py::parse_sse_or_json`\
+      \ contract/property behavior and the directly related targeted tests/property\
+      \ coverage that exercise it.\n- Repair the semantic contract so the function/result\
+      \ relationship is explicit and property-safe; if the current behavior is intentionally\
+      \ nullable, align the contract/tests accordingly without broadening into unrelated\
+      \ MCP JSON-RPC parsing work.\n- Do not reopen the now-resolved fastapi import-boundary\
+      \ loop.\n- Do not change unrelated guard blockers or widen into shell/proxy\
+      \ wiring outside the direct call sites needed to preserve this helper's semantics.\n\
+      - prior_loop: `regression_run.fix-fastapi-guard-doctest-import-boundary-escalated`\
+      \ -> `regression_run.retest-fastapi-guard-doctest-import-boundary-escalated`\n\
+      - remaining_blocker: guard/property execution now reaches `parse_sse_or_json`\
+      \ and reports a postcondition failure when `result` is `None`.\n- why_new_loop:\
+      \ the prior remediation closed the import-boundary blocker only; this semantic\
+      \ contract failure was not reachable until that path passed.\n\nHardened acceptance:\n\
+      - Failure-mode checklist:\n  - relative vs absolute path behavior: not applicable;\
+      \ no path semantics may be introduced.\n  - missing-file fallback behavior:\
+      \ not applicable; helper remains pure parsing logic with no I/O fallback.\n\
+      \  - explicit clear / null overwrite semantics: make `None` handling explicit\
+      \ in the helper contract and in targeted regression/property coverage.\n  -\
+      \ stale-definition vs new-state precedence: not applicable; no persisted state\
+      \ or dual definitions may be introduced.\n  - partial-write / CAS-conflict behavior:\
+      \ not applicable; no persistence semantics may be introduced.\n- State semantics\
+      \ bullets:\n  - Last-writer-wins: none; function remains pure and stateless.\n\
+      \  - Must preserve exactly: existing valid SSE/JSON parse outcomes for non-null\
+      \ successful cases.\n  - Backward-compatible legacy behavior: malformed or empty\
+      \ payload handling must remain explicitly defined rather than implied by a failing\
+      \ postcondition.\n- Out-of-scope guardrail:\n  - Compatibility wrappers, broader\
+      \ call-site migration, and unrelated parser refactors are excluded unless a\
+      \ direct in-scope call site must be adjusted to keep `parse_sse_or_json` semantically\
+      \ consistent.\n"
+    verification: '- Main path: targeted tests for `src/tasca/core/mcp_jsonrpc.py::parse_sse_or_json`
+      and its focused property/guard coverage pass with the chosen contract semantics
+
+      - Failure path: regression/property coverage proves the previously failing `result
+      is None` case is now handled explicitly without triggering a postcondition failure
+
+      - Proof: no unrelated fastapi import-boundary assertions are modified, and no
+      broader MCP parsing helpers are changed beyond direct in-scope support
+
+      - Use targeted commands or test names that isolate `parse_sse_or_json` contract/property
+      behavior rather than a broad suite rerun'
+    depends_on:
+    - regression_run.retest-fastapi-guard-doctest-import-boundary-escalated
+    agent: python-senior
+  - id: regression_run.retest-parse-sse-or-json-postcondition-property-failure
+    name: Retest parse_sse_or_json postcondition/property failure
+    status: pending
+    description: 'Re-test after fix: validate the narrow `parse_sse_or_json` contract/property
+      remediation from a fresh perspective.
+
+
+      As an INDEPENDENT TESTER (`integration-verifier`), validate `src/tasca/core/mcp_jsonrpc.py::parse_sse_or_json`
+      from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: valid in-scope SSE/JSON inputs still produce the expected non-error
+      parse results
+
+      - Edge cases: the previously failing nullable/empty/malformed payload path is
+      now explicitly modeled by the contract and no longer trips a postcondition failure
+
+      - Error scenarios: if targeted guard/property execution reveals a different
+      parser-contract blocker, record it as a new distinct fingerprint rather than
+      folding it into this remediation loop
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Re-run the exact targeted guard/property command or minimal focused
+      test selection that exercises `src/tasca/core/mcp_jsonrpc.py::parse_sse_or_json`
+
+      - Confirm the prior `result is None` postcondition failure no longer occurs
+      and that valid parse cases still satisfy the contract
+
+      - If a new blocker appears afterward, record it as a distinct fingerprint and
+      keep it separate from this remediation loop'
+    depends_on:
+    - regression_run.fix-parse-sse-or-json-postcondition-property-failure
+    agent: integration-verifier

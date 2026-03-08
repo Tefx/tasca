@@ -22966,7 +22966,9 @@ phases:
       - Remaining full-guard failures are unrelated and reported separately by verifier.'
 - id: guard_followup2_boundary
   name: Guard Follow-up 2 — Boundary
-  status: pending
+  status: locked
+  depends_on:
+  - guard_followup2_cleanup
   steps:
   - id: guard_followup2_boundary.auth-config-boundary-fix
     name: auth-config-boundary-fix

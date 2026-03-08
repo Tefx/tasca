@@ -23313,6 +23313,75 @@ phases:
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: pending
+  steps:
+  - id: guard_followup2_cleanup.database-pure-logic-split
+    name: database-pure-logic-split
+    status: pending
+    description: 'Refactor `src/tasca/shell/storage/database.py` to reduce shell-only
+      complexity without changing persistence behavior.
+
+
+      Spec refs: guard remediation follow-up derived from current guard report.
+
+      Touch paths: `src/tasca/shell/storage/database.py`, helper modules under `src/tasca/shell/storage/`
+      or `src/tasca/core/` only when needed.
+
+      Harness refs: `tests/integration/test_api.py`, `tests/integration/test_mcp.py`,
+      `tests/unit/storage/test_table_repo.py` (read-only).
+
+
+      Goals:
+
+      - Resolve this file''s `shell_pure_logic` and `file_size_warning` concentration
+      by extracting pure SQL-shaping or value-normalization helpers out of the shell
+      path where possible.
+
+      - Preserve connection, transaction, WAL, and error semantics exactly.
+
+
+      Failure-mode checklist:
+
+      - relative vs absolute path behavior unchanged
+
+      - missing-file bootstrap behavior unchanged
+
+      - explicit clear / null overwrite semantics preserved
+
+      - stale-definition vs runtime-state precedence unchanged
+
+      - partial-write / conflict behavior unchanged
+
+
+      State semantics:
+
+      - Last-writer-wins remains whatever current DB write path already enforces;
+      do not invent new merge rules.
+
+      - Exact schema/bootstrap side effects must be preserved.
+
+      - Backward compatibility means existing startup and repo callers behave identically.
+
+
+      `@invar:allow` policy:
+
+      - Acceptable only on unavoidable low-level connection/setup glue.
+
+      - Not acceptable for dead code, pure data shaping, or oversized helper blocks.
+
+
+      Out of scope:
+
+      - No repo-wide storage API redesign.
+
+      - No test edits.'
+    verification: '- Main path: targeted guard output for `database.py` drops the
+      flagged complexity categories
+
+      - Failure path: evidence explains why bootstrap/path/conflict behavior is unchanged
+      and points to the read-only smokes used
+
+      - Proof: no new persistence precedence or compatibility semantics introduced'
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: pending

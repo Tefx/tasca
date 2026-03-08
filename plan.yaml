@@ -23120,6 +23120,46 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-pure-logic-split
     agent: python-senior
+  - id: guard_followup2_correctness.limits-service-guard-cleanup
+    name: limits-service-guard-cleanup
+    status: pending
+    description: 'Resolve remaining core-side guard debt in `src/tasca/core/services/limits_service.py`
+      without touching excluded directories.
+
+
+      Spec refs: existing limits behavior from prior phases; this work is only to
+      clear current `wiring_gap` / related guard findings around the service seam.
+
+      Touch paths: `src/tasca/core/services/limits_service.py`, plus direct non-test
+      callers only if guard-driven alignment is required.
+
+      Harness refs: `tests/unit/test_limits_service.py`, `tests/integration/test_mcp.py`,
+      `tests/integration/test_api.py` (read-only).
+
+
+      Goals:
+
+      - Remove the remaining limits-service findings by aligning contracts and direct
+      shell call sites.
+
+      - Keep last-writer-wins and request-size semantics exactly as they already behave.
+
+      - Prefer real signature/call-site cleanup over `@invar:allow`.
+
+
+      Out of scope:
+
+      - No rule changes to content/history limits.
+
+      - No edits to tests.'
+    verification: '- Guard findings tied to `limits_service.py` are resolved
+
+      - Evidence names any shell callers updated to match the service seam
+
+      - Existing limits behavior remains unchanged in read-only harness runs'
+    depends_on:
+    - guard_followup2_correctness.entrypoints-symbol-cleanup
+    agent: python-executor
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: pending

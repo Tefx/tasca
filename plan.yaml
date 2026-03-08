@@ -23653,7 +23653,7 @@ phases:
     agent: gate-reviewer
   - id: guard_followup2_correctness.entrypoints-integration-proof-fix
     name: entrypoints-integration-proof.fix
-    status: pending
+    status: claimed
     description: 'Fix the focused MCP smoke compatibility issue in `tests/repro/issue_l3_mcp_smoke.py`.
 
 
@@ -23703,6 +23703,8 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-03-08T18:55:53.731595+00:00'
   - id: guard_followup2_correctness.entrypoints-integration-proof-retest
     name: entrypoints-integration-proof.retest
     status: pending

@@ -23653,8 +23653,8 @@ phases:
     - guard_followup2_correctness.entrypoints-integration-proof
     - guard_followup2_correctness.entrypoints-integration-proof-fix
     - guard_followup2_correctness.entrypoints-integration-proof-retest
-    - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
-    - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-retest
     - guard_followup2_correctness.freeze
     agent: gate-reviewer
   - id: guard_followup2_correctness.entrypoints-integration-proof-fix
@@ -23952,7 +23952,7 @@ phases:
       and unchanged.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-retest
     name: entrypoints-integration-proof.reporting-retest
-    status: claimed
+    status: skipped
     description: 'Re-test the focused smoke reporting fix from a fresh, independent
       verification pass.
 
@@ -23991,6 +23991,7 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-08T19:10:37.450785+00:00'
+    skipped_reason: superseded
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
     name: entrypoints-integration-proof.reporting-authority-fix
     status: pending

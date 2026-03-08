@@ -24677,7 +24677,7 @@ phases:
       \ reported, not remediated in this step."
   - id: guard_followup2_cleanup.storage-guard-verify
     name: storage-guard-verify
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), verify the storage
       cleanup phase from a fresh perspective.
 
@@ -24725,6 +24725,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-symbol-cleanup
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-08T20:34:47.277142+00:00'
   - id: guard_followup2_cleanup.freeze
     name: freeze
     status: pending

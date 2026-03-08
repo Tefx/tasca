@@ -32,6 +32,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Backward compatibility - kept for tools requiring extras
+# Use [dependency-groups] for uv --dev workflow
+
+[dependency-groups]
 dev = [
     "invar-tools",
     "pytest>=8.0.0",

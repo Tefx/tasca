@@ -23731,7 +23731,7 @@ phases:
       and removing obsolete speaker_kind in smoke script.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-retest
     name: entrypoints-integration-proof.retest
-    status: pending
+    status: claimed
     description: 'Re-test the MCP smoke compatibility fix from a fresh, independent
       verification pass.
 
@@ -23808,6 +23808,8 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof-fix
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-08T19:01:42.912915+00:00'
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

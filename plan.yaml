@@ -24202,6 +24202,58 @@ phases:
 
       - Unrelated partials remain for other error classes (VersionConflict, WaitTimeout)
       and are out-of-scope for this retest.'
+  - id: guard_followup2_correctness.freeze-tooling-evidence-fix
+    name: freeze-tooling-evidence-fix
+    status: pending
+    description: 'Fix the verification/tooling blocker and harden freeze artifacts
+      for the `guard_followup2_correctness` phase.
+
+
+      Scope: verification/evidence/tooling only; do not reopen product-code remediation
+      in `entrypoints.py` or `limits_service.py`.
+
+
+      Blockers to close:
+
+      - `uvx invar-tools guard` currently fails in this environment with `ModuleNotFoundError:
+      invar.shell.commands.hooks`; establish a reproducible guard path for this repo/environment,
+      or make the minimal local tooling/config change needed so one supported guard
+      command runs end-to-end.
+
+      - Freeze evidence is incomplete; produce reproducible freeze artifacts with
+      pasted raw command output for `git rev-parse HEAD`, `git status --short --branch`,
+      environment declaration, and the exact verification command set.
+
+
+      Failure-mode expectations:
+
+      - If `uvx invar-tools guard` remains unavailable, capture the full raw failure
+      output and the chosen supported replacement path in the evidence instead of
+      summarizing it.
+
+      - Freeze artifacts must be reproducible from the recorded commands alone; no
+      paraphrased status summaries.
+
+
+      Out of scope:
+
+      - No behavioral changes to MCP, limits, or smoke logic beyond what is strictly
+      required to make verification tooling/evidence reproducible.'
+    verification: '- A runnable guard path is identified and exercised with pasted
+      raw command output
+
+      - Freeze artifact includes raw `git rev-parse HEAD` and `git status --short
+      --branch` output
+
+      - Evidence states the exact environment and declares no code changes between
+      freeze capture and retest
+
+      - Any tooling adjustment stays local to verification/evidence support for this
+      phase'
+    depends_on:
+    - guard_followup2_correctness.freeze
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
+    agent: python-senior
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

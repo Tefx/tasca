@@ -24677,7 +24677,7 @@ phases:
       \ reported, not remediated in this step."
   - id: guard_followup2_cleanup.storage-guard-verify
     name: storage-guard-verify
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), verify the storage
       cleanup phase from a fresh perspective.
 
@@ -24727,6 +24727,31 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-08T20:34:47.277142+00:00'
+    done_at: '2026-03-08T20:46:47.856779+00:00'
+    evidence: "Artifact:\n- PR: none (verify-only step)\n\nVerification:\n- Guard\
+      \ checks (fallback path due direct entrypoint failure):\n  - `uv run invar guard\
+      \ src/tasca/shell/storage/database.py` -> passed (`errors=0`, `warnings=6`)\n\
+      \  - `uv run invar guard src/tasca/shell/storage/search_repo.py` -> passed (`errors=0`,\
+      \ `warnings=4`)\n  - `uv run invar guard src/tasca/shell/storage/saying_repo.py`\
+      \ -> passed (`errors=0`, `warnings=4`)\n  - `uv run invar guard src/tasca/shell/storage/seat_repo.py`\
+      \ -> passed (`errors=0`, `warnings=4`)\n  - `uv run invar guard src/tasca/shell/storage/dedup_repo.py`\
+      \ -> passed (`errors=0`, `warnings=2`)\n  - `uv run invar guard src/tasca/shell/storage/idempotency_repo.py`\
+      \ -> passed (`errors=0`, `warnings=2`)\n  - `uv run invar guard src/tasca/shell/storage/control_repo.py`\
+      \ -> passed (`errors=0`, `warnings=0`, `infos=1`)\n- Read-only confidence tests:\n\
+      \  - `uv run pytest -v tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth\
+      \ tests/unit/mcp/test_mcp_server.py::TestTableCreate::test_create_table_success\
+      \ tests/unit/storage/test_search_repo.py::TestRebuildFtsIndex::test_rebuild_empty_database\
+      \ tests/unit/storage/test_search_repo.py::TestSearchTables::test_search_handles_database_errors`\n\
+      \  -> `1 failed, 3 passed` (API create-table auth test failed with `401` vs\
+      \ expected `200`)\n- Tooling observation:\n  - `invar guard` direct entrypoint\
+      \ failed with `ModuleNotFoundError: No module named 'invar.shell.commands.hooks'`;\
+      \ `uv run invar guard ...` path works.\n\nSpec link:\n- guard_followup2_cleanup.storage-guard-verify\n\
+      \nCommit hash(es):\n- none (verify-only)\n\nFiles changed:\n- none\n\nGaps/Notes:\n\
+      - Verify step intentionally reports discovered issues instead of remediation.\n\
+      - Issue severity classified as should_fix (assertion failure in named test path\
+      \ and tooling entrypoint regression).\n\nnotes:\n  should_fix:\n    - \"tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth\
+      \ fails: assert 401 == 200\"\n    - \"direct invar guard entrypoint raises ModuleNotFoundError\
+      \ for invar.shell.commands.hooks\"\n"
   - id: guard_followup2_cleanup.freeze
     name: freeze
     status: pending

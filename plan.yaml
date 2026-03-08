@@ -23644,7 +23644,7 @@ phases:
       recorded caveats.'
   - id: guard_followup2_correctness.gate
     name: gate
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
       `guard_followup2_correctness` phase meets the quality bar for proceeding.
 
@@ -23712,6 +23712,47 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-08T19:26:29.792788+00:00'
+    done_at: '2026-03-08T19:32:30.285109+00:00'
+    evidence: '## Gate Review Report
+
+
+      **Reviewer**: gate-reviewer
+
+      **Phase**: guard_followup2_correctness
+
+
+      Gate decision: BLOCKED.
+
+
+      Blockers identified:
+
+      1) uvx invar-tools guard not runnable in environment (ModuleNotFoundError: invar.shell.commands.hooks),
+      preventing required freeze guard evidence.
+
+      2) Freeze artifact evidence incomplete for reproducibility/audit expectations.
+
+
+      Should-fix identified:
+
+      - Multiple step evidences used summarized outputs instead of pasted raw command
+      output (notably integration-proof and limits-service evidence quality).
+
+
+      Follow-up remediation steps created:
+
+      - guard_followup2_correctness.freeze-tooling-evidence-fix
+
+      - guard_followup2_correctness.evidence-raw-output-fix
+
+      - guard_followup2_correctness.freeze-gate-retest
+
+      - guard_followup2_correctness.gate (dependency rewired to wait for freeze-gate-retest)
+
+
+      Notes:
+
+      - This completion records the blocked gate outcome and remediation chain creation;
+      proceeding with remediation loop.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-fix
     name: entrypoints-integration-proof.fix
     status: done

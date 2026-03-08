@@ -5,11 +5,20 @@ Environment variables can be used to override defaults.
 """
 
 import secrets
-from importlib.metadata import version as _pkg_version
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# @invar:allow shell_result: Metadata lookup is expected to fail gracefully in dev/test environments
+def _get_version() -> str:
+    """Get package version, falling back to '0.0.0' if not installed."""
+    try:
+        return _pkg_version("tasca")
+    except PackageNotFoundError:
+        return "0.0.0"
 
 
 class Settings(BaseSettings):
@@ -23,7 +32,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    version: str = Field(default_factory=lambda: _pkg_version("tasca"))
+    version: str = Field(default_factory=_get_version)
     debug: bool = False
     environment: str = "development"  # "development" or "production"
 

@@ -22964,3 +22964,6 @@ phases:
       - Targeted postcondition/property failure is resolved.
 
       - Remaining full-guard failures are unrelated and reported separately by verifier.'
+- id: guard_followup2_cleanup
+  name: Guard Follow-up 2 — Cleanup
+  status: pending

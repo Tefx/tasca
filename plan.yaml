@@ -23863,3 +23863,31 @@ phases:
     depends_on:
     - guard_followup2_debt.final-guard-regression
     agent: integration-verifier
+  - id: guard_followup2_debt.gate
+    name: gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
+      `guard_followup2_debt` phase meets the quality bar for closure.
+
+
+      Review criteria:
+
+      1. Duplicate escape reasons were normalized without broadening the allow surface.
+
+      2. Residual size/complexity debt is either removed or justified as true boundary
+      glue.
+
+      3. Final guard evidence accounts for every warning/info category.
+
+      4. Excluded directories remained out of scope.'
+    verification: '- All phase steps completed
+
+      - Final guard evidence is specific and complete
+
+      - No unresolved blocker remains in the guard-followup2 chain'
+    depends_on:
+    - guard_followup2_debt.allow-policy-normalization
+    - guard_followup2_debt.file-size-and-complexity-trim
+    - guard_followup2_debt.final-guard-regression
+    - guard_followup2_debt.freeze
+    agent: gate-reviewer

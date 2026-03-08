@@ -1686,7 +1686,7 @@ def seat_heartbeat(
         result = heartbeat_seat_by_patron(conn, table_id, patron_id, now, internal_state)
     else:
         # Legacy path: lookup by seat_id (seat_id guaranteed not None by validation above)
-        result = repo_heartbeat_seat(conn, SeatId(seat_id), now)  # type: ignore[arg-type]
+        result = heartbeat_seat(conn, SeatId(seat_id), now)  # type: ignore[arg-type]
         # Note: legacy path doesn't support state update
 
     if isinstance(result, Failure):

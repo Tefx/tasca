@@ -23595,7 +23595,7 @@ phases:
       - No code changes occur after freeze capture until gate review completes'
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof
-    - guard_followup2_correctness.entrypoints-integration-proof-reporting-retest
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     agent: integration-verifier
   - id: guard_followup2_correctness.gate
     name: gate

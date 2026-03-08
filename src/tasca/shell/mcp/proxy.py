@@ -499,7 +499,9 @@ async def forward_jsonrpc_request(
             # Parse response (may be SSE or plain JSON from FastMCP)
             try:
                 data = _parse_sse_or_json(response.text)
-            except json.JSONDecodeError as e:
+            except (json.JSONDecodeError, Exception) as e:
+                # Catches both json.JSONDecodeError and deal.PreContractError
+                # (which wraps contract violations from @deal.pre decorators)
                 return error_response(
                     "UPSTREAM_INVALID_RESPONSE",
                     "Upstream returned invalid JSON",

@@ -23014,6 +23014,55 @@ phases:
 
       - Evidence distinguishes real code fixes from any retained boundary allowances'
     agent: python-senior
+  - id: guard_followup2_boundary.mcp-server-boundary-fix
+    name: mcp-server-boundary-fix
+    status: pending
+    description: 'Resolve remaining MCP boundary findings in `src/tasca/shell/mcp/server.py`
+      and any final entrypoint/server wiring gap left after correctness cleanup.
+
+
+      Spec refs: guard follow-up derived from current guard report and the existing
+      MCP surface already implemented.
+
+      Touch paths: `src/tasca/shell/mcp/server.py`, `src/tasca/shell/mcp/entrypoints.py`
+      only if direct server wiring alignment is required.
+
+      Harness refs: `tests/integration/test_mcp.py`, `tests/unit/mcp/test_mcp_server.py`,
+      `tests/repro/issue_l3_mcp_smoke.py` (read-only).
+
+
+      Goals:
+
+      - Remove residual `wiring_gap`, `review_suggested`, and dead-boundary debt in
+      the MCP server seam.
+
+      - Keep the shared tool registry stable; avoid registry churn beyond what is
+      required to point at repaired helpers.
+
+      - Prefer real wiring fixes over `@invar:allow`.
+
+
+      Integration requirement:
+
+      - Evidence must show the source-to-sink path through server wiring, not just
+      static cleanup.
+
+
+      Out of scope:
+
+      - No new MCP features.
+
+      - No edits to tests or web code.'
+    verification: '- Guard findings tied to `server.py`/remaining entrypoint boundary
+      glue are resolved
+
+      - Evidence identifies any remaining boundary-only allowance and why it cannot
+      be expressed as core logic
+
+      - MCP tool surface remains unchanged from the caller perspective'
+    depends_on:
+    - guard_followup2_boundary.auth-config-boundary-fix
+    agent: python-senior
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: pending

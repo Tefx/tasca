@@ -23878,7 +23878,7 @@ phases:
       - guard_followup2_correctness.entrypoints-integration-proof-reporting-retest'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
     name: entrypoints-integration-proof.reporting-fix
-    status: pending
+    status: claimed
     description: 'Fix the stale smoke reporting/status behavior for the already-repaired
       `TableClosed` path in `tests/repro/issue_l3_mcp_smoke.py`.
 
@@ -23922,6 +23922,8 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof-retest
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-03-08T19:06:27.023485+00:00'
     evidence: 'Priority: MEDIUM'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-retest
     name: entrypoints-integration-proof.reporting-retest

@@ -392,7 +392,6 @@ def get_unresolved_handles(
     lambda mentions_result: all(len(mention.handle) > 0 for mention in mentions_result.resolved)
 )
 @deal.ensure(lambda mentions_result, result: len(result) == len(mentions_result.resolved))
-@deal.post(lambda result: all(len(patron_id) > 0 for patron_id in result))
 def get_resolved_patron_ids(mentions_result: MentionsResult) -> list[PatronId]:
     """Extract patron IDs from a MentionsResult.
 

@@ -23729,3 +23729,44 @@ phases:
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: pending
+  steps:
+  - id: guard_followup2_debt.allow-policy-normalization
+    name: allow-policy-normalization
+    status: pending
+    description: 'Normalize remaining `duplicate_escape_reason` findings and codify
+      where `@invar:allow` is acceptable versus where real code changes are required.
+
+
+      Spec refs: derived from current guard output and prior guard remediation phases.
+
+      Touch paths: only files still carrying duplicate escape reasons among `src/tasca/shell/mcp/entrypoints.py`,
+      `src/tasca/shell/storage/database.py`, `src/tasca/shell/storage/search_repo.py`,
+      `src/tasca/shell/storage/saying_repo.py`, `src/tasca/shell/storage/seat_repo.py`,
+      `src/tasca/shell/api/auth.py`, `src/tasca/shell/mcp/server.py`.
+
+      Harness refs: final full guard run.
+
+
+      Policy to enforce:
+
+      - Acceptable: thin shell adapters, framework coercion seams, and unavoidable
+      boundary glue with a specific non-duplicated reason.
+
+      - Real code change required: dead exports/params/assigns, shell pure logic,
+      wiring gaps, internal imports, file-size debt caused by extractable logic.
+
+      - Excluded dirs (`tests`, `web`, `.invar/examples`) stay untouched.
+
+
+      Out of scope:
+
+      - No broad new exemptions.
+
+      - No suppressing categories just to silence guard.'
+    verification: '- Remaining escape reasons are deduplicated and file-local rationale
+      is specific
+
+      - No new blanket allowances added
+
+      - Evidence lists each retained allow and why a real code change was not appropriate'
+    agent: python-executor

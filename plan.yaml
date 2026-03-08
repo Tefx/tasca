@@ -23878,7 +23878,7 @@ phases:
       - guard_followup2_correctness.entrypoints-integration-proof-reporting-retest'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
     name: entrypoints-integration-proof.reporting-fix
-    status: claimed
+    status: done
     description: 'Fix the stale smoke reporting/status behavior for the already-repaired
       `TableClosed` path in `tests/repro/issue_l3_mcp_smoke.py`.
 
@@ -23924,7 +23924,32 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-08T19:06:27.023485+00:00'
-    evidence: 'Priority: MEDIUM'
+    done_at: '2026-03-08T19:10:27.589948+00:00'
+    evidence: 'Artifact:
+
+      - Commit hash(es): e37c289 (worktree), 7171c6c (main)
+
+      - Files changed: tests/repro/issue_l3_mcp_smoke.py
+
+
+      Verification:
+
+      - Run: uv run python tests/repro/issue_l3_mcp_smoke.py -> error_table_closed
+      summary now PASS (previously PARTIAL) when TableClosed section succeeds.
+
+
+      Spec link:
+
+      - guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
+
+
+      Gaps/Notes:
+
+      - Updated TableClosed helper to return (client, status) and compute status from
+      actual outcome checks; main summary now consumes returned status.
+
+      - Other scenarios (version_conflict, wait_timeout) remain PARTIAL as expected
+      and unchanged.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-retest
     name: entrypoints-integration-proof.reporting-retest
     status: pending

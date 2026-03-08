@@ -179,7 +179,9 @@ def _silence_next_action(empty_waits: int, next_sequence: int) -> str:
 # @shell_orchestration: Shell-local adapter from settings to MCP limits behavior.
 def _limits_config_from_settings() -> LimitsConfig:
     """Implementation detail for MCP tool behavior."""
-    return settings_to_limits_config(settings)
+    from tasca.config import settings as _settings  # Lazy import for test monkeypatching
+
+    return settings_to_limits_config(_settings)
 
 
 # @invar:allow shell_result: MCP protocol helper returns envelope dict, not Result

@@ -24746,9 +24746,11 @@ phases:
     verification: '- Freeze evidence contains commit SHA, worktree status, environment
       note, and command list
 
+      - Freeze occurs only after the remediation retest evidence is available
+
       - No code changes occur after freeze capture until gate review completes'
     depends_on:
-    - guard_followup2_cleanup.storage-guard-verify
+    - guard_followup2_cleanup.storage-guard-verify-retest
     agent: integration-verifier
   - id: guard_followup2_cleanup.gate
     name: gate
@@ -24768,9 +24770,6 @@ phases:
       4. Excluded directories remained untouched by the remediation scope.'
     verification: '- All phase steps completed
 
-      - Auth-route and guard-entrypoint regressions are either resolved or explicitly
-      documented by retest evidence
-
       - No unresolved blocker remains in the targeted storage files
 
       - Evidence quality acceptable
@@ -24780,8 +24779,6 @@ phases:
     - guard_followup2_cleanup.database-pure-logic-split
     - guard_followup2_cleanup.storage-symbol-cleanup
     - guard_followup2_cleanup.storage-guard-verify
-    - guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
-    - guard_followup2_cleanup.storage-guard-verify-retest
     - guard_followup2_cleanup.freeze
     agent: gate-reviewer
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint

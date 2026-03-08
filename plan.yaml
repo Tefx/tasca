@@ -24302,6 +24302,44 @@ phases:
     depends_on:
     - guard_followup2_correctness.freeze-tooling-evidence-fix
     agent: python-executor
+  - id: guard_followup2_correctness.freeze-gate-retest
+    name: freeze-gate-retest
+    status: pending
+    description: 'Re-test the freeze and evidence package from a fresh independent
+      pass before re-running the phase gate.
+
+
+      As an INDEPENDENT REVIEWER (`gate-reviewer`), re-run the required verification/evidence
+      audit for `guard_followup2_correctness` using the remediated tooling path and
+      raw-output artifacts.
+
+
+      Test for:
+
+      - Happy path: one supported guard command is runnable in this environment and
+      its raw output is attached
+
+      - Freeze completeness: commit SHA, branch/status state, environment declaration,
+      and exact command list are all present as pasted artifacts
+
+      - Evidence fidelity: MCP integration-proof and limits-service claims are backed
+      by pasted raw command output rather than summaries
+
+      - Scope discipline: no new product-code remediation was introduced outside verification/evidence/tooling
+
+
+      Finding missing or weak evidence is a successful outcome for this retest.'
+    verification: '- Main path: retest confirms the phase has a reproducible freeze
+      package and a runnable guard path with raw output attached
+
+      - Failure path: retest explicitly reports any still-unrunnable guard invocation
+      or any missing raw artifact instead of collapsing it into a summary
+
+      - Proof: reviewer can map each gate-critical claim to a pasted command output
+      artifact'
+    depends_on:
+    - guard_followup2_correctness.evidence-raw-output-fix
+    agent: gate-reviewer
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

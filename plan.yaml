@@ -10394,3 +10394,153 @@ phases:
 
       - No code changes in this step'
     agent: integration-verifier
+  - id: regression_run.fix_mcp_server_entrypoint_thickness
+    name: Fix MCP server entrypoint thickness
+    status: pending
+    description: 'HIGH priority blocker fix for regression_run.execute_full_regression.
+
+
+      Issue: full guard reports 17 `entry_point_too_thick` errors in `src/tasca/shell/mcp/server.py`.
+
+
+      Scope:
+
+      - Decompose the MCP server shell entrypoint so it satisfies the project''s shell/core
+      thickness constraints.
+
+      - Extract orchestration/helper logic out of `src/tasca/shell/mcp/server.py`
+      into appropriate helpers/modules while preserving current behavior.
+
+      - Include the previously deferred entrypoint decomposition work required to
+      clear the guard blocker.
+
+      - Do not mix unrelated MCP feature work into this refactor.
+
+
+      Affected area:
+
+      - `src/tasca/shell/mcp/server.py` and any narrowly scoped helper modules introduced
+      for decomposition
+
+
+      Priority:
+
+      - Blocker / HIGH
+
+
+      Expected outcome:
+
+      - Guard no longer reports `entry_point_too_thick` for the MCP server entrypoint.'
+    verification: '- Run `uvx invar-tools guard --all`
+
+      - Verification succeeds only if `src/tasca/shell/mcp/server.py` no longer produces
+      any `entry_point_too_thick` findings
+
+      - Record any remaining guard failures separately from this blocker so follow-up
+      work can be scoped precisely'
+    depends_on:
+    - regression_run.execute_full_regression
+    agent: python-senior
+  - id: regression_run.fix_pytest_dependency_wiring
+    name: Fix pytest dependency wiring
+    status: pending
+    description: 'HIGH priority blocker fix for regression_run.execute_full_regression.
+
+
+      Issue: `uv run pytest` fails before test execution with `Failed to spawn: pytest`.
+
+
+      Scope:
+
+      - Repair Python tooling/dependency wiring so the pytest executable is available
+      through the project''s uv-managed environment.
+
+      - Update the relevant dependency/config surface in `pyproject.toml` and any
+      lock/dev-group wiring required by the repo''s current setup.
+
+      - Keep the fix narrowly scoped to executable/dependency availability; do not
+      fold unrelated regression failures into this step.
+
+
+      Affected area:
+
+      - Python tooling/dependency config (`pyproject.toml`, dev groups, lock/dependency
+      wiring as needed)
+
+
+      Priority:
+
+      - Blocker / HIGH
+
+
+      Expected outcome:
+
+      - `uv run pytest` can launch successfully from this repo without spawn errors.'
+    verification: '- Run `uv sync --dev` (or the repo''s equivalent uv dependency
+      sync command if the dependency group name differs)
+
+      - Run `uv run pytest --version`
+
+      - Verification succeeds only if the command resolves and launches pytest instead
+      of failing with `Failed to spawn: pytest`
+
+      - Record exact config files changed and any remaining non-wiring test failures
+      separately'
+    depends_on:
+    - regression_run.execute_full_regression
+    agent: python-executor
+  - id: regression_run.retest_pytest_dependency_wiring
+    name: Retest pytest dependency wiring
+    status: pending
+    description: 'Independent retest for the blocker fixed by `regression_run.fix_pytest_dependency_wiring`.
+
+
+      Goal:
+
+      - Re-run the previously blocked pytest entry command from a fresh verification
+      perspective.
+
+      - Confirm the regression blocker is resolved and distinguish dependency/executable
+      success from any downstream test failures.
+
+
+      Original blocker:
+
+      - `uv run pytest` could not execute because pytest was not available in the
+      uv-managed environment.'
+    verification: '- Run `uv run pytest`
+
+      - Confirm the prior blocker is resolved: the command must start pytest instead
+      of failing with `Failed to spawn: pytest`
+
+      - If tests still fail after launch, classify the first downstream failure separately
+      and note that executable/dependency wiring is fixed'
+    depends_on:
+    - regression_run.fix_pytest_dependency_wiring
+    agent: integration-verifier
+  - id: regression_run.retest_mcp_server_entrypoint_thickness
+    name: Retest MCP server entrypoint thickness
+    status: pending
+    description: 'Independent retest for the blocker fixed by `regression_run.fix_mcp_server_entrypoint_thickness`.
+
+
+      Goal:
+
+      - Re-run guard from a fresh verification perspective and confirm the MCP server
+      entrypoint decomposition cleared the previously reported blocker.
+
+      - Distinguish this resolved blocker from any unrelated remaining guard findings.
+
+
+      Original blocker:
+
+      - Full guard reported 17 `entry_point_too_thick` errors in `src/tasca/shell/mcp/server.py`.'
+    verification: '- Run `uvx invar-tools guard --all`
+
+      - Confirm there are zero `entry_point_too_thick` findings for `src/tasca/shell/mcp/server.py`
+
+      - If other guard failures remain, list them separately and do not conflate them
+      with this resolved blocker'
+    depends_on:
+    - regression_run.fix_mcp_server_entrypoint_thickness
+    agent: integration-verifier

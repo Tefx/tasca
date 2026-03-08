@@ -23810,3 +23810,33 @@ phases:
     depends_on:
     - guard_followup2_debt.allow-policy-normalization
     agent: python-senior
+  - id: guard_followup2_debt.final-guard-regression
+    name: final-guard-regression
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), run the final
+      guard regression for the new remediation chain and confirm all remaining warning/info
+      categories were addressed or consciously bounded.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Scope:
+
+      - Full project guard run after the guard-followup2 chain
+
+      - Read-only existing API/MCP smokes only if needed to explain residual boundary
+      allowances
+
+
+      Finding issues is success.'
+    verification: '- Run `invar guard` for the full project and paste the actual output
+      summary
+
+      - Explicitly account for every remaining warning/info category, including why
+      any intentional allowance remains
+
+      - Confirm excluded directories were not edited as part of this chain'
+    depends_on:
+    - guard_followup2_debt.file-size-and-complexity-trim
+    agent: integration-verifier

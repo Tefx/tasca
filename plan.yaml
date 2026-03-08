@@ -24606,7 +24606,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-symbol-cleanup
     name: storage-symbol-cleanup
-    status: claimed
+    status: done
     description: 'Clean up remaining repo-level guard findings across the smaller
       storage modules after the database split is complete.
 
@@ -24655,6 +24655,26 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-08T20:16:47.198887+00:00'
+    done_at: '2026-03-08T20:34:30.539295+00:00'
+    evidence: "Artifact:\n- PR: N/A (isolated worktree no-op)\n\nVerification:\n-\
+      \ Run: `python3 analysis script` over scoped files -> reported zero targeted\
+      \ categories (`dead_export`, `dead_param`, `dead_assign`, `shell_pure_logic`)\
+      \ across:\n  - `src/tasca/shell/storage/search_repo.py`\n  - `src/tasca/shell/storage/saying_repo.py`\n\
+      \  - `src/tasca/shell/storage/seat_repo.py`\n  - `src/tasca/shell/storage/dedup_repo.py`\n\
+      \  - `src/tasca/shell/storage/idempotency_repo.py`\n  - `src/tasca/shell/storage/control_repo.py`\n\
+      - Run: `uv run pytest tests/unit/storage/test_control_repo.py tests/integration/test_mcp.py\
+      \ tests/unit/storage/test_search_repo.py --collect-only` -> 85 tests collected.\n\
+      - Run: `uv run pytest tests/unit/storage/test_control_repo.py -v` -> 12 passed.\n\
+      - Run: `uv run pytest tests/integration/test_mcp.py -v` -> 28 passed.\n- Run:\
+      \ `uv run pytest tests/integration/test_api.py -v` -> 5 passed, 4 failed (reported\
+      \ as pre-existing auth issue unrelated to this step).\n\nSpec link:\n- guard_followup2_cleanup.storage-symbol-cleanup\n\
+      \nCommit hash(es):\n- none (worker explicitly reported no code changes needed;\
+      \ previous exploratory commit was reset in worker branch before completion)\n\
+      \nFiles changed:\n- none\n\nGaps/Notes:\n- Worker reported this step is a no-op\
+      \ at current head: targeted categories are absent in scoped files.\n- Existing\
+      \ `@invar:allow` usages in scoped files were reported as live boundary justifications.\n\
+      - Unrelated `tests/integration/test_api.py` auth failures were observed and\
+      \ reported, not remediated in this step."
   - id: guard_followup2_cleanup.storage-guard-verify
     name: storage-guard-verify
     status: pending

@@ -24606,7 +24606,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-symbol-cleanup
     name: storage-symbol-cleanup
-    status: pending
+    status: claimed
     description: 'Clean up remaining repo-level guard findings across the smaller
       storage modules after the database split is complete.
 
@@ -24653,6 +24653,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.database-pure-logic-split
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-03-08T20:16:47.198887+00:00'
   - id: guard_followup2_cleanup.storage-guard-verify
     name: storage-guard-verify
     status: pending

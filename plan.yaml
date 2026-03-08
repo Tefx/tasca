@@ -24254,6 +24254,54 @@ phases:
     - guard_followup2_correctness.freeze
     - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     agent: python-senior
+  - id: guard_followup2_correctness.evidence-raw-output-fix
+    name: evidence-raw-output-fix
+    status: pending
+    description: 'Fix the evidence-quality gaps called out by gate review for the
+      same phase.
+
+
+      Scope: verification/evidence/tooling only.
+
+
+      Should-fix issues to close:
+
+      - Replace summarized command results with pasted raw output artifacts where
+      prior evidence only said commands passed.
+
+      - Consolidate raw-output proof for the MCP integration-proof path and the limits-service
+      verification path so the next reviewer can trace exact commands to exact outputs.
+
+
+      Remediation consolidation:
+
+      - prior_loop: `guard_followup2_correctness.entrypoints-integration-proof`, `guard_followup2_correctness.limits-service-guard-cleanup`
+
+      - remaining_blocker: final gate evidence cannot rely on summarized outputs for
+      the seam-proof and limits-service claims
+
+      - why_new_loop: prior implementation and verification steps are complete; the
+      remaining gap is evidence fidelity, so a focused evidence-consolidation step
+      is lower churn than reopening code work
+
+
+      Out of scope:
+
+      - No new product-code changes unless a verification command cannot be run without
+      a minimal tooling-only adjustment already covered by the blocker fix step.'
+    verification: '- Raw stdout/stderr or test-runner output is pasted for each required
+      command, not summarized
+
+      - Integration-proof evidence shows an actual seam command and its actual output
+
+      - Limits-service evidence includes the exact verification command and pasted
+      output
+
+      - Evidence bundle is sufficient for a downstream gate review without reinterpreting
+      summaries'
+    depends_on:
+    - guard_followup2_correctness.freeze-tooling-evidence-fix
+    agent: python-executor
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

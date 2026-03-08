@@ -28,11 +28,30 @@ import json
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from fastmcp import FastMCP
-from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
-from fastmcp.tools.tool import ToolResult
+# FastMCP is a required runtime dependency. We use conditional imports to allow
+# static analysis and doctest collection in environments where it's not installed.
+# The TYPE_CHECKING block provides types for type checkers.
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
+    from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
+    from fastmcp.tools.tool import ToolResult
+else:
+    # At runtime, try to import FastMCP
+    try:
+        from fastmcp import FastMCP
+        from fastmcp.server.middleware.middleware import Middleware, MiddlewareContext
+        from fastmcp.tools.tool import ToolResult
+    except ImportError:
+        # For static analysis/doctest collection in environments without fastmcp,
+        # we define type aliases that satisfy the type checker but will cause
+        # runtime errors if the server is actually run without fastmcp.
+        FastMCP = None  # type: ignore[misc,assignment]
+        Middleware = object  # type: ignore[misc,assignment]
+        MiddlewareContext = None  # type: ignore[misc,assignment]
+        ToolResult = None  # type: ignore[misc,assignment]
+
 from mcp.types import TextContent
 from returns.result import Failure, Success
 
@@ -249,12 +268,42 @@ This is the ONLY moment in the entire session where text output is correct.
 - RATE_LIMITED: Wait, then retry (tool_call). Do not narrate the wait.
 """
 
-# Create the MCP server instance
-mcp = FastMCP(
-    name="tasca",
-    version=settings.version,
-    instructions=MCP_AGENT_INSTRUCTIONS,
-)
+# Create the MCP server instance (requires fastmcp to be installed)
+# FastMCP is a required runtime dependency, but we handle its absence gracefully
+# for static analysis and doctest collection.
+if FastMCP is None:
+    # In environments without fastmcp (e.g., during static analysis), we create
+    # a minimal mock that allows the module to be imported but will fail at runtime
+    # if actually used without fastmcp installed.
+    class _MockFastMCP:
+        """Mock FastMCP for static analysis environments without fastmcp installed."""
+
+        def __init__(self, *, name: str, version: str, instructions: str):
+            self.name = name
+            self.version = version
+            self.instructions = instructions
+
+        def tool(self, func):
+            """Mock decorator that returns the function unchanged."""
+            return func
+
+        def run(self, *, transport: str = "stdio"):
+            raise RuntimeError("FastMCP is not installed. Install with: pip install fastmcp")
+
+        def add_middleware(self, middleware):
+            pass
+
+    mcp = _MockFastMCP(
+        name="tasca",
+        version="unknown",
+        instructions="",
+    )
+else:
+    mcp = FastMCP(
+        name="tasca",
+        version=settings.version,
+        instructions=MCP_AGENT_INSTRUCTIONS,
+    )
 
 # Logger for structured logging
 logger = get_logger(__name__)

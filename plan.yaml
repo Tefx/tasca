@@ -23991,6 +23991,60 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-08T19:10:37.450785+00:00'
+  - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
+    name: entrypoints-integration-proof.reporting-authority-fix
+    status: pending
+    description: 'Fix the stale contradictory smoke reporting for the already-passing
+      `TableClosed` scenario in `tests/repro/issue_l3_mcp_smoke.py` using a single
+      higher-authority remediation step.
+
+
+      Scope:
+
+      - Limit changes to smoke report generation consistency in `tests/repro/issue_l3_mcp_smoke.py`
+
+      - Remove contradictory stale lines that claim `table_control` is missing or
+      cannot be tested when the section passes and the tool exists
+
+      - Keep unrelated smoke scenarios and MCP behavior unchanged
+
+
+      Remediation consolidation:
+
+      - prior_loop: `guard_followup2_correctness.entrypoints-integration-proof-reporting-fix`,
+      `guard_followup2_correctness.entrypoints-integration-proof-reporting-retest`
+
+      - remaining_blocker: `TableClosed` smoke output still emits contradictory stale
+      reporting lines even though the section passes
+
+      - why_new_loop: repeated localized fixes created a loop in the same step family;
+      consolidate authority into one final report-generation correction instead of
+      appending another micro-remediation
+
+
+      Touch paths:
+
+      - `tests/repro/issue_l3_mcp_smoke.py`
+
+
+      Suggested agent:
+
+      - `python-senior` (small code surface, but repeated stale-state/reporting semantics
+      now need a higher-authority correction to prevent further loop churn)'
+    verification: '- Update only the `TableClosed` smoke report-generation path in
+      `tests/repro/issue_l3_mcp_smoke.py`
+
+      - A passing `TableClosed` section must not emit contradictory stale lines claiming
+      `table_control` is missing/cannot be tested
+
+      - Main path and emitted summary/status lines remain internally consistent for
+      `error_table_closed`
+
+      - Do not broaden scope into other smoke scenarios, tool behavior, or MCP contract
+      changes'
+    depends_on:
+    - guard_followup2_correctness.entrypoints-integration-proof-retest
+    agent: python-senior
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

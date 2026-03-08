@@ -388,7 +388,7 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
             {
                 "table_id": table_id,
                 "action": "close",
-                "speaker_kind": "agent",
+                "speaker_name": "TestAgent-001",
                 "patron_id": patron_id,
             },
         )

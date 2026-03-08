@@ -24087,7 +24087,7 @@ phases:
       - Unrelated smoke scenarios and MCP behavior unchanged.'
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
     name: entrypoints-integration-proof.reporting-authority-retest
-    status: pending
+    status: claimed
     description: 'Re-test the consolidated smoke reporting correction from a fresh,
       independent verification pass.
 
@@ -24126,6 +24126,8 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-08T19:21:50.721342+00:00'
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

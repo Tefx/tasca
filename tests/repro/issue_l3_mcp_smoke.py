@@ -363,13 +363,18 @@ def test_error_not_found(db_path: str):
 
 
 def test_table_closed(db_path: str, patron_id: str, table_id: str):
-    """Test TableClosed error path (if table_control exists)."""
+    """Test TableClosed error path (if table_control exists).
+
+    Returns:
+        tuple: (client, status) where status is "PASS", "PARTIAL", or "FAIL"
+    """
     print("\n" + "=" * 70)
     print("TEST: Error Path - TableClosed")
     print("=" * 70)
 
     client = MCPClient(db_path)
     client.start()
+    status = "PARTIAL"  # Default to partial if tool missing
 
     try:
         # Check if table_control tool exists
@@ -379,7 +384,7 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
         if "table_control" not in tools:
             print("  ⚠ table_control tool not found - cannot test TableClosed error")
             print("    Note: Spec requires table_control for pause/resume/close")
-            return client
+            return client, status
 
         # Close the table
         print("\n[1] TABLE_CONTROL (close)")
@@ -408,10 +413,12 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
                 },
             )
 
+            table_closed_correct = False
             if not result.get("ok"):
                 error = result.get("error", {})
                 if error.get("code") in ["TableClosed", "OPERATION_NOT_ALLOWED"]:
                     print(f"  ✓ Got TableClosed error: {error.get('code')}")
+                    table_closed_correct = True
                 else:
                     print(f"  ⚠ Got other error: {error.get('code')}")
             else:
@@ -423,14 +430,23 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
                 "table_listen", {"table_id": table_id, "since_sequence": 0, "limit": 10}
             )
 
+            listen_works = False
             if result.get("ok"):
                 print(f"  ✓ Listen works on closed table")
+                listen_works = True
             else:
                 print(f"  ⚠ Listen failed on closed table: {result.get('error')}")
+
+            # Determine overall status
+            if table_closed_correct and listen_works:
+                status = "PASS"
+            else:
+                status = "PARTIAL"
         else:
             print(f"  ✗ Failed to close table: {result.get('error')}")
+            status = "FAIL"
 
-        return client
+        return client, status
 
     finally:
         client.stop()
@@ -631,10 +647,10 @@ def main():
             results["error_not_found"] = "PASS"
 
             # Error: TableClosed
-            client = test_table_closed(db_path, patron_id, table_id)
+            client, table_closed_status = test_table_closed(db_path, patron_id, table_id)
             if client:
                 client.print_transcript("TableClosed Error")
-            results["error_table_closed"] = "PARTIAL"  # Tool missing
+            results["error_table_closed"] = table_closed_status
 
             # Create new table for remaining tests
             client = MCPClient(db_path)

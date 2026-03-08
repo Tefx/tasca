@@ -23407,7 +23407,7 @@ phases:
       - Non-scope warnings remain in shell_pure_logic category.'
   - id: guard_followup2_correctness.limits-service-guard-cleanup
     name: limits-service-guard-cleanup
-    status: claimed
+    status: done
     description: 'Resolve remaining core-side guard debt in `src/tasca/core/services/limits_service.py`
       without touching excluded directories.
 
@@ -23447,6 +23447,38 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-08T18:35:37.573946+00:00'
+    done_at: '2026-03-08T18:50:53.713957+00:00'
+    evidence: 'Artifact:
+
+      - Commit hash(es): b1ab2c9 (worktree), 58af712 (squash merge on main)
+
+      - Files changed: src/tasca/core/services/limits_service.py
+
+
+      Verification:
+
+      - Run: uvx invar-tools guard -> Passed: True, Errors: 0, Warnings: 0 (reported
+      for targeted scope by worker).
+
+      - Run: python -m pytest tests/unit/test_limits_service.py -> PASS (59 passed).
+
+      - Run: Functional limits validation -> All behavior unchanged per worker evidence.
+
+
+      Spec link:
+
+      - guard_followup2_correctness.limits-service-guard-cleanup
+
+
+      Gaps/Notes:
+
+      - Fixed internal_import finding by moving hypothesis imports from function-level
+      lazy import to module top-level with conditional availability.
+
+      - Worker reported no shell caller modifications required; seam fix contained
+      to limits_service.py.
+
+      - Worker reported integration auth failures as pre-existing and out-of-scope.'
   - id: guard_followup2_correctness.entrypoints-integration-proof
     name: entrypoints-integration-proof
     status: pending

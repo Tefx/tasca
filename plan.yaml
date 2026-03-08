@@ -23649,6 +23649,10 @@ phases:
     - guard_followup2_correctness.entrypoints-symbol-cleanup
     - guard_followup2_correctness.limits-service-guard-cleanup
     - guard_followup2_correctness.entrypoints-integration-proof
+    - guard_followup2_correctness.entrypoints-integration-proof-fix
+    - guard_followup2_correctness.entrypoints-integration-proof-retest
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-retest
     - guard_followup2_correctness.freeze
     agent: gate-reviewer
   - id: guard_followup2_correctness.entrypoints-integration-proof-fix

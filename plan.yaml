@@ -23770,3 +23770,43 @@ phases:
 
       - Evidence lists each retained allow and why a real code change was not appropriate'
     agent: python-executor
+  - id: guard_followup2_debt.file-size-and-complexity-trim
+    name: file-size-and-complexity-trim
+    status: pending
+    description: 'Address any residual `file_size_warning` and `shell_too_complex`
+      debt left after correctness/cleanup/boundary remediation.
+
+
+      Spec refs: derived from current guard output.
+
+      Touch paths: any still-flagged non-excluded source file, expected first at `src/tasca/shell/mcp/entrypoints.py`
+      and `src/tasca/shell/storage/database.py`.
+
+      Harness refs: changed-file guard plus existing read-only MCP/API smokes.
+
+
+      Goals:
+
+      - Finish the remaining info/warning items without reopening already-resolved
+      seams.
+
+      - Use extraction, decomposition, and deletion before allowances.
+
+      - Preserve stable public surfaces.
+
+
+      `@invar:allow` policy:
+
+      - Not acceptable as a substitute for straightforward decomposition.
+
+      - Acceptable only when the remaining complexity is inherent boundary glue and
+      the step evidence explains why extraction would cross the wrong layer boundary.'
+    verification: '- Residual size/complexity findings are eliminated or reduced to
+      boundary-only justified remnants
+
+      - Evidence states which files still carry unavoidable complexity and why
+
+      - Existing public seams remain stable'
+    depends_on:
+    - guard_followup2_debt.allow-policy-normalization
+    agent: python-senior

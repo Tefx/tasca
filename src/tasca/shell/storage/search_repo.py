@@ -277,8 +277,11 @@ def _row_to_search_result(row: tuple) -> SearchResult:
 # =============================================================================
 # Table-level Search (for REST /search endpoint)
 # =============================================================================
+# NOTE: Table-search helpers remain co-located to preserve exact FTS-first then
+# LIKE ordering and snippet selection semantics shared by search/count paths.
 
 
+# @invar:allow shell_result: repo helper orchestrates raw row retrieval for search_tables
 def _execute_fts_search(
     conn: sqlite3.Connection,
     query_param: str,
@@ -314,30 +317,27 @@ def _execute_fts_search(
         ORDER BY fts.rank
     """
 
-    if status:
-        rows = conn.execute(fts_sql, (query_param, status)).fetchall()
-    else:
-        rows = conn.execute(fts_sql, (query_param,)).fetchall()
+    params = (query_param, status) if status else (query_param,)
+    rows = conn.execute(fts_sql, params).fetchall()
 
     return [_row_to_table_hit(row) for row in rows]
 
 
-def _execute_like_search(
+# @invar:allow shell_result: repo helper executes SQL and returns raw rows
+def _execute_like_query(
     conn: sqlite3.Connection,
     query_param: str,
     status: str | None,
-    seen_tables: set[str],
-) -> list[TableSearchHit]:
-    """Execute LIKE search on table question and context.
+) -> list[tuple]:
+    """Execute LIKE SQL for question/context matching.
 
     Args:
         conn: Database connection.
         query_param: Search query string.
         status: Optional status filter.
-        seen_tables: Set of already-seen table IDs (for deduplication).
 
     Returns:
-        List of TableSearchHit from LIKE matches (excluding already seen).
+        Database rows for matching tables ordered by created_at DESC.
     """
     like_status_clause = "AND status = ?" if status else ""
     like_pattern = f"%{query_param}%"
@@ -358,10 +358,69 @@ def _execute_like_search(
         ORDER BY created_at DESC
     """
 
-    if status:
-        rows = conn.execute(like_sql, (like_pattern, like_pattern, status)).fetchall()
+    params = (like_pattern, like_pattern, status) if status else (like_pattern, like_pattern)
+    return conn.execute(like_sql, params).fetchall()
+
+
+# @invar:allow shell_result: repo helper computes match_type/snippet without extra I/O
+# @shell_orchestration: Row-shape normalization stays near SQL fallback path to preserve ordering semantics
+def _build_like_hit(row: tuple, query_param: str) -> TableSearchHit | None:
+    """Build LIKE-based hit if row still semantically matches the query.
+
+    Args:
+        row: LIKE query row tuple.
+        query_param: Search query string used for case-insensitive matching.
+
+    Returns:
+        TableSearchHit for question/context match, or None when no match applies.
+    """
+    question = row[1] or ""
+    context = row[2] or ""
+    query_lower = query_param.lower()
+    question_lower = question.lower()
+    context_lower = context.lower()
+
+    if query_lower in question_lower:
+        match_type = "question"
+        snippet = _truncate_snippet(question, query_param)
+    elif context and query_lower in context_lower:
+        match_type = "context"
+        snippet = _truncate_snippet(context, query_param)
     else:
-        rows = conn.execute(like_sql, (like_pattern, like_pattern)).fetchall()
+        return None
+
+    return TableSearchHit(
+        table_id=row[0],
+        question=question,
+        context=context,
+        status=row[3],
+        rank=0.0,
+        snippet=snippet,
+        match_type=match_type,
+        created_at=row[7],
+        updated_at=row[8],
+    )
+
+
+# @invar:allow shell_result: repo helper orchestrates LIKE fallback for search_tables
+def _execute_like_search(
+    conn: sqlite3.Connection,
+    query_param: str,
+    status: str | None,
+    seen_tables: set[str],
+) -> list[TableSearchHit]:
+    """Execute LIKE search on table question and context.
+
+    Args:
+        conn: Database connection.
+        query_param: Search query string.
+        status: Optional status filter.
+        seen_tables: Set of already-seen table IDs (for deduplication).
+
+    Returns:
+        List of TableSearchHit from LIKE matches (excluding already seen).
+    """
+    rows = _execute_like_query(conn, query_param, status)
 
     hits: list[TableSearchHit] = []
     for row in rows:
@@ -369,30 +428,10 @@ def _execute_like_search(
         if table_id in seen_tables:
             continue
 
-        question = row[1] or ""
-        context = row[2] or ""
+        hit = _build_like_hit(row, query_param)
+        if hit is None:
+            continue
 
-        # Determine match type and generate snippet
-        if query_param.lower() in question.lower():
-            match_type = "question"
-            snippet = _truncate_snippet(question, query_param)
-        elif context and query_param.lower() in context.lower():
-            match_type = "context"
-            snippet = _truncate_snippet(context, query_param)
-        else:
-            continue  # Should not happen, but be safe
-
-        hit = TableSearchHit(
-            table_id=table_id,
-            question=question,
-            context=context,
-            status=row[3],
-            rank=0.0,
-            snippet=snippet,
-            match_type=match_type,
-            created_at=row[7],
-            updated_at=row[8],
-        )
         hits.append(hit)
         seen_tables.add(table_id)
 

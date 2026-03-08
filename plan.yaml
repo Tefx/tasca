@@ -10373,3 +10373,24 @@ phases:
     depends_on:
     - guard_refresh.verify_full_guard
     agent: gate-reviewer
+- id: regression_run
+  name: Full Regression Run
+  status: pending
+  steps:
+  - id: regression_run.execute_full_regression
+    name: Execute full regression suite
+    status: pending
+    description: 'Run complete regression checks on current main: full Python tests,
+      integration tests, and frontend build/lint/test where configured. Collect exact
+      command outcomes and classify failures into blocker/should_fix/suggestion with
+      affected files and likely owning area.'
+    verification: '- Run full regression command set (at minimum: `uv run pytest`,
+      `uvx invar-tools guard --all`, and web checks from package scripts)
+
+      - Provide pass/fail summary by suite with exact counts
+
+      - If failures occur, include first-failure fingerprints and grouped ownership
+      suggestions
+
+      - No code changes in this step'
+    agent: integration-verifier

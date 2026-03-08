@@ -1721,6 +1721,19 @@ dev = [
     { name = "types-python-dateutil" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "invar-tools" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-timeout" },
+    { name = "ruff" },
+    { name = "types-python-dateutil" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "deal", specifier = ">=4.24.0" },
@@ -1744,6 +1757,19 @@ requires-dist = [
     { name = "wsproto", specifier = ">=1.2.0" },
 ]
 provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.28.0" },
+    { name = "invar-tools" },
+    { name = "mypy", specifier = ">=1.13.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", specifier = ">=0.24.0" },
+    { name = "pytest-cov", specifier = ">=6.0.0" },
+    { name = "pytest-timeout", specifier = ">=2.3.0" },
+    { name = "ruff", specifier = ">=0.8.0" },
+    { name = "types-python-dateutil", specifier = ">=2.9.0" },
+]
 
 [[package]]
 name = "typer"

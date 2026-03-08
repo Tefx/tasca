@@ -14,7 +14,7 @@ import sqlite3
 import time
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from returns.result import Failure, Success
 
@@ -301,7 +301,7 @@ async def append_saying_endpoint(
         )
 
     saying = result.unwrap()
-    
+
     # Log saying append
     log_say(
         logger,
@@ -311,7 +311,7 @@ async def append_saying_endpoint(
         speaker_name=saying.speaker.name,
         patron_id=saying.speaker.patron_id,
     )
-    
+
     return saying
 
 

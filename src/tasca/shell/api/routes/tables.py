@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from returns.result import Failure, Success
 
@@ -437,10 +437,7 @@ async def batch_delete_tables_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error": "BATCH_PRECONDITION_FAILED",
-                "details": [
-                    {"id": r.table_id, "reason": r.reason}
-                    for r in validation.rejections
-                ],
+                "details": [{"id": r.table_id, "reason": r.reason} for r in validation.rejections],
             },
         )
 

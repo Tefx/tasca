@@ -4,7 +4,7 @@ Health check routes.
 Endpoints for monitoring application health.
 """
 
-from fastapi import APIRouter
+from tasca.shell.api.fastapi_compat import APIRouter
 
 from tasca.config import settings
 

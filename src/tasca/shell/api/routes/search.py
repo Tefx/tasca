@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from returns.result import Failure, Success
 

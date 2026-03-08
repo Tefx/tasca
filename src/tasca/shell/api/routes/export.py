@@ -15,8 +15,13 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
+
+if TYPE_CHECKING:
+    from fastapi.responses import Response
+else:
+    from tasca.shell.api.fastapi_compat import Response
+
 from returns.result import Failure
 
 from tasca.core.domain.table import TableId

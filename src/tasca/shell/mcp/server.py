@@ -268,7 +268,7 @@ EXIT_EMPTY_WAITS_THRESHOLD = 30
 
 
 # @invar:allow shell_result: Pure in-memory state helper, not I/O
-# @invar:allow shell_pure_logic: Session state co-located with MCP tools
+# @shell_orchestration: Session loop state is MCP runtime orchestration state.
 def _get_loop_state(table_id: str) -> dict[str, int]:
     """Get or initialize loop state for a table."""
     if table_id not in _loop_state:
@@ -280,7 +280,7 @@ def _get_loop_state(table_id: str) -> dict[str, int]:
 
 
 # @invar:allow shell_result: Pure in-memory state helper, not I/O
-# @invar:allow shell_pure_logic: Session state co-located with MCP tools
+# @shell_orchestration: Session loop counters must remain in MCP shell state.
 def _record_wait_result(table_id: str, *, got_sayings: bool) -> dict[str, int]:
     """Update loop state after a wait/listen call. Returns the updated state."""
     state = _get_loop_state(table_id)
@@ -298,7 +298,7 @@ _URGENCY_THRESHOLD = 11
 
 
 # @invar:allow shell_result: Pure string builder, not I/O
-# @invar:allow shell_pure_logic: Formatting helper co-located with MCP tools
+# @shell_orchestration: Guidance text is coupled to MCP tool-call choreography.
 def _silence_next_action(empty_waits: int, next_sequence: int) -> str:
     """Build tiered _next_action string based on consecutive empty waits.
 
@@ -346,8 +346,8 @@ def _silence_next_action(empty_waits: int, next_sequence: int) -> str:
 # =============================================================================
 
 
-# @invar:allow shell_result: MCP protocol
-# @invar:allow shell_pure_logic: Simple dict construction is pure
+# @invar:allow shell_result: MCP protocol helper returning value object, not Result
+# @shell_orchestration: Shell-local adapter from settings to MCP limits behavior.
 def _limits_config_from_settings() -> LimitsConfig:
     """Get limits configuration from application settings.
 
@@ -357,8 +357,8 @@ def _limits_config_from_settings() -> LimitsConfig:
     return settings_to_limits_config(settings)
 
 
-# @invar:allow shell_result: MCP protocol
-# @invar:allow shell_pure_logic: Pure error-to-response mapping
+# @invar:allow shell_result: MCP protocol helper returns envelope dict, not Result
+# @shell_orchestration: Maps core limit errors to MCP response envelope shape.
 def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
     """Convert a LimitError to an MCP error response.
 
@@ -384,6 +384,8 @@ def _limit_error_to_response(error: LimitError) -> dict[str, Any]:
 # =============================================================================
 
 
+# @invar:allow shell_result: MCP response envelope helper returns dict by design
+# @shell_orchestration: Preserves MCP response envelope/backward-compat field shape.
 def _build_patron_response_data(patron: Patron, *, is_new: bool) -> dict[str, Any]:
     """Build response data for patron registration/lookup.
 
@@ -410,6 +412,8 @@ def _build_patron_response_data(patron: Patron, *, is_new: bool) -> dict[str, An
     }
 
 
+# @invar:allow shell_result: MCP response envelope helper returns dict by design
+# @shell_orchestration: Preserves MCP table payload schema expected by clients.
 def _build_table_dict(table: Table) -> dict[str, Any]:
     """Build table dict for MCP responses.
 
@@ -430,6 +434,8 @@ def _build_table_dict(table: Table) -> dict[str, Any]:
     }
 
 
+# @invar:allow shell_result: MCP response envelope helper returns dict by design
+# @shell_orchestration: Preserves MCP saying payload schema expected by clients.
 def _format_saying_dict(saying: Any) -> dict[str, Any]:
     """Format a saying entity for MCP response.
 
@@ -454,6 +460,8 @@ def _format_saying_dict(saying: Any) -> dict[str, Any]:
     }
 
 
+# @invar:allow shell_result: MCP response envelope helper returns dict by design
+# @shell_orchestration: Preserves MCP seat payload schema expected by clients.
 def _build_seat_dict(seat: Seat, expires_at: datetime) -> dict[str, Any]:
     """Build seat dict for MCP responses.
 
@@ -475,6 +483,9 @@ def _build_seat_dict(seat: Seat, expires_at: datetime) -> dict[str, Any]:
     }
 
 
+# @shell_complexity: Branches enforce protocol-level agent/human speaker invariants.
+# @invar:allow shell_result: Validation helper returns MCP error envelope dict.
+# @shell_orchestration: Keeps speaker validation and MCP error shaping in shell boundary.
 def _validate_speaker_constraints(
     speaker_kind: str, patron_id: str | None
 ) -> dict[str, Any] | None:
@@ -504,6 +515,8 @@ def _validate_speaker_constraints(
     return None
 
 
+# @shell_complexity: Branches encode explicit table-status transition gate checks.
+# @invar:allow shell_result: Validation helper returns MCP error envelope dict.
 def _validate_control_action(
     action: str, current_status: TableStatus
 ) -> tuple[TableStatus | None, dict[str, Any] | None]:
@@ -546,6 +559,8 @@ def _validate_control_action(
         return None, error_response("INVALID_ACTION", f"Unknown action: {action}")
 
 
+# @invar:allow shell_result: MCP response envelope helper returns dict by design
+# @shell_orchestration: Control response stays in shell to preserve protocol guidance text.
 def _build_control_response(new_status: TableStatus, control_sequence: int) -> dict[str, Any]:
     """Build response data for table_control.
 
@@ -571,6 +586,8 @@ def _build_control_response(new_status: TableStatus, control_sequence: int) -> d
     }
 
 
+# @invar:allow shell_result: MCP response envelope helper returns guidance string
+# @shell_orchestration: Join guidance text is shell-level MCP interaction contract.
 def _build_join_next_action(has_history: bool, next_sequence: int) -> str:
     """Build next_action guidance for table_join response.
 
@@ -598,6 +615,8 @@ def _build_join_next_action(has_history: bool, next_sequence: int) -> str:
     ).format(seq=next_sequence)
 
 
+# @invar:allow shell_result: MCP patch helper returns tuple with response dict on error
+# @shell_orchestration: Patch parsing remains shell-local to emit MCP-shaped errors.
 def _apply_table_patch(
     current_table: Table, patch: dict[str, Any]
 ) -> tuple[TableUpdate, dict[str, Any] | None]:
@@ -1511,6 +1530,7 @@ def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | 
 
 
 # @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+# @shell_complexity: Resolves optional identity across DB lookup and speaker-kind branches.
 def _resolve_speaker_for_say(
     conn: Any,
     actual_speaker_kind: str,
@@ -1675,6 +1695,7 @@ def _check_say_idempotency(
 
 
 # @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+# @shell_orchestration: MCP response payload assembly is shell-local protocol shaping.
 def _build_say_response(
     saying: Any, mentions_all: bool, mentions_resolved: list[str], mentions_unresolved: list[str]
 ) -> dict[str, Any]:
@@ -2022,6 +2043,7 @@ POLL_INTERVAL_MS = 500
 
 
 # @invar:allow shell_result: MCP helper - returns MCP response dicts, not Result
+# @shell_orchestration: CONTROL speaker construction is protocol-local shell wiring.
 def _create_control_speaker(speaker_name: str, patron_id: str | None) -> Speaker:
     """Create a Speaker for control operations.
 

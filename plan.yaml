@@ -23014,3 +23014,6 @@ phases:
 
       - Evidence distinguishes real code fixes from any retained boundary allowances'
     agent: python-senior
+- id: guard_followup2_correctness
+  name: Guard Follow-up 2 - Correctness
+  status: pending

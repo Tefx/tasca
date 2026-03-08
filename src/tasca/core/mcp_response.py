@@ -14,9 +14,13 @@ import deal
 
 @deal.pre(
     lambda code, message, details=None: (
-        isinstance(code, str) and isinstance(message, str) and len(code) > 0 and len(message) > 0
+        isinstance(code, str)
+        and isinstance(message, str)
+        and len(code) > 0
+        and len(message) > 0
+        and (details is None or isinstance(details, dict))
     ),
-    message="code and message must be non-empty strings",
+    message="code and message must be non-empty strings, details must be dict if provided",
 )
 @deal.post(lambda result: result["ok"] is False)
 @deal.post(lambda result: "error" in result)

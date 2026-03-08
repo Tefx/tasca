@@ -23017,6 +23017,57 @@ phases:
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: pending
+  steps:
+  - id: guard_followup2_correctness.entrypoints-pure-logic-split
+    name: entrypoints-pure-logic-split
+    status: pending
+    description: 'Micro remediation for `src/tasca/shell/mcp/entrypoints.py`.
+
+
+      Spec refs: guard remediation follow-up derived from current guard report.
+
+      Touch paths: `src/tasca/shell/mcp/entrypoints.py`, adjacent extracted helper
+      module(s) under `src/tasca/shell/mcp/` only if needed.
+
+      Harness refs: `tests/integration/test_mcp.py`, `tests/unit/mcp/test_mcp_server.py`,
+      `tests/repro/issue_l3_mcp_smoke.py` (read-only).
+
+
+      Goals:
+
+      - Remove `shell_pure_logic` findings by moving pure transformations, validation,
+      and shape assembly out of shell entrypoints into existing core/service helpers
+      or a new narrow helper module with contracts.
+
+      - Reduce `review_suggested` and `shell_too_complex` pressure in this file by
+      shrinking orchestration blocks rather than adding broad suppressions.
+
+      - Keep MCP surface and signatures unchanged.
+
+
+      `@invar:allow` policy:
+
+      - Acceptable only for tiny boundary adapters that must translate MCP transport
+      inputs/outputs and cannot become core logic without crossing I/O seams.
+
+      - Not acceptable for branchy normalization, payload shaping, limits logic, or
+      status derivation.
+
+
+      Out of scope:
+
+      - No edits under `tests`, `web`, or `.invar/examples`.
+
+      - No registry changes outside the MCP entrypoint seam unless required by extracted
+      helper imports.'
+    verification: '- Targeted guard delta for touched files reports the entrypoints
+      `shell_pure_logic` findings resolved or intentionally narrowed with explicit
+      rationale
+
+      - Existing MCP server tests and smoke scripts remain interface-compatible
+
+      - Evidence names the helper destinations for every moved logic block'
+    agent: python-senior
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: pending

@@ -10700,3 +10700,160 @@ phases:
     depends_on:
     - regression_run.fix_repo_heartbeat_seat_nameerror
     agent: integration-verifier
+  - id: regression_run.fix_fastmcp_guard_package_metadata
+    name: Fix tasca package metadata blocker in guard/doctest
+    status: pending
+    description: 'Fix: narrow remediation for the blocker surfaced by `regression_run.retest_fastmcp_doctest_collection`.
+
+
+      Issue:
+
+      - Guard/doctest no longer fails on missing `fastmcp`, but verification is now
+      blocked by unrelated package metadata resolution.
+
+      - Fingerprint: `importlib.metadata.PackageNotFoundError: No package metadata
+      was found for tasca`.
+
+
+      Scope:
+
+      - Keep scope limited to package metadata/version lookup along the guard/doctest
+      import path for `tasca`.
+
+      - Repair only the metadata access, fallback, or packaging boundary required
+      to let guard/doctest proceed.
+
+      - Do not reopen the optional `fastmcp` import boundary fix or broaden into unrelated
+      guard findings.
+
+      - prior_loop: `regression_run.fix_fastmcp_doctest_collection` -> `regression_run.retest_fastmcp_doctest_collection`
+
+      - remaining_blocker: doctest/guard can now reach package metadata lookup, which
+      aborts with `PackageNotFoundError` before broader verification completes.
+
+      - why_new_loop: the prior loop fixed optional dependency collection, not package
+      metadata availability in this verification environment.'
+    verification: '- Re-run the narrow guard/doctest path that previously produced
+      `PackageNotFoundError: No package metadata was found for tasca`
+
+      - Confirm metadata lookup no longer aborts collection in that path
+
+      - Keep evidence explicit about the exact command and output showing the blocker
+      is removed; list any next distinct guard fingerprint separately'
+    depends_on:
+    - regression_run.retest_fastmcp_doctest_collection
+    agent: python-executor
+  - id: regression_run.retest_fastmcp_guard_package_metadata
+    name: Retest tasca package metadata blocker after guard/doctest fix
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      package-metadata blocker addressed by `regression_run.fix_fastmcp_guard_package_metadata`
+      from a fresh verification perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: the prior guard/doctest path no longer aborts with `PackageNotFoundError`
+      for `tasca`
+
+      - Edge cases: metadata/version access remains safe in the current verification
+      environment even when package metadata is absent from site metadata stores
+
+      - Error scenarios: if collection continues and reveals another guard failure,
+      capture that new fingerprint distinctly rather than conflating it with this
+      blocker
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Re-run the exact guard/doctest command or minimal collection
+      path that previously raised `importlib.metadata.PackageNotFoundError: No package
+      metadata was found for tasca`
+
+      - Confirm that blocker is removed and collection proceeds past the metadata
+      lookup point
+
+      - If guard surfaces a new finding afterward, record it as a distinct fingerprint
+      and keep it separate from this retest chain
+
+      - Do not close `regression_run.retest_fastmcp_doctest_collection` based on this
+      step; this step is the blocker follow-up verification chain'
+    depends_on:
+    - regression_run.fix_fastmcp_guard_package_metadata
+    agent: integration-verifier
+  - id: regression_run.fix_repo_heartbeat_followup_pytest_failures
+    name: Fix downstream pytest fingerprints after repo heartbeat retest
+    status: pending
+    description: "Fix: narrow remediation for downstream pytest failures surfaced\
+      \ by `regression_run.retest_repo_heartbeat_seat_nameerror`.\n\nIssue:\n- Optional\
+      \ full-suite `uv run pytest -q` now executes, but 5 failures remain.\n- Fingerprints:\n\
+      \  - `tests/unit/mcp/test_mcp_server.py::TestLimitsEnforcementTableSay::{test_table_say_respects_content_length_limit,test_table_say_respects_history_count_limit,test_table_say_respects_mentions_limit,test_table_say_bytes_limit_enforced}`\n\
+      \  - `tests/unit/mcp/test_proxy.py::TestForwardJsonrpcRequestInvalidResponse::test_invalid_json_returns_error`\
+      \ (`PreContractError` around `_parse_sse_or_json`)\n\nScope:\n- Keep scope limited\
+      \ to the failing limits-enforcement and invalid-response parsing paths those\
+      \ fingerprints exercise.\n- Repair only the implementation and directly related\
+      \ helper/test wiring needed for those 5 failures.\n- Do not reopen the earlier\
+      \ `repo_heartbeat_seat` fix or broaden into unrelated pytest failures outside\
+      \ these fingerprints.\n- prior_loop: `regression_run.fix_repo_heartbeat_seat_nameerror`\
+      \ -> `regression_run.retest_repo_heartbeat_seat_nameerror`\n- remaining_blocker:\
+      \ after the NameError fix, the next pytest run exposes 4 limits-enforcement\
+      \ failures and 1 invalid-response parsing contract failure.\n- why_new_loop:\
+      \ the prior remediation closed the missing-symbol runtime bug only; these failures\
+      \ were not reachable until pytest executed past that point."
+    verification: "- Run the smallest targeted pytest selection covering the five\
+      \ known failures first:\n  - `uv run pytest tests/unit/mcp/test_mcp_server.py::TestLimitsEnforcementTableSay\
+      \ -q`\n  - `uv run pytest tests/unit/mcp/test_proxy.py::TestForwardJsonrpcRequestInvalidResponse::test_invalid_json_returns_error\
+      \ -q`\n- Confirm all five named fingerprints pass without introducing new failures\
+      \ in those same test classes\n- If a broader `uv run pytest -q` spot-check is\
+      \ used, record any next distinct fingerprint separately and keep it out of this\
+      \ fix scope"
+    depends_on:
+    - regression_run.retest_repo_heartbeat_seat_nameerror
+    agent: python-executor
+  - id: regression_run.retest_repo_heartbeat_followup_pytest_failures
+    name: Retest downstream pytest fingerprints after repo heartbeat follow-up fix
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      narrow downstream pytest fingerprints addressed by `regression_run.fix_repo_heartbeat_followup_pytest_failures`
+      from a fresh verification perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: the four `TestLimitsEnforcementTableSay` failures and the invalid
+      JSON proxy response test now pass
+
+      - Edge cases: limits enforcement still rejects oversize/over-count inputs at
+      the intended boundaries
+
+      - Error scenarios: invalid JSON handling no longer trips `PreContractError`
+      around `_parse_sse_or_json`
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: "- Re-run the exact targeted pytest selections tied to the five\
+      \ known fingerprints:\n  - `uv run pytest tests/unit/mcp/test_mcp_server.py::TestLimitsEnforcementTableSay\
+      \ -q`\n  - `uv run pytest tests/unit/mcp/test_proxy.py::TestForwardJsonrpcRequestInvalidResponse::test_invalid_json_returns_error\
+      \ -q`\n- Confirm all listed fingerprints are gone\n- If any failure remains,\
+      \ record the precise next fingerprint and whether it is within or outside this\
+      \ narrow scope\n- Do not close `regression_run.retest_repo_heartbeat_seat_nameerror`\
+      \ based on this step; this step is the follow-up verification chain for newly\
+      \ exposed failures"
+    depends_on:
+    - regression_run.fix_repo_heartbeat_followup_pytest_failures
+    agent: integration-verifier

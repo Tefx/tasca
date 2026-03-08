@@ -10,12 +10,18 @@ from pathlib import Path
 
 from returns.result import Failure, Result, Success
 
+from tasca.core.database_normalization import (
+    build_database_config,
+    column_names_from_pragma_rows,
+    is_memory_database_path,
+    normalize_busy_timeout,
+    normalize_foreign_keys_enabled,
+    normalize_journal_mode,
+)
 from tasca.core.schema import (
     get_all_fts_ddl,
     get_all_index_ddl,
     get_all_table_ddl,
-    is_valid_busy_timeout,
-    is_wal_mode,
 )
 
 # Default busy timeout in milliseconds
@@ -50,17 +56,15 @@ def init_database(db_path: Path) -> Result[sqlite3.Connection, str]:
     """
     try:
         # Create parent directories if needed (skip for :memory:)
-        if str(db_path) != ":memory:":
+        db_path_value = str(db_path)
+        if not is_memory_database_path(db_path_value):
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Connect to database
-        conn = sqlite3.connect(str(db_path))
+        conn = sqlite3.connect(db_path_value)
 
         # Enable WAL mode for better concurrency
-        result = conn.execute("PRAGMA journal_mode=WAL").fetchone()
-        if result and result[0].upper() != "WAL" and str(db_path) != ":memory:":
-            # :memory: databases can't use WAL, they use 'memory' journal
-            pass  # WAL mode set
+        conn.execute("PRAGMA journal_mode=WAL").fetchone()
 
         # Set busy_timeout (5 seconds) for lock handling
         conn.execute(f"PRAGMA busy_timeout={DEFAULT_BUSY_TIMEOUT}")
@@ -179,7 +183,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     """
     # Migration: Add alias and meta columns to patrons table
     cursor = conn.execute("PRAGMA table_info(patrons)")
-    columns = {row[1] for row in cursor.fetchall()}
+    columns = column_names_from_pragma_rows(cursor.fetchall())
 
     if "alias" not in columns:
         conn.execute("ALTER TABLE patrons ADD COLUMN alias TEXT")
@@ -189,7 +193,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     # Migration: Add creator_patron_id column to tables table
     cursor = conn.execute("PRAGMA table_info(tables)")
-    table_columns = {row[1] for row in cursor.fetchall()}
+    table_columns = column_names_from_pragma_rows(cursor.fetchall())
 
     if "creator_patron_id" not in table_columns:
         conn.execute("ALTER TABLE tables ADD COLUMN creator_patron_id TEXT")
@@ -218,19 +222,11 @@ def verify_database_config(conn: sqlite3.Connection) -> Result[dict[str, int | b
         timeout_result = conn.execute("PRAGMA busy_timeout").fetchone()
         fk_result = conn.execute("PRAGMA foreign_keys").fetchone()
 
-        journal_mode = journal_result[0] if journal_result else "unknown"
-        busy_timeout = int(timeout_result[0]) if timeout_result else 0
-        foreign_keys = fk_result[0] == 1 if fk_result else False
+        journal_mode = normalize_journal_mode(journal_result)
+        busy_timeout = normalize_busy_timeout(timeout_result)
+        foreign_keys = normalize_foreign_keys_enabled(fk_result)
 
-        return Success(
-            {
-                "journal_mode": journal_mode,
-                "wal_mode_enabled": is_wal_mode(str(journal_mode)),
-                "busy_timeout": busy_timeout,
-                "busy_timeout_valid": is_valid_busy_timeout(busy_timeout),
-                "foreign_keys_enabled": foreign_keys,
-            }
-        )
+        return Success(build_database_config(journal_mode, busy_timeout, foreign_keys))
     except sqlite3.Error as e:
         return Failure(f"Failed to verify database config: {e}")
 

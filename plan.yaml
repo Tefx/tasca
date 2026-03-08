@@ -10947,3 +10947,112 @@ phases:
     depends_on:
     - regression_run.fix-fastapi-guard-doctest-import-boundary
     agent: integration-verifier
+  - id: regression_run.fix-fastapi-guard-doctest-import-boundary-escalated
+    name: fix-fastapi-guard-doctest-import-boundary-escalated
+    status: pending
+    description: 'Fix: escalated remediation for the repeated `fastapi` blocker still
+      surfaced by `regression_run.retest-fastapi-guard-doctest-import-boundary`.
+
+
+      Issue:
+
+      - Retest still reports blocker fingerprint `ModuleNotFoundError: No module named
+      ''fastapi''` during guard/doctest collection.
+
+      - The failing collection path is broader than the first narrow fix and now reaches
+      `src/tasca/shell/api/app.py` -> `src/tasca/shell/api/routes/export.py:18`, not
+      only `src/tasca/shell/api/auth.py`.
+
+
+      Scope:
+
+      - Keep scope limited to the API import boundary required for guard/doctest collection
+      when `fastapi` is unavailable in the verification environment.
+
+      - Cover the full direct import wiring currently involved in collection for `src/tasca/shell/api/auth.py`,
+      `src/tasca/shell/api/app.py`, and `src/tasca/shell/api/routes/export.py`, plus
+      any immediate import shims needed to stop collection-time `fastapi` failures.
+
+      - Do not broaden into API feature behavior, routing changes unrelated to import
+      safety, dependency installation policy, or unrelated guard findings.
+
+
+      Remediation consolidation:
+
+      - prior_loop: `regression_run.fix-fastapi-guard-doctest-import-boundary` ->
+      `regression_run.retest-fastapi-guard-doctest-import-boundary`
+
+      - remaining_blocker: guard/doctest collection still aborts on missing `fastapi`
+      from the wider API import chain rooted at app/export wiring.
+
+      - why_new_loop: the first loop narrowed the auth-side boundary but did not fully
+      isolate the broader API module graph now exercised during collection, so an
+      escalated import-boundary pass is required.
+
+
+      Implementation notes:
+
+      - Keep the remediation explicit and narrow to collection-safe optional dependency
+      boundaries.
+
+      - Preserve existing runtime behavior when `fastapi` is installed; only harden
+      import-time behavior when it is absent during verification collection.'
+    verification: '- Main path: targeted guard/doctest collection proceeds past `src/tasca/shell/api/auth.py`,
+      `src/tasca/shell/api/app.py`, and `src/tasca/shell/api/routes/export.py` without
+      `ModuleNotFoundError: fastapi`
+
+      - Failure path: focused regression demonstrates that direct import wiring in
+      the API collection path degrades safely when `fastapi` is absent rather than
+      aborting collection
+
+      - Proof: scope remains limited to import-boundary hardening for guard collection;
+      no feature or routing behavior changes are introduced'
+    depends_on:
+    - regression_run.retest-fastapi-guard-doctest-import-boundary
+    agent: python-senior
+  - id: regression_run.retest-fastapi-guard-doctest-import-boundary-escalated
+    name: retest-fastapi-guard-doctest-import-boundary-escalated
+    status: pending
+    description: 'Re-test after escalated fix: validate the full API import boundary
+      for the repeated `fastapi` guard/doctest collection blocker.
+
+
+      As an INDEPENDENT TESTER (`integration-verifier`), validate the guard/doctest
+      import boundary from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: the relevant guard/doctest collection path no longer aborts with
+      `ModuleNotFoundError: No module named ''fastapi''` anywhere across `src/tasca/shell/api/auth.py`,
+      `src/tasca/shell/api/app.py`, and `src/tasca/shell/api/routes/export.py`
+
+      - Edge cases: direct import wiring used during collection is collection-safe
+      when `fastapi` is absent, and the earlier `tasca` package metadata fix remains
+      intact
+
+      - Error scenarios: if collection proceeds and reveals a later blocker, capture
+      the new fingerprint distinctly rather than folding it into this import-boundary
+      loop
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Re-run the exact guard/doctest command or minimal collection
+      path that now reaches `src/tasca/shell/api/app.py` -> `src/tasca/shell/api/routes/export.py:18`
+
+      - Confirm collection proceeds past the auth/app/export import boundary without
+      regressing the resolved `PackageNotFoundError` condition for `tasca`
+
+      - If a new blocker appears afterward, record it as a distinct fingerprint and
+      keep it separate from this remediation loop'
+    depends_on:
+    - regression_run.fix-fastapi-guard-doctest-import-boundary-escalated
+    agent: integration-verifier

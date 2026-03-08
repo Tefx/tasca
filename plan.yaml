@@ -23879,8 +23879,14 @@ phases:
   - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
     name: entrypoints-integration-proof.reporting-fix
     status: done
-    description: 'Fix the stale smoke reporting/status behavior for the already-repaired
-      `TableClosed` path in `tests/repro/issue_l3_mcp_smoke.py`.
+    description: 'Historical note: this completed remediation is superseded by `guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix`
+      / `guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest`.
+      Retained as done for evidence lineage because vectl does not permit skipping
+      an already-completed step.
+
+
+      Fix the stale smoke reporting/status behavior for the already-repaired `TableClosed`
+      path in `tests/repro/issue_l3_mcp_smoke.py`.
 
 
       Issue:

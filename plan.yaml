@@ -24324,7 +24324,7 @@ phases:
       \ uv run --group dev invar guard.\n- No product-code changes made."
   - id: guard_followup2_correctness.evidence-raw-output-fix
     name: evidence-raw-output-fix
-    status: claimed
+    status: done
     description: 'Fix the evidence-quality gaps called out by gate review for the
       same phase.
 
@@ -24372,6 +24372,22 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-08T19:35:48.174870+00:00'
+    done_at: '2026-03-08T19:41:44.357955+00:00'
+    evidence: "Artifact:\n- Commit hash(es): none\n- Files changed: none\n\nVerification:\n\
+      - Run: uv run --group dev invar guard --changed src/tasca/shell/mcp/entrypoints.py\n\
+      \  Output:\n  status passed; files_checked 1; errors 0; warnings 21.\n- Run:\
+      \ uv run pytest -v tests/integration/test_mcp.py -k \"test_mcp_full_cycle_patron_flow\
+      \ or test_mcp_stdio_list_tools or test_mcp_error_invalid_request\"\n  Output:\n\
+      \  3 passed, 25 deselected in 2.29s.\n- Run: uv run python tests/repro/issue_l3_mcp_smoke.py\n\
+      \  Output:\n  Happy path PASS; NOT_FOUND path PASS; TableClosed path PASS with\
+      \ close/say/listen checks.\n- Run: uv run --group dev invar guard --changed\
+      \ src/tasca/core/services/limits_service.py\n  Output:\n  status passed; files_checked\
+      \ 1; errors 0; warnings 2; property_tests passed (8/8, 700 examples).\n- Run:\
+      \ uv run pytest -q tests/unit/test_limits_service.py\n  Output:\n  59 passed\
+      \ in 0.31s.\n\nSpec link:\n- guard_followup2_correctness.evidence-raw-output-fix\n\
+      \nGaps/Notes:\n- Verification-only consolidation; no product-code changes made.\n\
+      - Established/used supported guard path via uv run --group dev invar guard for\
+      \ reproducible raw evidence."
   - id: guard_followup2_correctness.freeze-gate-retest
     name: freeze-gate-retest
     status: pending

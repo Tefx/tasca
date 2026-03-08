@@ -24045,6 +24045,47 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof-retest
     agent: python-senior
+  - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-retest
+    name: entrypoints-integration-proof.reporting-authority-retest
+    status: pending
+    description: 'Re-test the consolidated smoke reporting correction from a fresh,
+      independent verification pass.
+
+
+      As an INDEPENDENT TESTER (`integration-verifier`), validate that `tests/repro/issue_l3_mcp_smoke.py`
+      reports the already-fixed `TableClosed` path consistently and no contradictory
+      stale lines remain.
+
+
+      Test for:
+
+      - Happy path: the `TableClosed` section still passes
+
+      - Reporting accuracy: the final smoke summary for `error_table_closed` matches
+      the section result
+
+      - Output consistency: no stale lines claim `table_control` is missing/cannot
+      be tested when the section passes and the tool exists
+
+      - Scope discipline: unrelated smoke report sections remain unchanged
+
+
+      Finding issues is a successful outcome for this step.
+
+
+      Independence Level: L1'
+    verification: '- Run a focused reproduction command: `python tests/repro/issue_l3_mcp_smoke.py`
+      or repo-standard equivalent
+
+      - Capture the actual `TableClosed` section output and final smoke summary
+
+      - Confirm the section result, emitted status lines, and summary agree for `error_table_closed`
+
+      - If any contradiction remains, record the exact stale line(s) and location
+      in `tests/repro/issue_l3_mcp_smoke.py`'
+    depends_on:
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-authority-fix
+    agent: integration-verifier
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

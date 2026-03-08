@@ -37,7 +37,7 @@ router = APIRouter()
 
 
 # @invar:allow shell_result: Returns FastAPI Response, not Result
-# @invar:allow shell_pure_logic: Response builder for HTTP layer
+# @shell_orchestration: FastAPI response assembly is HTTP-layer wiring, not reusable domain logic
 def _build_export_response(
     content: str,
     filename: str,

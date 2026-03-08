@@ -32,6 +32,10 @@ import httpx
 
 from returns.result import Failure, Result, Success
 
+from tasca.core.mcp_jsonrpc import (
+    parse_sse_or_json as _parse_sse_or_json,
+    validate_jsonrpc_response as _validate_jsonrpc_response,
+)
 from tasca.shell.mcp.responses import error_response
 
 if TYPE_CHECKING:
@@ -44,129 +48,6 @@ logger = logging.getLogger(__name__)
 MCP_PROTOCOL_VERSION = "2024-11-05"
 MCP_CLIENT_NAME = "tasca-proxy"
 MCP_CLIENT_VERSION = "0.1.0"
-
-
-# @invar:allow shell_result: MCP protocol
-# @invar:allow shell_pure_logic: SSE/JSON parsing helper for MCP HTTP transport
-# @shell_complexity: 4 branches for SSE format detection + JSON fallback + multi-line parsing
-def _parse_sse_or_json(
-    text: str,
-) -> Any:
-    """Parse response body that may be SSE or plain JSON.
-
-    FastMCP's Streamable HTTP transport returns SSE format:
-        event: message
-        data: {"jsonrpc": "2.0", ...}
-
-    This helper extracts the JSON payload from either format.
-
-    Args:
-        text: Response body text.
-
-    Returns:
-        Parsed JSON data.
-
-    Raises:
-        json.JSONDecodeError: If neither SSE nor JSON can be parsed.
-
-    Examples:
-        >>> _parse_sse_or_json('{"ok": true}')
-        {'ok': True}
-        >>> _parse_sse_or_json('event: message\\ndata: {"ok": true}\\n\\n')
-        {'ok': True}
-    """
-    # Try SSE format first (FastMCP default for Streamable HTTP)
-    # Track event type so we only extract data from "event: message" blocks,
-    # not from other event types (e.g. heartbeats) in multi-event responses.
-    if text.startswith("event:"):
-        in_message_event = False
-        for line in text.split("\n"):
-            if line.startswith("event:"):
-                in_message_event = line.split(":", 1)[1].strip() == "message"
-            elif line.startswith("data:") and in_message_event:
-                return json.loads(line[5:].strip())
-    # Fall back to plain JSON
-    return json.loads(text)
-
-
-# @invar:allow shell_result: MCP protocol
-# @shell_complexity: Multiple validation branches for JSON-RPC spec compliance
-# @shell_orchestration: Pure validation logic used by forward_jsonrpc_request
-def _validate_jsonrpc_response(data: Any, expected_id: str) -> dict[str, Any] | None:
-    """Validate JSON-RPC 2.0 response shape.
-
-    Per JSON-RPC 2.0 spec, a valid response must have:
-    - jsonrpc: "2.0" (string)
-    - id: same as request id (this implementation always sends UUID string ids,
-      so null id responses are always rejected as invalid)
-    - Either result (any type) OR error (object with code, message)
-
-    Args:
-        data: Parsed JSON data to validate.
-        expected_id: The request ID to match against.
-
-    Returns:
-        None if valid, or a dict with 'field' and 'reason' keys describing the error.
-
-    Examples:
-        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "result": {}}, "1")
-        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "error": {"code": -1, "message": "err"}}, "1")
-        >>> _validate_jsonrpc_response("not a dict", "1")
-        {'field': 'root', 'reason': 'response must be a dict'}
-        >>> _validate_jsonrpc_response({}, "1")
-        {'field': 'jsonrpc', 'reason': 'missing required field'}
-        >>> _validate_jsonrpc_response({"jsonrpc": "1.0", "id": "1", "result": {}}, "1")
-        {'field': 'jsonrpc', 'reason': 'must be "2.0"'}
-        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "wrong", "result": {}}, "1")
-        {'field': 'id', 'reason': 'response id does not match request id'}
-        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1"}, "1")
-        {'field': 'result/error', 'reason': 'must have exactly one of result or error'}
-        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "result": {}, "error": {}}, "1")
-        {'field': 'result/error', 'reason': 'must have exactly one of result or error'}
-        >>> _validate_jsonrpc_response({"jsonrpc": "2.0", "id": "1", "error": {"code": -1}}, "1")
-        {'field': 'error.message', 'reason': 'error must have code (int) and message (str)'}
-    """
-    if not isinstance(data, dict):
-        return {"field": "root", "reason": "response must be a dict"}
-
-    # Check jsonrpc version
-    if "jsonrpc" not in data:
-        return {"field": "jsonrpc", "reason": "missing required field"}
-    if data["jsonrpc"] != "2.0":
-        return {"field": "jsonrpc", "reason": 'must be "2.0"'}
-
-    # Check id is present (can be null, but field must exist for responses)
-    if "id" not in data:
-        return {"field": "id", "reason": "missing required field"}
-
-    # Validate id matches the request id
-    if data["id"] != expected_id:
-        return {"field": "id", "reason": "response id does not match request id"}
-
-    # Check that exactly one of result or error is present
-    has_result = "result" in data
-    has_error = "error" in data
-    if not has_result and not has_error:
-        return {"field": "result/error", "reason": "must have exactly one of result or error"}
-    if has_result and has_error:
-        return {"field": "result/error", "reason": "must have exactly one of result or error"}
-
-    # If error is present, validate its structure
-    if has_error:
-        error = data["error"]
-        if not isinstance(error, dict):
-            return {"field": "error", "reason": "error must be a dict"}
-        if "code" not in error or "message" not in error:
-            return {
-                "field": "error.message",
-                "reason": "error must have code (int) and message (str)",
-            }
-        if not isinstance(error["code"], int):
-            return {"field": "error.code", "reason": "error code must be an integer"}
-        if not isinstance(error["message"], str):
-            return {"field": "error.message", "reason": "error message must be a string"}
-
-    return None
 
 
 @dataclass
@@ -471,7 +352,7 @@ def get_upstream_config() -> Result[UpstreamConfig, ProxyConfigError]:
 
 
 # @invar:allow shell_result: MCP protocol
-# @invar:allow shell_pure_logic: Updates module-level config state for proxy mode switching
+# @shell_orchestration: Switches module-level runtime state shared by MCP route handlers
 def switch_to_remote(url: str, token: str | None = None) -> None:
     """Switch the global config to remote upstream mode.
 
@@ -489,7 +370,7 @@ def switch_to_remote(url: str, token: str | None = None) -> None:
     _config.switch_to_remote(url, token)
 
 
-# @invar:allow shell_pure_logic: Updates module-level config state for proxy mode switching
+# @shell_orchestration: Switches module-level runtime state shared by MCP route handlers
 def switch_to_local() -> None:
     """Switch the global config to local mode.
 

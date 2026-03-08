@@ -18,7 +18,7 @@ from tasca.config import settings
 
 
 # @invar:allow shell_result: HTTP auth
-# @invar:allow shell_pure_logic: Token validation co-located with verify_admin_token for cohesion
+# @shell_orchestration: Co-located with FastAPI dependency to keep auth flow and failure semantics together
 def validate_bearer_token(token: str, expected: str) -> bool:
     """Compare a Bearer token against the expected value using constant-time comparison.
 

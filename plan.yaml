@@ -24862,6 +24862,91 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify
     agent: python-senior
+  - id: guard_followup2_cleanup.storage-guard-verify-retest
+    name: storage-guard-verify-retest
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-run the verification
+      after `guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint` and try
+      to break the repaired auth and guard-entrypoint paths.
+
+
+      YOUR GOAL IS TO FIND REMAINING PROBLEMS, not to confirm success.
+
+
+      Re-test for:
+
+      - Happy path: `tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth`
+      now succeeds with the expected authenticated response.
+
+      - Error path: direct `invar guard` no longer fails on `invar.shell.commands.hooks`,
+      and any remaining entrypoint differences are documented.
+
+      - Regression scope: storage cleanup changes did not introduce new auth or harness
+      regressions around the create-table route.
+
+
+      Finding issues is success.'
+    verification: '- Re-run the named route test and include actual output
+
+      - Re-run the direct `invar guard` entrypoint that previously failed and include
+      actual output
+
+      - Note whether `uv run invar guard ...` still matches the direct entrypoint
+      behavior
+
+      - Call out any remaining blocker/should_fix findings explicitly'
+    evidence_template: '## Retest Report
+
+
+      **Tester**: integration-verifier
+
+      **Scope**: auth route regression + guard entrypoint packaging regression
+
+      **Original verify step**: guard_followup2_cleanup.storage-guard-verify
+
+
+      ### Commands executed
+
+      ```bash
+
+      <exact route-test command>
+
+      <exact direct-guard command>
+
+      <optional comparison command>
+
+      ```
+
+
+      ### Actual output
+
+      ```text
+
+      <paste relevant output>
+
+      ```
+
+
+      ### Findings
+
+      | Severity | Description | Location | Reproduction |
+
+      | --- | --- | --- | --- |
+
+      | blocker/should_fix/suggestion/tech_debt | <finding or none> | <path/test>
+      | <steps> |
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [ ] ISSUES_FOUND
+
+      - [ ] INCOMPLETE'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

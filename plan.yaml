@@ -23088,6 +23088,95 @@ phases:
     - guard_followup2_boundary.auth-config-boundary-fix
     - guard_followup2_boundary.mcp-server-boundary-fix
     agent: integration-verifier
+  - id: guard_followup2_boundary.boundary-l3-verify
+    name: boundary-l3-verify
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`blind-tester`), validate auth/config/MCP
+      boundary behavior from a black-box perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Independence Level: L3
+
+
+      Scope under test:
+
+      - Auth and config boundaries touched by `src/tasca/shell/api/auth.py` and `src/tasca/config.py`
+
+      - MCP boundary wiring touched by `src/tasca/shell/mcp/server.py` and `src/tasca/shell/mcp/entrypoints.py`
+
+
+      Use only public interfaces, existing commands, and read-only harnesses/smokes.
+      Do not rely on implementation-process knowledge.
+
+
+      Test for:
+
+      - Happy path: authenticated API/MCP access still works through the public seam.
+
+      - Edge cases: missing/invalid auth and config-driven boundary behavior.
+
+      - Error scenarios: MCP boundary returns expected envelopes without leaking internal
+      state.
+
+
+      Finding issues is success.'
+    verification: '- Main path: run guard on changed files plus at least one read-only
+      auth/API smoke and one MCP smoke through public seams
+
+      - Failure path: include invalid or missing auth plus one MCP error-path execution
+
+      - Proof: actual commands and outputs are pasted, not summarized'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: blind-tester
+
+      **Scope**: auth/config/MCP boundary
+
+      **Independence Level**: L3
+
+
+      ### Test Execution
+
+      - Commands executed:
+
+      ```
+
+      <paste actual commands>
+
+      ```
+
+      - Output summary:
+
+      ```
+
+      <paste key output>
+
+      ```
+
+
+      ### Issues Found
+
+      | Severity | Description | Location | Reproduction |
+
+      | -------- | ----------- | -------- | ------------ |
+
+      | blocker | <issue> | <endpoint/tool> | <steps> |
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [ ] ISSUES_FOUND
+
+      - [ ] INCOMPLETE'
+    depends_on:
+    - guard_followup2_boundary.freeze
+    agent: blind-tester
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: pending

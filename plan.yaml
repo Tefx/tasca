@@ -23177,6 +23177,36 @@ phases:
     depends_on:
     - guard_followup2_boundary.freeze
     agent: blind-tester
+  - id: guard_followup2_boundary.gate
+    name: gate
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
+      `guard_followup2_boundary` phase meets the quality bar for proceeding.
+
+
+      Review criteria:
+
+      1. Auth/config and MCP boundary findings were fixed with real wiring/import
+      cleanup where required.
+
+      2. Any retained `@invar:allow` use is boundary-only and narrowly justified.
+
+      3. L3 evidence exercises both happy-path and failure-path behavior.
+
+      4. No excluded directory was drawn into scope.'
+    verification: '- All phase steps completed
+
+      - L3 evidence present and specific
+
+      - No unresolved blocker remains in auth/config/server boundary files
+
+      - Ready to open the debt phase'
+    depends_on:
+    - guard_followup2_boundary.auth-config-boundary-fix
+    - guard_followup2_boundary.mcp-server-boundary-fix
+    - guard_followup2_boundary.freeze
+    - guard_followup2_boundary.boundary-l3-verify
+    agent: gate-reviewer
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: pending

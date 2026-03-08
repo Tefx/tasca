@@ -237,6 +237,7 @@ def is_server_running(base_url: str) -> bool:
         return False
 
 
+# @invar:allow dead_export: Legacy helper, vestigial from previous CLI architecture
 # @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_complexity: 5 branches for server startup (find module, start, wait, timeout, error)
 def start_server_background(host: str, port: int) -> subprocess.Popen[str]:
@@ -276,6 +277,7 @@ def start_server_background(host: str, port: int) -> subprocess.Popen[str]:
         raise SystemExit(1) from e
 
 
+# @invar:allow dead_export: Legacy helper, vestigial from previous CLI architecture
 # @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_orchestration: Polling loop that calls is_server_running (which does HTTP I/O)
 def wait_for_server_ready(base_url: str, timeout: float = 30.0) -> bool:
@@ -337,6 +339,7 @@ signal.signal(signal.SIGTERM, _signal_handler)
 signal.signal(signal.SIGINT, _signal_handler)
 
 
+# @invar:allow dead_export: Test-only helper, exercised by tests/unit/test_cli.py and tests/integration/test_cli.py
 # @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_complexity: 6 branches for HTTP error handling (connection, timeout, status codes)
 def create_table_via_rest(
@@ -391,6 +394,7 @@ def create_table_via_rest(
     return response.json()
 
 
+# @invar:allow dead_export: Test-only helper, exercised by tests/unit/test_cli.py and tests/integration/test_cli.py
 # @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_complexity: 12 branches for MCP protocol handling (init, tool call, error paths)
 # @invar:allow function_size: MCP protocol requires multi-step handshake and error handling

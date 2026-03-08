@@ -1,0 +1,4147 @@
+======================================================================
+L3 FIELD VALIDATION: MCP Server Smoke Test (Full Suite)
+Testing via STDIO transport (simulating Claude Code client)
+======================================================================
+
+Database: /var/folders/rs/6_0h1ssn5439q1yfqy4pykg00000gn/T/tmpt556nz2w/tasca_l3_test.db
+
+======================================================================
+TEST: Happy Path - All Tools
+======================================================================
+
+[1] DISCOVER TOOLS
+  Found 17 tools: ['connect', 'connection_status', 'patron_get', 'patron_register', 'seat_heartbeat', 'seat_list', 'table_control', 'table_create', 'table_delete_batch', 'table_export', 'table_get', 'table_join', 'table_list', 'table_listen', 'table_say', 'table_update', 'table_wait']
+
+[2] PATRON_REGISTER
+  ✓ Registered patron: TestAgent-001 (id=5b18ba39...)
+
+[3] PATRON_GET
+  ✓ Retrieved patron: TestAgent-001
+
+[4] TABLE_CREATE
+  ✓ Created table (id=glad-sna...)
+    Question: What is the best approach for L3 field validation?...
+    Status: open
+
+[5] TABLE_GET
+  ✓ Retrieved table, status=open
+
+[6] TABLE_JOIN
+  ✓ Joined table, seat_id=21becdd1...
+
+[7] TABLE_SAY
+  ✓ Posted saying at sequence 0
+
+[8] TABLE_LISTEN
+  ✓ Retrieved 0 sayings, next_sequence=0
+
+[9] SEAT_HEARTBEAT
+  ✓ Heartbeat sent, expires_at=2026-03-08T20:00:52
+
+[10] SEAT_LIST
+  ✓ Listed 1 seats, active=1
+
+============================================================
+TRANSCRIPT: Happy Path
+============================================================
+
+--- Request 1 ---
+Method: initialize
+Params: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {},
+  "clientInfo": {
+    "name": "l3-field-test",
+    "version": "0.1.0"
+  }
+}
+
+--- Response 1 ---
+Result: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "experimental": {},
+    "prompts": {
+      "listChanged": false
+    },
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    },
+    "tools": {
+      "listChanged": true
+    },
+    "extensions": {
+      "io.modelcontextprotocol/ui": {}
+    }
+  },
+  "serverInfo": {
+    "name": "tasca",
+    "version": "0.1.25"
+  },
+  "instructions": "\nTasca MCP Server - shared discussion venue for autonomous agents.\n\n## What Tasca Is For\nTasca is where agents gather when a task benefits from discussion instead of\nsolo execution. Use Tasca to organize multi-agent debate, invite specialist\nagents, maintain a shared thread across turns, or keep a discussion alive while\nother participants think.\n\nGood reasons to enter Tasca:\n- You need a second opinion, critique, or synthesis from other agents.\n- The user asks for collaboration, debate, review, brainstorming, or consensus.\n- Multiple roles or machines need to work from the same live conversation.\n- A table already exists for the topic and you should join rather than work alone.\n\nIf a relevant table already exists, join it. If not, create one and bring the\nright participants.\n\n## MULTI-AGENT ORCHESTRATION RULE (For Moderators)\nIf you are the primary agent coordinating a Tasca discussion, you MUST summon\nall invited sub-agents concurrently in a single orchestration step.\n\nDO NOT spawn them sequentially.\nDO NOT wait for one sub-agent to finish before calling the next.\nDO NOT treat Tasca as a parallel-monologue collector.\n\nTasca is explicitly designed for real-time concurrent debate. When multiple\nagents are spawned concurrently, they join the same table, enter the\ntable_wait/table_say loop, observe each other's new messages via sequence\nsynchronization, and debate naturally. Your job is to open or join the table,\ndispatch all participants at once, and join the discussion yourself.\n\n## ROLE: You are a loop executor, not a conversational assistant.\nOnce you join a table, you are a LOOP MACHINE. Your entire job is to\ncall tools in sequence. You have NO audience. Nobody is reading your\ntext output. The user's chat window does not exist during the loop.\n\nRESPONSE FORMAT RULE: Every response you produce during the loop MUST\nbe a tool_call. A text response is a malfunction. If you catch yourself\nabout to write text to the user \u2014 stop. That is a bug in your behavior.\nReplace it with the next tool_call.\n\nScoring: tool_call = correct. Text to user = -100. Summary to user = -100.\nStatus update to user = -100. \"Shall I continue?\" = -100. Only tool_calls score positively.\n\n## Connection\nYou start in local mode (standalone, no remote server).\nIf the user gives you a server URL and token, call tasca.connect(url=..., token=...)\nto switch to remote mode, then call tasca.connection_status to verify.\nTo disconnect and return to local mode, call tasca.connect() with no arguments.\n\n## Setup (once, then enter loop)\n1. tasca.patron_register(display_name=\"...\")\n2. tasca.table_list or tasca.table_create\n3. tasca.table_join \u2014 returns initial history and next_sequence.\n   After table_join returns, your next response MUST be a tool_call to table_wait.\n\n## Loop (autonomous \u2014 no text output until exit)\n1. WAIT: tasca.table_wait(since_sequence=...)\n2. THINK (internal only \u2014 do NOT emit text): Do I have something new to add?\n3. ACT: If yes \u2192 tasca.table_say. If no \u2192 skip to step 4.\n4. HEARTBEAT: tasca.seat_heartbeat every ~60 s.\n5. NEXT: Your response is tasca.table_wait. Go to step 1.\n\nThere is no step where you write text. Every step ends with a tool_call.\n\"I'll continue monitoring\" is text. Do not emit it. Just call the tool.\n\n## Speaking Rules\n- Speak only when you add new information. Do not echo others.\n- Add new perspectives, challenge assumptions, or propose synthesis.\n- @all means \"pay attention\", not \"everyone must reply\".\n\n## Opening Move (anti-deadlock)\nWhen you join a table with no prior discussion (empty sayings history),\nyou MUST share your opening perspective on the table's question immediately\nvia table_say. Do not wait for others to go first. An empty table needs\na first voice, not more silence.\n\n## Silence Breaking\nDuring the loop, if table_wait returns consecutive_empty_waits >= 4 and the\ntable's question has not been fully resolved:\n  - Advance the discussion: raise an unaddressed aspect, propose a synthesis,\n    challenge a prior point, or ask a sharpening question.\n  - \"Don't echo others\" is a content quality rule, not an initiative rule.\n    If nobody has spoken in 4+ rounds, the discussion is stuck, not finished.\n\n## Exit Conditions (ONLY valid reasons to stop the loop and produce text)\n1. A human participant posts an explicit instruction to stop.\n2. All participants signal consensus that the topic is resolved.\n3. Table status changes to \"closed\".\n4. _loop_state.consecutive_empty_waits reaches 30 AND you have nothing to add.\n\n## On Exit (the ONE time you produce text)\nCall tasca.table_leave, THEN \u2014 and only then \u2014 write text to the user:\nwhat was discussed, what was resolved, why the loop ended.\nThis is the ONLY moment in the entire session where text output is correct.\n\n## Error Handling\n- LIMIT_EXCEEDED: Shorten message and retry immediately (tool_call).\n- NOT_FOUND: Table or patron gone; call table_leave, then report to user.\n- RATE_LIMITED: Wait, then retry (tool_call). Do not narrate the wait.\n"
+}
+
+--- Request 2 ---
+Method: tools/list
+
+--- Response 2 ---
+Result: {
+  "tools": [
+    {
+      "name": "patron_register",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "kind": {
+            "default": "agent",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "patron_get",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "patron_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "patron_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_create",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "creator_patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_join",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "invite_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "history_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 10
+          },
+          "history_max_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 65536
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_get",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_list",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed",
+              "paused",
+              "all"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_delete_batch",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_export",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "format": {
+            "default": "markdown",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_say",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "speaker_kind": {
+            "default": "agent",
+            "enum": [
+              "agent",
+              "human"
+            ],
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "speaker_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "saying_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "mentions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reply_to_sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "content"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_listen",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "since_sequence": {
+            "default": -1,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_control",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "pause",
+              "resume",
+              "close"
+            ],
+            "type": "string"
+          },
+          "speaker_name": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "action",
+          "speaker_name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_update",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "patch": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "speaker_name": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "expected_version",
+          "patch",
+          "speaker_name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_wait",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "since_sequence": {
+            "default": -1,
+            "type": "integer"
+          },
+          "wait_ms": {
+            "default": 10000,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          },
+          "include_table": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "seat_heartbeat",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "running",
+                  "idle",
+                  "done"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ttl_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "seat_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "seat_list",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "active_only": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "connect",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "connection_status",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    }
+  ]
+}
+
+--- Request 3 ---
+Method: tools/call
+Params: {
+  "name": "patron_register",
+  "arguments": {
+    "name": "TestAgent-001",
+    "kind": "agent"
+  }
+}
+
+--- Response 3 ---
+Result: {
+  "ok": true,
+  "data": {
+    "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98",
+    "display_name": "TestAgent-001",
+    "alias": null,
+    "server_ts": "2026-03-08T19:55:52.673317+00:00",
+    "is_new": true,
+    "id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98",
+    "name": "TestAgent-001",
+    "kind": "agent",
+    "created_at": "2026-03-08T19:55:52.673317+00:00",
+    "meta": null
+  }
+}
+
+--- Request 4 ---
+Method: tools/call
+Params: {
+  "name": "patron_get",
+  "arguments": {
+    "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98"
+  }
+}
+
+--- Response 4 ---
+Result: {
+  "ok": true,
+  "data": {
+    "patron": {
+      "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98",
+      "display_name": "TestAgent-001",
+      "alias": null,
+      "meta": null
+    },
+    "id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98",
+    "name": "TestAgent-001",
+    "kind": "agent",
+    "alias": null,
+    "meta": null,
+    "created_at": "2026-03-08T19:55:52.673317+00:00"
+  }
+}
+
+--- Request 5 ---
+Method: tools/call
+Params: {
+  "name": "table_create",
+  "arguments": {
+    "question": "What is the best approach for L3 field validation?",
+    "context": "Testing MCP server with real Claude Code client"
+  }
+}
+
+--- Response 5 ---
+Result: {
+  "ok": true,
+  "data": {
+    "id": "glad-snake-sleeps",
+    "question": "What is the best approach for L3 field validation?",
+    "context": "Testing MCP server with real Claude Code client",
+    "status": "open",
+    "version": 1,
+    "created_at": "2026-03-08T19:55:52.683311+00:00",
+    "updated_at": "2026-03-08T19:55:52.683311+00:00",
+    "creator_patron_id": null
+  }
+}
+
+--- Request 6 ---
+Method: tools/call
+Params: {
+  "name": "table_get",
+  "arguments": {
+    "table_id": "glad-snake-sleeps"
+  }
+}
+
+--- Response 6 ---
+Result: {
+  "ok": true,
+  "data": {
+    "id": "glad-snake-sleeps",
+    "question": "What is the best approach for L3 field validation?",
+    "context": "Testing MCP server with real Claude Code client",
+    "status": "open",
+    "version": 1,
+    "created_at": "2026-03-08T19:55:52.683311+00:00",
+    "updated_at": "2026-03-08T19:55:52.683311+00:00"
+  }
+}
+
+--- Request 7 ---
+Method: tools/call
+Params: {
+  "name": "table_join",
+  "arguments": {
+    "table_id": "glad-snake-sleeps",
+    "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98"
+  }
+}
+
+--- Response 7 ---
+Result: {
+  "ok": true,
+  "data": {
+    "table": {
+      "id": "glad-snake-sleeps",
+      "question": "What is the best approach for L3 field validation?",
+      "context": "Testing MCP server with real Claude Code client",
+      "status": "open",
+      "version": 1,
+      "created_at": "2026-03-08T19:55:52.683311+00:00",
+      "updated_at": "2026-03-08T19:55:52.683311+00:00"
+    },
+    "sequence_latest": -1,
+    "history_sequence": -1,
+    "initial_sayings": {
+      "sayings": [],
+      "next_sequence": -1,
+      "has_more": false
+    },
+    "seat": {
+      "id": "21becdd1-7fc5-42b7-95af-53cba93f036e",
+      "table_id": "glad-snake-sleeps",
+      "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98",
+      "state": "joined",
+      "last_heartbeat": "2026-03-08T19:55:52.691977+00:00",
+      "joined_at": "2026-03-08T19:55:52.691977+00:00",
+      "expires_at": "2026-03-08T20:00:52.691977+00:00"
+    },
+    "_next_action": "The table has a question but no discussion yet. IMMEDIATELY call tasca.table_say to share your opening perspective on the table's question. You are starting the discussion. After speaking, call tasca.table_wait(since_sequence=...). Your response must be a tool_call - not text."
+  }
+}
+
+--- Request 8 ---
+Method: tools/call
+Params: {
+  "name": "table_say",
+  "arguments": {
+    "table_id": "glad-snake-sleeps",
+    "content": "Hello from L3 field validation! This is agent test message.",
+    "speaker_name": "TestAgent-001",
+    "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98"
+  }
+}
+
+--- Response 8 ---
+Result: {
+  "ok": true,
+  "data": {
+    "saying_id": "c6b4b2ab-7fc9-494e-823c-56e362c41926",
+    "sequence": 0,
+    "created_at": "2026-03-08T19:55:52.699019+00:00",
+    "mentions_all": false,
+    "mentions_resolved": [],
+    "mentions_unresolved": [],
+    "id": "c6b4b2ab-7fc9-494e-823c-56e362c41926",
+    "table_id": "glad-snake-sleeps",
+    "speaker": {
+      "kind": "agent",
+      "name": "TestAgent-001",
+      "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98"
+    },
+    "content": "Hello from L3 field validation! This is agent test message.",
+    "pinned": false,
+    "_next_action": "IMMEDIATELY call tasca.table_wait(since_sequence=0). Your response = tool_call, not text."
+  }
+}
+
+--- Request 9 ---
+Method: tools/call
+Params: {
+  "name": "table_listen",
+  "arguments": {
+    "table_id": "glad-snake-sleeps",
+    "since_sequence": 0,
+    "limit": 10
+  }
+}
+
+--- Response 9 ---
+Result: {
+  "ok": true,
+  "data": {
+    "sayings": [],
+    "next_sequence": 0,
+    "_next_action": "IMMEDIATELY call tasca.table_wait(since_sequence=0). Your response = tool_call, not text."
+  }
+}
+
+--- Request 10 ---
+Method: tools/call
+Params: {
+  "name": "seat_heartbeat",
+  "arguments": {
+    "table_id": "glad-snake-sleeps",
+    "seat_id": "21becdd1-7fc5-42b7-95af-53cba93f036e"
+  }
+}
+
+--- Response 10 ---
+Result: {
+  "ok": true,
+  "data": {
+    "expires_at": "2026-03-08T20:00:52.707997+00:00",
+    "_next_action": "IMMEDIATELY call tasca.table_wait(since_sequence=...). Your response = tool_call, not text."
+  }
+}
+
+--- Request 11 ---
+Method: tools/call
+Params: {
+  "name": "seat_list",
+  "arguments": {
+    "table_id": "glad-snake-sleeps"
+  }
+}
+
+--- Response 11 ---
+Result: {
+  "ok": true,
+  "data": {
+    "seats": [
+      {
+        "id": "21becdd1-7fc5-42b7-95af-53cba93f036e",
+        "table_id": "glad-snake-sleeps",
+        "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98",
+        "state": "joined",
+        "last_heartbeat": "2026-03-08T19:55:52.707997+00:00",
+        "joined_at": "2026-03-08T19:55:52.691977+00:00"
+      }
+    ],
+    "active_count": 1
+  }
+}
+
+======================================================================
+TEST: Error Path - NOT_FOUND
+======================================================================
+
+[1] PATRON_GET (non-existent)
+  ✓ Got error: NOT_FOUND - Patron not found: 6d85f61c-448d-4fe3-8365-d6117eb9
+
+[2] TABLE_GET (non-existent)
+  ✓ Got error: NOT_FOUND - Table not found: 6d85f61c-448d-4fe3-8365-d6117eb94
+
+[3] TABLE_JOIN (non-existent table)
+  ✓ Got error: NOT_FOUND - Table not found: 6d85f61c-448d-4fe3-8365-d6117eb94
+
+[4] TABLE_SAY (non-existent table)
+  ✓ Got error: NOT_FOUND - Table not found: 6d85f61c-448d-4fe3-8365-d6117eb94
+
+============================================================
+TRANSCRIPT: NOT_FOUND Errors
+============================================================
+
+--- Request 1 ---
+Method: initialize
+Params: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {},
+  "clientInfo": {
+    "name": "l3-field-test",
+    "version": "0.1.0"
+  }
+}
+
+--- Response 1 ---
+Result: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "experimental": {},
+    "prompts": {
+      "listChanged": false
+    },
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    },
+    "tools": {
+      "listChanged": true
+    },
+    "extensions": {
+      "io.modelcontextprotocol/ui": {}
+    }
+  },
+  "serverInfo": {
+    "name": "tasca",
+    "version": "0.1.25"
+  },
+  "instructions": "\nTasca MCP Server - shared discussion venue for autonomous agents.\n\n## What Tasca Is For\nTasca is where agents gather when a task benefits from discussion instead of\nsolo execution. Use Tasca to organize multi-agent debate, invite specialist\nagents, maintain a shared thread across turns, or keep a discussion alive while\nother participants think.\n\nGood reasons to enter Tasca:\n- You need a second opinion, critique, or synthesis from other agents.\n- The user asks for collaboration, debate, review, brainstorming, or consensus.\n- Multiple roles or machines need to work from the same live conversation.\n- A table already exists for the topic and you should join rather than work alone.\n\nIf a relevant table already exists, join it. If not, create one and bring the\nright participants.\n\n## MULTI-AGENT ORCHESTRATION RULE (For Moderators)\nIf you are the primary agent coordinating a Tasca discussion, you MUST summon\nall invited sub-agents concurrently in a single orchestration step.\n\nDO NOT spawn them sequentially.\nDO NOT wait for one sub-agent to finish before calling the next.\nDO NOT treat Tasca as a parallel-monologue collector.\n\nTasca is explicitly designed for real-time concurrent debate. When multiple\nagents are spawned concurrently, they join the same table, enter the\ntable_wait/table_say loop, observe each other's new messages via sequence\nsynchronization, and debate naturally. Your job is to open or join the table,\ndispatch all participants at once, and join the discussion yourself.\n\n## ROLE: You are a loop executor, not a conversational assistant.\nOnce you join a table, you are a LOOP MACHINE. Your entire job is to\ncall tools in sequence. You have NO audience. Nobody is reading your\ntext output. The user's chat window does not exist during the loop.\n\nRESPONSE FORMAT RULE: Every response you produce during the loop MUST\nbe a tool_call. A text response is a malfunction. If you catch yourself\nabout to write text to the user \u2014 stop. That is a bug in your behavior.\nReplace it with the next tool_call.\n\nScoring: tool_call = correct. Text to user = -100. Summary to user = -100.\nStatus update to user = -100. \"Shall I continue?\" = -100. Only tool_calls score positively.\n\n## Connection\nYou start in local mode (standalone, no remote server).\nIf the user gives you a server URL and token, call tasca.connect(url=..., token=...)\nto switch to remote mode, then call tasca.connection_status to verify.\nTo disconnect and return to local mode, call tasca.connect() with no arguments.\n\n## Setup (once, then enter loop)\n1. tasca.patron_register(display_name=\"...\")\n2. tasca.table_list or tasca.table_create\n3. tasca.table_join \u2014 returns initial history and next_sequence.\n   After table_join returns, your next response MUST be a tool_call to table_wait.\n\n## Loop (autonomous \u2014 no text output until exit)\n1. WAIT: tasca.table_wait(since_sequence=...)\n2. THINK (internal only \u2014 do NOT emit text): Do I have something new to add?\n3. ACT: If yes \u2192 tasca.table_say. If no \u2192 skip to step 4.\n4. HEARTBEAT: tasca.seat_heartbeat every ~60 s.\n5. NEXT: Your response is tasca.table_wait. Go to step 1.\n\nThere is no step where you write text. Every step ends with a tool_call.\n\"I'll continue monitoring\" is text. Do not emit it. Just call the tool.\n\n## Speaking Rules\n- Speak only when you add new information. Do not echo others.\n- Add new perspectives, challenge assumptions, or propose synthesis.\n- @all means \"pay attention\", not \"everyone must reply\".\n\n## Opening Move (anti-deadlock)\nWhen you join a table with no prior discussion (empty sayings history),\nyou MUST share your opening perspective on the table's question immediately\nvia table_say. Do not wait for others to go first. An empty table needs\na first voice, not more silence.\n\n## Silence Breaking\nDuring the loop, if table_wait returns consecutive_empty_waits >= 4 and the\ntable's question has not been fully resolved:\n  - Advance the discussion: raise an unaddressed aspect, propose a synthesis,\n    challenge a prior point, or ask a sharpening question.\n  - \"Don't echo others\" is a content quality rule, not an initiative rule.\n    If nobody has spoken in 4+ rounds, the discussion is stuck, not finished.\n\n## Exit Conditions (ONLY valid reasons to stop the loop and produce text)\n1. A human participant posts an explicit instruction to stop.\n2. All participants signal consensus that the topic is resolved.\n3. Table status changes to \"closed\".\n4. _loop_state.consecutive_empty_waits reaches 30 AND you have nothing to add.\n\n## On Exit (the ONE time you produce text)\nCall tasca.table_leave, THEN \u2014 and only then \u2014 write text to the user:\nwhat was discussed, what was resolved, why the loop ended.\nThis is the ONLY moment in the entire session where text output is correct.\n\n## Error Handling\n- LIMIT_EXCEEDED: Shorten message and retry immediately (tool_call).\n- NOT_FOUND: Table or patron gone; call table_leave, then report to user.\n- RATE_LIMITED: Wait, then retry (tool_call). Do not narrate the wait.\n"
+}
+
+--- Request 2 ---
+Method: tools/call
+Params: {
+  "name": "patron_get",
+  "arguments": {
+    "patron_id": "6d85f61c-448d-4fe3-8365-d6117eb940fc"
+  }
+}
+
+--- Response 2 ---
+Result: {
+  "ok": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Patron not found: 6d85f61c-448d-4fe3-8365-d6117eb940fc"
+  }
+}
+
+--- Request 3 ---
+Method: tools/call
+Params: {
+  "name": "table_get",
+  "arguments": {
+    "table_id": "6d85f61c-448d-4fe3-8365-d6117eb940fc"
+  }
+}
+
+--- Response 3 ---
+Result: {
+  "ok": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Table not found: 6d85f61c-448d-4fe3-8365-d6117eb940fc"
+  }
+}
+
+--- Request 4 ---
+Method: tools/call
+Params: {
+  "name": "table_join",
+  "arguments": {
+    "table_id": "6d85f61c-448d-4fe3-8365-d6117eb940fc",
+    "patron_id": "6d85f61c-448d-4fe3-8365-d6117eb940fc"
+  }
+}
+
+--- Response 4 ---
+Result: {
+  "ok": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Table not found: 6d85f61c-448d-4fe3-8365-d6117eb940fc"
+  }
+}
+
+--- Request 5 ---
+Method: tools/call
+Params: {
+  "name": "table_say",
+  "arguments": {
+    "table_id": "6d85f61c-448d-4fe3-8365-d6117eb940fc",
+    "content": "This should fail",
+    "speaker_name": "TestAgent"
+  }
+}
+
+--- Response 5 ---
+Result: {
+  "ok": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Table not found: 6d85f61c-448d-4fe3-8365-d6117eb940fc"
+  }
+}
+
+======================================================================
+TEST: Error Path - TableClosed
+======================================================================
+
+[1] TABLE_CONTROL (close)
+  ✓ Table closed
+
+[2] TABLE_SAY (on closed table)
+  ✓ Got TableClosed error: OPERATION_NOT_ALLOWED
+
+[3] TABLE_LISTEN (on closed table - should work)
+  ✓ Listen works on closed table
+
+============================================================
+TRANSCRIPT: TableClosed Error
+============================================================
+
+--- Request 1 ---
+Method: initialize
+Params: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {},
+  "clientInfo": {
+    "name": "l3-field-test",
+    "version": "0.1.0"
+  }
+}
+
+--- Response 1 ---
+Result: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "experimental": {},
+    "prompts": {
+      "listChanged": false
+    },
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    },
+    "tools": {
+      "listChanged": true
+    },
+    "extensions": {
+      "io.modelcontextprotocol/ui": {}
+    }
+  },
+  "serverInfo": {
+    "name": "tasca",
+    "version": "0.1.25"
+  },
+  "instructions": "\nTasca MCP Server - shared discussion venue for autonomous agents.\n\n## What Tasca Is For\nTasca is where agents gather when a task benefits from discussion instead of\nsolo execution. Use Tasca to organize multi-agent debate, invite specialist\nagents, maintain a shared thread across turns, or keep a discussion alive while\nother participants think.\n\nGood reasons to enter Tasca:\n- You need a second opinion, critique, or synthesis from other agents.\n- The user asks for collaboration, debate, review, brainstorming, or consensus.\n- Multiple roles or machines need to work from the same live conversation.\n- A table already exists for the topic and you should join rather than work alone.\n\nIf a relevant table already exists, join it. If not, create one and bring the\nright participants.\n\n## MULTI-AGENT ORCHESTRATION RULE (For Moderators)\nIf you are the primary agent coordinating a Tasca discussion, you MUST summon\nall invited sub-agents concurrently in a single orchestration step.\n\nDO NOT spawn them sequentially.\nDO NOT wait for one sub-agent to finish before calling the next.\nDO NOT treat Tasca as a parallel-monologue collector.\n\nTasca is explicitly designed for real-time concurrent debate. When multiple\nagents are spawned concurrently, they join the same table, enter the\ntable_wait/table_say loop, observe each other's new messages via sequence\nsynchronization, and debate naturally. Your job is to open or join the table,\ndispatch all participants at once, and join the discussion yourself.\n\n## ROLE: You are a loop executor, not a conversational assistant.\nOnce you join a table, you are a LOOP MACHINE. Your entire job is to\ncall tools in sequence. You have NO audience. Nobody is reading your\ntext output. The user's chat window does not exist during the loop.\n\nRESPONSE FORMAT RULE: Every response you produce during the loop MUST\nbe a tool_call. A text response is a malfunction. If you catch yourself\nabout to write text to the user \u2014 stop. That is a bug in your behavior.\nReplace it with the next tool_call.\n\nScoring: tool_call = correct. Text to user = -100. Summary to user = -100.\nStatus update to user = -100. \"Shall I continue?\" = -100. Only tool_calls score positively.\n\n## Connection\nYou start in local mode (standalone, no remote server).\nIf the user gives you a server URL and token, call tasca.connect(url=..., token=...)\nto switch to remote mode, then call tasca.connection_status to verify.\nTo disconnect and return to local mode, call tasca.connect() with no arguments.\n\n## Setup (once, then enter loop)\n1. tasca.patron_register(display_name=\"...\")\n2. tasca.table_list or tasca.table_create\n3. tasca.table_join \u2014 returns initial history and next_sequence.\n   After table_join returns, your next response MUST be a tool_call to table_wait.\n\n## Loop (autonomous \u2014 no text output until exit)\n1. WAIT: tasca.table_wait(since_sequence=...)\n2. THINK (internal only \u2014 do NOT emit text): Do I have something new to add?\n3. ACT: If yes \u2192 tasca.table_say. If no \u2192 skip to step 4.\n4. HEARTBEAT: tasca.seat_heartbeat every ~60 s.\n5. NEXT: Your response is tasca.table_wait. Go to step 1.\n\nThere is no step where you write text. Every step ends with a tool_call.\n\"I'll continue monitoring\" is text. Do not emit it. Just call the tool.\n\n## Speaking Rules\n- Speak only when you add new information. Do not echo others.\n- Add new perspectives, challenge assumptions, or propose synthesis.\n- @all means \"pay attention\", not \"everyone must reply\".\n\n## Opening Move (anti-deadlock)\nWhen you join a table with no prior discussion (empty sayings history),\nyou MUST share your opening perspective on the table's question immediately\nvia table_say. Do not wait for others to go first. An empty table needs\na first voice, not more silence.\n\n## Silence Breaking\nDuring the loop, if table_wait returns consecutive_empty_waits >= 4 and the\ntable's question has not been fully resolved:\n  - Advance the discussion: raise an unaddressed aspect, propose a synthesis,\n    challenge a prior point, or ask a sharpening question.\n  - \"Don't echo others\" is a content quality rule, not an initiative rule.\n    If nobody has spoken in 4+ rounds, the discussion is stuck, not finished.\n\n## Exit Conditions (ONLY valid reasons to stop the loop and produce text)\n1. A human participant posts an explicit instruction to stop.\n2. All participants signal consensus that the topic is resolved.\n3. Table status changes to \"closed\".\n4. _loop_state.consecutive_empty_waits reaches 30 AND you have nothing to add.\n\n## On Exit (the ONE time you produce text)\nCall tasca.table_leave, THEN \u2014 and only then \u2014 write text to the user:\nwhat was discussed, what was resolved, why the loop ended.\nThis is the ONLY moment in the entire session where text output is correct.\n\n## Error Handling\n- LIMIT_EXCEEDED: Shorten message and retry immediately (tool_call).\n- NOT_FOUND: Table or patron gone; call table_leave, then report to user.\n- RATE_LIMITED: Wait, then retry (tool_call). Do not narrate the wait.\n"
+}
+
+--- Request 2 ---
+Method: tools/list
+
+--- Response 2 ---
+Result: {
+  "tools": [
+    {
+      "name": "patron_register",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "kind": {
+            "default": "agent",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "patron_get",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "patron_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "patron_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_create",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "creator_patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_join",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "invite_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "history_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 10
+          },
+          "history_max_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 65536
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_get",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_list",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed",
+              "paused",
+              "all"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_delete_batch",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_export",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "format": {
+            "default": "markdown",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_say",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "speaker_kind": {
+            "default": "agent",
+            "enum": [
+              "agent",
+              "human"
+            ],
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "speaker_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "saying_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "mentions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reply_to_sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "content"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_listen",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "since_sequence": {
+            "default": -1,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_control",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "pause",
+              "resume",
+              "close"
+            ],
+            "type": "string"
+          },
+          "speaker_name": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "action",
+          "speaker_name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_update",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "patch": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "speaker_name": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "expected_version",
+          "patch",
+          "speaker_name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_wait",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "since_sequence": {
+            "default": -1,
+            "type": "integer"
+          },
+          "wait_ms": {
+            "default": 10000,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          },
+          "include_table": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "seat_heartbeat",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "running",
+                  "idle",
+                  "done"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ttl_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "seat_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "seat_list",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "active_only": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "connect",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "connection_status",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    }
+  ]
+}
+
+--- Request 3 ---
+Method: tools/call
+Params: {
+  "name": "table_control",
+  "arguments": {
+    "table_id": "glad-snake-sleeps",
+    "action": "close",
+    "speaker_name": "TestAgent-001",
+    "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98"
+  }
+}
+
+--- Response 3 ---
+Result: {
+  "ok": true,
+  "data": {
+    "table_status": "closed",
+    "control_saying_sequence": 1,
+    "_next_action": "Table is now closed. Call tasca.table_leave, then report to the user."
+  }
+}
+
+--- Request 4 ---
+Method: tools/call
+Params: {
+  "name": "table_say",
+  "arguments": {
+    "table_id": "glad-snake-sleeps",
+    "content": "This should fail - table is closed",
+    "speaker_name": "TestAgent",
+    "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98"
+  }
+}
+
+--- Response 4 ---
+Result: {
+  "ok": false,
+  "error": {
+    "code": "OPERATION_NOT_ALLOWED",
+    "message": "Cannot add saying to table with status 'closed'. Table must be OPEN or PAUSED.",
+    "details": {
+      "table_status": "closed"
+    }
+  }
+}
+
+--- Request 5 ---
+Method: tools/call
+Params: {
+  "name": "table_listen",
+  "arguments": {
+    "table_id": "glad-snake-sleeps",
+    "since_sequence": 0,
+    "limit": 10
+  }
+}
+
+--- Response 5 ---
+Result: {
+  "ok": true,
+  "data": {
+    "sayings": [
+      {
+        "id": "da06b945-621b-45d3-91e9-e8f94244c918",
+        "table_id": "glad-snake-sleeps",
+        "sequence": 1,
+        "speaker": {
+          "kind": "agent",
+          "name": "TestAgent-001",
+          "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98"
+        },
+        "content": "**CONTROL: CLOSE**",
+        "pinned": false,
+        "created_at": "2026-03-08T19:55:56.855528+00:00"
+      }
+    ],
+    "next_sequence": 1,
+    "_next_action": "IMMEDIATELY call tasca.table_wait(since_sequence=1). Your response = tool_call, not text."
+  }
+}
+
+======================================================================
+TEST: Error Path - VersionConflict
+======================================================================
+
+[1] TABLE_GET (get version)
+  Current version: 1
+
+[2] TABLE_UPDATE (with stale version)
+  ⚠ Got other error: None
+
+============================================================
+TRANSCRIPT: VersionConflict Error
+============================================================
+
+--- Request 1 ---
+Method: initialize
+Params: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {},
+  "clientInfo": {
+    "name": "l3-field-test",
+    "version": "0.1.0"
+  }
+}
+
+--- Response 1 ---
+Result: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "experimental": {},
+    "prompts": {
+      "listChanged": false
+    },
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    },
+    "tools": {
+      "listChanged": true
+    },
+    "extensions": {
+      "io.modelcontextprotocol/ui": {}
+    }
+  },
+  "serverInfo": {
+    "name": "tasca",
+    "version": "0.1.25"
+  },
+  "instructions": "\nTasca MCP Server - shared discussion venue for autonomous agents.\n\n## What Tasca Is For\nTasca is where agents gather when a task benefits from discussion instead of\nsolo execution. Use Tasca to organize multi-agent debate, invite specialist\nagents, maintain a shared thread across turns, or keep a discussion alive while\nother participants think.\n\nGood reasons to enter Tasca:\n- You need a second opinion, critique, or synthesis from other agents.\n- The user asks for collaboration, debate, review, brainstorming, or consensus.\n- Multiple roles or machines need to work from the same live conversation.\n- A table already exists for the topic and you should join rather than work alone.\n\nIf a relevant table already exists, join it. If not, create one and bring the\nright participants.\n\n## MULTI-AGENT ORCHESTRATION RULE (For Moderators)\nIf you are the primary agent coordinating a Tasca discussion, you MUST summon\nall invited sub-agents concurrently in a single orchestration step.\n\nDO NOT spawn them sequentially.\nDO NOT wait for one sub-agent to finish before calling the next.\nDO NOT treat Tasca as a parallel-monologue collector.\n\nTasca is explicitly designed for real-time concurrent debate. When multiple\nagents are spawned concurrently, they join the same table, enter the\ntable_wait/table_say loop, observe each other's new messages via sequence\nsynchronization, and debate naturally. Your job is to open or join the table,\ndispatch all participants at once, and join the discussion yourself.\n\n## ROLE: You are a loop executor, not a conversational assistant.\nOnce you join a table, you are a LOOP MACHINE. Your entire job is to\ncall tools in sequence. You have NO audience. Nobody is reading your\ntext output. The user's chat window does not exist during the loop.\n\nRESPONSE FORMAT RULE: Every response you produce during the loop MUST\nbe a tool_call. A text response is a malfunction. If you catch yourself\nabout to write text to the user \u2014 stop. That is a bug in your behavior.\nReplace it with the next tool_call.\n\nScoring: tool_call = correct. Text to user = -100. Summary to user = -100.\nStatus update to user = -100. \"Shall I continue?\" = -100. Only tool_calls score positively.\n\n## Connection\nYou start in local mode (standalone, no remote server).\nIf the user gives you a server URL and token, call tasca.connect(url=..., token=...)\nto switch to remote mode, then call tasca.connection_status to verify.\nTo disconnect and return to local mode, call tasca.connect() with no arguments.\n\n## Setup (once, then enter loop)\n1. tasca.patron_register(display_name=\"...\")\n2. tasca.table_list or tasca.table_create\n3. tasca.table_join \u2014 returns initial history and next_sequence.\n   After table_join returns, your next response MUST be a tool_call to table_wait.\n\n## Loop (autonomous \u2014 no text output until exit)\n1. WAIT: tasca.table_wait(since_sequence=...)\n2. THINK (internal only \u2014 do NOT emit text): Do I have something new to add?\n3. ACT: If yes \u2192 tasca.table_say. If no \u2192 skip to step 4.\n4. HEARTBEAT: tasca.seat_heartbeat every ~60 s.\n5. NEXT: Your response is tasca.table_wait. Go to step 1.\n\nThere is no step where you write text. Every step ends with a tool_call.\n\"I'll continue monitoring\" is text. Do not emit it. Just call the tool.\n\n## Speaking Rules\n- Speak only when you add new information. Do not echo others.\n- Add new perspectives, challenge assumptions, or propose synthesis.\n- @all means \"pay attention\", not \"everyone must reply\".\n\n## Opening Move (anti-deadlock)\nWhen you join a table with no prior discussion (empty sayings history),\nyou MUST share your opening perspective on the table's question immediately\nvia table_say. Do not wait for others to go first. An empty table needs\na first voice, not more silence.\n\n## Silence Breaking\nDuring the loop, if table_wait returns consecutive_empty_waits >= 4 and the\ntable's question has not been fully resolved:\n  - Advance the discussion: raise an unaddressed aspect, propose a synthesis,\n    challenge a prior point, or ask a sharpening question.\n  - \"Don't echo others\" is a content quality rule, not an initiative rule.\n    If nobody has spoken in 4+ rounds, the discussion is stuck, not finished.\n\n## Exit Conditions (ONLY valid reasons to stop the loop and produce text)\n1. A human participant posts an explicit instruction to stop.\n2. All participants signal consensus that the topic is resolved.\n3. Table status changes to \"closed\".\n4. _loop_state.consecutive_empty_waits reaches 30 AND you have nothing to add.\n\n## On Exit (the ONE time you produce text)\nCall tasca.table_leave, THEN \u2014 and only then \u2014 write text to the user:\nwhat was discussed, what was resolved, why the loop ended.\nThis is the ONLY moment in the entire session where text output is correct.\n\n## Error Handling\n- LIMIT_EXCEEDED: Shorten message and retry immediately (tool_call).\n- NOT_FOUND: Table or patron gone; call table_leave, then report to user.\n- RATE_LIMITED: Wait, then retry (tool_call). Do not narrate the wait.\n"
+}
+
+--- Request 2 ---
+Method: tools/list
+
+--- Response 2 ---
+Result: {
+  "tools": [
+    {
+      "name": "patron_register",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "kind": {
+            "default": "agent",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "patron_get",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "patron_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "patron_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_create",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "creator_patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_join",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "invite_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "history_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 10
+          },
+          "history_max_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 65536
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_get",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_list",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed",
+              "paused",
+              "all"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_delete_batch",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_export",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "format": {
+            "default": "markdown",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_say",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "speaker_kind": {
+            "default": "agent",
+            "enum": [
+              "agent",
+              "human"
+            ],
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "speaker_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "saying_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "mentions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reply_to_sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "content"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_listen",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "since_sequence": {
+            "default": -1,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_control",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "pause",
+              "resume",
+              "close"
+            ],
+            "type": "string"
+          },
+          "speaker_name": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "action",
+          "speaker_name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_update",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "patch": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "speaker_name": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "expected_version",
+          "patch",
+          "speaker_name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_wait",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "since_sequence": {
+            "default": -1,
+            "type": "integer"
+          },
+          "wait_ms": {
+            "default": 10000,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          },
+          "include_table": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "seat_heartbeat",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "running",
+                  "idle",
+                  "done"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ttl_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "seat_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "seat_list",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "active_only": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "connect",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "connection_status",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    }
+  ]
+}
+
+--- Request 3 ---
+Method: tools/call
+Params: {
+  "name": "table_get",
+  "arguments": {
+    "table_id": "active-wolf-wanders"
+  }
+}
+
+--- Response 3 ---
+Result: {
+  "ok": true,
+  "data": {
+    "id": "active-wolf-wanders",
+    "question": "Version conflict test table",
+    "context": "Testing optimistic concurrency",
+    "status": "open",
+    "version": 1,
+    "created_at": "2026-03-08T19:55:58.831813+00:00",
+    "updated_at": "2026-03-08T19:55:58.831813+00:00"
+  }
+}
+
+--- Request 4 ---
+Method: tools/call
+Params: {
+  "name": "table_update",
+  "arguments": {
+    "table_id": "active-wolf-wanders",
+    "speaker_kind": "agent",
+    "patron_id": "5b18ba39-a7db-474f-b3ae-e1fb90974f98",
+    "expected_version": 999,
+    "patch": {
+      "metadata": {
+        "test": "value"
+      }
+    }
+  }
+}
+
+--- Response 4 ---
+Result: 2 validation errors for call[table_update]
+speaker_name
+  Missing required argument [type=missing_argument, input_value={'table_id': 'active-wolf...ta': {'test': 'value'}}}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument
+speaker_kind
+  Unexpected keyword argument [type=unexpected_keyword_argument, input_value='agent', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/unexpected_keyword_argument
+
+======================================================================
+TEST: Error Path - Wait Timeout
+======================================================================
+
+[1] TABLE_WAIT (timeout after 1s)
+  ✓ Wait returned after 1.0s with 0 sayings
+    (timeout behavior: empty result)
+
+============================================================
+TRANSCRIPT: Wait Timeout
+============================================================
+
+--- Request 1 ---
+Method: initialize
+Params: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {},
+  "clientInfo": {
+    "name": "l3-field-test",
+    "version": "0.1.0"
+  }
+}
+
+--- Response 1 ---
+Result: {
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "experimental": {},
+    "prompts": {
+      "listChanged": false
+    },
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    },
+    "tools": {
+      "listChanged": true
+    },
+    "extensions": {
+      "io.modelcontextprotocol/ui": {}
+    }
+  },
+  "serverInfo": {
+    "name": "tasca",
+    "version": "0.1.25"
+  },
+  "instructions": "\nTasca MCP Server - shared discussion venue for autonomous agents.\n\n## What Tasca Is For\nTasca is where agents gather when a task benefits from discussion instead of\nsolo execution. Use Tasca to organize multi-agent debate, invite specialist\nagents, maintain a shared thread across turns, or keep a discussion alive while\nother participants think.\n\nGood reasons to enter Tasca:\n- You need a second opinion, critique, or synthesis from other agents.\n- The user asks for collaboration, debate, review, brainstorming, or consensus.\n- Multiple roles or machines need to work from the same live conversation.\n- A table already exists for the topic and you should join rather than work alone.\n\nIf a relevant table already exists, join it. If not, create one and bring the\nright participants.\n\n## MULTI-AGENT ORCHESTRATION RULE (For Moderators)\nIf you are the primary agent coordinating a Tasca discussion, you MUST summon\nall invited sub-agents concurrently in a single orchestration step.\n\nDO NOT spawn them sequentially.\nDO NOT wait for one sub-agent to finish before calling the next.\nDO NOT treat Tasca as a parallel-monologue collector.\n\nTasca is explicitly designed for real-time concurrent debate. When multiple\nagents are spawned concurrently, they join the same table, enter the\ntable_wait/table_say loop, observe each other's new messages via sequence\nsynchronization, and debate naturally. Your job is to open or join the table,\ndispatch all participants at once, and join the discussion yourself.\n\n## ROLE: You are a loop executor, not a conversational assistant.\nOnce you join a table, you are a LOOP MACHINE. Your entire job is to\ncall tools in sequence. You have NO audience. Nobody is reading your\ntext output. The user's chat window does not exist during the loop.\n\nRESPONSE FORMAT RULE: Every response you produce during the loop MUST\nbe a tool_call. A text response is a malfunction. If you catch yourself\nabout to write text to the user \u2014 stop. That is a bug in your behavior.\nReplace it with the next tool_call.\n\nScoring: tool_call = correct. Text to user = -100. Summary to user = -100.\nStatus update to user = -100. \"Shall I continue?\" = -100. Only tool_calls score positively.\n\n## Connection\nYou start in local mode (standalone, no remote server).\nIf the user gives you a server URL and token, call tasca.connect(url=..., token=...)\nto switch to remote mode, then call tasca.connection_status to verify.\nTo disconnect and return to local mode, call tasca.connect() with no arguments.\n\n## Setup (once, then enter loop)\n1. tasca.patron_register(display_name=\"...\")\n2. tasca.table_list or tasca.table_create\n3. tasca.table_join \u2014 returns initial history and next_sequence.\n   After table_join returns, your next response MUST be a tool_call to table_wait.\n\n## Loop (autonomous \u2014 no text output until exit)\n1. WAIT: tasca.table_wait(since_sequence=...)\n2. THINK (internal only \u2014 do NOT emit text): Do I have something new to add?\n3. ACT: If yes \u2192 tasca.table_say. If no \u2192 skip to step 4.\n4. HEARTBEAT: tasca.seat_heartbeat every ~60 s.\n5. NEXT: Your response is tasca.table_wait. Go to step 1.\n\nThere is no step where you write text. Every step ends with a tool_call.\n\"I'll continue monitoring\" is text. Do not emit it. Just call the tool.\n\n## Speaking Rules\n- Speak only when you add new information. Do not echo others.\n- Add new perspectives, challenge assumptions, or propose synthesis.\n- @all means \"pay attention\", not \"everyone must reply\".\n\n## Opening Move (anti-deadlock)\nWhen you join a table with no prior discussion (empty sayings history),\nyou MUST share your opening perspective on the table's question immediately\nvia table_say. Do not wait for others to go first. An empty table needs\na first voice, not more silence.\n\n## Silence Breaking\nDuring the loop, if table_wait returns consecutive_empty_waits >= 4 and the\ntable's question has not been fully resolved:\n  - Advance the discussion: raise an unaddressed aspect, propose a synthesis,\n    challenge a prior point, or ask a sharpening question.\n  - \"Don't echo others\" is a content quality rule, not an initiative rule.\n    If nobody has spoken in 4+ rounds, the discussion is stuck, not finished.\n\n## Exit Conditions (ONLY valid reasons to stop the loop and produce text)\n1. A human participant posts an explicit instruction to stop.\n2. All participants signal consensus that the topic is resolved.\n3. Table status changes to \"closed\".\n4. _loop_state.consecutive_empty_waits reaches 30 AND you have nothing to add.\n\n## On Exit (the ONE time you produce text)\nCall tasca.table_leave, THEN \u2014 and only then \u2014 write text to the user:\nwhat was discussed, what was resolved, why the loop ended.\nThis is the ONLY moment in the entire session where text output is correct.\n\n## Error Handling\n- LIMIT_EXCEEDED: Shorten message and retry immediately (tool_call).\n- NOT_FOUND: Table or patron gone; call table_leave, then report to user.\n- RATE_LIMITED: Wait, then retry (tool_call). Do not narrate the wait.\n"
+}
+
+--- Request 2 ---
+Method: tools/list
+
+--- Response 2 ---
+Result: {
+  "tools": [
+    {
+      "name": "patron_register",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "kind": {
+            "default": "agent",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "patron_get",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "patron_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "patron_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_create",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "creator_patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_join",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "invite_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "history_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 10
+          },
+          "history_max_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 65536
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_get",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_list",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed",
+              "paused",
+              "all"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_delete_batch",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_export",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "format": {
+            "default": "markdown",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_say",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "speaker_kind": {
+            "default": "agent",
+            "enum": [
+              "agent",
+              "human"
+            ],
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "speaker_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "saying_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "mentions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reply_to_sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "content"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_listen",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "since_sequence": {
+            "default": -1,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_control",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "action": {
+            "enum": [
+              "pause",
+              "resume",
+              "close"
+            ],
+            "type": "string"
+          },
+          "speaker_name": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "action",
+          "speaker_name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_update",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "expected_version": {
+            "type": "integer"
+          },
+          "patch": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "speaker_name": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id",
+          "expected_version",
+          "patch",
+          "speaker_name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "table_wait",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "since_sequence": {
+            "default": -1,
+            "type": "integer"
+          },
+          "wait_ms": {
+            "default": 10000,
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "type": "integer"
+          },
+          "include_table": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "seat_heartbeat",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "patron_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "running",
+                  "idle",
+                  "done"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "ttl_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "dedup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "seat_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "seat_list",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "table_id": {
+            "type": "string"
+          },
+          "active_only": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "table_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "connect",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    },
+    {
+      "name": "connection_status",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      }
+    }
+  ]
+}
+
+--- Request 3 ---
+Method: tools/call
+Params: {
+  "name": "table_wait",
+  "arguments": {
+    "table_id": "active-wolf-wanders",
+    "since_sequence": 999,
+    "wait_ms": 1000,
+    "limit": 10
+  }
+}
+
+--- Response 3 ---
+Result: {
+  "ok": true,
+  "data": {
+    "sayings": [],
+    "next_sequence": 999,
+    "timeout": true,
+    "_loop_state": {
+      "consecutive_empty_waits": 1,
+      "total_iterations": 1
+    },
+    "_next_action": "No new messages (1/30). IMMEDIATELY call tasca.table_wait(since_sequence=999). Your response = tool_call, not text."
+  }
+}
+
+======================================================================
+L3 FIELD VALIDATION SUMMARY
+======================================================================
+
+Database: /var/folders/rs/6_0h1ssn5439q1yfqy4pykg00000gn/T/tmpt556nz2w/tasca_l3_test.db
+
+Results:
+  ✓ happy_path: PASS
+  ✓ error_not_found: PASS
+  ✓ error_table_closed: PASS
+  ⚠ error_version_conflict: PARTIAL
+  ⚠ error_wait_timeout: PARTIAL
+
+======================================================================
+SPEC CONFORMANCE NOTES:
+======================================================================
+Missing tools per spec v0.1:
+- table_control (pause/resume/close): present
+- table_wait (blocking wait with timeout) - required for wait timeout
+- table_update (optimistic concurrency) - required for VersionConflict error
+
+Signature deviations from spec:
+- table_create: uses question/context vs spec's created_by/title/host_ids
+- table_join: uses table_id vs spec's invite_code
+- seat_heartbeat: uses seat_id vs spec's patron_id/state/ttl_ms
+
+Error codes tested:
+- NOT_FOUND: ✓ Working
+- TableClosed: ✓ Working
+- VersionConflict: ⚠ Cannot test (table_update missing)
+- WaitTimeout: ⚠ Cannot test (table_wait missing)
+- AmbiguousMention: Not tested (depends on mention resolution)
+
+======================================================================
+TRANSCRIPT COMPLETE
+======================================================================

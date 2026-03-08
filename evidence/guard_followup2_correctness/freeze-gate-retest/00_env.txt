@@ -1,0 +1,10 @@
+Darwin Zhaomengs-MacBook-Air.local 25.1.0 Darwin Kernel Version 25.1.0: Mon Oct 20 19:32:56 PDT 2025; root:xnu-12377.41.6~2/RELEASE_ARM64_T8132 arm64
+ProductName:		macOS
+ProductVersion:		26.1
+BuildVersion:		25B78
+/opt/homebrew/bin/python3
+Python 3.14.3
+python not found
+zsh:1: command not found: python
+/opt/homebrew/bin/uv
+uv 0.10.9 (Homebrew 2026-03-06)

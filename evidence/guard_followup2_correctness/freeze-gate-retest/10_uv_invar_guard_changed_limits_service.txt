@@ -1,0 +1,102 @@
+{
+  "status": "passed",
+  "static": {
+    "passed": true,
+    "errors": 0,
+    "warnings": 2,
+    "infos": 0,
+    "findings": [
+      {
+        "file": "src/tasca/core/services/limits_service.py",
+        "line": null,
+        "rule": "file_size_warning",
+        "severity": "warning",
+        "message": "File has 499 lines (99% of 500 limit)",
+        "fix": {
+          "action": "manual",
+          "instruction": "Consider splitting before reaching limit.\nExtractable groups:\n[A] check_content_limits, validate_bytes_size, validate_content_length, validate_history_count, validate_mentions (204L) | Deps: none\n[B] get_limits_status (46L) | Deps: none\n[C] settings_to_limits_config (24L) | Deps: none"
+        },
+        "rule_meta": {
+          "category": "size",
+          "detects": "File approaching max_file_lines limit (80% threshold)",
+          "cannot_detect": [
+            "Whether split is actually needed"
+          ],
+          "hint": "Consider splitting before reaching limit"
+        }
+      },
+      {
+        "file": "src/tasca/core/services/limits_service.py",
+        "line": null,
+        "rule": "review_suggested",
+        "severity": "warning",
+        "message": "High escape hatch count: 3 @invar:allow markers",
+        "fix": {
+          "action": "manual",
+          "instruction": "Consider independent /review to validate escape justifications"
+        },
+        "rule_meta": {
+          "category": "docs",
+          "detects": "Conditions warranting independent code review (escape count, coverage, security)",
+          "cannot_detect": [
+            "Whether review was performed",
+            "Review quality"
+          ],
+          "hint": "Consider independent /review sub-agent before task completion"
+        }
+      }
+    ]
+  },
+  "summary": {
+    "files_checked": 1,
+    "errors": 0,
+    "warnings": 2,
+    "infos": 0
+  },
+  "escape_hatches": {
+    "count": 3,
+    "by_rule": {
+      "missing_contract": 3
+    },
+    "details": [
+      {
+        "file": "src/tasca/core/services/limits_service.py",
+        "line": 70,
+        "rule": "missing_contract",
+        "reason": "Dataclass __post_init__ validates invariants via ValueError"
+      },
+      {
+        "file": "src/tasca/core/services/limits_service.py",
+        "line": 86,
+        "rule": "missing_contract",
+        "reason": "Module-level initialization function, not a core operation"
+      },
+      {
+        "file": "src/tasca/core/services/limits_service.py",
+        "line": 156,
+        "rule": "missing_contract",
+        "reason": "Dataclass __post_init__ generates default message"
+      }
+    ]
+  },
+  "verification_level": "STANDARD",
+  "doctest": {
+    "passed": true,
+    "output": ""
+  },
+  "crosshair": {
+    "status": "verified",
+    "reason": "no changes to verify",
+    "files_verified": 0,
+    "files_cached": 1
+  },
+  "property_tests": {
+    "status": "passed",
+    "functions_tested": 8,
+    "functions_passed": 8,
+    "functions_failed": 0,
+    "total_examples": 700,
+    "failures": [],
+    "errors": []
+  }
+}

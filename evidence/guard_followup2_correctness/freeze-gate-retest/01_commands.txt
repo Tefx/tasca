@@ -1,0 +1,18 @@
+Commands executed (exact):
+
+1) uname -a
+2) sw_vers
+3) which python3
+4) python3 --version
+5) which python
+6) python --version
+7) which uv
+8) uv --version
+
+9) uv run --group dev invar guard --changed src/tasca/core/services/limits_service.py
+10) uv run pytest -q tests/unit/test_limits_service.py
+11) uv run pytest -q tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py -k "test_mcp_stdio_list_tools or test_mcp_error_invalid_request"
+12) uv run python tests/repro/issue_l3_mcp_smoke.py
+
+13) git status --short --branch
+14) git diff --stat

@@ -23683,6 +23683,85 @@ phases:
     depends_on:
     - guard_followup2_correctness.entrypoints-integration-proof
     agent: python-executor
+  - id: guard_followup2_correctness.entrypoints-integration-proof-retest
+    name: entrypoints-integration-proof.retest
+    status: pending
+    description: 'Re-test the MCP smoke compatibility fix from a fresh, independent
+      verification pass.
+
+
+      As an INDEPENDENT TESTER (`integration-verifier`), validate that the repaired
+      `TableClosed` reproduction path now matches the current MCP `table_control`
+      contract.
+
+
+      Test for:
+
+      - Happy path: the smoke script can close the table using the current MCP contract,
+      including `speaker_name`
+
+      - Regression guard: the prior failure `✗ Failed to close table: None` is no
+      longer produced for this section
+
+      - Scope discipline: no unrelated MCP smoke sections were broken by the compatibility
+      update
+
+
+      Finding issues is a successful outcome for this step.'
+    verification: '- Run a focused reproduction command: `python tests/repro/issue_l3_mcp_smoke.py`
+      or repo-standard equivalent
+
+      - Capture actual output for the `TableClosed` section
+
+      - Confirm the `table_control` close-table call now uses the current MCP contract
+      and no longer fails due to outdated arguments
+
+      - If another issue is found, record the exact failing output and location'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier
+
+      **Scope**: MCP smoke compatibility retest for `TableClosed`
+
+
+      **Command executed**:
+
+      ```
+
+      python tests/repro/issue_l3_mcp_smoke.py
+
+      ```
+
+
+      **Relevant output**:
+
+      ```
+
+      <paste the TableClosed section output>
+
+      ```
+
+
+      **Checks**:
+
+      - [ ] Close-table invocation matches current MCP contract
+
+      - [ ] `speaker_name` is included where required
+
+      - [ ] Prior failure `✗ Failed to close table: None` is gone
+
+      - [ ] No unrelated smoke regression observed
+
+
+      **Findings**:
+
+      - blocker | should_fix | suggestion | tech_debt
+
+      '
+    depends_on:
+    - guard_followup2_correctness.entrypoints-integration-proof-fix
+    agent: integration-verifier
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

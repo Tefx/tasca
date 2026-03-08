@@ -22967,3 +22967,50 @@ phases:
 - id: guard_followup2_boundary
   name: Guard Follow-up 2 — Boundary
   status: pending
+  steps:
+  - id: guard_followup2_boundary.auth-config-boundary-fix
+    name: auth-config-boundary-fix
+    status: pending
+    description: 'Fix remaining boundary findings in `src/tasca/shell/api/auth.py`
+      and `src/tasca/config.py` without expanding scope into excluded directories.
+
+
+      Spec refs: auth/config behavior already established by existing API/MCP phases;
+      this is guard-driven remediation.
+
+      Touch paths: `src/tasca/shell/api/auth.py`, `src/tasca/config.py`.
+
+      Harness refs: `tests/integration/test_api.py`, `tests/integration/test_mcp.py`,
+      `tests/unit/api/test_tables_routes.py` (read-only).
+
+
+      Goals:
+
+      - Remove the remaining `internal_import`, `wiring_gap`, and `review_suggested`
+      debt affecting auth/config boundaries.
+
+      - Prefer real import/wiring corrections over suppressions.
+
+
+      `@invar:allow` policy:
+
+      - Acceptable only for deliberate environment or framework boundary reads that
+      cannot be represented in core.
+
+      - Not acceptable for auth decision logic, token comparison flow, or dead helper
+      branches.
+
+
+      Out of scope:
+
+      - No auth feature redesign.
+
+      - No changes to excluded test files beyond execution as read-only verification
+      inputs.'
+    verification: '- Targeted guard output for auth/config is clean or reduced to
+      explicitly justified boundary-only allowances
+
+      - Existing auth/API/MCP smokes remain compatible
+
+      - Evidence distinguishes real code fixes from any retained boundary allowances'
+    agent: python-senior

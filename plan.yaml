@@ -24390,7 +24390,7 @@ phases:
       \ reproducible raw evidence."
   - id: guard_followup2_correctness.freeze-gate-retest
     name: freeze-gate-retest
-    status: pending
+    status: claimed
     description: 'Re-test the freeze and evidence package from a fresh independent
       pass before re-running the phase gate.
 
@@ -24426,6 +24426,8 @@ phases:
     depends_on:
     - guard_followup2_correctness.evidence-raw-output-fix
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-03-08T19:42:00.085277+00:00'
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

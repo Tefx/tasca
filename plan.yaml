@@ -23810,6 +23810,92 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-08T19:01:42.912915+00:00'
+  - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
+    name: entrypoints-integration-proof.reporting-fix
+    status: pending
+    description: 'Fix the stale smoke reporting/status behavior for the already-repaired
+      `TableClosed` path in `tests/repro/issue_l3_mcp_smoke.py`.
+
+
+      Issue:
+
+      - The `TableClosed` execution path now passes, but the smoke summary still reports
+      `error_table_closed: PARTIAL` and emits stale partial-status output.
+
+      - Scope is limited to reporting/status accuracy for this already-fixed path;
+      do not change unrelated smoke sections or reopen the MCP contract fix itself.
+
+
+      Touch paths:
+
+      - `tests/repro/issue_l3_mcp_smoke.py`
+
+
+      Remediation consolidation:
+
+      - prior_loop: `guard_followup2_correctness.entrypoints-integration-proof-fix`,
+      `guard_followup2_correctness.entrypoints-integration-proof-retest`
+
+      - remaining_blocker: summary/status bookkeeping still marks the `TableClosed`
+      case as partial after the path succeeds
+
+      - why_new_loop: the original loop fixed the close-table contract invocation,
+      but did not fully realign downstream smoke reporting for that path
+
+
+      Suggested agent:
+
+      - `python-executor` (clear, localized Python test/reporting fix)'
+    verification: '- Update only the `TableClosed` smoke-reporting/status path so
+      a successful close no longer surfaces `error_table_closed: PARTIAL`
+
+      - Keep summary labels and emitted status lines consistent with the actual per-section
+      outcome
+
+      - Do not broaden scope into other smoke scenarios or MCP entrypoint behavior'
+    depends_on:
+    - guard_followup2_correctness.entrypoints-integration-proof-retest
+    agent: python-executor
+    evidence: 'Priority: MEDIUM'
+  - id: guard_followup2_correctness.entrypoints-integration-proof-reporting-retest
+    name: entrypoints-integration-proof.reporting-retest
+    status: pending
+    description: 'Re-test the focused smoke reporting fix from a fresh, independent
+      verification pass.
+
+
+      As an INDEPENDENT TESTER (`integration-verifier`), validate that `tests/repro/issue_l3_mcp_smoke.py`
+      now reports the already-fixed `TableClosed` path consistently.
+
+
+      Test for:
+
+      - Happy path: the `TableClosed` section still executes successfully
+
+      - Reporting accuracy: the smoke summary no longer reports `error_table_closed:
+      PARTIAL` when that path passes
+
+      - Output consistency: stale partial-status lines for this path are no longer
+      emitted
+
+      - Scope discipline: unrelated smoke-report sections remain unchanged
+
+
+      Finding issues is a successful outcome for this step.
+
+
+      Independence Level: L1'
+    verification: '- Run a focused reproduction command: `python tests/repro/issue_l3_mcp_smoke.py`
+      or repo-standard equivalent
+
+      - Capture the actual `TableClosed` section output and final smoke summary
+
+      - Confirm success output and summary/status labels agree for `error_table_closed`
+
+      - If any mismatch remains, record the exact stale line(s) and location in `tests/repro/issue_l3_mcp_smoke.py`'
+    depends_on:
+    - guard_followup2_correctness.entrypoints-integration-proof-reporting-fix
+    agent: integration-verifier
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: locked

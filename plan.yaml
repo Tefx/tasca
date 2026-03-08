@@ -23481,7 +23481,7 @@ phases:
       - Worker reported integration auth failures as pre-existing and out-of-scope.'
   - id: guard_followup2_correctness.entrypoints-integration-proof
     name: entrypoints-integration-proof
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       repaired MCP entrypoint seam from a fresh perspective.
 
@@ -23552,6 +23552,26 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-08T18:51:09.041352+00:00'
+    done_at: '2026-03-08T18:55:30.840528+00:00'
+    evidence: "## Integration Evidence\n\n**Command or test exercising the full path**:\n\
+      ```\nuvx invar-tools guard --changed --human src/tasca/shell/mcp/entrypoints.py\n\
+      uv run pytest -v tests/integration/test_mcp.py -k \"test_mcp_full_cycle_patron_flow\
+      \ or test_mcp_stdio_list_tools or test_mcp_error_invalid_request\"\nuv run python\
+      \ tests/repro/issue_l3_mcp_smoke.py\n```\n\n**Actual output**:\n```\nGuard run:\
+      \ Files checked 1, Errors 0, Warnings 21, Guard passed.\nPytest run: 3 passed,\
+      \ 25 deselected.\nSmoke script: Happy-path and NOT_FOUND paths passed; TableClosed\
+      \ section failed with `✗ Failed to close table: None` and indicates table_control\
+      \ arg mismatch (speaker_name requirement).\n```\n\n**Path exercised**: limits_service\
+      \ -> mcp.entrypoints -> MCP tool surface\n\n**Issues Found**:\n- blocker: none\n\
+      - should_fix: tests/repro/issue_l3_mcp_smoke.py TableClosed flow uses outdated\
+      \ table_control invocation that mismatches current contract (speaker_name required).\n\
+      - suggestion: keep invalid-request failure-path test in CI selection for this\
+      \ seam.\n- tech_debt: changed-file guard reports non-blocking shell/core placement\
+      \ warnings in entrypoints seam.\n\nnotes:\n  suggestions:\n    - Keep failure-path\
+      \ invalid-request MCP test in CI selection for seam stability.\n  tech_debt:\n\
+      \    - Remaining non-blocking shell/core placement warnings in entrypoints seam.\n\
+      \nfollowup_created:\n- guard_followup2_correctness.entrypoints-integration-proof-fix\n\
+      - guard_followup2_correctness.entrypoints-integration-proof-retest"
   - id: guard_followup2_correctness.freeze
     name: freeze
     status: pending

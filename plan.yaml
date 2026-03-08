@@ -23068,6 +23068,58 @@ phases:
 
       - Evidence names the helper destinations for every moved logic block'
     agent: python-senior
+  - id: guard_followup2_correctness.entrypoints-symbol-cleanup
+    name: entrypoints-symbol-cleanup
+    status: pending
+    description: 'Continue micro remediation in `src/tasca/shell/mcp/entrypoints.py`
+      after the pure-logic split.
+
+
+      Spec refs: same guard follow-up source as prior step.
+
+      Touch paths: `src/tasca/shell/mcp/entrypoints.py` and any newly extracted helper
+      from the previous step.
+
+      Harness refs: `tests/integration/test_mcp.py`, `tests/unit/mcp/test_mcp_server.py`
+      (read-only).
+
+
+      Goals:
+
+      - Remove `dead_export`, `dead_param`, and `dead_assign` findings still concentrated
+      in this file.
+
+      - Collapse stale helper branches, eliminate unused wrapper exports, and tighten
+      signatures without widening the MCP public API.
+
+      - Prefer deletion or call-site alignment over new suppressions.
+
+
+      Conflict rationale:
+
+      - Same file and same MCP harness as the previous step; must remain serialized.
+
+
+      `@invar:allow` policy:
+
+      - Not acceptable for dead symbols or unused assignments.
+
+      - If a wrapper truly must remain for compatibility, keep it live and document
+      the boundary reason instead of suppressing a dead export.
+
+
+      Out of scope:
+
+      - No compatibility layer expansion beyond current MCP surface.'
+    verification: '- Remaining dead-symbol findings for `entrypoints.py` are removed
+      or reduced to a documented compatibility-preserving live export
+
+      - Evidence identifies every removed or retained symbol and why
+
+      - No MCP tool registration or signature regression is introduced'
+    depends_on:
+    - guard_followup2_correctness.entrypoints-pure-logic-split
+    agent: python-senior
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
   status: pending

@@ -25124,6 +25124,97 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest
     agent: python-senior
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
+    name: storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the guard
+      entrypoint and zero-file semantics after `guard_followup2_cleanup.storage-guard-verify-retest-fix-entrypoint-and-zero-file-policy`.
+
+
+      YOUR GOAL IS TO FIND REMAINING PROBLEMS, not to confirm success.
+
+
+      Re-test for:
+
+      - Happy path: the repo-owned direct `invar guard` path no longer fails with
+      `ModuleNotFoundError: invar.shell.commands.hooks` when exercised from this repository.
+
+      - Policy/failure path: a no-changed-files run does not present `files_checked:
+      0` as a misleading successful verification outcome; the resulting behavior/message
+      matches the repo policy and is backed by tests.
+
+      - Regression scope: the remediation does not break the existing compatibility
+      wrapper or other guard-related test coverage.
+
+
+      Finding issues is success.'
+    verification: '- Re-run the direct `invar guard` path and include actual output
+
+      - Re-run the repo-supported zero-file guard scenario and include actual output
+
+      - State clearly whether the zero-file behavior is blocked, downgraded, or otherwise
+      explicitly marked as non-meaningful verification
+
+      - Call out blocker/should_fix findings explicitly if any remain'
+    evidence_template: '## Retest Report
+
+
+      **Tester**: integration-verifier
+
+      **Original issue source**: `guard_followup2_cleanup.storage-guard-verify-retest`
+
+
+      ### Direct entrypoint check
+
+      ```bash
+
+      <paste exact command>
+
+      ```
+
+      ```text
+
+      <paste actual output>
+
+      ```
+
+
+      ### Zero-file semantics check
+
+      ```bash
+
+      <paste exact command>
+
+      ```
+
+      ```text
+
+      <paste actual output>
+
+      ```
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [ ] ISSUES_FOUND
+
+      - [ ] INCOMPLETE
+
+
+      ### Findings
+
+      | Severity | Description | Reproduction |
+
+      | --- | --- | --- |
+
+      | blocker | <issue or none> | <steps> |
+
+      | should_fix | <issue or none> | <steps> |'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-fix-entrypoint-and-zero-file-policy
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

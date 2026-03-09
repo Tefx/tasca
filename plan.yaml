@@ -25795,7 +25795,7 @@ phases:
       \ because effective guidance behavior already present in main from prior remediation.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     name: storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       follow-up usability remediation for direct `invar guard` invocation from a fresh
       perspective.
@@ -25878,6 +25878,73 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T14:51:12.558511+00:00'
+    done_at: '2026-03-09T14:56:42.434485+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: direct-entrypoint invocation guidance / wrapper follow-up
+
+      **Independence Level**: L1
+
+
+      ### Commands executed
+
+      ```
+
+      uv run invar guard
+
+      invar guard
+
+      ```
+
+
+      ### Actual output
+
+      ```
+
+      uv run invar guard -> status passed, files_checked 0, runtime checks skipped
+      (no changed files)
+
+      invar guard -> ModuleNotFoundError: No module named ''tasca''
+
+      ```
+
+
+      ### Findings
+
+      - Deterministic repo-scoped behavior: yes
+
+      - Unsupported raw direct invocation clearly signposted: no
+
+      - Zero-file enforcement unchanged on supported path: no
+
+
+      ### Verdict
+
+      - ISSUES_FOUND
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
+
+
+      Commit hash(es):
+
+      - none (verify-only)
+
+
+      Gaps/Notes:
+
+      - Identified blocker on supported path (`uv run invar guard` zero-file PASS)
+      and should_fix on raw direct traceback.
+
+      - Added planner-created fix/retest chain and rewired freeze/gate before phase
+      closure.
+
+      '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
     status: pending

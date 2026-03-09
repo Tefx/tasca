@@ -25610,7 +25610,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     name: storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       final remediation for direct entrypoint zero-file enforcement from a fresh perspective.
 
@@ -25664,6 +25664,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-09T14:27:27.837178+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

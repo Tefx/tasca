@@ -168,6 +168,22 @@ def _invoke_uvx_invar_guard(argv: Sequence[str]) -> None:
         raise SystemExit(completed.returncode)
 
 
+# @invar:allow shell_result: formats startup guidance for missing module dependency
+def _missing_module_guidance(error: ModuleNotFoundError) -> str:
+    """Build explicit guidance for missing-module startup failures."""
+
+    missing_name = error.name if error.name is not None else "<unknown>"
+    return (
+        "Unable to start `invar guard`: missing module dependency.\n"
+        f"Missing module: {missing_name}\n"
+        "\n"
+        "Try one of the supported invocations from repository root:\n"
+        "  - uv run invar guard --all\n"
+        "  - uv run invar guard <path>\n"
+        "  - uvx invar-tools guard --all"
+    )
+
+
 def _run_guard_app(argv: Sequence[str]) -> None:
     """Run invar guard app via import, with uvx fallback when unavailable."""
 
@@ -180,7 +196,7 @@ def _run_guard_app(argv: Sequence[str]) -> None:
             "invar.shell.commands",
             "invar.shell.commands.guard",
         }:
-            raise
+            raise SystemExit(_missing_module_guidance(error)) from error
         _invoke_uvx_invar_guard(argv)
         return
 
@@ -192,5 +208,8 @@ def main() -> None:
     argv = sys.argv[1:]
     _enforce_supported_invocation(sys.argv[0], argv, Path.cwd())
     _enforce_changed_files_policy(argv, Path.cwd())
-    _install_missing_hooks_stub()
-    _run_guard_app(argv)
+    try:
+        _install_missing_hooks_stub()
+        _run_guard_app(argv)
+    except ModuleNotFoundError as error:
+        raise SystemExit(_missing_module_guidance(error)) from error

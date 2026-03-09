@@ -44,13 +44,40 @@ def test_install_missing_hooks_stub_allows_missing_invar_root(monkeypatch) -> No
     invar_entrypoint._install_missing_hooks_stub()
 
 
-def test_enforce_changed_files_policy_rejects_zero_file_guard(monkeypatch) -> None:
-    """Guard default mode exits early when no changed Python files exist."""
+def test_uv_run_guard_zero_file_policy_rejects_zero_file_set(monkeypatch) -> None:
+    """`uv run invar guard` default-mode policy still rejects zero-file scope."""
 
     monkeypatch.setattr(invar_entrypoint, "_list_changed_python_files", lambda _: set())
 
     with pytest.raises(SystemExit, match="no changed Python files found"):
         invar_entrypoint._enforce_changed_files_policy(["guard"], Path("."))
+
+
+def test_run_guard_app_reports_guidance_for_non_fallback_module_missing(monkeypatch) -> None:
+    """Raw direct guard startup reports guidance instead of traceback noise."""
+
+    original_import = __import__
+
+    def _fake_import(
+        name: str,
+        globals: dict[str, object] | None = None,
+        locals: dict[str, object] | None = None,
+        fromlist: Sequence[str] = (),
+        level: int = 0,
+    ) -> object:
+        if name == "invar.shell.commands.guard":
+            raise ModuleNotFoundError(name="invar.shell.commands.hooks")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr("builtins.__import__", _fake_import)
+
+    with pytest.raises(SystemExit) as exc_info:
+        invar_entrypoint._run_guard_app(["guard"])
+
+    message = str(exc_info.value)
+    assert "Unable to start `invar guard`: missing module dependency." in message
+    assert "Missing module: invar.shell.commands.hooks" in message
+    assert "uv run invar guard --all" in message
 
 
 def test_enforce_changed_files_policy_allows_guard_all(monkeypatch) -> None:

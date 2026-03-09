@@ -25324,7 +25324,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
     name: storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the guard
       entrypoint and zero-file semantics after `guard_followup2_cleanup.storage-guard-verify-retest-fix-entrypoint-and-zero-file-policy`.
 
@@ -25421,6 +25421,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-fix-entrypoint-and-zero-file-policy
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-09T13:56:45.295689+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

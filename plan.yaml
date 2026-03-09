@@ -25876,6 +25876,114 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T14:51:12.558511+00:00'
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
+    name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
+    status: pending
+    description: 'Fix (HIGH): close the remaining direct guard invocation blockers
+      found by `guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance`.
+
+
+      prior_loop:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
+
+
+      remaining_blocker:
+
+      - Supported repo-owned path `uv run invar guard` still returns PASS with `files_checked:
+      0`, so zero-file policy is not enforced on the documented repo path.
+
+      - Raw direct `invar guard` still crashes with `ModuleNotFoundError: No module
+      named ''tasca''` without clear signposting.
+
+
+      why_new_loop:
+
+      - The previous usability remediation improved guidance intent but did not actually
+      close the policy enforcement gap on the supported path, and the unsupported
+      raw entrypoint still fails opaquely.
+
+
+      Scope:
+
+      - Update the repo-owned guard invocation flow so supported repo execution fails
+      or clearly reports when zero files are checked.
+
+      - Make unsupported raw direct invocation fail with explicit, actionable guidance
+      instead of a traceback.
+
+      - Preserve existing persistence semantics and non-storage scope boundaries.
+
+
+      Out of scope:
+
+      - New storage cleanup work beyond the guard entrypoint/invocation path.
+
+      - Broad CLI redesign outside the repo-owned guard execution path.'
+    verification: '- Main path: targeted regression proves `uv run invar guard` no
+      longer reports PASS when `files_checked: 0` on the supported repo path
+
+      - Failure path: direct raw `invar guard` no longer emits a bare `ModuleNotFoundError`;
+      it signposts the supported invocation clearly
+
+      - Proof: updated behavior is evidenced with focused command output for both
+      supported and unsupported paths'
+    evidence_template: '## Remediation Evidence
+
+
+      **Priority**: HIGH
+
+      **Prior loop**:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
+
+
+      **Main-path command**:
+
+      ```
+
+      uv run invar guard
+
+      ```
+
+
+      **Main-path output**:
+
+      ```
+
+      <paste actual output showing zero-file policy enforcement>
+
+      ```
+
+
+      **Unsupported direct command**:
+
+      ```
+
+      invar guard
+
+      ```
+
+
+      **Unsupported direct output**:
+
+      ```
+
+      <paste actual output showing explicit guidance instead of traceback>
+
+      ```
+
+
+      **Remaining blocker closed**: <yes/no and why>
+
+      **Scope preserved**: <note that storage/persistence semantics were untouched>'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

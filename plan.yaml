@@ -26226,7 +26226,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-guidance
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-guidance
-    status: claimed
+    status: done
     description: 'HIGH-priority remediation for the blocker found in `guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest`.
 
 
@@ -26327,6 +26327,24 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-09T15:19:54.847136+00:00'
+    done_at: '2026-03-09T15:26:06.094829+00:00'
+    evidence: "## Direct Entrypoint Guidance Fix\n\n**Blocker addressed**: raw direct\
+      \ `invar guard` emitted opaque `ModuleNotFoundError` instead of explicit guidance.\n\
+      \n**Files changed**:\n- `src/tasca/shell/invar_entrypoint.py`\n- `tests/unit/test_invar_entrypoint.py`\n\
+      \n**Targeted regressions added/updated**:\n- `test_run_guard_app_reports_guidance_for_non_fallback_module_missing`\n\
+      - `test_uv_run_guard_zero_file_policy_rejects_zero_file_set`\n\n**Commands run**:\n\
+      ```bash\nuv run pytest -q tests/unit/test_invar_entrypoint.py\nuv run python\
+      \ -c \"... e._run_guard_app(['guard']) ...\"   # simulated missing non-fallback\
+      \ module import\nuv run pytest -q tests/unit/test_invar_entrypoint.py -k \"\
+      uv_run_guard_zero_file_policy\"\n```\n\n**Actual output**:\n```text\nUnable\
+      \ to start `invar guard`: missing module dependency.\nMissing module: invar.shell.commands.hooks\n\
+      \nTry one of the supported invocations from repository root:\n  - uv run invar\
+      \ guard --all\n  - uv run invar guard <path>\n  - uvx invar-tools guard --all\n\
+      ```\n\n**Invariant check**:\n- `uv run invar guard` zero-file policy unchanged:\
+      \ yes\n- Raw direct invocation now non-opaque: yes\n\nSpec link:\n- guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-guidance\n\
+      \nCommit hash(es):\n- Worker: `7d2590b`\n- Main squash: `ceaa485`\n\nGaps/Notes:\n\
+      - Scoped verification used targeted tests/commands; no broad suite rerun in\
+      \ this step.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
     status: pending

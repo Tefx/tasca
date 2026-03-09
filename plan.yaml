@@ -26085,7 +26085,7 @@ phases:
       \ outside supported repo scope.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the direct
       guard invocation remediation from a fresh perspective.
 
@@ -26135,6 +26135,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-09T15:16:00.443772+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

@@ -26589,7 +26589,7 @@ phases:
     agent: integration-verifier
   - id: guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
     name: bump-invar-tools-dev-dependency-1-19-7
-    status: claimed
+    status: done
     description: 'Bump the dev dependency `invar-tools` to `1.19.7` and refresh the
       lockfile so the repo pins the same tool version in both dependency metadata
       and resolved state.
@@ -26620,6 +26620,49 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-09T19:32:14.636194+00:00'
+    done_at: '2026-03-09T19:35:01.251107+00:00'
+    evidence: 'Artifact:
+
+      - PR: N/A (isolated worktree), worker commit `80ccbe1ee1aee96721674ccfcf3cd4fec1e07b3c`,
+      squashed to main `34948e6`
+
+
+      Verification:
+
+      - Run: `grep -n ''invar-tools'' pyproject.toml` -> `invar-tools==1.19.7` present
+      in dev group.
+
+      - Run: `grep -A2 ''^name = "invar-tools"'' uv.lock` -> `version = "1.19.7"`
+      confirmed.
+
+      - Lock refresh impact: `pyproject.toml` (+1 line), `uv.lock` (+389 lines), consistent
+      with transitive dependency materialization.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
+
+
+      Commit hash(es):
+
+      - Worker: `80ccbe1ee1aee96721674ccfcf3cd4fec1e07b3c`
+
+      - Main squash: `34948e6`
+
+
+      Files changed:
+
+      - `pyproject.toml`
+
+      - `uv.lock`
+
+
+      Gaps/Notes:
+
+      - No unrelated file modifications; dependency bump constrained to declared scope.
+
+      '
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

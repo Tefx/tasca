@@ -25510,7 +25510,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
     name: storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
-    status: pending
+    status: claimed
     description: 'Fix the direct `/Users/tefx/.local/bin/invar guard` entrypoint so
       the zero-file policy is enforced consistently instead of returning PASS with
       `files_checked: 0` and skipping runtime checks.
@@ -25556,6 +25556,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-09T14:03:41.320966+00:00'
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     name: storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     status: pending

@@ -25140,6 +25140,11 @@ phases:
       - Happy path: the repo-owned direct `invar guard` path no longer fails with
       `ModuleNotFoundError: invar.shell.commands.hooks` when exercised from this repository.
 
+      - External-tool mitigation path: if `/Users/tefx/.local/bin/invar` remains externally
+      broken, the in-repo mitigation/policy is executable, testable, and clearly identifies
+      the supported deterministic path instead of allowing a crash to masquerade as
+      repo success.
+
       - Policy/failure path: a no-changed-files run does not present `files_checked:
       0` as a misleading successful verification outcome; the resulting behavior/message
       matches the repo policy and is backed by tests.
@@ -25152,6 +25157,9 @@ phases:
     verification: '- Re-run the direct `invar guard` path and include actual output
 
       - Re-run the repo-supported zero-file guard scenario and include actual output
+
+      - Verify the executable repo policy/assertion for unsupported global-entrypoint
+      behavior, if that path remains external
 
       - State clearly whether the zero-file behavior is blocked, downgraded, or otherwise
       explicitly marked as non-meaningful verification

@@ -24809,9 +24809,9 @@ phases:
 
       3. Evidence includes main-path and failure-path coverage.
 
-      4. The final remediation loop closed both the direct entrypoint blocker and
-      the zero-file policy ambiguity, or left only explicitly accepted non-blocking
-      risk.
+      4. The final remediation loop closed the direct entrypoint blocker by moving
+      verification to a deterministic repo-owned invocation path while preserving
+      supported guidance.
 
       5. The dependency metadata and lockfile both reflect `invar-tools==1.19.7` with
       no unnecessary version churn.
@@ -24822,8 +24822,8 @@ phases:
       - No unresolved blocker remains in the targeted storage files or repo-owned
       guard entrypoint policy
 
-      - Evidence quality acceptable, including final retest output for direct entrypoint
-      and zero-file scenarios
+      - Evidence quality acceptable, including final retest output for direct entrypoint,
+      repo-owned direct invocation path, and zero-file scenarios
 
       - Dependency bump evidence confirms `pyproject.toml` and `uv.lock` both reflect
       `invar-tools==1.19.7`
@@ -24839,6 +24839,7 @@ phases:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
     - guard_followup2_cleanup.freeze
     agent: gate-reviewer

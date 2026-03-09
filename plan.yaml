@@ -25698,7 +25698,7 @@ phases:
       \ step chain was added by planner and wired into freeze/gate before closure.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
     name: storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
-    status: pending
+    status: claimed
     description: 'Fix (MEDIUM): make repo-scope `invar guard` invocation deterministic
       or explicitly guided when using the direct entrypoint.
 
@@ -25768,6 +25768,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-03-09T14:36:47.056043+00:00'
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     name: storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     status: pending

@@ -24923,7 +24923,7 @@ phases:
       \ scope; project-managed entrypoint path is fixed.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest
     name: storage-guard-verify-retest
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-run the verification
       after `guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint` and try
       to break the repaired auth and guard-entrypoint paths.
@@ -25006,6 +25006,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-09T01:03:13.028294+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

@@ -25325,7 +25325,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
     name: storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the guard
       entrypoint and zero-file semantics after `guard_followup2_cleanup.storage-guard-verify-retest-fix-entrypoint-and-zero-file-policy`.
 
@@ -25424,6 +25424,90 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T13:56:45.295689+00:00'
+    done_at: '2026-03-09T14:03:21.485566+00:00'
+    evidence: '## Retest Report
+
+
+      **Tester**: integration-verifier
+
+      **Original issue source**: `guard_followup2_cleanup.storage-guard-verify-retest`
+
+
+      ### Direct entrypoint check
+
+      ```bash
+
+      /Users/tefx/.local/bin/invar guard
+
+      ```
+
+      ```text
+
+      {"status":"passed", "summary":{"files_checked":0,"errors":0,"warnings":0,"infos":0},
+      "crosshair":{"status":"skipped","reason":"no changed files"}, "property_tests":{"status":"skipped","reason":"no
+      changed files"}}
+
+      ```
+
+
+      ### Zero-file semantics check
+
+      ```bash
+
+      uv run python -c "import sys; from tasca.shell.invar_entrypoint import main;
+      sys.argv=[''invar'',''guard'']; main()"
+
+      ```
+
+      ```text
+
+      invar entrypoint policy: no changed Python files found for `invar guard` changed-mode.
+      Use `invar guard --all` for meaningful verification.
+
+      ```
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [x] ISSUES_FOUND
+
+      - [ ] INCOMPLETE
+
+
+      ### Findings
+
+      | Severity | Description | Reproduction |
+
+      | --- | --- | --- |
+
+      | blocker | Direct `invar guard` path still allows non-meaningful green result
+      (`files_checked: 0`) instead of enforcing/downgrading policy consistently. |
+      Run `/Users/tefx/.local/bin/invar guard` from repo root and inspect output.
+      |
+
+      | should_fix | Repo policy exists but path-dependent; users can bypass it unintentionally
+      via direct global entrypoint resolution. | Compare direct global entrypoint
+      vs repo entrypoint invocation outputs. |
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
+
+
+      Commit hash(es):
+
+      - none (verify-only)
+
+
+      Gaps/Notes:
+
+      - Planner remediation loop added immediately after this retest; freeze/gate
+      rewired to wait for next fix+retest chain.
+
+      '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
     name: storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
     status: pending

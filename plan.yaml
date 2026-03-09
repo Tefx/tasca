@@ -24817,6 +24817,7 @@ phases:
     - guard_followup2_cleanup.storage-guard-verify
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     - guard_followup2_cleanup.freeze
     agent: gate-reviewer
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint

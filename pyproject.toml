@@ -52,7 +52,7 @@ dev = [
 [project.scripts]
 tasca = "tasca.main:main"
 tasca-mcp = "tasca.shell.mcp.server:run_mcp_server"
-invar = "tasca.shell.invar_entrypoint:main"
+invar = "tasca_invar_entrypoint:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -61,7 +61,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/tasca"]
 artifacts = ["src/tasca/web/dist/**"]
-include = ["src/tasca/**/*.md"]
+include = ["src/tasca/**/*.md", "src/tasca_invar_entrypoint.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

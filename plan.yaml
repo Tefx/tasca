@@ -25423,6 +25423,54 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T13:56:45.295689+00:00'
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
+    name: storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
+    status: pending
+    description: 'Fix the direct `/Users/tefx/.local/bin/invar guard` entrypoint so
+      the zero-file policy is enforced consistently instead of returning PASS with
+      `files_checked: 0` and skipping runtime checks.
+
+
+      prior_loop: [guard_followup2_cleanup.storage-guard-verify-retest.fix-entrypoint-and-zero-file-policy,
+      guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy]
+
+      remaining_blocker: direct-path guard invocation can still bypass zero-file enforcement
+      and report a false PASS
+
+      why_new_loop: the prior remediation closed the repo-path behavior but did not
+      prove or enforce the same policy on the direct installed entrypoint path
+
+
+      Requirements:
+
+      - enforce the same zero-file failure semantics on the direct installed entrypoint
+      path as the repo-owned invocation path
+
+      - remove path-dependent policy divergence that allows unintentional bypass
+
+      - preserve existing non-zero-file guard behavior and runtime checks
+
+      - document any compatibility boundary if the direct path must delegate through
+      a single shared policy surface
+
+
+      Out of scope:
+
+      - unrelated guard output formatting changes
+
+      - broader CLI redesign beyond unifying zero-file enforcement'
+    verification: '- Main path: targeted regression proves direct `/Users/tefx/.local/bin/invar
+      guard` no longer returns PASS when zero files are checked
+
+      - Failure path: focused regression covers zero-file invocation on the direct
+      entrypoint and confirms runtime checks are not silently skipped behind a PASS
+      result
+
+      - Proof: policy behavior matches repo-owned invocation for zero-file enforcement
+      and does not regress non-zero-file guard execution'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

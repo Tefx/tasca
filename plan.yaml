@@ -26774,6 +26774,52 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
     agent: python-senior
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
+    name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      repo-owned direct-invocation path remediation from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: `uv run invar guard` still works from repo scope and its guidance/zero-file
+      behavior is unchanged
+
+      - Happy path: the new repo-owned direct invocation path executes deterministically
+      from repo scope without depending on an absent host-global binary
+
+      - Edge case: invoking the previously referenced host-global path remains unnecessary
+      for verification and is explicitly not required
+
+      - Error scenarios: unsupported direct invocation still produces explicit guidance
+      rather than opaque import/module-path failures
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute `uv run invar guard` from repo scope and capture actual
+      output proving supported guidance and zero-file policy behavior remain unchanged
+
+      - Execute the repo-owned direct invocation path from repo scope and capture
+      actual output
+
+      - Confirm the verification path no longer depends on `/Users/tefx/.local/bin/invar`
+
+      - Confirm unsupported direct invocation guidance is explicit and deterministic,
+      without opaque import/module-path failure UX
+
+      - Record any remaining blocker or should-fix inconsistency'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-repo-owned-direct-invocation-path
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

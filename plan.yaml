@@ -25510,7 +25510,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
     name: storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
-    status: claimed
+    status: done
     description: 'Fix the direct `/Users/tefx/.local/bin/invar guard` entrypoint so
       the zero-file policy is enforced consistently instead of returning PASS with
       `files_checked: 0` and skipping runtime checks.
@@ -25558,6 +25558,56 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-09T14:03:41.320966+00:00'
+    done_at: '2026-03-09T14:27:13.895574+00:00'
+    evidence: 'Artifact:
+
+      - PR: worker commits `981e731`, `63d8848`; squashed to main as `f22b510`
+
+
+      Verification:
+
+      - Run: `uv run pytest tests/unit/test_invar_entrypoint.py -v` -> PASS (`7 passed`),
+      including focused regression for direct-entrypoint fallback wiring.
+
+      - Run: `uv tool uninstall tasca && uv tool install --editable --from . tasca`
+      -> direct `/Users/tefx/.local/bin/invar` now resolves to repo entrypoint path
+      for deterministic behavior.
+
+      - Run: `/Users/tefx/.local/bin/invar guard` (zero changed py files) -> exits
+      with explicit policy message; no misleading PASS JSON.
+
+      - Run: `/Users/tefx/.local/bin/invar guard --all` -> PASS with non-zero execution
+      (`summary.files_checked: 68`, errors 0), confirming non-zero-file behavior preserved.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
+
+
+      Commit hash(es):
+
+      - Worker: `981e731`, `63d8848`
+
+      - Main squash: `f22b510`
+
+
+      Files changed:
+
+      - `src/tasca/shell/invar_entrypoint.py`
+
+      - `tests/unit/test_invar_entrypoint.py`
+
+
+      Gaps/Notes:
+
+      - Direct-entrypoint proof depends on local direct script being installed from
+      this repo (`uv tool install --editable --from . tasca`) during verification.
+
+      - Worker reported upstream/out-of-scope behavior: `uvx invar-tools guard <single-file>`
+      may still report zero files in this environment.
+
+      '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     name: storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     status: pending

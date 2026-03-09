@@ -24780,6 +24780,7 @@ phases:
       - No code changes occur after freeze capture until gate review completes'
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     agent: integration-verifier
   - id: guard_followup2_cleanup.gate
     name: gate

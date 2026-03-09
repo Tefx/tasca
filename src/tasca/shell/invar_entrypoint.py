@@ -106,7 +106,15 @@ def _enforce_changed_files_policy(argv: Sequence[str], repo_root: Path) -> None:
     message = (
         "invar entrypoint policy: no changed Python files found for "
         "`invar guard` changed-mode. Use `invar guard --all` for meaningful "
-        "verification."
+        "verification.\n"
+        "\n"
+        "Supported invar guard usage from repo root:\n"
+        "  - invar guard --all          # Full project verification\n"
+        "  - invar guard <path>         # Check specific file/directory\n"
+        "  - uv run invar guard --all   # Via uv run (recommended)\n"
+        "\n"
+        "For CI/release, use: invar guard --all\n"
+        "For MCP/tools, use: uvx invar-tools guard --all"
     )
     raise SystemExit(message)
 

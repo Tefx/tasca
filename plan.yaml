@@ -24771,11 +24771,12 @@ phases:
     verification: '- Freeze evidence contains commit SHA, worktree status, environment
       note, and command list
 
-      - Freeze occurs only after the remediation retest evidence is available
+      - Freeze occurs only after the remediation retest evidence is available, including
+      direct entrypoint and zero-file policy checks
 
       - No code changes occur after freeze capture until gate review completes'
     depends_on:
-    - guard_followup2_cleanup.storage-guard-verify-retest
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
     agent: integration-verifier
   - id: guard_followup2_cleanup.gate
     name: gate

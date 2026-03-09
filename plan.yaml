@@ -24934,7 +24934,7 @@ phases:
       \ scope; project-managed entrypoint path is fixed.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest
     name: storage-guard-verify-retest
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-run the verification
       after `guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint` and try
       to break the repaired auth and guard-entrypoint paths.
@@ -25019,6 +25019,72 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T01:03:13.028294+00:00'
+    done_at: '2026-03-09T13:48:54.323088+00:00'
+    evidence: '## Retest Report
+
+
+      **Tester**: integration-verifier
+
+      **Scope**: auth route regression + guard entrypoint packaging regression
+
+      **Original verify step**: guard_followup2_cleanup.storage-guard-verify
+
+
+      ### Commands executed
+
+      ```bash
+
+      uv run pytest -v tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth
+
+      invar guard
+
+      uv run invar guard
+
+      ```
+
+
+      ### Actual output
+
+      ```text
+
+      tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth
+      PASSED
+
+      invar guard -> ModuleNotFoundError: No module named ''invar.shell.commands.hooks''
+
+      uv run invar guard -> status passed, files_checked 0 on clean tree
+
+      ```
+
+
+      ### Findings
+
+      - blocker: direct `invar guard` crashes from global entrypoint.
+
+      - should_fix: `uv run invar guard` can pass with zero checked files.
+
+
+      ### Verdict
+
+      - ISSUES_FOUND
+
+
+      Commit hash(es):
+
+      - none (verify-only)
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest
+
+
+      Gaps/Notes:
+
+      - Remediation steps were added by planner and wired into freeze/gate before
+      phase closure.
+
+      '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-fix-entrypoint-and-zero-file-policy
     name: storage-guard-verify-retest.fix-entrypoint-and-zero-file-policy
     status: pending

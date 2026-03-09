@@ -51,6 +51,7 @@ dev = [
 [project.scripts]
 tasca = "tasca.main:main"
 tasca-mcp = "tasca.shell.mcp.server:run_mcp_server"
+invar = "tasca.shell.invar_entrypoint:main"
 
 [build-system]
 requires = ["hatchling"]

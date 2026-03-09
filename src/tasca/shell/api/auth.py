@@ -85,11 +85,19 @@ def bearer_scheme() -> "HTTPBearer":
 # Module-level sentinel - initialized lazily
 _bearer_scheme: "HTTPBearer | None" = None
 
+# FastAPI dependency default for credentials extraction.
+# Source: Route dependencies use Depends(verify_admin_token), so this function
+# must declare how credentials are injected from Authorization header.
+if Depends is not None:
+    _credentials_dependency = Depends(bearer_scheme())
+else:
+    _credentials_dependency = None
+
 
 # @shell_orchestration: FastAPI dependency that validates HTTP Authorization header and raises HTTPException
 # @shell_complexity: Auth validation requires multiple branches (disabled, missing, malformed, invalid)
 async def verify_admin_token(
-    credentials: "HTTPAuthorizationCredentials | None" = None,
+    credentials: "HTTPAuthorizationCredentials | None" = _credentials_dependency,
 ) -> None:
     """
     Verify admin Bearer token for protected endpoints.
@@ -119,9 +127,6 @@ async def verify_admin_token(
         >>> # Authorization: "Bearer wrong-token"
         >>> # Raises HTTPException(401, "Invalid or missing token")
     """
-    # Handle lazy initialization of bearer_scheme for environments without fastapi
-    # This avoids import-time errors during doctest collection
-
     # Validate token using constant-time comparison (never log or print the token value)
     token = credentials.credentials if credentials else None
     if not validate_bearer_token(token or "", settings.admin_token):

@@ -24781,6 +24781,7 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     agent: integration-verifier
   - id: guard_followup2_cleanup.gate
     name: gate

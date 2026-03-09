@@ -25471,6 +25471,62 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-entrypoint-and-zero-file-policy
     agent: python-senior
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
+    name: storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      final remediation for direct entrypoint zero-file enforcement from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: repo-owned and direct entrypoint invocations behave consistently
+      when files are present
+
+      - Edge cases: zero-file invocation through the direct installed entrypoint,
+      path-dependent invocation differences
+
+      - Error scenarios: zero-file runs fail instead of reporting PASS with `files_checked:
+      0`, runtime checks are not skipped behind a false PASS
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute the direct installed entrypoint and repo-owned invocation
+      paths with zero-file and non-zero-file scenarios
+
+      - Capture actual command output showing zero-file policy enforcement on the
+      direct path
+
+      - Confirm any remaining path-dependent behavior is non-blocking and explicitly
+      justified'
+    evidence_template: "## Verification Report\n\n**Tester**: integration-verifier\
+      \ (independent of implementation)\n**Scope**: direct entrypoint zero-file enforcement\n\
+      **Independence Level**: L1\n**Timestamp**: <ISO 8601>\n\n### Test Execution\n\
+      - Commands executed:\n  ```\n  <actual direct-entrypoint and repo-path commands>\n\
+      \  ```\n- Output summary: <key results>\n\n### Issues Found\n\nFinding issues\
+      \ is the primary value of verification.\n\n| Severity   | Description   | Location\
+      \                | Reproduction |\n| ---------- | ------------- | -----------------------\
+      \ | ------------ |\n| blocker    | <issue>       | <entrypoint or file>    |\
+      \ <steps>      |\n| should_fix | <issue>       | <location>              | <steps>\
+      \      |\n| suggestion | <improvement> | <context>               | -       \
+      \     |\n| tech_debt  | <known debt>  | <location>              | -        \
+      \    |\n\n### Coverage Assessment\n- Happy path verified: ✅/❌\n- Edge cases\
+      \ tested: <count>\n  - direct entrypoint zero-file path\n  - repo-owned zero-file\
+      \ path\n  - non-zero-file comparison path\n- NOT tested: <areas not covered\
+      \ and why>\n\n### Verdict\n- [ ] **PASS**: No issues found (coverage justified\
+      \ above)\n- [ ] **ISSUES_FOUND**: See issues table above\n- [ ] **INCOMPLETE**:\
+      \ <reason>\n\n**Confidence**: high/medium/low"
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-zero-file-enforcement
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

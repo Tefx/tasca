@@ -25947,7 +25947,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
-    status: claimed
+    status: done
     description: 'Fix (HIGH): close the remaining direct guard invocation blockers
       found by `guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance`.
 
@@ -26055,6 +26055,34 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-09T15:00:34.217748+00:00'
+    done_at: '2026-03-09T15:15:44.325497+00:00'
+    evidence: "## Remediation Evidence\n\n**Priority**: HIGH\n**Prior loop**:\n- guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance\n\
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance\n\
+      \n**Main-path command**:\n```\nuv run invar guard\n```\n\n**Main-path output**:\n\
+      ```\ninvar entrypoint policy: no changed Python files found for `invar guard`\
+      \ changed-mode. Use `invar guard --all` for meaningful verification.\n\nSupported\
+      \ invar guard usage from repo root:\n  - invar guard --all\n  - invar guard\
+      \ <path>\n  - uv run invar guard --all\n\nFor CI/release, use: invar guard --all\n\
+      For MCP/tools, use: uvx invar-tools guard --all\n```\n\n**Unsupported direct\
+      \ command**:\n```\ninvar guard\n```\n\n**Unsupported direct output**:\n```\n\
+      Unsupported direct `invar` invocation.\nResolved command: /Users/tefx/.local/share/uv/tools/tasca/bin/invar\n\
+      \nUse a supported invocation from repository root:\n  - uv run invar guard --all\n\
+      \  - uv run invar guard <path>\n  - uvx invar-tools guard --all\n```\n\n**Remaining\
+      \ blocker closed**: yes — supported `uv run invar guard` now enforces zero-file\
+      \ policy and no longer emits misleading PASS for changed-mode zero-file runs.\n\
+      **Scope preserved**: storage/persistence semantics untouched; changes constrained\
+      \ to guard entrypoint/invocation surfaces and dependency wiring.\n\nSpec link:\n\
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix\n\
+      \nCommit hash(es):\n- Worker: `72d975fa20338047148ee587d5c48ab9dc7c2a53`\n-\
+      \ Main squash: `f22e82d`\n\nFiles changed:\n- `pyproject.toml`\n- `uv.lock`\n\
+      - `src/tasca/shell/invar_entrypoint.py`\n- `tests/unit/test_invar_entrypoint.py`\n\
+      \nVerification:\n- Run: `uv run pytest -q tests/unit/test_invar_entrypoint.py`\
+      \ -> `9 passed`.\n- Run: `uv run invar guard src/tasca/shell/invar_entrypoint.py`\
+      \ -> pass (warnings only).\n- Run: `uv run invar guard` -> explicit zero-file\
+      \ policy message.\n\nGaps/Notes:\n- Direct invocation validation in this host\
+      \ required making repo entrypoint importable (`PYTHONPATH`) because host shim\
+      \ resolution is external.\n- Worker reported host-level shim may still be path-dependent\
+      \ outside supported repo scope.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     status: pending

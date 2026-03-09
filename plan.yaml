@@ -26087,7 +26087,7 @@ phases:
       \ outside supported repo scope.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the direct
       guard invocation remediation from a fresh perspective.
 
@@ -26139,6 +26139,91 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T15:16:00.443772+00:00'
+    done_at: '2026-03-09T15:19:35.481315+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: direct guard invocation policy and guidance remediation
+
+      **Independence Level**: L1
+
+
+      ### Test Execution
+
+      - Commands executed:
+
+      ```
+
+      uv run invar guard
+
+      invar guard
+
+      ```
+
+      - Actual outputs:
+
+      ```
+
+      uv run invar guard -> policy message shown for zero changed files with supported
+      invocation guidance.
+
+      invar guard -> ModuleNotFoundError: No module named ''tasca'' traceback.
+
+      ```
+
+
+      ### Issues Found
+
+      | Severity | Description | Location | Reproduction |
+
+      | --- | --- | --- | --- |
+
+      | blocker | Unsupported raw direct invocation remains opaque traceback instead
+      of clear signposted guidance. | `/Users/tefx/.local/bin/invar` | From worktree
+      root run `invar guard`. |
+
+      | should_fix | none | n/a | n/a |
+
+
+      ### Coverage Assessment
+
+      - Supported repo path verified: ✅
+
+      - Zero-file policy enforced: ✅
+
+      - Unsupported direct invocation signposted: ❌
+
+      - NOT tested: repeated multi-repo determinism and additional flags, excluded
+      per scoped command set.
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [x] ISSUES_FOUND
+
+      - [ ] INCOMPLETE
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
+
+
+      Commit hash(es):
+
+      - none (verify-only)
+
+
+      Gaps/Notes:
+
+      - Planner remediation chain added (fix + retest + freeze/gate rewiring) before
+      closure per blocker handling.
+
+      '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-guidance
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-guidance
     status: pending

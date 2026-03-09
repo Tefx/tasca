@@ -25984,6 +25984,58 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     agent: python-senior
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
+    name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the direct
+      guard invocation remediation from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: supported repo-owned `uv run invar guard` enforces the zero-file
+      policy and does not report a false PASS with `files_checked: 0`
+
+      - Edge cases: repo-root invocation remains deterministic without ambient import-path
+      setup
+
+      - Error scenarios: raw direct `invar guard` is clearly signposted as unsupported
+      or redirected, without an opaque `ModuleNotFoundError` traceback
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute `uv run invar guard` from repo scope and capture actual
+      output proving zero-file policy enforcement when no files are checked
+
+      - Execute raw `invar guard` and capture actual output proving the unsupported
+      path is clearly signposted and non-opaque
+
+      - Confirm the supported path behavior still works without ambient import-path
+      setup
+
+      - Record whether any blocker or should-fix issue remains'
+    evidence_template: "## Verification Report\n\n**Tester**: integration-verifier\
+      \ (independent of implementation)\n**Scope**: direct guard invocation policy\
+      \ and guidance remediation\n**Independence Level**: L1\n\n### Test Execution\n\
+      - Commands executed:\n  ```\n  uv run invar guard\n  invar guard\n  ```\n- Actual\
+      \ outputs:\n  ```\n  <paste stdout/stderr for both commands>\n  ```\n\n### Issues\
+      \ Found\n| Severity | Description | Location | Reproduction |\n| --- | --- |\
+      \ --- | --- |\n| blocker | <issue or none> | <path/command> | <steps> |\n| should_fix\
+      \ | <issue or none> | <path/command> | <steps> |\n\n### Coverage Assessment\n\
+      - Supported repo path verified: ✅/❌\n- Zero-file policy enforced: ✅/❌\n- Unsupported\
+      \ direct invocation signposted: ✅/❌\n- NOT tested: <areas omitted and why>\n\
+      \n### Verdict\n- [ ] PASS\n- [ ] ISSUES_FOUND\n- [ ] INCOMPLETE"
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

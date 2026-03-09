@@ -24783,6 +24783,7 @@ phases:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
     agent: integration-verifier
   - id: guard_followup2_cleanup.gate
     name: gate

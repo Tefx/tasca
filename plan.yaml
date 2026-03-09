@@ -25698,7 +25698,7 @@ phases:
       \ step chain was added by planner and wired into freeze/gate before closure.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
     name: storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
-    status: claimed
+    status: done
     description: 'Fix (MEDIUM): make repo-scope `invar guard` invocation deterministic
       or explicitly guided when using the direct entrypoint.
 
@@ -25770,6 +25770,27 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-09T14:36:47.056043+00:00'
+    done_at: '2026-03-09T14:50:55.705586+00:00'
+    evidence: "## Fix Evidence\n\n**Issue**: direct `invar guard` may fail with `ModuleNotFoundError`\
+      \ outside repo-owned invocation context\n\n**Repo-scoped path implemented**:\n\
+      ```\nuv run invar guard --all\ninvar guard --all\ninvar guard <path>\nuvx invar-tools\
+      \ guard --all\n```\n\n**Behavior change or guidance**:\n```\ninvar entrypoint\
+      \ policy: no changed Python files found for `invar guard` changed-mode. Use\
+      \ `invar guard --all` for meaningful verification.\n\nSupported invar guard\
+      \ usage from repo root:\n  - invar guard --all          # Full project verification\n\
+      \  - invar guard <path>         # Check specific file/directory\n  - uv run\
+      \ invar guard --all   # Via uv run (recommended)\n\nFor CI/release, use: invar\
+      \ guard --all\nFor MCP/tools, use: uvx invar-tools guard --all\n```\n\n**Non-goal\
+      \ preserved**: zero-file enforcement semantics unchanged on supported repo-owned\
+      \ path.\n\nSpec link:\n- guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance\n\
+      \nCommit hash(es):\n- none on merge (worker reported local commit `7d16630`,\
+      \ but branch produced no net diff against current main at merge time)\n\nFiles\
+      \ changed:\n- none on merge (changes were already present in main)\n\nVerification:\n\
+      - Run: `uv run invar guard` (no changes) -> guidance message shown with supported\
+      \ commands.\n- Run: `uv run invar guard --all` -> passes (`files_checked: 68`,\
+      \ `errors: 0`).\n- Run: `uv run pytest tests/unit/test_invar_entrypoint.py`\
+      \ -> `7 passed`.\n\nGaps/Notes:\n- Step validated as no-op at merge boundary\
+      \ because effective guidance behavior already present in main from prior remediation.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     name: storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     status: pending

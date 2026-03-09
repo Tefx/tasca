@@ -25738,6 +25738,89 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     agent: python-executor
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
+    name: storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      follow-up usability remediation for direct `invar guard` invocation from a fresh
+      perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: supported repo-owned invocation is deterministic from repo scope
+
+      - Edge cases: user runs the documented or wrapped command from repo root without
+      ambient import-path setup
+
+      - Error scenarios: unsupported raw direct invocation remains ambiguous, misleading,
+      or regresses zero-file enforcement expectations
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute the supported repo-owned invocation path exactly as documented
+      or wrapped
+
+      - Capture actual output showing deterministic behavior or explicit guidance
+      within repo scope
+
+      - Probe the unsupported raw direct invocation enough to confirm the remaining
+      behavior is clearly signposted and non-blocking
+
+      - Confirm zero-file policy enforcement still works on the supported path'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: direct-entrypoint invocation guidance / wrapper follow-up
+
+      **Independence Level**: L1
+
+
+      ### Commands executed
+
+      ```
+
+      <paste exact supported repo-scoped command>
+
+      <paste any comparison command for raw direct invocation>
+
+      ```
+
+
+      ### Actual output
+
+      ```
+
+      <paste stdout/stderr>
+
+      ```
+
+
+      ### Findings
+
+      - Deterministic repo-scoped behavior: <yes/no>
+
+      - Unsupported raw direct invocation clearly signposted: <yes/no>
+
+      - Zero-file enforcement unchanged on supported path: <yes/no>
+
+
+      ### Verdict
+
+      - PASS | ISSUES_FOUND | INCOMPLETE'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

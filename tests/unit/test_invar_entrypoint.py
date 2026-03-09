@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import sys
 import types
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,17 @@ def test_install_missing_hooks_stub_injects_hooks_module(monkeypatch) -> None:
     hooks_module = sys.modules.get("invar.shell.commands.hooks")
     assert hooks_module is not None
     assert hasattr(hooks_module, "app")
+
+
+def test_install_missing_hooks_stub_allows_missing_invar_root(monkeypatch) -> None:
+    """Missing root invar package is tolerated for uvx fallback path."""
+
+    def _raise_missing(name: str):
+        raise ModuleNotFoundError(name="invar")
+
+    monkeypatch.setattr(invar_entrypoint.importlib, "import_module", _raise_missing)
+
+    invar_entrypoint._install_missing_hooks_stub()
 
 
 def test_enforce_changed_files_policy_rejects_zero_file_guard(monkeypatch) -> None:
@@ -88,3 +100,33 @@ def test_main_installs_hooks_stub_before_importing_guard(monkeypatch) -> None:
             sys.modules["invar.shell.commands.guard"] = original_guard_module
 
     assert called == {"stub": True, "app": True}
+
+
+def test_run_guard_app_falls_back_to_uvx_when_guard_unavailable(monkeypatch) -> None:
+    """Guard runner uses uvx fallback when invar package is unavailable."""
+
+    called = {"uvx": False}
+
+    original_import = __import__
+
+    def _fake_import(
+        name: str,
+        globals: dict[str, object] | None = None,
+        locals: dict[str, object] | None = None,
+        fromlist: Sequence[str] = (),
+        level: int = 0,
+    ) -> object:
+        if name == "invar.shell.commands.guard":
+            raise ModuleNotFoundError(name="invar")
+        return original_import(name, globals, locals, fromlist, level)
+
+    def _fake_uvx(argv: Sequence[str]) -> None:
+        called["uvx"] = True
+        assert list(argv) == ["guard", "tests/unit/test_invar_entrypoint.py"]
+
+    monkeypatch.setattr("builtins.__import__", _fake_import)
+    monkeypatch.setattr(invar_entrypoint, "_invoke_uvx_invar_guard", _fake_uvx)
+
+    invar_entrypoint._run_guard_app(["guard", "tests/unit/test_invar_entrypoint.py"])
+
+    assert called == {"uvx": True}

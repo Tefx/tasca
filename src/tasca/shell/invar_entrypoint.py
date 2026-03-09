@@ -24,6 +24,8 @@ def _install_missing_hooks_stub() -> None:
         importlib.import_module("invar.shell.commands.hooks")
         return
     except ModuleNotFoundError as error:
+        if error.name == "invar":
+            return
         if error.name != "invar.shell.commands.hooks":
             raise
 
@@ -109,10 +111,41 @@ def _enforce_changed_files_policy(argv: Sequence[str], repo_root: Path) -> None:
     raise SystemExit(message)
 
 
-def main() -> None:
-    """Dispatch to the upstream invar guard Typer app."""
-    _enforce_changed_files_policy(sys.argv[1:], Path.cwd())
-    _install_missing_hooks_stub()
-    from invar.shell.commands.guard import app
+def _invoke_uvx_invar_guard(argv: Sequence[str]) -> None:
+    """Fallback to uvx invar-tools when importable invar package is missing.
+
+    Source: direct installed entrypoint may run in an environment that has the
+    tasca console script but not an importable `invar` package.
+    """
+
+    command = ["uvx", "invar-tools", *argv]
+    completed = subprocess.run(command, check=False)
+    if completed.returncode != 0:
+        raise SystemExit(completed.returncode)
+
+
+def _run_guard_app(argv: Sequence[str]) -> None:
+    """Run invar guard app via import, with uvx fallback when unavailable."""
+
+    try:
+        from invar.shell.commands.guard import app
+    except ModuleNotFoundError as error:
+        if error.name not in {
+            "invar",
+            "invar.shell",
+            "invar.shell.commands",
+            "invar.shell.commands.guard",
+        }:
+            raise
+        _invoke_uvx_invar_guard(argv)
+        return
 
     app()
+
+
+def main() -> None:
+    """Dispatch to the upstream invar guard Typer app."""
+    argv = sys.argv[1:]
+    _enforce_changed_files_policy(argv, Path.cwd())
+    _install_missing_hooks_stub()
+    _run_guard_app(argv)

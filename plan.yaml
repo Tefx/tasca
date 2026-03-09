@@ -26600,7 +26600,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       direct-entrypoint traceback/module-path UX remediation from a fresh perspective.
 
@@ -26644,6 +26644,52 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T19:44:10.581297+00:00'
+    done_at: '2026-03-09T19:47:20.599870+00:00'
+    evidence: 'Artifact:
+
+      - PR: none (verify-only)
+
+
+      Verification:
+
+      - Run: `uv run invar guard` -> PASS output with structured JSON (`files_checked:
+      0`, runtime checks skipped due no changed files).
+
+      - Run: `/Users/tefx/.local/bin/invar guard` -> failed (`no such file or directory`)
+      in this environment; prior `invar guard` invocation was also unavailable (`command
+      not found`).
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
+
+
+      Commit hash(es):
+
+      - none
+
+
+      Files changed:
+
+      - none
+
+
+      Gaps/Notes:
+
+      - Direct entrypoint UX could not be validated via host-global binary path because
+      that executable is absent in this worktree environment.
+
+      - Per blocker handling, planner added a new HIGH fix/retest chain to make direct-invocation
+      verification deterministic via repo-owned path and rewired freeze/gate accordingly.
+
+
+      discovered_issues:
+
+      - Direct global entrypoint path dependency is environment-sensitive and currently
+      unavailable (`/Users/tefx/.local/bin/invar` missing).
+
+      '
   - id: guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
     name: bump-invar-tools-dev-dependency-1-19-7
     status: done

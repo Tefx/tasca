@@ -26717,6 +26717,63 @@ phases:
       - No unrelated file modifications; dependency bump constrained to declared scope.
 
       '
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-repo-owned-direct-invocation-path
+    name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-repo-owned-direct-invocation-path
+    status: pending
+    description: 'Priority: HIGH
+
+
+      Fix: replace the hard-coded absent host-global direct entrypoint verification
+      path with a deterministic, repo-owned invocation path for direct-invocation
+      UX testing.
+
+
+      prior_loop: [guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux,
+      guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux]
+
+      remaining_blocker: direct entrypoint verification still depends on `/Users/tefx/.local/bin/invar`,
+      which does not exist in this environment and blocks deterministic validation
+
+      why_new_loop: the prior traceback/module-path UX remediation improved messaging
+      but did not eliminate the environment-specific dependency on an absent global
+      binary path
+
+
+      Requirements:
+
+      - Make direct-invocation UX testable through a repo-controlled canonical wrapper
+      or equivalent repo-owned entrypoint
+
+      - Remove any hard-coded dependence on `/Users/tefx/.local/bin/invar` for verification
+      evidence
+
+      - Preserve supported `uv run invar guard` behavior and guidance unchanged
+
+      - Keep unsupported direct invocation guidance deterministic and explicit from
+      repo scope
+
+      - Document the supported repo-owned path that verifiers must exercise
+
+
+      Out of scope:
+
+      - Requiring installation of a host-global `invar` binary
+
+      - Changing the supported `uv run invar guard` contract
+
+      - Broad packaging or release workflow changes beyond what is needed for a repo-owned
+      direct-invocation path'
+    verification: '- Main path: focused regression proves the repo-owned direct invocation
+      path can be executed from repo scope and emits the intended UX/guidance
+
+      - Failure path: regression proves verification no longer depends on the absent
+      `/Users/tefx/.local/bin/invar` host-global path
+
+      - Proof: supported `uv run invar guard` behavior remains unchanged and the verifier
+      instructions point only at repo-owned invocation paths'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

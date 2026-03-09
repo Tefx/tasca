@@ -25008,6 +25008,122 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T01:03:13.028294+00:00'
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-fix-entrypoint-and-zero-file-policy
+    name: storage-guard-verify-retest.fix-entrypoint-and-zero-file-policy
+    status: pending
+    description: 'Fix the remaining guard entrypoint and zero-file verification issues
+      found by `guard_followup2_cleanup.storage-guard-verify-retest`.
+
+
+      Scope:
+
+      - Treat the direct `invar guard` failure through `/Users/tefx/.local/bin/invar`
+      as a blocker/high issue.
+
+      - Treat `uv run invar guard` reporting PASS with `files_checked: 0` when no
+      files changed as a coherent should_fix in the same remediation step.
+
+
+      Required in-repo mitigation:
+
+      - Make repo-owned entrypoint behavior deterministic even when a globally installed
+      `invar` package is missing `invar.shell.commands.hooks`.
+
+      - Do not defer to vague environment notes; add executable detection, clearer
+      failure behavior, or an explicit repo-scoped entrypoint policy enforced by code/tests.
+
+      - Clarify and enforce expected semantics when guard is invoked with no changed
+      files so a zero-file run cannot be misread as meaningful verification.
+
+
+      Likely touch paths:
+
+      - `src/tasca/shell/invar_entrypoint.py`
+
+      - `tests/unit/test_invar_entrypoint.py`
+
+      - `pyproject.toml`
+
+      - any repo-local guard wrapper/policy helper or test covering zero-file guard
+      semantics
+
+
+      Regression expectations:
+
+      - Add or update targeted tests for direct entrypoint fallback/import behavior.
+
+      - Add or update targeted tests for no-changed-files / `files_checked: 0` behavior
+      and emitted policy/error text.
+
+
+      Out of scope:
+
+      - Fixing the user''s global install outside the repo.
+
+      - Broad guard feature redesign unrelated to entrypoint determinism or zero-file
+      semantics.'
+    verification: '- Main path: repo-scoped direct `invar guard` invocation now behaves
+      deterministically and no longer dies on missing `invar.shell.commands.hooks`
+
+      - Failure/policy path: zero-changed-file invocation produces explicit, test-backed
+      behavior that cannot be mistaken for a successful meaningful guard verification
+
+      - Proof: targeted unit/contract tests cover both entrypoint fallback and zero-file
+      semantics, and affected docs/messages align with the enforced policy'
+    evidence_template: '## Remediation Evidence
+
+
+      **Blocker addressed**: direct `invar guard` entrypoint failure
+
+      **Should-fix addressed**: zero-file guard pass semantics
+
+
+      ### Files changed
+
+      - <path>
+
+
+      ### Main-path proof
+
+      ```bash
+
+      <paste exact command(s) used to exercise the repo-owned entrypoint>
+
+      ```
+
+      ```text
+
+      <paste actual output>
+
+      ```
+
+
+      ### Failure/policy proof
+
+      ```bash
+
+      <paste exact command/test for zero-file behavior>
+
+      ```
+
+      ```text
+
+      <paste actual output showing explicit handling>
+
+      ```
+
+
+      ### Tests updated
+
+      - <exact test ids>
+
+
+      ### Remaining ambiguity
+
+      - <none or explicit note>'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

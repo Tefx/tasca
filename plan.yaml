@@ -26504,7 +26504,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
-    status: claimed
+    status: done
     description: 'Fix the remaining direct-entrypoint blocker for raw `invar guard`
       from `/Users/tefx/.local/bin/invar`.
 
@@ -26545,6 +26545,56 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-09T19:35:20.431736+00:00'
+    done_at: '2026-03-09T19:43:56.829805+00:00'
+    evidence: 'Artifact:
+
+      - PR: worker commit `16f562d3f760239bb47041746e15205daa1ddb09`, squashed to
+      main `f15ec69`
+
+
+      Verification:
+
+      - Run: `uv run pytest tests/unit/test_invar_entrypoint.py tests/unit/test_tasca_invar_entrypoint.py
+      -q` -> `11 passed`, including new missing-`tasca` guidance regression.
+
+      - Run: `uv run python -c "... import tasca_invar_entrypoint as e ... e.main()"`
+      with simulated `ModuleNotFoundError(name=''tasca'')` -> explicit guidance emitted
+      (supported commands shown), no opaque traceback.
+
+      - Run: `invar_guard(path=<worktree>, changed=true)` -> PASS (`errors=0`, `warnings=0`,
+      `files_checked=1`).
+
+      - Run: `uv run invar guard` -> supported flow preserved; guard executes with
+      existing policy path.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
+
+
+      Commit hash(es):
+
+      - Worker: `16f562d3f760239bb47041746e15205daa1ddb09`
+
+      - Main squash: `f15ec69`
+
+
+      Files changed:
+
+      - `pyproject.toml`
+
+      - `src/tasca_invar_entrypoint.py`
+
+      - `tests/unit/test_tasca_invar_entrypoint.py`
+
+
+      Gaps/Notes:
+
+      - Worker reported relative-path invocation handling remains as existing policy
+      behavior and was left unchanged due scope boundary.
+
+      '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
     status: pending

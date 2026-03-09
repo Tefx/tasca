@@ -25612,7 +25612,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     name: storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       final remediation for direct entrypoint zero-file enforcement from a fresh perspective.
 
@@ -25668,6 +25668,34 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T14:27:27.837178+00:00'
+    done_at: '2026-03-09T14:36:23.872557+00:00'
+    evidence: "## Verification Report\n\n**Tester**: integration-verifier (independent\
+      \ of implementation)\n**Scope**: direct entrypoint zero-file enforcement\n**Independence\
+      \ Level**: L1\n**Timestamp**: 2026-03-09T14:34:26Z\n\n### Test Execution\n-\
+      \ Commands executed:\n  - `git status --porcelain -- \"*.py\"`\n  - `invar guard`\n\
+      \  - `PYTHONPATH=src invar guard; echo EXIT:$?`\n  - `uv run python -c \"import\
+      \ sys; from tasca.shell.invar_entrypoint import main; sys.argv=['invar','guard'];\
+      \ main()\"; echo EXIT:$?`\n  - `python3 -c \"from pathlib import Path; Path('tmp_guard_probe.py').write_text('x\
+      \ = 1\\n', encoding='utf-8')\"`\n  - `PYTHONPATH=src invar guard; echo EXIT:$?`\n\
+      \  - `uv run python -c \"import sys; from tasca.shell.invar_entrypoint import\
+      \ main; sys.argv=['invar','guard']; main()\"; echo EXIT:$?`\n- Output summary:\n\
+      \  - Supported repo path enforces zero-file policy with non-zero exit and explicit\
+      \ message.\n  - Non-zero-file scenario passes with files checked for both supported\
+      \ direct-with-repo-path and repo-owned invocation.\n  - Raw ambient `invar guard`\
+      \ without repo import context can still fail with `ModuleNotFoundError: tasca`.\n\
+      \n### Issues Found\n| Severity | Description | Location | Reproduction |\n|\
+      \ --- | --- | --- | --- |\n| blocker | none | - | - |\n| should_fix | Ambient\
+      \ global direct invocation without repo import path can fail (`ModuleNotFoundError:\
+      \ tasca`), which is path-dependent UX ambiguity. | `~/.local/bin/invar` environment\
+      \ path | run `invar guard` from worktree root without repo path setup |\n| suggestion\
+      \ | Document canonical supported invocation path to avoid PATH/env ambiguity.\
+      \ | tooling docs/policy surface | compare direct ambient vs supported invocation\
+      \ |\n| tech_debt | none | - | - |\n\n### Coverage Assessment\n- Happy path verified:\
+      \ ✅\n- Edge cases verified: ✅\n- Error scenarios verified: ✅\n\n### Verdict\n\
+      - [ ] PASS\n- [x] ISSUES_FOUND\n- [ ] INCOMPLETE\n\nSpec link:\n- guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement\n\
+      \nCommit hash(es):\n- none (verify-only)\n\nGaps/Notes:\n- Temporary probe file\
+      \ used for non-zero scenario was cleaned up.\n- Per should_fix handling, remediation\
+      \ step chain was added by planner and wired into freeze/gate before closure.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
     name: storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
     status: pending

@@ -26442,6 +26442,50 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
     agent: python-senior
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
+    name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      direct-entrypoint traceback/module-path UX remediation from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: supported repo-owned `uv run invar guard` still behaves exactly
+      as before, including zero-file policy guidance
+
+      - Edge cases: raw direct `/Users/tefx/.local/bin/invar guard` fails deterministically
+      without ambient import-path setup
+
+      - Error scenarios: the raw direct path now emits explicit supported-entrypoint
+      guidance instead of opaque `ModuleNotFoundError: No module named ''tasca''`
+
+      - Consistency: unsupported direct-entrypoint UX is no more confusing than the
+      supported `uv run invar guard` guidance path
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute `uv run invar guard` from repo scope and capture actual
+      output proving the zero-file policy and supported guidance UX are unchanged
+
+      - Execute raw direct `/Users/tefx/.local/bin/invar guard` from repo scope without
+      ambient import-path setup and capture actual output
+
+      - Confirm the direct raw invocation now surfaces explicit supported-entrypoint
+      guidance instead of opaque `ModuleNotFoundError`
+
+      - Record any remaining blocker or should-fix inconsistency'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

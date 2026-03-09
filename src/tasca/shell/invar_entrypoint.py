@@ -55,6 +55,42 @@ def _has_explicit_target(argv: Sequence[str]) -> bool:
     return any(not token.startswith("-") for token in argv[1:])
 
 
+# @invar:allow shell_result: invocation path predicate for entrypoint policy
+def _is_supported_repo_invocation(argv0: str, repo_root: Path) -> bool:
+    """Return True when command resolves to repo-managed `.venv/bin/invar`."""
+
+    candidate = Path(argv0)
+    if not candidate.is_absolute():
+        return False
+    supported = repo_root / ".venv" / "bin" / "invar"
+    return candidate.resolve() == supported.resolve()
+
+
+# @invar:allow shell_result: formats user guidance message for unsupported invocation
+def _unsupported_direct_invocation_message(argv0: str) -> str:
+    """Build guidance for unsupported raw direct `invar` invocation."""
+
+    return (
+        "Unsupported direct `invar` invocation.\n"
+        f"Resolved command: {Path(argv0).resolve()}\n"
+        "\n"
+        "Use a supported invocation from repository root:\n"
+        "  - uv run invar guard --all\n"
+        "  - uv run invar guard <path>\n"
+        "  - uvx invar-tools guard --all"
+    )
+
+
+def _enforce_supported_invocation(argv0: str, argv: Sequence[str], repo_root: Path) -> None:
+    """Reject unsupported direct guard invocation with explicit guidance."""
+
+    if not _is_guard_invocation(argv):
+        return
+    if _is_supported_repo_invocation(argv0, repo_root):
+        return
+    raise SystemExit(_unsupported_direct_invocation_message(argv0))
+
+
 # @invar:allow shell_result: entrypoint helper reads git status for guard policy
 def _list_changed_python_files(repo_root: Path) -> set[str]:
     """Collect changed Python files from tracked and untracked git state.
@@ -154,6 +190,7 @@ def _run_guard_app(argv: Sequence[str]) -> None:
 def main() -> None:
     """Dispatch to the upstream invar guard Typer app."""
     argv = sys.argv[1:]
+    _enforce_supported_invocation(sys.argv[0], argv, Path.cwd())
     _enforce_changed_files_policy(argv, Path.cwd())
     _install_missing_hooks_stub()
     _run_guard_app(argv)

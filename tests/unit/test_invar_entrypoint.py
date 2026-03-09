@@ -71,6 +71,21 @@ def test_enforce_changed_files_policy_allows_explicit_target(monkeypatch) -> Non
     )
 
 
+def test_enforce_supported_invocation_rejects_non_repo_binary() -> None:
+    """Direct invar binary outside repo venv exits with guidance."""
+
+    repo_root = Path("/repo")
+    with pytest.raises(SystemExit, match="Unsupported direct `invar` invocation"):
+        invar_entrypoint._enforce_supported_invocation("/usr/local/bin/invar", ["guard"], repo_root)
+
+
+def test_enforce_supported_invocation_allows_repo_venv_binary() -> None:
+    """Repo-local venv invar binary is considered supported."""
+
+    repo_root = Path("/repo")
+    invar_entrypoint._enforce_supported_invocation("/repo/.venv/bin/invar", ["guard"], repo_root)
+
+
 def test_main_installs_hooks_stub_before_importing_guard(monkeypatch) -> None:
     """main() should dispatch guard app without crashing on missing hooks."""
 

@@ -26401,6 +26401,47 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T15:26:20.591918+00:00'
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
+    name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
+    status: pending
+    description: 'Fix the remaining direct-entrypoint blocker for raw `invar guard`
+      from `/Users/tefx/.local/bin/invar`.
+
+
+      prior_loop: [guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance]
+
+      remaining_blocker: raw direct `invar guard` still fails with opaque `ModuleNotFoundError:
+      No module named ''tasca''` instead of explicit supported-entrypoint guidance,
+      and UX is inconsistent with supported `uv run invar guard` guidance.
+
+      why_new_loop: the prior traceback-guidance remediation did not intercept this
+      direct entrypoint path, so a targeted follow-up is required rather than reusing
+      the completed retest step.
+
+
+      Requirements:
+
+      - make the unsupported direct `/Users/tefx/.local/bin/invar guard` path fail
+      with explicit, actionable guidance instead of an opaque import traceback
+
+      - align messaging with supported `uv run invar guard` guidance UX where feasible
+      without changing the supported-path zero-file policy
+
+      - preserve supported repo-owned `uv run invar guard` behavior exactly
+
+      - document scope boundaries if compatibility wrappers or launcher-path handling
+      remain intentionally deferred'
+    verification: '- Main path: targeted regression proves supported `uv run invar
+      guard` behavior and zero-file policy remain unchanged
+
+      - Failure path: targeted regression proves raw direct `/Users/tefx/.local/bin/invar
+      guard` emits explicit supported-entrypoint guidance instead of opaque `ModuleNotFoundError`
+
+      - Proof: implementation evidence identifies whether launcher-path compatibility
+      handling is fully covered or explicitly deferred'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

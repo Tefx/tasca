@@ -25947,7 +25947,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix
-    status: pending
+    status: claimed
     description: 'Fix (HIGH): close the remaining direct guard invocation blockers
       found by `guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance`.
 
@@ -26053,6 +26053,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-09T15:00:34.217748+00:00'
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest
     status: pending

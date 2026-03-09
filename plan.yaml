@@ -25016,6 +25016,20 @@ phases:
       found by `guard_followup2_cleanup.storage-guard-verify-retest`.
 
 
+      Remediation consolidation:
+
+      - prior_loop: `guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint`,
+      `guard_followup2_cleanup.storage-guard-verify-retest`
+
+      - remaining_blocker: direct `invar guard` from `/Users/tefx/.local/bin/invar`
+      crashes with `ModuleNotFoundError: invar.shell.commands.hooks`
+
+      - why_new_loop: the prior remediation fixed repo auth wiring and improved guard
+      entrypoint behavior, but independent retest still found an external/global entrypoint
+      crash plus ambiguous zero-file PASS semantics that require explicit repo-owned
+      mitigation and executable policy.
+
+
       Scope:
 
       - Treat the direct `invar guard` failure through `/Users/tefx/.local/bin/invar`
@@ -25029,6 +25043,10 @@ phases:
 
       - Make repo-owned entrypoint behavior deterministic even when a globally installed
       `invar` package is missing `invar.shell.commands.hooks`.
+
+      - If the global tool behavior is external, encode a repo-executable mitigation
+      or policy assertion in code/tests so the supported invocation path fails clearly
+      or reroutes deterministically instead of crashing.
 
       - Do not defer to vague environment notes; add executable detection, clearer
       failure behavior, or an explicit repo-scoped entrypoint policy enforced by code/tests.

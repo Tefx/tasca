@@ -26573,6 +26573,37 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
     agent: integration-verifier
+  - id: guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
+    name: bump-invar-tools-dev-dependency-1-19-7
+    status: pending
+    description: 'Bump the dev dependency `invar-tools` to `1.19.7` and refresh the
+      lockfile so the repo pins the same tool version in both dependency metadata
+      and resolved state.
+
+
+      Scope:
+
+      - update `pyproject.toml` dev dependencies to include `invar-tools==1.19.7`
+
+      - update `uv.lock` so the resolved package entry reflects `1.19.7`
+
+      - keep the step runnable now; do not add unrelated dependency upgrades or extra
+      prerequisite work unless strictly required by the lock refresh
+
+
+      Touch paths:
+
+      - `pyproject.toml`
+
+      - `uv.lock`'
+    verification: '- `pyproject.toml` dependency spec includes `invar-tools==1.19.7`
+      in the dev dependency group
+
+      - `uv.lock` resolves `invar-tools` at `1.19.7`
+
+      - No unrelated dependency/version churn is introduced beyond what is strictly
+      required for the lockfile refresh'
+    agent: python-executor
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

@@ -26349,7 +26349,7 @@ phases:
       \ this step.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       traceback-guidance remediation from a fresh perspective.
 
@@ -26403,6 +26403,91 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T15:26:20.591918+00:00'
+    done_at: '2026-03-09T15:31:04.500254+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: direct raw `invar guard` guidance remediation vs supported `uv run
+      invar guard`
+
+      **Independence Level**: L1
+
+
+      ### Test Execution
+
+      - Commands executed:
+
+      ```
+
+      uv run invar guard
+
+      invar guard
+
+      ```
+
+      - Output summary: supported path enforces zero-file policy with explicit guidance;
+      raw direct path still produced opaque `ModuleNotFoundError: No module named
+      ''tasca''` traceback.
+
+
+      ### Issues Found
+
+      | Severity | Description | Location | Reproduction |
+
+      | --- | --- | --- | --- |
+
+      | blocker | Raw direct invocation remains opaque/failing without explicit user
+      guidance. | `/Users/tefx/.local/bin/invar` | Run `invar guard` from repo root
+      in isolated worktree. |
+
+      | should_fix | Command-level UX remains inconsistent between `invar guard` and
+      `uv run invar guard`. | invocation path behavior | Run both commands and compare
+      outputs. |
+
+      | suggestion | Direct entrypoint should catch bootstrap/import failures and
+      emit supported-path guidance text. | entrypoint bootstrap | N/A |
+
+      | tech_debt | User-level shim remains brittle across isolated worktrees due
+      module-path dependence. | `~/.local/bin/invar` | N/A |
+
+
+      ### Coverage Assessment
+
+      - Supported `uv run invar guard` zero-file behavior verified: ✅
+
+      - Raw direct invocation guidance verified: ❌
+
+      - NOT tested: `invar guard --all`, path-targeted modes, CI `uvx` modes (out
+      of scoped two-command run)
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [x] ISSUES_FOUND
+
+      - [ ] INCOMPLETE
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-guidance
+
+
+      Commit hash(es):
+
+      - none (verify-only)
+
+
+      Gaps/Notes:
+
+      - Per blocker handling, new planner-created fix/retest chain added and freeze/gate
+      rewired before closure.
+
+      '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-traceback-module-path-ux
     status: pending

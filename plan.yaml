@@ -25793,7 +25793,7 @@ phases:
       \ because effective guidance behavior already present in main from prior remediation.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
     name: storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       follow-up usability remediation for direct `invar guard` invocation from a fresh
       perspective.
@@ -25874,6 +25874,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-09T14:51:12.558511+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

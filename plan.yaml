@@ -25666,6 +25666,78 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-09T14:27:27.837178+00:00'
+  - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
+    name: storage-guard-verify-retest-retest-fix-direct-entrypoint-invocation-guidance
+    status: pending
+    description: 'Fix (MEDIUM): make repo-scope `invar guard` invocation deterministic
+      or explicitly guided when using the direct entrypoint.
+
+
+      Issue addressed:
+
+      - Raw direct `invar guard` without the repo import path can fail with `ModuleNotFoundError:
+      No module named ''tasca''` depending on environment/path state.
+
+      - Repo-owned invocation already enforces the zero-file policy correctly, so
+      this loop is limited to usability/tooling clarity inside supported repo scope.
+
+
+      Scope:
+
+      - Add deterministic invocation guidance and/or wrapper behavior for repo-owned
+      guard usage.
+
+      - Preserve existing zero-file enforcement behavior on supported repo-owned paths.
+
+      - Do not broaden support guarantees for arbitrary external environments.
+
+
+      Acceptance:
+
+      - A repo-scoped invocation path is documented or wrapped so operators do not
+      depend on ambient import-path state.
+
+      - Failure messaging or wrapper behavior clearly distinguishes unsupported raw
+      direct invocation from supported repo-owned usage.
+
+      - No change to storage cleanup semantics or zero-file policy enforcement.'
+    verification: '- Main path: targeted proof shows the supported repo-owned invocation
+      is deterministic or clearly wrapped/guided from the repo root
+
+      - Failure path: raw direct invocation either emits clearer guidance or is explicitly
+      documented as outside supported repo scope
+
+      - Zero-file enforcement behavior remains unchanged on the supported path'
+    evidence_template: '## Fix Evidence
+
+
+      **Issue**: direct `invar guard` may fail with `ModuleNotFoundError` outside
+      repo-owned invocation context
+
+
+      **Repo-scoped path implemented**:
+
+      ```
+
+      <paste exact supported command or wrapper path>
+
+      ```
+
+
+      **Behavior change or guidance**:
+
+      ```
+
+      <paste user-facing message, docs snippet, or wrapper output>
+
+      ```
+
+
+      **Non-goal preserved**: zero-file enforcement semantics unchanged on supported
+      repo-owned path.'
+    depends_on:
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
+    agent: python-executor
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

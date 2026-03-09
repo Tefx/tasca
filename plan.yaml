@@ -24808,7 +24808,7 @@ phases:
     agent: gate-reviewer
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
     name: storage-guard-fix-auth-and-entrypoint
-    status: claimed
+    status: done
     description: 'Fix the issues surfaced by `guard_followup2_cleanup.storage-guard-verify`
       in the API auth path and guard entrypoint wiring.
 
@@ -24891,6 +24891,36 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-08T20:47:09.040781+00:00'
+    done_at: '2026-03-09T01:02:59.730125+00:00'
+    evidence: "## Fix Evidence\n\n**Issues addressed**:\n- `tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth`\
+      \ returned `401` instead of `200`.\n- direct `invar guard` failed with `ModuleNotFoundError:\
+      \ invar.shell.commands.hooks`.\n\n**Files changed**:\n- `src/tasca/shell/api/auth.py`\n\
+      - `src/tasca/shell/invar_entrypoint.py`\n- `pyproject.toml`\n- `tests/unit/test_invar_entrypoint.py`\n\
+      \n**Root cause**:\n- Auth path: `verify_admin_token` was used as FastAPI dependency\
+      \ without a declared credential dependency source, so credentials remained `None`\
+      \ and validation failed to 401.\n- Entrypoint packaging: certain installs import\
+      \ `invar.shell.commands.guard` which hard-imported hooks and aborted when hooks\
+      \ module unavailable; entrypoint shim needed to avoid hard-fail path.\n\n**Local\
+      \ verification commands**:\n```bash\nuv sync --dev\nuv run mypy src/tasca/shell/invar_entrypoint.py\
+      \ src/tasca/shell/api/auth.py\nuv run pytest tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth\
+      \ tests/unit/test_invar_entrypoint.py -v\n.venv/bin/invar guard --help\nPATH=\"\
+      $(pwd)/.venv/bin:$PATH\" invar guard --help\nPATH=\"$(pwd)/.venv/bin:$PATH\"\
+      \ invar guard\n```\n\n**Local verification output**:\n```text\nSuccess: no issues\
+      \ found in 2 source files\n\ntests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth\
+      \ PASSED\ntests/unit/test_invar_entrypoint.py::test_install_missing_hooks_stub_injects_hooks_module\
+      \ PASSED\n============================== 2 passed in 0.30s ===============================\n\
+      \n.venv/bin/invar guard --help\nUsage: invar guard [OPTIONS] [PATH]\n... (help\
+      \ rendered, no ModuleNotFoundError)\n\nPATH=\"$(pwd)/.venv/bin:$PATH\" invar\
+      \ guard --help\nUsage: invar guard [OPTIONS] [PATH]\n... (help rendered, no\
+      \ ModuleNotFoundError)\n\nPATH=\"$(pwd)/.venv/bin:$PATH\" invar guard\n{\n \
+      \ \"status\": \"passed\",\n  \"summary\": {\n    \"files_checked\": 2,\n   \
+      \ \"errors\": 0,\n    \"warnings\": 3,\n    \"infos\": 0\n  }\n}\n\n✓ Final:\
+      \ guard PASS | 0 errors, 3 warnings\n```\n\nCommit hash(es):\n- Worker branch\
+      \ commits: `9031588`, `0772096`\n- Main squash merge commit: `d271a5f`\n\nSpec\
+      \ link:\n- guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint\n\n\
+      Gaps/Notes:\n- Regression coverage includes existing route test plus new entrypoint\
+      \ test.\n- Global external tool installation outside project venv is out of\
+      \ scope; project-managed entrypoint path is fixed.\n"
   - id: guard_followup2_cleanup.storage-guard-verify-retest
     name: storage-guard-verify-retest
     status: pending

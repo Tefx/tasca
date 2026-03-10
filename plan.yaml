@@ -23253,7 +23253,7 @@ phases:
       step).'
   - id: guard_followup2_boundary.mcp-server-boundary-fix
     name: mcp-server-boundary-fix
-    status: pending
+    status: claimed
     description: 'Resolve the remaining MCP boundary findings in `src/tasca/shell/mcp/server.py`
       and the paired entrypoint/runtime seam in `src/tasca/shell/mcp/entrypoints.py`
       without changing the public MCP tool surface.
@@ -23385,6 +23385,8 @@ phases:
     depends_on:
     - guard_followup2_boundary.auth-config-boundary-fix
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-10T09:59:07.721373+00:00'
   - id: guard_followup2_boundary.freeze
     name: freeze
     status: pending

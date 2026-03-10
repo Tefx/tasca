@@ -29467,6 +29467,48 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence
     agent: python-senior
+  - id: guard_followup2_cleanup.gate-retest-presence-artifact-anti-loop-signal
+    name: gate-retest-presence-artifact-anti-loop-signal
+    status: pending
+    description: 'Priority: MEDIUM
+
+
+      As an INDEPENDENT REVIEWER (`gate-reviewer`), re-test the presence-artifact
+      durability fix from a fresh perspective after `guard_followup2_cleanup.gate-fix-presence-artifact-anti-loop-signal`.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: `presence-check.json` retains an explicit deterministic signal,
+      or equivalent deterministic field, showing both the raw-zero-file branch and
+      canonical branch were captured
+
+      - Edge cases: artifact write/update order cannot erase the raw-zero-file signal
+      after canonical capture
+
+      - Error scenarios: single-owner classification semantics change, canonical/non-canonical
+      ownership wording drifts, or the regression would miss a dropped/overwritten
+      field
+
+      - Anti-loop closure: artifact evidence remains durable enough that the same
+      field regression cannot silently weaken gate evidence again
+
+
+      Independence Level: L1'
+    verification: '- Execute the focused regression covering presence artifact field
+      durability and paste the exact result
+
+      - Inspect the produced presence artifact or equivalent deterministic output
+      and confirm both raw-zero-file and canonical branches are machine-detectable
+
+      - Verify single-owner classification semantics are unchanged while the artifact
+      durability issue is closed'
+    depends_on:
+    - guard_followup2_cleanup.gate-fix-presence-artifact-anti-loop-signal
+    agent: gate-reviewer
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

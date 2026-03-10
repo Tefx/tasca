@@ -27733,6 +27733,113 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T05:16:12.049799+00:00'
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
+    name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
+    status: pending
+    description: 'HIGH-priority strategy remediation for the persistent blocker after
+      `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch`.
+
+
+      prior_loop: [guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch,
+      guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch]
+
+      remaining_blocker: The exact command `uv run --group dev invar guard` still
+      reports PASS with `files_checked=0` even though targeted tests exercise a different
+      or insufficiently enforced path.
+
+      why_new_loop: Another narrow command-resolution patch would risk infinite churn
+      because prior loops proved targeted regressions can pass while the blocked command
+      remains unchanged. This loop must close recurrence by choosing one unambiguous
+      strategy and wiring acceptance to it.
+
+
+      Strategy requirements:
+
+      - Option A (preferred if feasible): hard-fix the exact blocked command so `uv
+      run --group dev invar guard` deterministically exercises the enforced zero-file
+      policy and no longer reports PASS with `files_checked=0`.
+
+      - Option B (only if Option A is externally controlled or still ambiguous after
+      repo inspection): codify a repo-owned canonical command such as `./scripts/invar
+      guard`, add machine-checked enforcement so repo tests and docs verify that contract,
+      and make `uv run --group dev invar guard` emit explicit non-ambiguous guidance
+      or redirection instead of being treated as semantic proof.
+
+      - Whichever option is chosen, reconcile `.venv/bin/invar`, `uv run --group dev`
+      resolution, and the tested code path so one supported command path owns the
+      contract.
+
+      - Update any repo-owned wrappers, command-resolution checks, and regression
+      tests needed so the chosen contract is executable and auditable from a clean
+      checkout.
+
+      - Out of scope: adding another fallback command family without retiring ambiguity;
+      acceptance must converge on one canonical behavior, not multiple loosely-equivalent
+      paths.'
+    verification: '- Implement either Option A or Option B, and state explicitly which
+      option was chosen and why the other was rejected or unnecessary
+
+      - Add or update focused regressions that machine-check the chosen contract against
+      the exact blocked command and the canonical repo-owned path (if Option B)
+
+      - Main path: prove the supported command path enforces non-pass zero-file behavior
+      or explicit canonical-contract guidance
+
+      - Failure path: prove ambiguous resolution cannot silently PASS with `files_checked=0`
+      on `uv run --group dev invar guard`
+
+      - Proof: no remaining acceptance text in this phase treats an ambiguous command-resolution
+      path as sufficient closure'
+    evidence_template: '## Strategy Remediation Evidence
+
+
+      **Chosen option**: A|B
+
+      **Reason**: <why this closes the blocker and prevents recurrence>
+
+
+      **Resolution mapping**:
+
+      - `uv run --group dev invar guard` resolves to: <path/module>
+
+      - Canonical repo-owned command (if any): <command>
+
+      - Enforcement owner in repo: <file/test>
+
+
+      **Exact commands exercised**:
+
+      ```
+
+      <exact blocked command>
+
+      <canonical command if Option B>
+
+      ```
+
+
+      **Actual outputs**:
+
+      ```
+
+      <paste command output>
+
+      ```
+
+
+      **Regression coverage added/updated**:
+
+      - <test names>
+
+
+      **Anti-loop rationale**:
+
+      - <why future targeted tests cannot pass while the blocked command remains ambiguous>
+
+      '
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

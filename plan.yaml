@@ -22966,7 +22966,7 @@ phases:
       - Remaining full-guard failures are unrelated and reported separately by verifier.'
 - id: guard_followup2_boundary
   name: Guard Follow-up 2 — Boundary
-  status: locked
+  status: pending
   depends_on:
   - guard_followup2_cleanup
   steps:
@@ -24460,7 +24460,7 @@ phases:
       \ performed."
 - id: guard_followup2_cleanup
   name: Guard Follow-up 2 - Cleanup
-  status: in_progress
+  status: done
   depends_on:
   - guard_followup2_correctness
   steps:
@@ -29541,7 +29541,7 @@ phases:
       - Worker reported clean worktree after commit.'
   - id: guard_followup2_cleanup.gate-retest-presence-artifact-anti-loop-signal
     name: gate-retest-presence-artifact-anti-loop-signal
-    status: claimed
+    status: done
     description: 'Priority: MEDIUM
 
 
@@ -29583,6 +29583,53 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T08:53:21.187354+00:00'
+    done_at: '2026-03-10T09:45:17.705249+00:00'
+    evidence: 'Artifact:
+
+      - presence-check artifact now retains raw_zero_file_pass with presence checks
+      and canonical capture fields in same payload
+
+      - raw-guard and canonical-guard artifacts preserve non-canonical vs canonical
+      owner_classification
+
+
+      Verification:
+
+      - uv run --group dev pytest -q tests/unit/test_guard_contract.py::test_run_guard_contract_writes_expected_artifacts
+      tests/unit/test_guard_contract.py::test_presence_artifact_keeps_raw_zero_file_pass_after_presence_validation
+      tests/unit/test_guard_contract.py::test_presence_artifact_keeps_raw_zero_file_pass_false_with_canonical_capture
+      -> 3 passed
+
+      - uv run --group dev pytest -q tests/unit/test_guard_contract.py::test_build_zero_file_contract_message_enforces_canonical_commands
+      tests/unit/test_guard_contract.py::test_run_guard_contract_warns_on_zero_file_pass
+      -> 2 passed
+
+      - TASCA_GUARD_CONTRACT_ARTIFACT_DIR=/tmp/tasca-guard-contract-artifacts-audit
+      uv run --group dev guard-contract -> exit 0; artifacts machine-detectable for
+      raw-zero-file + canonical branches
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-retest-presence-artifact-anti-loop-signal
+
+
+      Files changed:
+
+      - none
+
+
+      Commit hash(es):
+
+      - none (verify-only step)
+
+
+      Gaps/Notes:
+
+      - canonical-branch/nonzero-raw case covered by focused regression; live run
+      demonstrates raw-zero-file branch in clean worktree.
+
+      - no discovered issues.'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

@@ -28973,6 +28973,136 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix
     agent: integration-verifier
+  - id: guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence
+    name: gate-fix-single-closure-owner-and-canonical-evidence
+    status: pending
+    description: 'HIGH-priority remediation to close the blocker reopened by `guard_followup2_cleanup.gate`
+      around deterministic closure ownership, canonical enforcement, and evidence
+      artifacts.
+
+
+      prior_loop: [guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix,
+      guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest]
+
+      remaining_blocker: Exactly one deterministic closure owner is still not enforced
+      because Option B ownership remains ambiguous, canonical vs non-canonical command
+      wording still competes, `guard-contract` can EXIT 0 while the raw signal is
+      PASS with `files_checked=0`, executable/path reconciliation for `uv run --group
+      dev invar guard` remains incomplete, and repository evidence artifacts still
+      miss the required canonical outputs.
+
+      why_new_loop: Editing the prior loop is insufficient because the blocker narrowed
+      from general closure/freeze semantics to a specific anti-loop enforcement gap
+      spanning runtime policy, entrypoint resolution, repo-owned contract ownership,
+      and evidence linkage. A new bounded remediation is required so the gate cannot
+      reopen on the same warning-only / zero-file / dual-canonical shape.
+
+
+      Scope the fix to:
+
+      - `src/tasca/shell/guard_contract.py`
+
+      - `src/tasca/shell/invar_runtime_policy.py`
+
+      - `src/tasca/shell/invar_entrypoint.py`
+
+      - `src/tasca_invar_entrypoint.py`
+
+      - `scripts/invar`
+
+      - `plan.yaml` evidence requirements linkage only as needed for canonical artifact
+      expectations
+
+
+      Acceptance hardening:
+
+      - Define one deterministic closure owner only, with no competing Option B interpretation
+      and no dual-canonical wording left in code, scripts, policy text, or plan-linked
+      evidence requirements.
+
+      - Separate canonical vs non-canonical commands explicitly so warning-only `errors=0`
+      output cannot loop forever: the chosen canonical contract must enforce failure
+      when closure requirements are unmet, while non-canonical informational commands
+      cannot by themselves fail closure.
+
+      - Reconcile executable/path behavior for `uv run --group dev invar guard` against
+      the repo-owned contract path, including which executable resolves, which path
+      is authoritative, and how regressions exercise the same owner.
+
+      - Require canonical evidence artifacts in repo-owned evidence outputs: pasted
+      command lines, actual stdout/stderr, chosen closure owner, non-canonical classification,
+      and artifact presence checks must all align.
+
+      - Prove anti-loop conditions: the same combination of warning-only `errors=0`,
+      `files_checked=0`, ambiguous ownership wording, or missing artifact outputs
+      cannot satisfy the canonical rule or reopen the same blocker without a new behavioral
+      change.
+
+
+      Failure-mode checklist:
+
+      - relative vs absolute executable/path resolution for canonical and raw commands
+
+      - missing evidence artifact behavior and explicit failure when canonical outputs
+      are absent
+
+      - explicit clear / null overwrite semantics for command classification if policy
+      metadata is persisted
+
+      - stale wording vs runtime behavior precedence when policy text and executable
+      output disagree
+
+      - partial-write / mismatch behavior when canonical artifact generation succeeds
+      incompletely
+
+
+      State semantics:
+
+      - Last-writer-wins applies only to the single chosen closure owner declaration
+      and its linked policy metadata.
+
+      - Canonical command classification, artifact expectations, and repo-owned executable
+      path must be preserved exactly.
+
+      - Backward-compatible legacy behavior is limited to informative raw command
+      output; it must not remain a second closure path.
+
+
+      Out-of-scope guardrail:
+
+      - Do not reopen unrelated storage cleanup or dependency-version scope.
+
+      - Do not introduce another fallback owner or alternate evidence path.
+
+      - Do not defer executable/path reconciliation or artifact enforcement to a later
+      loop.'
+    verification: '- Main path: focused regressions and contract evidence prove one
+      deterministic closure owner only, with canonical/non-canonical separation enforced
+      end-to-end
+
+      - Failure path: regression covers warning-only `errors=0` / `files_checked=0`,
+      missing canonical artifact outputs, and executable/path mismatch between `uv
+      run --group dev invar guard` and the repo-owned contract path
+
+      - Proof: no policy text, entrypoint behavior, or evidence linkage leaves competing
+      closure ownership alive, and no warning-only path can EXIT 0 while still satisfying
+      closure requirements'
+    evidence_template: "## Canonical Closure Remediation Evidence\n\n**Chosen closure\
+      \ owner**: <single canonical owner>\n**Repo-owned contract path**: <exact command/path>\n\
+      **Raw/non-canonical command**: `uv run --group dev invar guard`\n\n### Main-path\
+      \ proof\n- Exact canonical command executed:\n```\n<paste command>\n```\n- Actual\
+      \ output:\n```\n<paste stdout/stderr>\n```\n- Artifact files produced and stored:\n\
+      \  - <path>\n  - <path>\n\n### Failure-path proof\n- Warning-only / zero-file\
+      \ regression command:\n```\n<paste command or test>\n```\n- Actual output:\n\
+      ```\n<paste stdout/stderr>\n```\n- Missing-artifact or path-mismatch regression:\n\
+      ```\n<paste command or test>\n```\n- Actual output:\n```\n<paste stdout/stderr>\n\
+      ```\n\n### Anti-loop proof\n- No competing closure wording remains: <where checked>\n\
+      - Canonical vs non-canonical separation verified: <how>\n- Executable/path reconciliation\
+      \ verified: <how>\n- Evidence artifact presence verified: <paths + check>\n\
+      - Why the same blocker cannot recur on warning-only `errors=0`: <one paragraph>\n"
+    depends_on:
+    - guard_followup2_cleanup.gate
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

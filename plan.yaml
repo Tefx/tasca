@@ -27680,7 +27680,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the command-resolution
       blocker after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch`.
 
@@ -27725,6 +27725,51 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T05:16:12.049799+00:00'
+    done_at: '2026-03-10T05:21:44.610443+00:00'
+    evidence: 'Artifact:
+
+      - PR: none (verify-only)
+
+
+      Verification:
+
+      - Run: `uv run --group dev invar guard` -> still returns PASS JSON with `summary.files_checked:
+      0`.
+
+      - Run: `uv run --group dev python -c "import shutil; print(shutil.which(''invar''))"`
+      -> resolves `.venv/bin/invar`.
+
+      - Run: `uv run --group dev pytest -v tests/unit/test_invar_runtime_policy.py
+      tests/unit/test_invar_entrypoint.py` -> `15 passed`.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
+
+
+      Commit hash(es):
+
+      - none
+
+
+      Files changed:
+
+      - none
+
+
+      Gaps/Notes:
+
+      - Blocker remains: exact blocked command behavior still unchanged (`PASS` with
+      zero files checked).
+
+      - Evidence indicates command-resolution mismatch persists between tested policy
+      path and runtime command behavior.
+
+      - Planner added bounded strategy-remediation loop and updated freeze/gate acceptance
+      to prevent recurrence churn.
+
+      '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
     status: pending

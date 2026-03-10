@@ -24025,7 +24025,7 @@ phases:
       error envelope; output explicitly captured.'
   - id: guard_followup2_boundary.gate_retest
     name: Boundary gate retest
-    status: pending
+    status: claimed
     description: 'Independent gate re-review for `guard_followup2_boundary` after
       the MCP cleanup-proof fix and L3 failure-path retest.
 
@@ -24108,6 +24108,8 @@ phases:
     depends_on:
     - guard_followup2_boundary.retest_l3_mcp_failure_paths
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-03-10T10:35:41.038555+00:00'
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: done

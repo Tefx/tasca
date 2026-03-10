@@ -30836,13 +30836,13 @@ phases:
       - no discovered issues.'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
-  status: pending
+  status: in_progress
   depends_on:
   - guard_followup2_boundary
   steps:
   - id: guard_followup2_debt.allow-policy-normalization
     name: allow-policy-normalization
-    status: pending
+    status: claimed
     description: 'Normalize remaining `duplicate_escape_reason` findings and codify
       where `@invar:allow` is acceptable versus where real code changes are required.
 
@@ -30880,6 +30880,8 @@ phases:
 
       - Evidence lists each retained allow and why a real code change was not appropriate'
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-03-10T10:52:09.940079+00:00'
   - id: guard_followup2_debt.file-size-and-complexity-trim
     name: file-size-and-complexity-trim
     status: pending

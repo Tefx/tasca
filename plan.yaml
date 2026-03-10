@@ -27688,7 +27688,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the command-resolution
       blocker after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch`.
 
@@ -27731,6 +27731,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T05:16:12.049799+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

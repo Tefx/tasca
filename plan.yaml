@@ -27300,6 +27300,94 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-retest
     agent: python-senior
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
+    name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the blocker
+      after `guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement`.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: the supported `uv run --group dev invar guard` entrypoint enforces
+      the zero-file policy in a clean repo state
+
+      - Edge cases: changed-files mode remains auditable and deterministic on the
+      supported wrapper path
+
+      - Error scenarios: the exact blocked command output does not report `PASS` together
+      with `files_checked: 0`
+
+      - Auditability: paste the exact command and output used for the verdict
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute the exact blocked command `uv run --group dev invar guard`
+      in a clean-state repo and capture the full output
+
+      - Re-run the focused supported-entrypoint regression tests added for zero-file
+      enforcement
+
+      - Verdict is PASS only if the blocked command no longer reports `PASS` with
+      `files_checked: 0` and instead shows enforced zero-file policy behavior'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: supported `uv run --group dev invar guard` zero-file policy enforcement
+
+      **Independence Level**: L1
+
+
+      ### Test Execution
+
+      - Exact blocked command:
+
+      ```
+
+      uv run --group dev invar guard
+
+      ```
+
+      - Actual output:
+
+      ```
+
+      <paste stdout/stderr showing the zero-file case no longer reports PASS with
+      files_checked: 0>
+
+      ```
+
+      - Focused regression command(s):
+
+      ```
+
+      <paste exact regression test command(s)>
+
+      ```
+
+
+      ### Verdict
+
+      - [ ] PASS: blocked command no longer reports PASS with files_checked: 0
+
+      - [ ] ISSUES_FOUND: blocker or follow-on issue remains
+
+      - [ ] INCOMPLETE: evidence missing
+
+      '
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

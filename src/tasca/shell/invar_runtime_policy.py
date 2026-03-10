@@ -37,6 +37,9 @@ def _resolve_invar_executable(argv0: str) -> Path | None:
     if candidate.is_absolute():
         return candidate
 
+    if candidate.parent != Path(".") and candidate.exists():
+        return candidate.resolve()
+
     resolved = shutil.which(argv0)
     if resolved is None:
         return None
@@ -59,6 +62,8 @@ def _ambiguous_guard_token_message(executable: Path) -> str:
         "Use one of these supported commands:\n"
         "  - uv run --group dev invar --all\n"
         "  - uv run --group dev invar <path>\n"
+        "  - uv run --group dev invar guard --all\n"
+        "  - uv run --group dev invar guard <path>\n"
         "  - ./scripts/invar guard --all\n"
         "  - ./scripts/invar guard <path>"
     )

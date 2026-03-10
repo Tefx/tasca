@@ -21,7 +21,7 @@ def test_build_zero_file_contract_message_enforces_canonical_commands() -> None:
     message = guard_contract._build_zero_file_contract_message()
     assert "Canonical closure owner: guard-contract." in message
     assert "./scripts/invar guard --all" in message
-    assert "informational evidence" in message.lower()
+    assert "owner-controlled canonical evidence" in message.lower()
     assert "non-canonical standalone signal" in message
     assert "does not by itself determine gate closure" in message
     assert "uv run --group dev invar guard" in message
@@ -39,16 +39,35 @@ def test_run_guard_contract_warns_on_zero_file_pass(monkeypatch, capsys) -> None
 
     payload = '{"status":"passed","summary":{"files_checked":0}}'
 
-    def _fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(args=["uv"], returncode=0, stdout=payload, stderr="")
+    calls: list[list[str]] = []
+
+    def _fake_run(*args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        calls.append(command)
+        if command == ["uv", "run", "--group", "dev", "invar", "guard"]:
+            return subprocess.CompletedProcess(
+                args=command, returncode=0, stdout=payload, stderr=""
+            )
+        if command == ["./scripts/invar", "guard", "--all"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout='{"status":"passed","summary":{"files_checked":2}}',
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
     assert guard_contract.run_guard_contract() == 0
     captured = capsys.readouterr()
+    assert calls == [
+        ["uv", "run", "--group", "dev", "invar", "guard"],
+        ["./scripts/invar", "guard", "--all"],
+    ]
     assert "non-canonical standalone signal" in captured.err
     assert "does not by itself determine gate closure" in captured.err
     assert "Canonical closure owner: guard-contract." in captured.err
-    assert "informational evidence" in captured.err.lower()
 
 
 def test_run_guard_contract_passes_nonzero_file_guard(monkeypatch) -> None:
@@ -56,8 +75,18 @@ def test_run_guard_contract_passes_nonzero_file_guard(monkeypatch) -> None:
 
     payload = '{"status":"passed","summary":{"files_checked":1}}'
 
-    def _fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(args=["uv"], returncode=0, stdout=payload, stderr="")
+    def _fake_run(*args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        if command == ["uv", "run", "--group", "dev", "invar", "guard"]:
+            return subprocess.CompletedProcess(
+                args=command, returncode=0, stdout=payload, stderr=""
+            )
+        if command == ["./scripts/invar", "guard", "--all"]:
+            return subprocess.CompletedProcess(
+                args=command, returncode=0, stdout=payload, stderr=""
+            )
+        raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
     assert guard_contract.run_guard_contract() == 0
@@ -68,8 +97,18 @@ def test_run_guard_contract_warning_heavy_errors_zero_still_passes(monkeypatch, 
 
     payload = '{"status":"passed","summary":{"files_checked":2,"errors":0,"warnings":37,"infos":0}}'
 
-    def _fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(args=["uv"], returncode=0, stdout=payload, stderr="")
+    def _fake_run(*args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        if command == ["uv", "run", "--group", "dev", "invar", "guard"]:
+            return subprocess.CompletedProcess(
+                args=command, returncode=0, stdout=payload, stderr=""
+            )
+        if command == ["./scripts/invar", "guard", "--all"]:
+            return subprocess.CompletedProcess(
+                args=command, returncode=0, stdout=payload, stderr=""
+            )
+        raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.delenv("TASCA_FREEZE_HEAD", raising=False)
     monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
@@ -77,6 +116,87 @@ def test_run_guard_contract_warning_heavy_errors_zero_still_passes(monkeypatch, 
     captured = capsys.readouterr()
     assert "canonical closure owner is `guard-contract`" in captured.err
     assert "informational evidence only" in captured.err
+
+
+def test_run_guard_contract_fails_when_canonical_command_fails(monkeypatch) -> None:
+    """Canonical owner command return code determines closure result."""
+
+    def _fake_run(*args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        if command == ["uv", "run", "--group", "dev", "invar", "guard"]:
+            return subprocess.CompletedProcess(args=command, returncode=0, stdout="{}", stderr="")
+        if command == ["./scripts/invar", "guard", "--all"]:
+            return subprocess.CompletedProcess(
+                args=command, returncode=7, stdout="", stderr="failed"
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
+    assert guard_contract.run_guard_contract() == 7
+
+
+def test_run_guard_contract_writes_expected_artifacts(monkeypatch, tmp_path) -> None:
+    """Canonical and raw evidence artifacts include streams and ownership."""
+
+    payload = '{"status":"passed","summary":{"files_checked":1}}'
+
+    def _fake_run(*args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout=payload, stderr="")
+
+    monkeypatch.setenv(guard_contract._ARTIFACT_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
+
+    assert guard_contract.run_guard_contract() == 0
+
+    raw_artifact = tmp_path / guard_contract._ARTIFACTS["raw"]
+    canonical_artifact = tmp_path / guard_contract._ARTIFACTS["canonical"]
+    presence_artifact = tmp_path / guard_contract._ARTIFACTS["presence"]
+    assert raw_artifact.exists()
+    assert canonical_artifact.exists()
+    assert presence_artifact.exists()
+
+    raw_payload = raw_artifact.read_text(encoding="utf-8")
+    assert '"owner_classification": "non-canonical"' in raw_payload
+    assert '"command": "uv run --group dev invar guard"' in raw_payload
+    assert (
+        '"stdout": "{\\"status\\":\\"passed\\",\\"summary\\":{\\"files_checked\\":1}}"'
+        in raw_payload
+    )
+
+    canonical_payload = canonical_artifact.read_text(encoding="utf-8")
+    assert '"owner_classification": "canonical:guard-contract"' in canonical_payload
+    assert '"command": "./scripts/invar guard --all"' in canonical_payload
+
+    presence_payload = presence_artifact.read_text(encoding="utf-8")
+    assert '"all_present": true' in presence_payload
+    assert '"checks"' in presence_payload
+
+
+def test_run_guard_contract_fails_when_presence_artifact_missing(monkeypatch, tmp_path) -> None:
+    """Missing artifacts after command execution fail closure immediately."""
+
+    payload = '{"status":"passed","summary":{"files_checked":1}}'
+
+    def _fake_run(*args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout=payload, stderr="")
+
+    original_write = guard_contract._write_artifact
+
+    def _fake_write(path, payload_obj):
+        original_write(path, payload_obj)
+        if path.name == guard_contract._ARTIFACTS["presence"]:
+            path.unlink()
+
+    monkeypatch.setenv(guard_contract._ARTIFACT_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
+    monkeypatch.setattr(guard_contract, "_write_artifact", _fake_write)
+
+    assert guard_contract.run_guard_contract() == 2
 
 
 def test_is_plan_only_drift_accepts_plan_and_vectl_paths() -> None:

@@ -78,7 +78,7 @@ def test_run_guard_app_reports_guidance_for_non_fallback_module_missing(monkeypa
     message = str(exc_info.value)
     assert "Unable to start `invar guard`: missing module dependency." in message
     assert "Missing module: invar.shell.commands.hooks" in message
-    assert "uv run invar guard --all" in message
+    assert "uv run --group dev invar guard --all" in message
 
 
 def test_enforce_changed_files_policy_allows_guard_all(monkeypatch) -> None:
@@ -109,6 +109,7 @@ def test_enforce_supported_invocation_rejects_non_repo_binary() -> None:
     message = str(exc_info.value)
     assert "./scripts/invar guard --all" in message
     assert "/Users/tefx/.local/bin/invar" not in message
+    assert "uv run --group dev invar guard --all" in message
 
 
 def test_enforce_supported_invocation_allows_repo_venv_binary() -> None:
@@ -141,6 +142,7 @@ def test_main_installs_hooks_stub_before_importing_guard(monkeypatch) -> None:
     guard_module.__dict__["app"] = _app
 
     monkeypatch.setattr(invar_entrypoint, "_install_missing_hooks_stub", _stub)
+    monkeypatch.setattr(invar_entrypoint, "enforce_runtime_guard_contract", lambda *_: None)
     monkeypatch.setattr(invar_entrypoint, "_enforce_changed_files_policy", lambda *_: None)
 
     original_guard_module = sys.modules.get("invar.shell.commands.guard")
@@ -211,3 +213,25 @@ def test_invoke_uvx_invar_guard_allows_nonzero_file_pass(monkeypatch) -> None:
     monkeypatch.setattr(invar_entrypoint.subprocess, "run", _fake_run)
 
     invar_entrypoint._invoke_uvx_invar_guard(["guard"])
+
+
+def test_main_enforces_runtime_guard_contract_first(monkeypatch) -> None:
+    """Runtime policy executes before invocation/changed-files policy checks."""
+
+    order: list[str] = []
+
+    monkeypatch.setattr(
+        invar_entrypoint, "enforce_runtime_guard_contract", lambda *_: order.append("runtime")
+    )
+    monkeypatch.setattr(
+        invar_entrypoint, "_enforce_supported_invocation", lambda *_: order.append("supported")
+    )
+    monkeypatch.setattr(
+        invar_entrypoint, "_enforce_changed_files_policy", lambda *_: order.append("changed")
+    )
+    monkeypatch.setattr(invar_entrypoint, "_install_missing_hooks_stub", lambda: None)
+    monkeypatch.setattr(invar_entrypoint, "_run_guard_app", lambda *_: order.append("run"))
+
+    invar_entrypoint.main()
+
+    assert order == ["runtime", "supported", "changed", "run"]

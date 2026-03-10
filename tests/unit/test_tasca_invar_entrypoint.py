@@ -36,7 +36,7 @@ def test_main_reports_guidance_when_tasca_module_is_missing(monkeypatch) -> None
     message = str(exc_info.value)
     assert "Unable to start direct `invar` entrypoint" in message
     assert "Missing module: tasca" in message
-    assert "uv run invar guard --all" in message
+    assert "uv run --group dev invar guard --all" in message
 
 
 def test_pyproject_contract_keeps_repo_owned_invar_script() -> None:

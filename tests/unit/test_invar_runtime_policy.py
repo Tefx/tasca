@@ -53,3 +53,23 @@ def test_runtime_contract_skips_when_invar_name_cannot_be_resolved(
 
     monkeypatch.setattr(invar_runtime_policy.shutil, "which", lambda _: None)
     invar_runtime_policy.enforce_runtime_guard_contract(["invar", "guard"])
+
+
+def test_runtime_contract_resolves_relative_script_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Relative executable paths are resolved without PATH lookup."""
+
+    executable = tmp_path / "scripts" / "invar"
+    executable.parent.mkdir(parents=True)
+    executable.write_text("from invar.shell.commands.guard import app\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        invar_runtime_policy.enforce_runtime_guard_contract(
+            [str(executable.relative_to(tmp_path)), "guard"]
+        )
+
+    message = str(exc_info.value)
+    assert "Unsupported invocation: `invar guard` is ambiguous" in message
+    assert "uv run --group dev invar guard --all" in message

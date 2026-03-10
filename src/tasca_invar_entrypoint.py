@@ -12,8 +12,8 @@ def _missing_tasca_guidance(error: ModuleNotFoundError) -> str:
         f"Missing module: {missing_name}\n"
         "\n"
         "Use a supported invocation from repository root:\n"
-        "  - uv run invar guard --all\n"
-        "  - uv run invar guard <path>\n"
+        "  - uv run --group dev invar guard --all\n"
+        "  - uv run --group dev invar guard <path>\n"
         "  - uvx invar-tools guard --all"
     )
 

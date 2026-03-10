@@ -14,6 +14,8 @@ import types
 from collections.abc import Sequence
 from pathlib import Path
 
+from tasca.shell.invar_runtime_policy import enforce_runtime_guard_contract
+
 
 def _install_missing_hooks_stub() -> None:
     """Install a minimal hooks module when invar-tools lacks it.
@@ -88,8 +90,8 @@ def _unsupported_direct_invocation_message(argv0: str) -> str:
         "Use a supported invocation from repository root:\n"
         "  - ./scripts/invar guard --all\n"
         "  - ./scripts/invar guard <path>\n"
-        "  - uv run invar guard --all\n"
-        "  - uv run invar guard <path>\n"
+        "  - uv run --group dev invar guard --all\n"
+        "  - uv run --group dev invar guard <path>\n"
         "  - uvx invar-tools guard --all"
     )
 
@@ -160,7 +162,7 @@ def _enforce_changed_files_policy(argv: Sequence[str], repo_root: Path) -> None:
         "Supported invar guard usage from repo root:\n"
         "  - invar guard --all          # Full project verification\n"
         "  - invar guard <path>         # Check specific file/directory\n"
-        "  - uv run invar guard --all   # Via uv run (recommended)\n"
+        "  - uv run --group dev invar guard --all   # Via uv run (recommended)\n"
         "\n"
         "For CI/release, use: invar guard --all\n"
         "For MCP/tools, use: uvx invar-tools guard --all"
@@ -224,8 +226,8 @@ def _missing_module_guidance(error: ModuleNotFoundError) -> str:
         f"Missing module: {missing_name}\n"
         "\n"
         "Try one of the supported invocations from repository root:\n"
-        "  - uv run invar guard --all\n"
-        "  - uv run invar guard <path>\n"
+        "  - uv run --group dev invar guard --all\n"
+        "  - uv run --group dev invar guard <path>\n"
         "  - uvx invar-tools guard --all"
     )
 
@@ -252,6 +254,7 @@ def _run_guard_app(argv: Sequence[str]) -> None:
 def main() -> None:
     """Dispatch to the upstream invar guard Typer app."""
     argv = sys.argv[1:]
+    enforce_runtime_guard_contract([sys.argv[0], *argv])
     _enforce_supported_invocation(sys.argv[0], argv, Path.cwd())
     _enforce_changed_files_policy(argv, Path.cwd())
     try:

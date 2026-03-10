@@ -17,12 +17,13 @@ def _build_zero_file_contract_message() -> str:
     """Return actionable guidance for blocked zero-file PASS behavior."""
 
     return (
-        "guard contract violation: `uv run --group dev invar guard` returned PASS with "
+        "guard contract violation: raw `uv run --group dev invar guard` returned PASS with "
         "files_checked=0.\n"
-        "This output is ambiguous and cannot be used to close verification gates.\n"
-        "Use one of:\n"
-        "  - uv run --group dev invar guard --all\n"
-        "  - uv run --group dev invar guard <path>"
+        "Raw `uv run --group dev invar guard` is a non-canonical standalone signal and "
+        "must be evaluated only through this contract check.\n"
+        "Canonical commands for gate closure:\n"
+        "  - guard-contract\n"
+        "  - ./scripts/invar guard --all"
     )
 
 

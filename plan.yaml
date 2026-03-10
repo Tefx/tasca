@@ -28021,7 +28021,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       strategy-remediation closure from a fresh perspective after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation`.
 
@@ -28115,6 +28115,75 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T05:40:22.783602+00:00'
+    done_at: '2026-03-10T05:44:45.417045+00:00'
+    evidence: '## Independent Retest Report
+
+
+      **Chosen option under test**: B
+
+      **Blocked command**:
+
+      ```bash
+
+      uv run --group dev invar guard
+
+      ```
+
+
+      **Canonical command** (if Option B):
+
+      ```bash
+
+      ./scripts/invar guard --all
+
+      ```
+
+
+      **Exact outputs**:
+
+      - `uv run --group dev invar guard` still outputs JSON PASS with `summary.files_checked:
+      0`.
+
+      - `uv run --group dev which invar` resolves `.venv/bin/invar`.
+
+      - Regression suite (`test_guard_contract`, `test_invar_entrypoint`, `test_invar_runtime_policy`,
+      `test_tasca_invar_entrypoint`) passes (`24 passed`).
+
+
+      **Regression tests exercised**:
+
+      - `uv run --group dev pytest -v tests/unit/test_guard_contract.py tests/unit/test_invar_entrypoint.py
+      tests/unit/test_invar_runtime_policy.py tests/unit/test_tasca_invar_entrypoint.py`
+
+
+      **Verdict**:
+
+      - ISSUES_FOUND: blocked command behavior still contradicts intended standalone
+      interpretation; runtime evidence and contract-test evidence diverged.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
+
+
+      Commit hash(es):
+
+      - none
+
+
+      Files changed:
+
+      - none
+
+
+      Gaps/Notes:
+
+      - To stop recurrence churn, planner applied Option B pivot: freeze/gate now
+      require canonical repo-owned contract evidence and explicitly classify raw blocked
+      command as non-canonical standalone signal.
+
+      '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement
     status: pending

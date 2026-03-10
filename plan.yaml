@@ -23617,7 +23617,7 @@ phases:
       \ evidence lines were captured."
   - id: guard_followup2_boundary.gate
     name: gate
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
       `guard_followup2_boundary` phase meets the quality bar for proceeding.
 
@@ -23647,6 +23647,20 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T10:13:18.205985+00:00'
+    done_at: '2026-03-10T10:23:45.817374+00:00'
+    evidence: "Independent gate review executed and surfaced blocker-level verification\
+      \ gaps.\n\nArtifact:\n- Gate review result from gate-reviewer (FAIL)\n- Evidence\
+      \ files inspected include L3 smoke artifacts under evidence/guard_followup2_correctness/freeze-gate-retest/\n\
+      \nVerification:\n- uvx invar-tools guard --all -> PASS with warning volume;\
+      \ review_suggested true\n- L3 evidence inspection found partial coverage for\
+      \ required failure paths (VersionConflict/WaitTimeout) in current artifact set\n\
+      - MCP boundary cleanup proof around close_mcp_db wiring/dead_export deemed insufficient\
+      \ for closure confidence\n\nSpec link:\n- guard_followup2_boundary.gate\n\n\
+      Notes:\n- Per verification-step issue handling, remediation chain created before\
+      \ closure:\n  - guard_followup2_boundary.fix_mcp_boundary_cleanup_proof\n  -\
+      \ guard_followup2_boundary.retest_l3_mcp_failure_paths\n  - guard_followup2_boundary.gate_retest\n\
+      - Reviewer-reported plan.yaml history concern was normalized as orchestrator-state\
+      \ behavior and is not treated as a product-code blocker for this phase."
   - id: guard_followup2_boundary.fix_mcp_boundary_cleanup_proof
     name: Fix MCP boundary cleanup proof
     status: pending

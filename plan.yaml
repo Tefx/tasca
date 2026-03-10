@@ -28996,7 +28996,7 @@ phases:
       - plan.yaml not modified by worker per isolation constraints.'
   - id: guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest
     name: gate-deterministic-closure-and-freeze-intent-retest
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       bounded deterministic-closure and freeze-intent remediation from a fresh perspective
       after `guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix`.
@@ -29042,6 +29042,54 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T07:17:00.184595+00:00'
+    done_at: '2026-03-10T07:22:22.702873+00:00'
+    evidence: 'Artifact:
+
+      - Independent retest executed in isolated worktree (no code changes).
+
+      - Audited remediation behavior in src/tasca/shell/guard_contract.py and tests/unit/test_guard_contract.py.
+
+
+      Verification:
+
+      - uv run --group dev guard-contract -> PASS; output explicitly states canonical
+      closure owner is guard-contract and ./scripts/invar guard --all is informational
+      non-owner
+
+      - ./scripts/invar guard --all -> PASS with warnings and errors=0; classified
+      informational-only under Option B
+
+      - uv run --group dev pytest -v tests/unit/test_guard_contract.py -k "warning_heavy_errors_zero_still_passes
+      or is_plan_only_drift_accepts_plan_and_vectl_paths or is_plan_only_drift_rejects_non_plan_paths
+      or run_guard_contract_accepts_plan_only_freeze_drift or run_guard_contract_rejects_non_plan_freeze_drift"
+      -> PASS (5 passed)
+
+      - TASCA_FREEZE_HEAD=0c7546d uv run --group dev guard-contract -> PASS with plan-only
+      drift accepted
+
+      - TASCA_FREEZE_HEAD=f2ac41c uv run --group dev guard-contract -> FAIL (return
+      code 2) for non-plan drift
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest
+
+
+      Files changed:
+
+      - none
+
+
+      Commit hash(es):
+
+      - none (verification-only step; no repository modifications required)
+
+
+      Gaps/Notes:
+
+      - No discovered issues; retest confirms single-owner closure and freeze-intent
+      accept/reject behavior.'
   - id: guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence
     name: gate-fix-single-closure-owner-and-canonical-evidence
     status: pending

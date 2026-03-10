@@ -31402,7 +31402,7 @@ phases:
       - Other warning categories were intentionally left for full-guard retest disposition.'
   - id: guard_followup2_debt.final-guard-regression-retest
     name: final-guard-regression-retest
-    status: pending
+    status: claimed
     description: 'Re-run the full guard regression after the remediation fixes and
       produce a contradiction-free disposition for every remaining warning/info category.
 
@@ -31452,6 +31452,8 @@ phases:
     depends_on:
     - guard_followup2_debt.residual-debt-closure-fix
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T14:01:29.803723+00:00'
   - id: guard_followup2_debt.gate-retest
     name: gate-retest
     status: pending

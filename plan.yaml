@@ -27158,7 +27158,7 @@ phases:
       \ were not modified in this scoped fix.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest
     name: gate-zero-file-policy-retest
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate that
       the blocker from `guard_followup2_cleanup.gate` is closed on the actual supported
       entrypoint path.
@@ -27261,6 +27261,27 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:39:58.851630+00:00'
+    done_at: '2026-03-10T04:44:31.871017+00:00'
+    evidence: "## Verification Report\n\n**Tester**: integration-verifier (independent\
+      \ of implementation)\n**Scope**: guard zero-file policy on the supported dev-group\
+      \ entrypoint\n**Independence Level**: L1\n\n### Test Execution\n- Commands executed:\n\
+      \  - `uv run --group dev invar guard`\n  - `uv run --group dev pytest -v tests/unit/test_invar_runtime_policy.py::test_runtime_contract_allows_supported_invar_tools_call_without_guard_token\
+      \ tests/unit/test_invar_runtime_policy.py::test_runtime_contract_rejects_ambiguous_guard_token_for_invar_tools`\n\
+      - Actual output:\n  - `uv run --group dev invar guard` returned JSON PASS with\
+      \ `files_checked: 0`.\n  - Targeted runtime-policy tests both passed (`2 passed`).\n\
+      \n### Issues Found\n| Severity | Description | Location | Reproduction |\n|\
+      \ --- | --- | --- | --- |\n| blocker | Supported dev-group entrypoint still\
+      \ silently PASSes on zero-file state (`files_checked: 0`). | `uv run --group\
+      \ dev invar guard` | Run in clean tree with no changed Python files. |\n| should_fix\
+      \ | Existing runtime-policy tests do not yet guarantee blocked command behavior\
+      \ on this exact invoked path. | runtime policy tests vs entrypoint behavior\
+      \ | Compare command output above against test pass results. |\n\n### Coverage\
+      \ Assessment\n- Supported path verified: ✅\n- Failure-path coverage present:\
+      \ ✅\n- Immutable evidence captured: exact command/output pasted\n\n### Verdict\n\
+      - [ ] PASS\n- [x] ISSUES_FOUND\n- [ ] INCOMPLETE\n\nSpec link:\n- guard_followup2_cleanup.gate-zero-file-policy-retest\n\
+      \nCommit hash(es):\n- none\n\nFiles changed:\n- none\n\nGaps/Notes:\n- Planner-created\
+      \ remediation chain added after this retest to close the remaining blocker on\
+      \ the exact supported command path.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
     name: gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
     status: pending

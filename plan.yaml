@@ -31193,7 +31193,7 @@ phases:
       \  - guard_followup2_debt.final-guard-regression-retest\n  - guard_followup2_debt.gate-retest"
   - id: guard_followup2_debt.duplicate-escape-reason-fix
     name: duplicate-escape-reason-fix
-    status: pending
+    status: claimed
     description: 'Fix unresolved `duplicate_escape_reason` findings across FastAPI
       route files without broadening the allow surface.
 
@@ -31243,6 +31243,8 @@ phases:
     depends_on:
     - guard_followup2_debt.gate
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-03-10T13:40:41.319024+00:00'
   - id: guard_followup2_debt.residual-debt-closure-fix
     name: residual-debt-closure-fix
     status: pending

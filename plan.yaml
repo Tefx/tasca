@@ -27840,6 +27840,100 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
     agent: python-senior
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
+    name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      strategy-remediation closure from a fresh perspective after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation`.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: the chosen supported command path behaves exactly as the new contract
+      claims
+
+      - Edge cases: clean repo state, changed-files mode, and wrapper/redirect behavior
+      remain deterministic and auditable
+
+      - Error scenarios: `uv run --group dev invar guard` cannot silently PASS with
+      `files_checked: 0`; if Option B was chosen, the blocked command must surface
+      explicit canonical-command guidance rather than ambiguous success
+
+      - Anti-loop closure: targeted regression tests and the exact blocked command
+      now exercise the same owned contract, so another resolution mismatch cannot
+      hide behind passing narrow tests
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute the exact blocked command `uv run --group dev invar guard`
+      and paste the full output
+
+      - Execute the canonical repo-owned command if Option B is chosen, and paste
+      the full output
+
+      - Re-run the focused regression tests that now claim to own the command-resolution
+      contract
+
+      - Verdict is PASS only if the exact blocked command no longer reports `PASS`
+      with `files_checked: 0`, and the pasted outputs match one unambiguous supported
+      contract with no residual resolution ambiguity'
+    evidence_template: '## Independent Retest Report
+
+
+      **Chosen option under test**: A|B
+
+      **Blocked command**:
+
+      ```bash
+
+      uv run --group dev invar guard
+
+      ```
+
+
+      **Canonical command** (if Option B):
+
+      ```bash
+
+      <command>
+
+      ```
+
+
+      **Exact outputs**:
+
+      ```
+
+      <paste full outputs>
+
+      ```
+
+
+      **Regression tests exercised**:
+
+      - <exact test commands>
+
+
+      **Verdict**:
+
+      - PASS only if one owned contract is proven and `files_checked: 0` silent PASS
+      is gone
+
+      - ISSUES_FOUND if blocked command still behaves ambiguously or contradicts the
+      claimed canonical contract
+
+      '
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

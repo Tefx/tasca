@@ -5,6 +5,7 @@ Environment variables can be used to override defaults.
 """
 
 import secrets
+import os
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path
 
@@ -19,6 +20,38 @@ def _get_version() -> str:
         return _pkg_version("tasca")
     except PackageNotFoundError:
         return "0.0.0"
+
+
+_ADMIN_TOKEN_CLEAR_SENTINELS = {"null", "none", "clear"}
+
+
+# @invar:allow shell_result: Configuration normalization helper for auth env precedence
+def _normalize_admin_token(raw: str | None) -> str | None:
+    """Normalize TASCA_ADMIN_TOKEN input from environment.
+
+    Explicit clear/null sentinels are treated as unset for safe fallback.
+
+    Examples:
+        >>> _normalize_admin_token(None) is None
+        True
+        >>> _normalize_admin_token("  tk_secret  ")
+        'tk_secret'
+        >>> _normalize_admin_token("") is None
+        True
+        >>> _normalize_admin_token(" null ") is None
+        True
+    """
+    if raw is None:
+        return None
+
+    normalized = raw.strip()
+    if not normalized:
+        return None
+
+    if normalized.lower() in _ADMIN_TOKEN_CLEAR_SENTINELS:
+        return None
+
+    return normalized
 
 
 class Settings(BaseSettings):
@@ -51,12 +84,26 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def set_admin_token_from_env(self) -> "Settings":
-        """Check if admin_token was provided via TASCA_ADMIN_TOKEN environment variable."""
-        # This runs after all fields are populated
-        # We check if the env var exists (not if it matches, since pydantic already loaded it)
-        import os
+        """Resolve admin token precedence between env input and safe fallback.
 
-        self.admin_token_from_env = "TASCA_ADMIN_TOKEN" in os.environ
+        Precedence contract (step: guard_followup2_boundary.auth-config-boundary-fix):
+        1) Non-empty TASCA_ADMIN_TOKEN environment value wins.
+        2) Empty/clear/null TASCA_ADMIN_TOKEN is treated as explicit clear and does NOT disable auth.
+        3) If resolved token is empty, generate a secure default token.
+        """
+        raw_env_token = os.getenv("TASCA_ADMIN_TOKEN")
+        normalized_env_token = _normalize_admin_token(raw_env_token)
+
+        if normalized_env_token is not None:
+            self.admin_token = normalized_env_token
+            self.admin_token_from_env = True
+            return self
+
+        self.admin_token_from_env = False
+        admin_token_normalized = self.admin_token.strip().lower()
+        if not self.admin_token.strip() or admin_token_normalized in _ADMIN_TOKEN_CLEAR_SENTINELS:
+            self.admin_token = f"tk_{secrets.token_hex(16)}"
+
         return self
 
     # CORS

@@ -37,12 +37,11 @@ from tasca.config import settings
 
 # @invar:allow shell_result: HTTP auth
 # @shell_orchestration: Co-located with FastAPI dependency to keep auth flow and failure semantics together
-def validate_bearer_token(token: str, expected: str) -> bool:
+def validate_bearer_token(token: str | None, expected: str | None) -> bool:
     """Compare a Bearer token against the expected value using constant-time comparison.
 
-    Uses ``hmac.compare_digest`` to prevent timing attacks. Both arguments must
-    be non-empty strings; callers are responsible for checking whether auth is
-    required before invoking this helper.
+    Uses ``hmac.compare_digest`` to prevent timing attacks.
+    Missing/empty values always fail closed.
 
     Args:
         token: The token extracted from the Authorization header.
@@ -58,8 +57,20 @@ def validate_bearer_token(token: str, expected: str) -> bool:
         False
         >>> validate_bearer_token("", "secret")
         False
+        >>> validate_bearer_token("secret", "")
+        False
+        >>> validate_bearer_token(None, "secret")
+        False
     """
-    return hmac.compare_digest(token, expected)
+    if token is None or expected is None:
+        return False
+
+    normalized_token = token.strip()
+    normalized_expected = expected.strip()
+    if not normalized_token or not normalized_expected:
+        return False
+
+    return hmac.compare_digest(normalized_token, normalized_expected)
 
 
 # @invar:allow shell_result: FastAPI security scheme instantiation - not a Result type
@@ -129,7 +140,7 @@ async def verify_admin_token(
     """
     # Validate token using constant-time comparison (never log or print the token value)
     token = credentials.credentials if credentials else None
-    if not validate_bearer_token(token or "", settings.admin_token):
+    if not validate_bearer_token(token, settings.admin_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing token",

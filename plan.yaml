@@ -28305,7 +28305,7 @@ phases:
       \ unchanged and out-of-scope for this step.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       canonical-contract enforcement closure from a fresh perspective after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement`.
 
@@ -28393,6 +28393,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T05:52:55.161525+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

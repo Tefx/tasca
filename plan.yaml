@@ -27024,6 +27024,98 @@ phases:
       should use `--all` when no changed files exist.
 
       '
+  - id: guard_followup2_cleanup.gate-zero-file-policy-fix
+    name: gate-zero-file-policy-fix
+    status: pending
+    description: 'Priority: HIGH
+
+
+      Fix: close the remaining blocker from `guard_followup2_cleanup.gate` by making
+      the actually-invoked supported `uv run --group dev invar guard` path enforce
+      deterministic zero-file policy semantics, or by tightening the supported-path
+      contract so the invoked path is unambiguous and enforced by tests.
+
+
+      prior_loop: [guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-repo-owned-direct-invocation-path,
+      guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path]
+
+      remaining_blocker: `uv run --group dev invar guard` still returns PASS with
+      `files_checked=0`, so the zero-file policy is not enforced on the actual supported
+      entrypoint path and the closure criterion is still open
+
+      why_new_loop: prior remediation removed environment-specific direct-entrypoint
+      ambiguity, but did not harden or test the zero-file policy on the dev-group
+      entrypoint that reviewers actually invoked
+
+
+      Requirements:
+
+      - Close the blocker on the supported `uv run --group dev invar guard` invocation
+      path, not only on alternate wrapper paths
+
+      - Either enforce deterministic zero-file behavior on that path or make the supported-path
+      contract explicit, narrow, and machine-checked so ambiguous invocation paths
+      fail with actionable guidance
+
+      - Add or update focused regressions covering both the main path and the highest-risk
+      failure path
+
+      - Ensure evidence can show the actual invoked command and output for the supported
+      path
+
+
+      Out of scope:
+
+      - Broad packaging or release-process redesign
+
+      - Reopening unrelated storage cleanup work
+
+      - Adding a separate artifact-capture loop unless required to close the blocker'
+    verification: '- Main path: targeted regression proves the supported `uv run --group
+      dev invar guard` path now has deterministic zero-file policy behavior or an
+      enforced supported-path contract
+
+      - Failure path: focused regression proves ambiguous or unsupported invocation
+      paths cannot silently PASS with `files_checked=0`
+
+      - Proof: exact tests and command output identify the supported path exercised
+      and show why closure is now unambiguous'
+    evidence_template: '## Remediation Evidence
+
+
+      **Blocked command**:
+
+      ```
+
+      uv run --group dev invar guard
+
+      ```
+
+
+      **Implementation choice**: <deterministic zero-file enforcement | enforced supported-path
+      contract>
+
+
+      **Targeted regressions**:
+
+      - <test name for supported path>
+
+      - <test name for failure/ambiguous path>
+
+
+      **Actual command output**:
+
+      ```
+
+      <paste the exact command output demonstrating closure>
+
+      ```
+
+
+      **Why this closes the blocker**: <one paragraph tying behavior to the gate finding>'
+    depends_on:
+    - guard_followup2_cleanup.freeze
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

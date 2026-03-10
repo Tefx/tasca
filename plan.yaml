@@ -23663,7 +23663,7 @@ phases:
       \ behavior and is not treated as a product-code blocker for this phase."
   - id: guard_followup2_boundary.fix_mcp_boundary_cleanup_proof
     name: Fix MCP boundary cleanup proof
-    status: claimed
+    status: done
     description: 'HIGH-priority bounded remediation for the unresolved MCP boundary
       cleanup proof blocker after `guard_followup2_boundary.gate`.
 
@@ -23766,6 +23766,59 @@ phases:
     agent: python-executor
     claimed_by: python-senior
     claimed_at: '2026-03-10T10:24:16.419407+00:00'
+    done_at: '2026-03-10T10:30:37.622849+00:00'
+    evidence: 'Artifact:
+
+      - Worker commits: 0e02c72927ee8a5d1d6f7eac88ff08d7d0a79439 (initial), 407a012073f53454782183122d455fda27f9a389
+      (scope-repair)
+
+      - Main squash commit: c5d54e6
+
+      - Authoritative MCP cleanup wiring now in src/tasca/shell/mcp/server.py (run_mcp_server
+      uses try/finally to call close_mcp_db)
+
+
+      Verification:
+
+      - uvx invar-tools guard src/tasca/shell/mcp/database.py --static --agent ->
+      passed, no dead_export for close_mcp_db
+
+      - uvx invar-tools guard src/tasca/shell/mcp/server.py --static --agent -> passed;
+      no dead_export (only pre-existing dead_param warnings in _MockFastMCP)
+
+      - runtime smoke command patching server.mcp.run and server.close_mcp_db -> PASS
+      for normal and exception cleanup path
+
+      - git diff --name-only across corrective commit window confirms net scoped seam
+      change in server.py
+
+
+      Spec link:
+
+      - guard_followup2_boundary.fix_mcp_boundary_cleanup_proof
+
+
+      Files changed:
+
+      - src/tasca/shell/mcp/server.py
+
+
+      Commit hash(es):
+
+      - 0e02c72927ee8a5d1d6f7eac88ff08d7d0a79439
+
+      - 407a012073f53454782183122d455fda27f9a389
+
+      - c5d54e6
+
+
+      Gaps/Notes:
+
+      - Out-of-scope test addition was detected and repaired before merge; final merged
+      diff contains only in-scope source change.
+
+      - Remaining dead_param warnings in _MockFastMCP are recorded separately as non-blocking
+      debt for this seam.'
   - id: guard_followup2_boundary.retest_l3_mcp_failure_paths
     name: Retest L3 MCP failure-path completeness
     status: pending

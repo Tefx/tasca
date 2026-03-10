@@ -24890,9 +24890,12 @@ phases:
       - No unresolved blocker remains in the targeted storage files or supported guard
       entrypoint zero-file policy
 
-      - Evidence quality acceptable, including final retest output for direct entrypoint,
-      repo-owned direct invocation path, and the supported `uv run --group dev invar
-      guard` zero-file scenario
+      - Evidence quality acceptable, including the exact blocked-command output showing
+      `uv run --group dev invar guard` no longer reports `PASS` with `files_checked:
+      0`
+
+      - Evidence also covers direct entrypoint, repo-owned direct invocation path,
+      and the supported `uv run --group dev invar guard` zero-file scenario
 
       - Dependency bump evidence confirms `pyproject.toml` and `uv.lock` both reflect
       `invar-tools==1.19.7`
@@ -24912,6 +24915,7 @@ phases:
     - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
     - guard_followup2_cleanup.freeze
     - guard_followup2_cleanup.gate-zero-file-policy-retest
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
     agent: gate-reviewer
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
     name: storage-guard-fix-auth-and-entrypoint

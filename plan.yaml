@@ -28388,7 +28388,7 @@ phases:
       \ command continues to emit PASS+0-files JSON despite canonical contract guardrails.\""
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment
-    status: claimed
+    status: done
     description: 'HIGH-priority bounded remediation to close the current `guard_followup2_cleanup.gate`
       blocker without another unbounded fix/retest loop.
 
@@ -28503,6 +28503,85 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T06:24:41.306056+00:00'
+    done_at: '2026-03-10T06:30:49.956233+00:00'
+    evidence: '## Option B Closure Alignment Evidence
+
+
+      **Chosen closure rule**:
+
+      - [x] Raw blocked command remains non-canonical and no longer forces `guard-contract`
+      failure when canonical evidence passes.
+
+      - [ ] Raw blocked command now fails conclusively.
+
+
+      **Exact commands executed**:
+
+      ```bash
+
+      uv run --group dev guard-contract
+
+      ./scripts/invar guard --all
+
+      uv run --group dev invar guard
+
+      uv run --group dev pytest -v tests/unit/test_guard_contract.py
+
+      ```
+
+
+      **Actual outputs**:
+
+      - `uv run --group dev guard-contract` -> status passed with summary (`files_checked:
+      1`, `errors: 0`), and non-canonical guidance retained.
+
+      - `./scripts/invar guard --all` -> status passed with full verification payload
+      (warnings only, no errors).
+
+      - `uv run --group dev invar guard` -> status passed as non-canonical signal
+      under Option B contract.
+
+      - `uv run --group dev pytest -v tests/unit/test_guard_contract.py` -> `5 passed`.
+
+
+      **Why this closes the loop**:
+
+      - prior_loop: canonical-contract retest reported ambiguity because `guard-contract`
+      failed hard on non-canonical raw signal.
+
+      - remaining_blocker resolved by: adjusting `guard-contract` to warn/classify
+      non-canonical raw command rather than fail closure when canonical commands pass.
+
+      - no alternate closure interpretation remains because tests now encode single
+      Option B rule and message text explicitly says raw command alone does not determine
+      closure.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment
+
+
+      Commit hash(es):
+
+      - Worker: `2efd5a966d53eea5cbd6f55b284bf5f5fe5dea7d`
+
+      - Main squash: `f36bebc`
+
+
+      Files changed:
+
+      - `src/tasca/shell/guard_contract.py`
+
+      - `tests/unit/test_guard_contract.py`
+
+
+      Gaps/Notes:
+
+      - Repo-wide guard warnings under `--all` remain unchanged and are outside this
+      alignment step scope.
+
+      '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
     status: pending

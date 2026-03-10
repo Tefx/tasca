@@ -252,7 +252,12 @@ def patron_register(
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
         store_idempotency_key(
-            conn, resource_key, "patron_register", dedup_id, {"data": response_data}
+            conn,
+            resource_key,
+            "patron_register",
+            dedup_id,
+            {"data": response_data},
+            now=now,
         )
     return success_response(response_data)
 
@@ -366,7 +371,14 @@ def table_create(
     }
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
-        store_idempotency_key(conn, resource_key, "table_create", dedup_id, {"data": response_data})
+        store_idempotency_key(
+            conn,
+            resource_key,
+            "table_create",
+            dedup_id,
+            {"data": response_data},
+            now=now,
+        )
     return success_response(response_data)
 
 
@@ -1158,7 +1170,12 @@ def table_control(
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
         store_idempotency_key(
-            conn, resource_key, "table_control", dedup_id, {"data": response_data}
+            conn,
+            resource_key,
+            "table_control",
+            dedup_id,
+            {"data": response_data},
+            now=now,
         )
 
     return success_response(response_data)
@@ -1240,7 +1257,14 @@ def table_update(
 
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
-        store_idempotency_key(conn, resource_key, "table_update", dedup_id, {"data": response_data})
+        store_idempotency_key(
+            conn,
+            resource_key,
+            "table_update",
+            dedup_id,
+            {"data": response_data},
+            now=now,
+        )
 
     return success_response(response_data)
 
@@ -1433,7 +1457,13 @@ def seat_heartbeat(
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
         store_idempotency_key(
-            conn, resource_key, "seat_heartbeat", dedup_id, {"data": response_data}
+            conn,
+            resource_key,
+            "seat_heartbeat",
+            dedup_id,
+            {"data": response_data},
+            ttl_seconds=ttl_seconds,
+            now=now,
         )
     return success_response(response_data)
 

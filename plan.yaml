@@ -29103,6 +29103,136 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate
     agent: python-senior
+  - id: guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence
+    name: gate-retest-single-closure-owner-and-canonical-evidence
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), re-test the blocker
+      reported by `guard_followup2_cleanup.gate` after `guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence`.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      prior_loop: [guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix,
+      guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest]
+
+      remaining_blocker: The phase still lacked one deterministic closure owner, meaningful
+      canonical enforcement for warning-only / zero-file output, executable/path reconciliation
+      for `uv run --group dev invar guard`, required canonical evidence artifacts,
+      and anti-loop proof.
+
+      why_new_loop: This retest must independently prove that the narrowed blocker
+      is actually closed after the new remediation, rather than inheriting confidence
+      from the earlier closure/freeze loop.
+
+
+      Test for:
+
+      - Happy path: one and only one deterministic closure owner is documented, executable,
+      and evidenced by the canonical repo-owned command path
+
+      - Edge cases: warning-only `errors=0`; `files_checked=0`; raw `uv run --group
+      dev invar guard` classification; canonical artifact presence checks
+
+      - Error scenarios: any competing interpretation of Option B ownership, any EXIT
+      0 path that bypasses canonical enforcement, any unresolved executable/path mismatch,
+      or any missing canonical evidence output
+
+      - Anti-loop closure: the same blocker cannot recur on the same command/output
+      shape because policy text, runtime behavior, and evidence artifacts all agree
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute and paste the exact canonical closure command and confirm
+      it is the only closure owner
+
+      - Execute and paste `uv run --group dev invar guard`; verify it is reconciled
+      to the repo-owned contract path and cannot independently close or fail the phase
+      contrary to policy
+
+      - Verify focused regressions or checks cover warning-only `errors=0`, `files_checked=0`,
+      missing canonical artifact outputs, and executable/path reconciliation
+
+      - Verify repository evidence artifacts contain the required canonical outputs
+      and that anti-loop proof is explicit'
+    evidence_template: '## Independent Retest Report
+
+
+      **Reviewer**: gate-reviewer
+
+      **Scope**: deterministic closure owner, canonical enforcement, executable/path
+      reconciliation, evidence artifacts
+
+      **Independence Level**: L1
+
+
+      ### Commands executed
+
+      ```
+
+      <paste canonical command>
+
+      <paste raw command>
+
+      <paste focused regression commands>
+
+      ```
+
+
+      ### Actual outputs
+
+      ```
+
+      <paste stdout/stderr>
+
+      ```
+
+
+      ### Findings
+
+      | Severity | Description | Location | Reproduction |
+
+      | -------- | ----------- | -------- | ------------ |
+
+      | blocker | <issue or none> | <file/path> | <steps> |
+
+      | should_fix | <issue or none> | <file/path> | <steps> |
+
+
+      ### Closure-owner checks
+
+      - Single deterministic owner present: ✅/❌
+
+      - No competing Option B interpretation remains: ✅/❌
+
+      - Canonical vs non-canonical separation enforced: ✅/❌
+
+      - Warning-only / zero-file path cannot loop on EXIT 0: ✅/❌
+
+      - `uv run --group dev invar guard` path reconciled to repo-owned contract: ✅/❌
+
+      - Canonical evidence artifacts present in repository outputs: ✅/❌
+
+      - Anti-loop proof explicit: ✅/❌
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [ ] ISSUES_FOUND
+
+      - [ ] INCOMPLETE
+
+      '
+    depends_on:
+    - guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence
+    agent: gate-reviewer
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

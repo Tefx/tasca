@@ -27037,9 +27037,9 @@ phases:
     description: 'Priority: HIGH
 
 
-      Fix: close the remaining blocker from `guard_followup2_cleanup.gate` by making
-      the actually-invoked supported `uv run --group dev invar guard` path enforce
-      deterministic zero-file policy semantics, or by tightening the supported-path
+      Fix: close the remaining blocker reported at `guard_followup2_cleanup.gate`
+      by making the actually-invoked supported `uv run --group dev invar guard` path
+      enforce deterministic zero-file policy semantics, or by tightening the supported-path
       contract so the invoked path is unambiguous and enforced by tests.
 
 
@@ -27121,7 +27121,7 @@ phases:
 
       **Why this closes the blocker**: <one paragraph tying behavior to the gate finding>'
     depends_on:
-    - guard_followup2_cleanup.freeze
+    - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     agent: python-senior
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest
     name: gate-zero-file-policy-retest

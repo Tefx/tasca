@@ -29254,7 +29254,7 @@ phases:
       \ files_checked=0, intentionally non-canonical by contract."
   - id: guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence
     name: gate-retest-single-closure-owner-and-canonical-evidence
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), re-test the blocker
       reported by `guard_followup2_cleanup.gate` after `guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence`.
 
@@ -29384,6 +29384,33 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T08:08:15.804311+00:00'
+    done_at: '2026-03-10T08:49:20.579932+00:00'
+    evidence: "## Independent Retest Report\nReviewer: gate-reviewer\nScope: deterministic\
+      \ closure owner, canonical enforcement, executable/path reconciliation, evidence\
+      \ artifacts\nIndependence Level: L1\n\nCommands executed:\n- uv run --group\
+      \ dev invar guard\n- ./scripts/invar guard --all\n- uv run --group dev which\
+      \ invar\n- uv run --group dev python -c \"import importlib.metadata as m; print(m.version('invar-tools'))\"\
+      \n- TASCA_GUARD_CONTRACT_ARTIFACT_DIR=$(mktemp -d) uv run --group dev guard-contract\n\
+      \nActual outputs (key):\n- raw uv run --group dev invar guard -> PASS, files_checked=0,\
+      \ errors=0 (non-canonical)\n- ./scripts/invar guard --all -> PASS, files_checked=73,\
+      \ errors=0, warnings=80\n- guard-contract -> explicit canonical owner is guard-contract;\
+      \ raw signal non-canonical\n- artifact files present: canonical-guard.json,\
+      \ raw-guard.json, presence-check.json\n\nFindings:\n- blocker: none\n- should_fix:\
+      \ presence-check artifact payload currently drops/overwrites raw_zero_file_pass\
+      \ signal; anti-loop proof remains available via raw/canonical artifacts but\
+      \ artifact durability should be strengthened\n\nClosure-owner checks:\n- Single\
+      \ deterministic owner present: yes\n- No competing interpretation remains: yes\n\
+      - Canonical vs non-canonical separation enforced: yes\n- Warning-only/zero-file\
+      \ path cannot loop on EXIT 0: yes\n- uv run --group dev invar guard path reconciled\
+      \ to repo-owned contract: yes\n\nArtifact and anti-loop checks:\n- required\
+      \ canonical artifacts present: yes\n- same blocker shape cannot recur without\
+      \ behavior change: yes (with should_fix note above)\n\nCommit hash(es):\n- none\
+      \ (verify-only; no file modifications)\n\nFiles changed:\n- none\n\nVerification:\n\
+      - Commands above executed with outputs captured during retest\n\nSpec link:\n\
+      - guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence\n\
+      \nNotes:\n- Per test-issue policy, created remediation loop for should_fix finding:\n\
+      \  - guard_followup2_cleanup.gate-fix-presence-artifact-anti-loop-signal\n \
+      \ - guard_followup2_cleanup.gate-retest-presence-artifact-anti-loop-signal"
   - id: guard_followup2_cleanup.gate-fix-presence-artifact-anti-loop-signal
     name: gate-fix-presence-artifact-anti-loop-signal
     status: pending

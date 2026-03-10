@@ -24183,6 +24183,112 @@ phases:
     depends_on:
     - guard_followup2_boundary.gate_retest
     agent: python-executor
+  - id: guard_followup2_boundary.retest-repro-version-conflict-waittimeout
+    name: retest_repro_version_conflict_waittimeout
+    status: pending
+    description: 'MEDIUM-priority independent retest: verify the repaired `tests/repro/issue_l3_mcp_smoke.py`
+      now reaches the intended MCP stdio failure paths and produces reliable evidence.
+
+
+      As an INDEPENDENT TESTER (`blind-tester`), use the public MCP stdio seam only.
+
+
+      Goals:
+
+      - Confirm the repro now actually reaches the `VersionConflict` path with the
+      corrected `table_update` schema.
+
+      - Confirm the repro still covers the `WaitTimeout` path after the schema fix.
+
+      - Capture pasted command/output evidence from the public seam; summaries alone
+      are insufficient.
+
+
+      Spec refs:
+
+      - Failure-path acceptance already established by `guard_followup2_boundary.retest_l3_mcp_failure_paths`
+      and reaffirmed by `guard_followup2_boundary.gate_retest`.
+
+      - Derived acceptance for this remediation: the repro artifact must demonstrate
+      `VersionConflict` and `WaitTimeout` through MCP stdio without schema-validation
+      short-circuiting.
+
+
+      Touch paths:
+
+      - No code changes expected; verification uses `tests/repro/issue_l3_mcp_smoke.py`
+      and the existing MCP stdio seam.
+
+
+      Harness refs:
+
+      - `tests/repro/issue_l3_mcp_smoke.py`
+
+      - Existing MCP stdio runner / public seam used in prior L3 evidence
+
+
+      Acceptance:
+
+      - Script output demonstrates a caller-visible `VersionConflict` envelope through
+      MCP stdio path.
+
+      - Script output demonstrates the `WaitTimeout` timeout payload through MCP stdio
+      path.
+
+      - Evidence makes clear which invocation/output corresponds to each path.
+
+      - If either path still fails early, document the exact blocker and where the
+      path diverged.
+
+
+      Evidence template:
+
+      ## Repro Retest Evidence
+
+
+      **Command executed**:
+
+      ```
+
+      <paste exact MCP stdio repro command>
+
+      ```
+
+
+      **VersionConflict output**:
+
+      ```
+
+      <paste actual envelope/output>
+
+      ```
+
+
+      **WaitTimeout output**:
+
+      ```
+
+      <paste actual timeout payload/output>
+
+      ```
+
+
+      **Assessment**:
+
+      - Did the repro bypass schema validation and hit VersionConflict? yes/no
+
+      - Did WaitTimeout still execute through the same public seam? yes/no'
+    verification: '- Main path: pasted MCP stdio repro output shows caller-visible
+      `VersionConflict` envelope after schema alignment
+
+      - Failure path: pasted MCP stdio repro output still shows `WaitTimeout` timeout
+      payload
+
+      - Evidence identifies exact command(s) and ties each output to the intended
+      failure path'
+    depends_on:
+    - guard_followup2_boundary.fix-repro-table-update-schema
+    agent: blind-tester
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: done

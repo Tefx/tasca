@@ -22972,7 +22972,7 @@ phases:
   steps:
   - id: guard_followup2_boundary.auth-config-boundary-fix
     name: auth-config-boundary-fix
-    status: claimed
+    status: done
     description: 'Fix the remaining auth/config boundary findings in `src/tasca/shell/api/auth.py`
       and `src/tasca/config.py` without expanding scope into excluded directories.
 
@@ -23159,6 +23159,98 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T09:48:36.312496+00:00'
+    done_at: '2026-03-10T09:55:22.210358+00:00'
+    evidence: '## Auth/Config Boundary Evidence
+
+      Touched paths:
+
+      - src/tasca/shell/api/auth.py
+
+      - src/tasca/config.py
+
+
+      Precedence decision implemented:
+
+      - Env present: non-empty TASCA_ADMIN_TOKEN wins and is normalized; admin_token_from_env=true
+
+      - Env empty/clear: empty/whitespace and clear sentinels (null/none/clear) treated
+      as unset
+
+      - Config fallback: when env is unset/clear and effective token is empty/sentinel,
+      secure tk_* token is regenerated; explicit non-empty constructor/config token
+      still applies
+
+
+      Main-path commands:
+
+      - uv run pytest -v tests/integration/test_mcp.py::test_mcp_auth_valid_token_succeeds
+      tests/integration/test_mcp.py::test_mcp_auth_no_token_returns_401 tests/integration/test_mcp.py::test_mcp_auth_invalid_token_returns_401
+      tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_requires_auth
+
+      - uv run python -c "... Settings precedence regression assertions ..."
+
+
+      Failure-path commands:
+
+      - uv run pytest -v tests/integration/test_mcp.py::test_mcp_auth_no_token_returns_401
+      tests/integration/test_mcp.py::test_mcp_auth_invalid_token_returns_401 tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_requires_auth
+
+      - uv run python -c "from tasca.shell.api.auth import validate_bearer_token;
+      assert ... None/empty cases are False ..."
+
+
+      Actual results:
+
+      - Success path: targeted suite passed (4 passed) including valid-token success
+      path
+
+      - Highest-risk failure path: missing/invalid token paths returned expected 401
+      behavior for MCP/API cases
+
+
+      Dead-branch/stale-helper proof:
+
+      - Removed path: presence-only env flag path that could mark env-auth active
+      for empty token
+
+      - Remaining authoritative path: Settings.set_admin_token_from_env -> settings.admin_token
+      -> validate_bearer_token fail-closed check
+
+      - No permissive fallback remains in touched auth/config paths because validate_bearer_token
+      rejects None/empty/whitespace and config normalization prevents empty expected
+      token via env/config precedence
+
+
+      Guard evidence:
+
+      - invar_guard(changed=true) -> status passed, errors=0, warnings=4
+
+
+      Files changed:
+
+      - src/tasca/config.py
+
+      - src/tasca/shell/api/auth.py
+
+
+      Commit hash(es):
+
+      - Worker: dcd3bf6
+
+      - Main squash: 161d49d
+
+
+      Spec link:
+
+      - guard_followup2_boundary.auth-config-boundary-fix
+
+
+      Gaps/Notes:
+
+      - Out-of-scope discovered issue: src/tasca/shell/api/app.py still has an explicit
+      if-not-admin-token allow-through branch; now unreachable under normalized env/config
+      precedence but can be triggered via runtime monkeypatch (not touched by this
+      step).'
   - id: guard_followup2_boundary.mcp-server-boundary-fix
     name: mcp-server-boundary-fix
     status: pending

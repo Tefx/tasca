@@ -23821,7 +23821,7 @@ phases:
       debt for this seam.'
   - id: guard_followup2_boundary.retest_l3_mcp_failure_paths
     name: Retest L3 MCP failure-path completeness
-    status: pending
+    status: claimed
     description: 'HIGH-priority independent L3 retest for the remaining MCP failure-path
       evidence blocker after `guard_followup2_boundary.fix_mcp_boundary_cleanup_proof`.
 
@@ -23951,6 +23951,8 @@ phases:
     depends_on:
     - guard_followup2_boundary.fix_mcp_boundary_cleanup_proof
     agent: blind-tester
+    claimed_by: blind-tester
+    claimed_at: '2026-03-10T10:30:57.570355+00:00'
   - id: guard_followup2_boundary.gate_retest
     name: Boundary gate retest
     status: pending

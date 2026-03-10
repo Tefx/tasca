@@ -23253,7 +23253,7 @@ phases:
       step).'
   - id: guard_followup2_boundary.mcp-server-boundary-fix
     name: mcp-server-boundary-fix
-    status: claimed
+    status: done
     description: 'Resolve the remaining MCP boundary findings in `src/tasca/shell/mcp/server.py`
       and the paired entrypoint/runtime seam in `src/tasca/shell/mcp/entrypoints.py`
       without changing the public MCP tool surface.
@@ -23387,6 +23387,55 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T09:59:07.721373+00:00'
+    done_at: '2026-03-10T10:07:23.728301+00:00'
+    evidence: 'Artifact:
+
+      - PR/commit: cf4ccfb (worker), 2892e84 (main squash)
+
+
+      Verification:
+
+      - uv run python (entrypoint->server->dispatch main path probe for list_tools/call_tool
+      connection_status/patron_register) -> main_path_ok 17 True
+
+      - uv run python (monkeypatch helper then remove helper to test failure-path
+      precedence) -> deterministic AttributeError and no fallback path
+
+      - uvx invar-tools guard --all piped through target filter for src/tasca/shell/mcp/{entrypoints,server}.py
+      -> wiring_gap target count 0
+
+      - invar_invar_guard(changed=true) -> passed, errors=0 (no new wiring_gap on
+      touched file)
+
+      - uv run python tool-surface assertion against expected 17 tool names -> passed
+      (caller-visible surface unchanged)
+
+
+      Spec link:
+
+      - guard_followup2_boundary.mcp-server-boundary-fix
+
+
+      Files changed:
+
+      - src/tasca/shell/mcp/entrypoints.py
+
+
+      Commit hash(es):
+
+      - cf4ccfb
+
+      - 2892e84
+
+
+      Gaps/Notes:
+
+      - Only direct wiring alignment updates were applied for MCP entrypoints->server
+      helper calls.
+
+      - src/tasca/shell/mcp/server.py not changed; remaining findings there are non-wiring
+      dead_param compatibility methods in _MockFastMCP (reported as discovered issue,
+      out of scope for this boundary wiring step).'
   - id: guard_followup2_boundary.freeze
     name: freeze
     status: pending

@@ -27568,7 +27568,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
-    status: claimed
+    status: done
     description: 'HIGH-priority fix for the blocker found by `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement`.
 
 
@@ -27636,6 +27636,56 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T04:56:17.923805+00:00'
+    done_at: '2026-03-10T05:15:57.095355+00:00'
+    evidence: 'Artifact:
+
+      - PR: worker commits `88e992d`, `087bda0`, squashed to main `3af255e`
+
+
+      Verification:
+
+      - Run: `uv run --group dev invar guard` -> now enforced policy output (no silent
+      PASS with `files_checked:0`); emits actionable zero-file guidance.
+
+      - Run: `uv run --group dev python -c "import pathlib, shutil; p=pathlib.Path(shutil.which(''invar''));
+      print(p); print(p.read_text(encoding=''utf-8'').splitlines()[5])"` -> resolved
+      executable is `.venv/bin/invar` importing `tasca_invar_entrypoint`.
+
+      - Run: `uv run --group dev pytest tests/unit/test_invar_runtime_policy.py tests/unit/test_invar_entrypoint.py`
+      -> `15 passed, 0 failed`.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
+
+
+      Commit hash(es):
+
+      - Worker: `88e992d`, `087bda0`
+
+      - Main squash: `3af255e`
+
+
+      Files changed:
+
+      - `pyproject.toml`
+
+      - `uv.lock`
+
+      - `src/tasca/shell/invar_runtime_policy.py`
+
+      - `tests/unit/test_invar_runtime_policy.py`
+
+
+      Gaps/Notes:
+
+      - Fix addresses command-resolution mismatch on exact blocked command path.
+
+      - Worker noted stdlib `sitecustomize` precedence behavior as background issue,
+      but no additional scope expansion was performed.
+
+      '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
     status: pending

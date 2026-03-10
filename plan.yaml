@@ -24929,7 +24929,7 @@ phases:
       reviewer: planner
   - id: guard_followup2_cleanup.gate
     name: gate
-    status: claimed
+    status: done
     description: "As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the\
       \ `guard_followup2_cleanup` phase meets the quality bar for proceeding.\n\n\
       Review criteria:\n1. Storage files were cleaned via real code changes instead\
@@ -25009,6 +25009,24 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T06:53:07.785049+00:00'
+    done_at: '2026-03-10T07:07:25.184747+00:00'
+    evidence: "Gate audit executed by gate-reviewer in isolated worktree and identified\
+      \ blocker-level closure/contract issues.\n\nArtifact:\n- Commit (audit evidence):\
+      \ 69427d2c7b3e8a3935b275945e9d7ea5375b9892\n- Freeze commit referenced: cdbc9bd48a64b051ca802aa8002affa39e19d5d5\n\
+      - Phase implementation commit referenced: 275093d2284327cce0ff2de40f9ef126b6a46350\n\
+      \nVerification:\n- ./scripts/invar guard --all -> PASS (errors=0, warnings present)\n\
+      - uv run --group dev guard-contract -> EXIT 0\n- uv run --group dev which invar\
+      \ -> worktree .venv/bin/invar\n- uv run --group dev invar guard -> PASS with\
+      \ files_checked=0\n- uv run --group dev invar --all -> FAIL (No such option:\
+      \ --all)\n- Targeted pytest suites for guard/entrypoint/runtime-policy/storage\
+      \ -> PASS\n- git diff --name-status cdbc9bd..HEAD -> plan.yaml only (post-freeze\
+      \ drift limited)\n\nSpec link:\n- plan.yaml guard_followup2_cleanup.gate criteria\n\
+      - src/tasca/shell/guard_contract.py\n- src/tasca/shell/invar_runtime_policy.py\n\
+      \nNotes:\n- BLOCKER detected: deterministic closure owner ambiguity + guard-contract\
+      \ allows EXIT 0 with PASS files_checked=0 + executable/path reconciliation incomplete\
+      \ + canonical evidence artifact gap.\n- Per orchestrator policy, remediation\
+      \ chain was added via planner after this gate result:\n  - guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence\n\
+      \  - guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence"
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
     name: storage-guard-fix-auth-and-entrypoint
     status: done

@@ -7,6 +7,7 @@ installed `invar-tools` package is missing `invar.shell.commands.hooks`.
 from __future__ import annotations
 
 import importlib
+import json
 import subprocess
 import sys
 import types
@@ -53,6 +54,13 @@ def _has_all_flag(argv: Sequence[str]) -> bool:
 def _has_explicit_target(argv: Sequence[str]) -> bool:
     """Return True when guard command includes a positional path target."""
     return any(not token.startswith("-") for token in argv[1:])
+
+
+# @invar:allow shell_result: CLI argument predicate helper for runtime output policy
+def _should_enforce_zero_file_policy(argv: Sequence[str]) -> bool:
+    """Return True when guard output must reject PASS+files_checked=0."""
+
+    return _is_guard_invocation(argv) and not _has_all_flag(argv) and not _has_explicit_target(argv)
 
 
 # @invar:allow shell_result: invocation path predicate for entrypoint policy
@@ -168,9 +176,42 @@ def _invoke_uvx_invar_guard(argv: Sequence[str]) -> None:
     """
 
     command = ["uvx", "invar-tools", *argv]
-    completed = subprocess.run(command, check=False)
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    if completed.stdout:
+        print(completed.stdout, end="")
+    if completed.stderr:
+        print(completed.stderr, end="", file=sys.stderr)
     if completed.returncode != 0:
         raise SystemExit(completed.returncode)
+    _enforce_zero_file_output_policy(argv, completed.stdout)
+
+
+def _enforce_zero_file_output_policy(argv: Sequence[str], output: str) -> None:
+    """Reject runtime JSON that reports zero-file PASS for changed-mode guard."""
+
+    if not _should_enforce_zero_file_policy(argv):
+        return
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return
+
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        return
+    files_checked = summary.get("files_checked")
+    status = payload.get("status")
+    if status != "passed" or files_checked != 0:
+        return
+
+    raise SystemExit(
+        "invar entrypoint policy: runtime guard reported PASS with files_checked=0 for "
+        "changed-mode invocation. This result is not accepted because it can hide unresolved "
+        "scope/selection issues.\n"
+        "Use one of:\n"
+        "  - invar guard --all\n"
+        "  - invar guard <path>"
+    )
 
 
 # @invar:allow shell_result: formats startup guidance for missing module dependency

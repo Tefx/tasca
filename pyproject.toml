@@ -30,7 +30,6 @@ dependencies = [
     "deal>=4.24.0",
     "fastmcp>=0.1.0",
     "python-multipart>=0.0.12",
-    "invar-tools==1.19.7",
 ]
 
 [project.optional-dependencies]
@@ -54,6 +53,7 @@ dev = [
 tasca = "tasca.main:main"
 tasca-mcp = "tasca.shell.mcp.server:run_mcp_server"
 invar = "tasca_invar_entrypoint:main"
+guard-contract = "tasca.shell.guard_contract:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import subprocess
 import sys
 import types
 from collections.abc import Sequence
@@ -183,3 +184,30 @@ def test_run_guard_app_falls_back_to_uvx_when_guard_unavailable(monkeypatch) -> 
     invar_entrypoint._run_guard_app(["guard", "tests/unit/test_invar_entrypoint.py"])
 
     assert called == {"uvx": True}
+
+
+def test_invoke_uvx_invar_guard_rejects_zero_file_pass(monkeypatch) -> None:
+    """Fallback uvx runtime output cannot silently pass with zero checked files."""
+
+    payload = '{"status":"passed","summary":{"files_checked":0,"errors":0,"warnings":0,"infos":0}}'
+
+    def _fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=["uvx"], returncode=0, stdout=payload, stderr="")
+
+    monkeypatch.setattr(invar_entrypoint.subprocess, "run", _fake_run)
+
+    with pytest.raises(SystemExit, match="runtime guard reported PASS with files_checked=0"):
+        invar_entrypoint._invoke_uvx_invar_guard(["guard"])
+
+
+def test_invoke_uvx_invar_guard_allows_nonzero_file_pass(monkeypatch) -> None:
+    """Fallback uvx runtime output is accepted when files are actually checked."""
+
+    payload = '{"status":"passed","summary":{"files_checked":2,"errors":0,"warnings":0,"infos":0}}'
+
+    def _fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=["uvx"], returncode=0, stdout=payload, stderr="")
+
+    monkeypatch.setattr(invar_entrypoint.subprocess, "run", _fake_run)
+
+    invar_entrypoint._invoke_uvx_invar_guard(["guard"])

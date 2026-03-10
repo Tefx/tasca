@@ -23,9 +23,10 @@ def test_runtime_contract_allows_supported_invar_tools_call_without_guard_token(
 def test_runtime_contract_rejects_ambiguous_guard_token_for_invar_tools(
     tmp_path: Path,
 ) -> None:
-    """`invar guard` fails fast with actionable guidance."""
+    """`invar guard` fails fast for repo venv-style executable path."""
 
-    executable = tmp_path / "invar"
+    executable = tmp_path / ".venv" / "bin" / "invar"
+    executable.parent.mkdir(parents=True)
     executable.write_text("from invar.shell.commands.guard import app\n", encoding="utf-8")
 
     with pytest.raises(SystemExit, match="Unsupported invocation: `invar guard` is ambiguous"):

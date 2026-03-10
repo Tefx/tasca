@@ -24110,6 +24110,79 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T10:35:41.038555+00:00'
+  - id: guard_followup2_boundary.fix-repro-table-update-schema
+    name: fix_repro_table_update_schema
+    status: pending
+    description: 'MEDIUM-priority fix: align `tests/repro/issue_l3_mcp_smoke.py` with
+      the current `table_update` schema while preserving the public-seam MCP stdio
+      repro intent.
+
+
+      Scope:
+
+      - Update the repro artifact to stop sending non-schema `speaker_kind` in `table_update`.
+
+      - Provide required `speaker_name` and preserve any other current-schema arguments
+      needed to exercise the public MCP stdio path.
+
+      - Keep this as an evidence-only reliability improvement: no feature work, no
+      production behavior changes, no expansion beyond the repro artifact and narrowly-related
+      repro support if strictly required.
+
+
+      Spec refs:
+
+      - Current MCP public seam and Tasca `table_update` request schema as exercised
+      by the existing repro and boundary verification chain.
+
+      - Derived acceptance from `guard_followup2_boundary.gate_retest`: the repro
+      must actually reach `VersionConflict` instead of failing early on request validation.
+
+
+      Touch paths:
+
+      - `tests/repro/issue_l3_mcp_smoke.py`
+
+      - No production-path changes unless a minimal schema-alignment helper in the
+      repro harness is strictly required.
+
+
+      Harness refs:
+
+      - `tests/repro/issue_l3_mcp_smoke.py`
+
+      - Existing MCP stdio execution path used by the boundary failure-path evidence.
+
+
+      Failure-mode checklist:
+
+      - `table_update` payload uses only valid schema fields.
+
+      - Required `speaker_name` is present so the repro reaches server-side `VersionConflict`
+      behavior rather than client/request validation failure.
+
+      - The WaitTimeout exercise path remains intact after the schema correction.
+
+      - Output remains caller-visible MCP stdio evidence, not white-box instrumentation.
+
+
+      Out of scope:
+
+      - No feature work.
+
+      - No API/schema changes.
+
+      - No non-repro cleanup beyond what is strictly necessary to keep the smoke artifact
+      aligned with the current public seam.'
+    verification: '- Repro artifact updated to use valid `table_update` schema fields
+      only
+
+      - Script still targets MCP stdio public seam
+
+      - Changes are limited to evidence reliability, not feature behavior'
+    depends_on:
+    - guard_followup2_boundary.gate_retest
+    agent: python-executor
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: done

@@ -24790,8 +24790,6 @@ phases:
       and `uv.lock` at `invar-tools==1.19.7`
 
       - No code changes occur after freeze capture until gate review completes'
-    refs:
-    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance

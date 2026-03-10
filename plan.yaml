@@ -24935,46 +24935,49 @@ phases:
       \ `guard_followup2_cleanup` phase meets the quality bar for proceeding.\n\n\
       Review criteria:\n1. Storage files were cleaned via real code changes instead\
       \ of blanket allowances.\n2. Persistence semantics remained unchanged.\n3. Evidence\
-      \ includes main-path and failure-path coverage.\n4. Option B closure is enforced\
-      \ through one unambiguous repo-owned contract:\n   - canonical contract command\
-      \ `guard-contract`\n   - explicit enforcement command `./scripts/invar guard\
-      \ --all`\n5. Raw `uv run --group dev invar guard` is explicitly treated as a\
-      \ non-canonical environment signal and must not by itself fail the phase when\
-      \ canonical evidence passes.\n6. The latest closure-alignment retest proves\
-      \ `guard-contract` now matches that Option B rule, or conclusively proves the\
-      \ raw blocked command is now non-pass on this environment; both interpretations\
-      \ cannot remain alive.\n7. The strategy-remediation evidence reconciles which\
-      \ `invar` executable `uv run --group dev` resolves to with the path exercised\
-      \ by regressions, the canonical commands, and the repo-owned contract owner.\n\
-      8. The anti-loop rationale is satisfied: no remaining acceptance path allows\
-      \ canonical evidence to pass while `guard-contract` still fails on the same\
-      \ known non-canonical raw-command signal.\n9. The dependency metadata and lockfile\
-      \ both reflect `invar-tools==1.19.7` with no unnecessary version churn.\n10.\
-      \ Excluded directories remained untouched by the remediation scope.\n11. Freeze\
-      \ evidence cites the canonical contract outputs plus the new closure-alignment\
-      \ retest before closure."
+      \ includes main-path and failure-path coverage.\n4. There is exactly ONE deterministic\
+      \ closure owner for this phase:\n   - Option A: `./scripts/invar guard --all`\
+      \ is canonical and warnings are explicitly non-fatal when `errors=0`; or\n \
+      \  - Option B: `guard-contract` is canonical and `./scripts/invar guard --all`\
+      \ is informational evidence only.\n5. Raw `uv run --group dev invar guard` is\
+      \ explicitly non-canonical and must not by itself fail the phase.\n6. The latest\
+      \ deterministic-closure/freeze-intent retest proves the chosen rule, and no\
+      \ competing closure interpretation remains alive.\n7. The strategy-remediation\
+      \ evidence reconciles which `invar` executable `uv run --group dev` resolves\
+      \ to with the path exercised by regressions, the canonical commands, and the\
+      \ repo-owned contract owner.\n8. The anti-loop rationale is satisfied: no remaining\
+      \ acceptance path allows canonical evidence to pass while gate still fails on\
+      \ warning-only `errors=0` output or the same raw non-canonical signal.\n9. The\
+      \ dependency metadata and lockfile both reflect `invar-tools==1.19.7` with no\
+      \ unnecessary version churn.\n10. Excluded directories remained untouched by\
+      \ the remediation scope.\n11. Freeze validity is explicit: post-freeze drift\
+      \ is acceptable only when limited to `plan.yaml` and `.git/vectl/**`; any broader\
+      \ drift invalidates freeze and blocks closure.\n12. Gate evidence states whether\
+      \ plan.yaml-only drift occurred after freeze and why it is acceptable or absent."
     verification: '- All phase steps completed
 
-      - No unresolved blocker remains in the targeted storage files or guard-contract
-      closure semantics
+      - No unresolved blocker remains in the targeted storage files or deterministic
+      closure / freeze-intent semantics
 
-      - Evidence quality acceptable, including pasted canonical command outputs for
-      `uv run --group dev guard-contract` and `./scripts/invar guard --all`
+      - Evidence quality acceptable, including pasted output for the single chosen
+      canonical closure command and for `./scripts/invar guard --all`
 
       - Evidence explicitly states that raw `uv run --group dev invar guard` is non-canonical
-      and must not by itself fail the phase when canonical evidence passes, unless
-      the chosen remediation instead proves it is now conclusively non-pass
+      and must not by itself fail the phase
 
-      - Evidence includes the latest closure-alignment retest showing `guard-contract`
-      behavior matches the single chosen rule
+      - Evidence includes the latest deterministic-closure/freeze-intent retest showing
+      one closure rule only and explicit handling of warning-heavy `errors=0` output
 
       - Evidence reconciles the resolved `invar` executable/path for `uv run --group
-      dev` with the regression tests, canonical commands, and the single repo-owned
-      contract owner
+      dev` with the regressions, canonical commands, and the single repo-owned contract
+      owner
+
+      - Evidence explicitly states whether post-freeze drift was limited to `plan.yaml`
+      / `.git/vectl/**`; any broader drift requires freeze refresh and blocks closure
 
       - Evidence covers direct entrypoint, repo-owned direct invocation path, the
-      final supported contract, canonical contract enforcement, and the new bounded
-      closure-alignment retest with no residual ambiguity
+      final supported contract, canonical contract enforcement, closure alignment,
+      and the deterministic-closure/freeze-intent retest with no residual ambiguity
 
       - Anti-loop proof is present: acceptance no longer allows the current blocker
       to recur on the same command/output shape

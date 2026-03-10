@@ -102,8 +102,12 @@ def test_enforce_supported_invocation_rejects_non_repo_binary() -> None:
     """Direct invar binary outside repo venv exits with guidance."""
 
     repo_root = Path("/repo")
-    with pytest.raises(SystemExit, match="Unsupported direct `invar` invocation"):
+    with pytest.raises(SystemExit, match="Unsupported direct `invar` invocation") as exc_info:
         invar_entrypoint._enforce_supported_invocation("/usr/local/bin/invar", ["guard"], repo_root)
+
+    message = str(exc_info.value)
+    assert "./scripts/invar guard --all" in message
+    assert "/Users/tefx/.local/bin/invar" not in message
 
 
 def test_enforce_supported_invocation_allows_repo_venv_binary() -> None:
@@ -111,6 +115,13 @@ def test_enforce_supported_invocation_allows_repo_venv_binary() -> None:
 
     repo_root = Path("/repo")
     invar_entrypoint._enforce_supported_invocation("/repo/.venv/bin/invar", ["guard"], repo_root)
+
+
+def test_enforce_supported_invocation_allows_repo_wrapper_script() -> None:
+    """Repo-owned wrapper script is considered supported direct invocation."""
+
+    repo_root = Path("/repo")
+    invar_entrypoint._enforce_supported_invocation("/repo/scripts/invar", ["guard"], repo_root)
 
 
 def test_main_installs_hooks_stub_before_importing_guard(monkeypatch) -> None:

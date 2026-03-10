@@ -57,13 +57,16 @@ def _has_explicit_target(argv: Sequence[str]) -> bool:
 
 # @invar:allow shell_result: invocation path predicate for entrypoint policy
 def _is_supported_repo_invocation(argv0: str, repo_root: Path) -> bool:
-    """Return True when command resolves to repo-managed `.venv/bin/invar`."""
+    """Return True when command resolves to a supported repo-owned entrypoint."""
 
     candidate = Path(argv0)
     if not candidate.is_absolute():
         return False
-    supported = repo_root / ".venv" / "bin" / "invar"
-    return candidate.resolve() == supported.resolve()
+    supported_entrypoints = {
+        (repo_root / ".venv" / "bin" / "invar").resolve(),
+        (repo_root / "scripts" / "invar").resolve(),
+    }
+    return candidate.resolve() in supported_entrypoints
 
 
 # @invar:allow shell_result: formats user guidance message for unsupported invocation
@@ -75,6 +78,8 @@ def _unsupported_direct_invocation_message(argv0: str) -> str:
         f"Resolved command: {Path(argv0).resolve()}\n"
         "\n"
         "Use a supported invocation from repository root:\n"
+        "  - ./scripts/invar guard --all\n"
+        "  - ./scripts/invar guard <path>\n"
         "  - uv run invar guard --all\n"
         "  - uv run invar guard <path>\n"
         "  - uvx invar-tools guard --all"

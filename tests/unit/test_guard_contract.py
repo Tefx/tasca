@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import json
 from typing import Any
 
 from tasca.shell import guard_contract
@@ -173,6 +174,66 @@ def test_run_guard_contract_writes_expected_artifacts(monkeypatch, tmp_path) -> 
     presence_payload = presence_artifact.read_text(encoding="utf-8")
     assert '"all_present": true' in presence_payload
     assert '"checks"' in presence_payload
+
+
+def test_presence_artifact_keeps_raw_zero_file_pass_after_presence_validation(
+    monkeypatch, tmp_path
+) -> None:
+    """Final presence artifact retains anti-loop signal after validation rewrite."""
+
+    raw_payload = '{"status":"passed","summary":{"files_checked":0}}'
+    canonical_payload = '{"status":"passed","summary":{"files_checked":2}}'
+
+    def _fake_run(*args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        if command == ["uv", "run", "--group", "dev", "invar", "guard"]:
+            return subprocess.CompletedProcess(
+                args=command, returncode=0, stdout=raw_payload, stderr=""
+            )
+        if command == ["./scripts/invar", "guard", "--all"]:
+            return subprocess.CompletedProcess(
+                args=command, returncode=0, stdout=canonical_payload, stderr=""
+            )
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setenv(guard_contract._ARTIFACT_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
+
+    assert guard_contract.run_guard_contract() == 0
+
+    payload = json.loads(
+        (tmp_path / guard_contract._ARTIFACTS["presence"]).read_text(encoding="utf-8")
+    )
+    assert payload["raw_zero_file_pass"] is True
+    assert payload["all_present"] is True
+    assert payload["checks"]["raw"]["exists"] is True
+    assert payload["checks"]["canonical"]["exists"] is True
+
+
+def test_presence_artifact_keeps_raw_zero_file_pass_false_with_canonical_capture(
+    monkeypatch, tmp_path
+) -> None:
+    """Canonical branch capture does not erase deterministic raw-zero=false proof."""
+
+    payload = '{"status":"passed","summary":{"files_checked":3}}'
+
+    def _fake_run(*args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        command = args[0]
+        assert isinstance(command, list)
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout=payload, stderr="")
+
+    monkeypatch.setenv(guard_contract._ARTIFACT_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
+
+    assert guard_contract.run_guard_contract() == 0
+
+    presence = json.loads(
+        (tmp_path / guard_contract._ARTIFACTS["presence"]).read_text(encoding="utf-8")
+    )
+    assert "raw_zero_file_pass" in presence
+    assert presence["raw_zero_file_pass"] is False
+    assert presence["checks"]["canonical"]["non_empty"] is True
 
 
 def test_run_guard_contract_fails_when_presence_artifact_missing(monkeypatch, tmp_path) -> None:

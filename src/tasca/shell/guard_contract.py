@@ -224,6 +224,13 @@ def run_guard_contract() -> int:
     if canonical_completed.stderr:
         print(canonical_completed.stderr, end="", file=sys.stderr)
 
+    presence_contract_payload = {
+        "owner": _CANONICAL_CLOSURE_OWNER,
+        "raw_command": _RAW_NON_CANONICAL_COMMAND,
+        "canonical_command": _CANONICAL_COMMAND,
+        "raw_zero_file_pass": _is_zero_file_pass(raw_completed.stdout),
+    }
+
     try:
         _persist_command_artifact(
             path=artifact_dir / _ARTIFACTS["raw"],
@@ -239,12 +246,7 @@ def run_guard_contract() -> int:
         )
         _write_artifact(
             artifact_dir / _ARTIFACTS["presence"],
-            {
-                "owner": _CANONICAL_CLOSURE_OWNER,
-                "raw_command": _RAW_NON_CANONICAL_COMMAND,
-                "canonical_command": _CANONICAL_COMMAND,
-                "raw_zero_file_pass": _is_zero_file_pass(raw_completed.stdout),
-            },
+            presence_contract_payload,
         )
     except RuntimeError as error:
         print(f"guard contract evidence error: {error}", file=sys.stderr)
@@ -252,7 +254,13 @@ def run_guard_contract() -> int:
 
     artifacts_ok, presence_payload = _validate_artifact_presence(artifact_dir)
     try:
-        _write_artifact(artifact_dir / _ARTIFACTS["presence"], presence_payload)
+        _write_artifact(
+            artifact_dir / _ARTIFACTS["presence"],
+            {
+                **presence_contract_payload,
+                **presence_payload,
+            },
+        )
     except RuntimeError as error:
         print(f"guard contract evidence error: {error}", file=sys.stderr)
         return 2

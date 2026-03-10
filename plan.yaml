@@ -31193,7 +31193,7 @@ phases:
       \  - guard_followup2_debt.final-guard-regression-retest\n  - guard_followup2_debt.gate-retest"
   - id: guard_followup2_debt.duplicate-escape-reason-fix
     name: duplicate-escape-reason-fix
-    status: claimed
+    status: done
     description: 'Fix unresolved `duplicate_escape_reason` findings across FastAPI
       route files without broadening the allow surface.
 
@@ -31245,6 +31245,60 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-10T13:40:41.319024+00:00'
+    done_at: '2026-03-10T13:51:32.223433+00:00'
+    evidence: 'Artifact:
+
+      - Worker commit: f339dccd9c71f3c8c4b7137a35f9c18ae47e9fe4
+
+      - Main squash commit: 5aa52bd
+
+      - Duplicate escape-reason buckets in FastAPI route files were normalized to
+      unique file/function-local reasons without adding new allow categories
+
+
+      Verification:
+
+      - uvx invar-tools guard --all -> passed, errors=0, warnings reduced; duplicate_escape_reason
+      now 0
+
+      - Before this fix: duplicate_escape_reason=2
+
+      - After this fix: duplicate_escape_reason=0
+
+
+      Spec link:
+
+      - guard_followup2_debt.duplicate-escape-reason-fix
+
+
+      Files changed:
+
+      - src/tasca/shell/api/routes/export.py
+
+      - src/tasca/shell/api/routes/seats.py
+
+      - src/tasca/shell/api/routes/sayings.py
+
+      - src/tasca/shell/api/routes/tables.py
+
+      - src/tasca/shell/api/routes/tables_control.py
+
+      - src/tasca/shell/api/routes/patrons.py
+
+      - src/tasca/shell/api/routes/search.py
+
+
+      Commit hash(es):
+
+      - f339dccd9c71f3c8c4b7137a35f9c18ae47e9fe4
+
+      - 5aa52bd
+
+
+      Gaps/Notes:
+
+      - Scope limited to duplicate_escape_reason normalization only; other warning
+      classes remain for subsequent residual-debt step.'
   - id: guard_followup2_debt.residual-debt-closure-fix
     name: residual-debt-closure-fix
     status: pending

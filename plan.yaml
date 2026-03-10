@@ -23750,6 +23750,138 @@ phases:
     depends_on:
     - guard_followup2_boundary.gate
     agent: python-executor
+  - id: guard_followup2_boundary.retest_l3_mcp_failure_paths
+    name: Retest L3 MCP failure-path completeness
+    status: pending
+    description: 'HIGH-priority independent L3 retest for the remaining MCP failure-path
+      evidence blocker after `guard_followup2_boundary.fix_mcp_boundary_cleanup_proof`.
+
+
+      As an INDEPENDENT TESTER (`blind-tester`), validate the MCP boundary through
+      public seams only.
+
+
+      Goal:
+
+      - Produce conclusive failure-path evidence for both `VersionConflict` and `WaitTimeout`
+      through public MCP-facing seams.
+
+      - Paste concrete commands and actual outputs; summaries alone are insufficient.
+
+      - Confirm the failure-path evidence is distinguishable from happy-path proof
+      and actually exercises the required error paths.
+
+
+      Scope under test:
+
+      - Public MCP startup / request seams used by the existing smoke and integration
+      harnesses
+
+      - Existing repro and integration entry points only; no implementation-guided
+      white-box shortcuts
+
+
+      Failure-path acceptance (mandatory):
+
+      - `VersionConflict` must be triggered through a public seam with an exact command
+      and pasted output showing the caller-visible envelope or error text.
+
+      - `WaitTimeout` must be triggered through a public seam with an exact command
+      and pasted output showing the caller-visible envelope or error text.
+
+      - Evidence must identify which command exercised which failure path.
+
+      - If either path cannot be exercised, document the exact seam limitation and
+      why the evidence remains incomplete.
+
+
+      Related should-fix item:
+
+      - Note any remaining boundary-related dead_export/shell warning volume that
+      weakens confidence, but do not treat warning volume as a substitute for the
+      required failure-path outputs.
+
+      '
+    verification: '- Main path: existing MCP public seam still starts and serves the
+      smoke harness if needed to set up the failure-path runs
+
+      - Failure path: explicit public-seam executions for `VersionConflict` and `WaitTimeout`
+      each include concrete command lines and pasted outputs
+
+      - Evidence must show which output corresponds to `VersionConflict` and which
+      corresponds to `WaitTimeout`
+
+      - If warnings remain, list them separately from the blocker verdict so the phase
+      can distinguish blocker evidence gaps from residual should-fix noise'
+    evidence_template: '## L3 Failure-Path Evidence
+
+
+      **Tester**: blind-tester
+
+      **Scope**: MCP public boundary failure paths
+
+      **Independence Level**: L3
+
+
+      ### VersionConflict
+
+      **Exact command**:
+
+      ```
+
+      <paste exact command>
+
+      ```
+
+      **Actual output**:
+
+      ```
+
+      <paste stdout/stderr or captured envelope>
+
+      ```
+
+      **Public seam exercised**: <entrypoint/smoke path>
+
+
+      ### WaitTimeout
+
+      **Exact command**:
+
+      ```
+
+      <paste exact command>
+
+      ```
+
+      **Actual output**:
+
+      ```
+
+      <paste stdout/stderr or captured envelope>
+
+      ```
+
+      **Public seam exercised**: <entrypoint/smoke path>
+
+
+      ### Residual warning volume
+
+      - Boundary-related dead_export/shell warnings still present: <count or none>
+
+      - Why they do or do not affect blocker status: <brief rationale>
+
+
+      ### Verdict
+
+      - [ ] PASS: both failure paths conclusively exercised with pasted outputs
+
+      - [ ] ISSUES_FOUND: missing/partial evidence or wrong seam exercised
+
+      - [ ] INCOMPLETE: could not exercise one or both paths through a public seam'
+    depends_on:
+    - guard_followup2_boundary.fix_mcp_boundary_cleanup_proof
+    agent: blind-tester
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: done

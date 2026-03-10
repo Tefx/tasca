@@ -24131,7 +24131,7 @@ phases:
       \  - guard_followup2_boundary.retest-repro-version-conflict-waittimeout"
   - id: guard_followup2_boundary.fix-repro-table-update-schema
     name: fix_repro_table_update_schema
-    status: pending
+    status: claimed
     description: 'MEDIUM-priority fix: align `tests/repro/issue_l3_mcp_smoke.py` with
       the current `table_update` schema while preserving the public-seam MCP stdio
       repro intent.
@@ -24202,6 +24202,8 @@ phases:
     depends_on:
     - guard_followup2_boundary.gate_retest
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-03-10T10:44:27.051169+00:00'
   - id: guard_followup2_boundary.retest-repro-version-conflict-waittimeout
     name: retest_repro_version_conflict_waittimeout
     status: pending

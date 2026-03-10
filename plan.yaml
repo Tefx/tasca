@@ -23882,6 +23882,91 @@ phases:
     depends_on:
     - guard_followup2_boundary.fix_mcp_boundary_cleanup_proof
     agent: blind-tester
+  - id: guard_followup2_boundary.gate_retest
+    name: Boundary gate retest
+    status: pending
+    description: 'Independent gate re-review for `guard_followup2_boundary` after
+      the MCP cleanup-proof fix and L3 failure-path retest.
+
+
+      Review criteria:
+
+      1. The MCP boundary cleanup proof blocker is closed: the `dead_export` signal
+      around `src/tasca/shell/mcp/database.py::close_mcp_db` is either gone or objectively
+      justified as outside boundary scope with proof that no live boundary seam depends
+      on it.
+
+      2. L3 evidence conclusively exercises both `VersionConflict` and `WaitTimeout`
+      through public seams with pasted commands and outputs.
+
+      3. Residual boundary-related dead_export/shell warning volume is evaluated as
+      should-fix debt only if it no longer undermines the blocker conclusions.
+
+      4. Orchestrator-only `plan.yaml` drift is explicitly tolerated and MUST NOT
+      be treated as a code-scope blocker for this gate.
+
+      5. No excluded directory was drawn into scope.
+
+
+      Finding issues is valuable; block only on unresolved boundary blockers or incomplete
+      evidence.'
+    verification: '- Review evidence from `guard_followup2_boundary.fix_mcp_boundary_cleanup_proof`
+      and `guard_followup2_boundary.retest_l3_mcp_failure_paths`
+
+      - Confirm blocker closure requires objective cleanup proof plus explicit pasted
+      outputs for `VersionConflict` and `WaitTimeout`
+
+      - Confirm any remaining warning volume is correctly categorized as should-fix
+      debt and not misreported as unresolved blocker evidence
+
+      - Explicitly ignore orchestrator-only `plan.yaml` drift when assessing boundary
+      gate readiness
+
+      - Open the gate only if the remaining issues are non-blocking and the boundary
+      evidence is complete'
+    evidence_template: '## Gate Retest Report
+
+
+      **Reviewer**: gate-reviewer
+
+      **Phase**: guard_followup2_boundary
+
+
+      ### Blocker Review
+
+      - MCP cleanup proof blocker: <resolved|blocked> with objective reference
+
+      - VersionConflict evidence: <present|missing>
+
+      - WaitTimeout evidence: <present|missing>
+
+
+      ### Residual Warning Review
+
+      - Boundary-related dead_export/shell warnings: <count or none>
+
+      - Classification: <should_fix debt | blocker>
+
+      - Reasoning: <brief>
+
+
+      ### Drift Tolerance
+
+      - Orchestrator-only `plan.yaml` drift observed: <yes/no>
+
+      - Gate treatment: ignored unless it changes code-scope evidence
+
+
+      ### Decision
+
+      - [ ] OPEN
+
+      - [ ] BLOCKED
+
+      - Required follow-up if blocked: <specific blocker>'
+    depends_on:
+    - guard_followup2_boundary.retest_l3_mcp_failure_paths
+    agent: gate-reviewer
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: done

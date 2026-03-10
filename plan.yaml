@@ -24251,7 +24251,7 @@ phases:
       - No discovered issues.'
   - id: guard_followup2_boundary.retest-repro-version-conflict-waittimeout
     name: retest_repro_version_conflict_waittimeout
-    status: pending
+    status: claimed
     description: 'MEDIUM-priority independent retest: verify the repaired `tests/repro/issue_l3_mcp_smoke.py`
       now reaches the intended MCP stdio failure paths and produces reliable evidence.
 
@@ -24355,6 +24355,8 @@ phases:
     depends_on:
     - guard_followup2_boundary.fix-repro-table-update-schema
     agent: blind-tester
+    claimed_by: blind-tester
+    claimed_at: '2026-03-10T10:49:05.454575+00:00'
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: done

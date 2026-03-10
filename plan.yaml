@@ -24767,7 +24767,8 @@ phases:
       - Declare the environment and exact verification commands used in this phase
 
       - Capture that the final remediation retest covered both direct entrypoint behavior,
-      repo-owned direct invocation path behavior, and zero-file policy behavior
+      repo-owned direct invocation path behavior, and zero-file policy behavior on
+      the supported `uv run --group dev invar guard` path
 
       - Capture that the dependency bump evidence shows `pyproject.toml` and `uv.lock`
       both reflect `invar-tools==1.19.7`
@@ -24778,8 +24779,8 @@ phases:
       note, and command list
 
       - Freeze occurs only after the final remediation retest evidence is available,
-      including direct entrypoint, repo-owned direct invocation path, and zero-file
-      policy checks
+      including direct entrypoint, repo-owned direct invocation path, and the supported
+      `uv run --group dev invar guard` zero-file policy checks
 
       - Freeze evidence also cites the dependency bump proof for `pyproject.toml`
       and `uv.lock` at `invar-tools==1.19.7`
@@ -24793,6 +24794,7 @@ phases:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
+    - guard_followup2_cleanup.gate-zero-file-policy-retest
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:17:12.748150+00:00'

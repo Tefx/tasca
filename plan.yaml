@@ -31149,7 +31149,7 @@ phases:
       - Freeze verification only; no source/docs/tests changed.'
   - id: guard_followup2_debt.gate
     name: gate
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
       `guard_followup2_debt` phase meets the quality bar for closure.
 
@@ -31177,6 +31177,20 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T13:31:40.911278+00:00'
+    done_at: '2026-03-10T13:40:10.906669+00:00'
+    evidence: "Independent gate review found unresolved debt-phase blockers.\n\nArtifact:\n\
+      - Gate reviewer evidence identified unresolved duplicate_escape_reason buckets\
+      \ and incomplete residual debt justification in current final-guard evidence.\n\
+      \nVerification:\n- uvx invar-tools guard --all -> PASS with non-zero warnings/infos\
+      \ including duplicate_escape_reason and residual size/complexity categories\n\
+      - allow reason grep across route files confirmed remaining duplicated reason\
+      \ buckets\n- scope check across debt commits confirmed excluded dirs remained\
+      \ untouched\n\nSpec link:\n- guard_followup2_debt.gate\n\nNotes:\n- Blockers\
+      \ recorded by reviewer: duplicate_escape_reason unresolved; residual file_size_warning/shell_too_complex\
+      \ not adequately justified; final-guard evidence contradiction on duplicate_escape_reason\
+      \ status.\n- Per gate/test issue handling, remediation chain created before\
+      \ closure:\n  - guard_followup2_debt.duplicate-escape-reason-fix\n  - guard_followup2_debt.residual-debt-closure-fix\n\
+      \  - guard_followup2_debt.final-guard-regression-retest\n  - guard_followup2_debt.gate-retest"
   - id: guard_followup2_debt.duplicate-escape-reason-fix
     name: duplicate-escape-reason-fix
     status: pending

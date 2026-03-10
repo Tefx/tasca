@@ -28186,7 +28186,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement
-    status: claimed
+    status: done
     description: 'HIGH-priority anti-loop remediation to end recurrence after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation`.
 
 
@@ -28286,6 +28286,23 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T05:45:31.219247+00:00'
+    done_at: '2026-03-10T05:52:41.585944+00:00'
+    evidence: "## Canonical Contract Enforcement Evidence\n\n**Objective**: Close\
+      \ anti-loop recurrence with one repo-owned canonical contract.\n\n**Canonical\
+      \ contract command(s)**:\n```bash\nguard-contract\n./scripts/invar guard --all\n\
+      ```\n\n**Raw blocked command (non-canonical)**:\n```bash\nuv run --group dev\
+      \ invar guard\n```\n\n**Required proof**:\n- Artifacts updated to encode canonical\
+      \ ownership:\n  - `src/tasca/shell/guard_contract.py`\n  - `tests/unit/test_guard_contract.py`\n\
+      - Focused checks executed:\n  - `uv run --group dev pytest -v tests/unit/test_guard_contract.py`\
+      \ -> `5 passed`\n  - `uv run --group dev guard-contract` -> passed with machine-readable\
+      \ summary\n  - `./scripts/invar guard --all` -> passed (no new errors)\n- Non-canonical\
+      \ classification encoded in message/tests:\n  - raw blocked command must be\
+      \ interpreted via `guard-contract`, not as standalone closure signal.\n\nSpec\
+      \ link:\n- guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement\n\
+      \nCommit hash(es):\n- Worker: `1b9c165`\n- Main squash: `c0506c0`\n\nFiles changed:\n\
+      - `src/tasca/shell/guard_contract.py`\n- `tests/unit/test_guard_contract.py`\n\
+      \nGaps/Notes:\n- Existing repository warning inventory under `guard --all` remains\
+      \ unchanged and out-of-scope for this step.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
     status: pending

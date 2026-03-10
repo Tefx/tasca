@@ -21,6 +21,7 @@ def test_build_zero_file_contract_message_enforces_canonical_commands() -> None:
     assert "guard-contract" in message
     assert "./scripts/invar guard --all" in message
     assert "non-canonical standalone signal" in message
+    assert "does not by itself determine gate closure" in message
     assert "uv run --group dev invar guard" in message
 
 
@@ -31,8 +32,8 @@ def test_is_zero_file_pass_ignores_nonzero_file_payload() -> None:
     assert guard_contract._is_zero_file_pass(payload) is False
 
 
-def test_run_guard_contract_fails_on_zero_file_pass(monkeypatch, capsys) -> None:
-    """Contract wrapper exits non-zero when blocked behavior is observed."""
+def test_run_guard_contract_warns_on_zero_file_pass(monkeypatch, capsys) -> None:
+    """Contract wrapper warns but keeps canonical closure interpretation."""
 
     payload = '{"status":"passed","summary":{"files_checked":0}}'
 
@@ -40,9 +41,10 @@ def test_run_guard_contract_fails_on_zero_file_pass(monkeypatch, capsys) -> None
         return subprocess.CompletedProcess(args=["uv"], returncode=0, stdout=payload, stderr="")
 
     monkeypatch.setattr(guard_contract.subprocess, "run", _fake_run)
-    assert guard_contract.run_guard_contract() == 2
+    assert guard_contract.run_guard_contract() == 0
     captured = capsys.readouterr()
     assert "non-canonical standalone signal" in captured.err
+    assert "does not by itself determine gate closure" in captured.err
     assert "guard-contract" in captured.err
     assert "./scripts/invar guard --all" in captured.err
 

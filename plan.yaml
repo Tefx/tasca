@@ -27031,7 +27031,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-fix
     name: gate-zero-file-policy-fix
-    status: pending
+    status: claimed
     description: 'Priority: HIGH
 
 
@@ -27121,6 +27121,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-10T04:30:15.764061+00:00'
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest
     name: gate-zero-file-policy-retest
     status: pending

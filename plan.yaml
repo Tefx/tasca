@@ -27772,7 +27772,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
-    status: claimed
+    status: done
     description: 'HIGH-priority strategy remediation for the persistent blocker after
       `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch`.
 
@@ -27879,6 +27879,130 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T05:22:08.821626+00:00'
+    done_at: '2026-03-10T05:40:13.202947+00:00'
+    evidence: '## Strategy Remediation Evidence
+
+
+      **Chosen option**: A
+
+      **Reason**: Fixed exact blocked command path while preserving `invar-tools==1.19.7`
+      in dev+lock; added command-contract checks so silent zero-file PASS on blocked
+      command is rejected and recurrence is machine-detectable.
+
+
+      **Resolution mapping**:
+
+      - `uv run --group dev invar guard` resolves to `.venv/bin/invar` importing `tasca_invar_entrypoint:main`.
+
+      - Canonical repo-owned command for full runs: `uv run --group dev invar guard
+      --all`.
+
+      - Enforcement owners: `src/tasca/shell/invar_entrypoint.py`, `src/tasca/shell/guard_contract.py`,
+      and associated unit tests.
+
+
+      **Exact commands exercised**:
+
+      ```bash
+
+      uv sync --group dev
+
+      uv run --group dev which invar
+
+      uv run --group dev pytest -v tests/unit/test_guard_contract.py tests/unit/test_invar_entrypoint.py
+      tests/unit/test_tasca_invar_entrypoint.py tests/unit/test_invar_runtime_policy.py
+
+      uv run --group dev invar guard
+
+      uv run --group dev invar guard --all
+
+      uv run --group dev guard-contract
+
+      ```
+
+
+      **Actual outputs**:
+
+      ```text
+
+      uv run --group dev which invar
+
+      .../.venv/bin/invar
+
+
+      uv run --group dev pytest ...
+
+      24 passed
+
+
+      uv run --group dev invar guard
+
+      invar entrypoint policy: no changed Python files found for `invar guard` changed-mode.
+      Use `invar guard --all` for meaningful verification.
+
+      ...
+
+      For CI/release, use: invar guard --all
+
+      For MCP/tools, use: uvx invar-tools guard --all
+
+      ```
+
+
+      **Regression coverage added/updated**:
+
+      - `tests/unit/test_guard_contract.py` (PASS+0-files contract violation detection
+      + non-zero-file pass acceptance)
+
+      - `tests/unit/test_tasca_invar_entrypoint.py` (dev pin/lock expectations and
+      runtime script resolution checks)
+
+      - `tests/unit/test_invar_entrypoint.py` (entrypoint policy coverage updates)
+
+
+      **Anti-loop rationale**:
+
+      - Guard-contract checks now fail if blocked behavior reappears.
+
+      - Runtime path and dependency pin expectations are test-asserted, preventing
+      green tests with unresolved command-path ambiguity.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
+
+
+      Commit hash(es):
+
+      - Worker: `67a12a4ca878f45f4fc1ca5ad6199eb2dccd58ae`
+
+      - Main squash: `0c163c3`
+
+
+      Files changed:
+
+      - `pyproject.toml`
+
+      - `uv.lock`
+
+      - `src/tasca/shell/guard_contract.py`
+
+      - `src/tasca/shell/invar_entrypoint.py`
+
+      - `tests/unit/test_guard_contract.py`
+
+      - `tests/unit/test_invar_entrypoint.py`
+
+      - `tests/unit/test_tasca_invar_entrypoint.py`
+
+
+      Gaps/Notes:
+
+      - Repository-wide warnings under `guard --all` remain out of scope for this
+      blocker fix.
+
+      '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
     status: pending

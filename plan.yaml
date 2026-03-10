@@ -28996,7 +28996,7 @@ phases:
       - plan.yaml not modified by worker per isolation constraints.'
   - id: guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest
     name: gate-deterministic-closure-and-freeze-intent-retest
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       bounded deterministic-closure and freeze-intent remediation from a fresh perspective
       after `guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix`.
@@ -29040,6 +29040,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T07:17:00.184595+00:00'
   - id: guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence
     name: gate-fix-single-closure-owner-and-canonical-evidence
     status: pending

@@ -27116,6 +27116,109 @@ phases:
     depends_on:
     - guard_followup2_cleanup.freeze
     agent: python-senior
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest
+    name: gate-zero-file-policy-retest
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate that
+      the blocker from `guard_followup2_cleanup.gate` is closed on the actual supported
+      entrypoint path.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: the supported `uv run --group dev invar guard` path shows deterministic
+      zero-file policy behavior or enforced contract behavior
+
+      - Edge cases: repo state with zero changed files, supported wrapper path behavior,
+      and any documented canonical alternative path
+
+      - Error scenarios: ambiguous or unsupported invocation paths do not silently
+      PASS with `files_checked=0`
+
+      - Auditability: evidence includes the exact command and pasted output used for
+      the verdict
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute the supported `uv run --group dev invar guard` path and
+      capture the actual output
+
+      - Re-run the focused regression tests added for supported-path behavior and
+      the highest-risk failure path
+
+      - Verdict is PASS only if the supported path no longer silently returns PASS
+      with `files_checked=0` without enforced policy semantics or an explicit enforced
+      contract'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: guard zero-file policy on the supported dev-group entrypoint
+
+      **Independence Level**: L1
+
+
+      ### Test Execution
+
+      - Commands executed:
+
+      ```
+
+      uv run --group dev invar guard
+
+      <targeted regression command(s)>
+
+      ```
+
+      - Actual output:
+
+      ```
+
+      <paste stdout/stderr>
+
+      ```
+
+
+      ### Issues Found
+
+
+      | Severity | Description | Location | Reproduction |
+
+      | --- | --- | --- | --- |
+
+      | blocker | <issue or none> | <path/entrypoint> | <steps> |
+
+      | should_fix | <issue or none> | <path/entrypoint> | <steps> |
+
+
+      ### Coverage Assessment
+
+      - Supported path verified: ✅/❌
+
+      - Failure-path coverage present: ✅/❌
+
+      - Immutable evidence captured: exact command/output pasted above
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [ ] ISSUES_FOUND
+
+      - [ ] INCOMPLETE'
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-fix
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

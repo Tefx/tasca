@@ -28305,7 +28305,7 @@ phases:
       \ unchanged and out-of-scope for this step.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       canonical-contract enforcement closure from a fresh perspective after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement`.
 
@@ -28395,6 +28395,26 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T05:52:55.161525+00:00'
+    done_at: '2026-03-10T05:56:53.588958+00:00'
+    evidence: "## Independent Retest Report\n\n**Canonical commands exercised**:\n\
+      - `uv run --group dev guard-contract`\n- `./scripts/invar guard --all`\n\n**Raw\
+      \ blocked command exercised**:\n- `uv run --group dev invar guard`\n\n**Required\
+      \ findings**:\n- Canonical closure evidence is now explicitly named as `guard-contract`\
+      \ + `./scripts/invar guard --all` in plan criteria.\n- Raw blocked command is\
+      \ explicitly classified as non-canonical standalone signal and contract-checked\
+      \ only.\n- Outputs captured:\n  - `uv run --group dev guard-contract` emits\
+      \ non-canonical warning text and contract guidance.\n  - `./scripts/invar guard\
+      \ --all` returns full verification JSON pass path.\n  - `uv run --group dev\
+      \ invar guard` still emits PASS JSON with `files_checked: 0`.\n\nSpec link:\n\
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement\n\
+      \nCommit hash(es):\n- none\n\nFiles changed:\n- none\n\nGaps/Notes:\n- Residual\
+      \ ambiguity risk remains only if operators ignore canonical-contract policy\
+      \ and misread raw blocked command output directly.\n- Classified as non-blocking\
+      \ follow-up risk under canonical-contract closure model; gate should enforce\
+      \ canonical evidence requirement.\n\nnotes:\n  suggestions:\n    - \"Consider\
+      \ adding an explicit non-zero exit mode for raw blocked command to eliminate\
+      \ possible human misread of PASS JSON.\"\n  tech_debt:\n    - \"Raw blocked\
+      \ command continues to emit PASS+0-files JSON despite canonical contract guardrails.\""
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

@@ -23438,7 +23438,7 @@ phases:
       out of scope for this boundary wiring step).'
   - id: guard_followup2_boundary.freeze
     name: freeze
-    status: pending
+    status: claimed
     description: 'Freeze snapshot for L3/boundary verification in `guard_followup2_boundary`.
 
 
@@ -23461,6 +23461,8 @@ phases:
     - guard_followup2_boundary.auth-config-boundary-fix
     - guard_followup2_boundary.mcp-server-boundary-fix
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T10:07:47.846681+00:00'
   - id: guard_followup2_boundary.boundary-l3-verify
     name: boundary-l3-verify
     status: pending

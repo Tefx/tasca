@@ -24025,7 +24025,7 @@ phases:
       error envelope; output explicitly captured.'
   - id: guard_followup2_boundary.gate_retest
     name: Boundary gate retest
-    status: claimed
+    status: done
     description: 'Independent gate re-review for `guard_followup2_boundary` after
       the MCP cleanup-proof fix and L3 failure-path retest.
 
@@ -24110,6 +24110,25 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T10:35:41.038555+00:00'
+    done_at: '2026-03-10T10:44:06.924437+00:00'
+    evidence: "## Gate Retest Report\nReviewer: gate-reviewer\nPhase: guard_followup2_boundary\n\
+      \nBlocker Review:\n- MCP cleanup proof blocker: PASS (dead_export seam not present;\
+      \ MCP table_export path works end-to-end)\n- VersionConflict evidence: PASS\
+      \ (public MCP seam command produced error.code VERSION_CONFLICT with expected/actual\
+      \ version detail)\n- WaitTimeout evidence: PASS (public MCP seam command produced\
+      \ timeout=true with empty sayings)\n\nResidual Warning Review:\n- boundary warnings\
+      \ observed in prior artifact set were classified as should_fix debt, not blocker\n\
+      - reasoning: they do not undermine blocker closure evidence for cleanup seam\
+      \ and explicit VersionConflict/WaitTimeout outputs\n\nDrift Tolerance:\n- orchestrator-only\
+      \ plan.yaml drift observed: no\n- gate treatment: non-blocker by policy\n\n\
+      Decision:\n- OPEN\n\nVerification:\n- git status / git diff -> clean review\
+      \ worktree\n- explicit MCP stdio commands for VersionConflict + WaitTimeout\
+      \ + table_export were run and outputs captured by reviewer\n\nSpec link:\n-\
+      \ guard_followup2_boundary.gate_retest\n\nFiles changed:\n- none\n\nCommit hash(es):\n\
+      - none (verify-only gate step)\n\nGaps/Notes:\n- should_fix detected: tests/repro/issue_l3_mcp_smoke.py\
+      \ uses outdated table_update args causing validation-failure risk in repro reliability.\n\
+      - Per verification-step issue handling, remediation chain added:\n  - guard_followup2_boundary.fix-repro-table-update-schema\n\
+      \  - guard_followup2_boundary.retest-repro-version-conflict-waittimeout"
   - id: guard_followup2_boundary.fix-repro-table-update-schema
     name: fix_repro_table_update_schema
     status: pending

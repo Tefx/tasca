@@ -30836,7 +30836,7 @@ phases:
       - no discovered issues.'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
-  status: in_progress
+  status: done
   depends_on:
   - guard_followup2_boundary
   steps:
@@ -31499,7 +31499,7 @@ phases:
       and concentrated in shell_pure_logic/dead_export categories.'
   - id: guard_followup2_debt.gate-retest
     name: gate-retest
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), reassess whether the
       `guard_followup2_debt` phase now meets the closure bar after remediation.
 
@@ -31539,3 +31539,45 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T14:05:42.024095+00:00'
+    done_at: '2026-03-10T14:09:41.519103+00:00'
+    evidence: 'Artifact:
+
+      - Full guard artifact from uvx invar-tools guard --all reviewed for gate-blocking
+      categories
+
+      - Worktree remained clean during gate retest
+
+
+      Verification:
+
+      - git status -> clean
+
+      - uvx invar-tools guard --changed -> PASS (0 files changed)
+
+      - uvx invar-tools guard --all -> PASS (errors=0, warnings=73, infos=0)
+
+      - category parse -> duplicate_escape_reason=0, file_size_warning=0, shell_too_complex=0
+
+      - contradiction check -> gate-blocking categories absent in full output; no
+      contradiction with step dispositions
+
+
+      Spec link:
+
+      - guard_followup2_debt.gate-retest
+
+
+      Files changed:
+
+      - none
+
+
+      Commit hash(es):
+
+      - none (verify-only)
+
+
+      Gaps/Notes:
+
+      - Non-blocking warning debt remains in other categories (shell_pure_logic/dead_export/dead_assign/dead_param/review_suggested)
+      but does not violate this gate’s explicit blocker conditions.'

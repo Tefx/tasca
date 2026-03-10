@@ -27252,6 +27252,52 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:39:58.851630+00:00'
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
+    name: gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
+    status: pending
+    description: 'HIGH-priority fix for the blocker found by `guard_followup2_cleanup.gate-zero-file-policy-retest`.
+
+
+      Scope:
+
+      - Close the remaining supported-entrypoint gap where `uv run --group dev invar
+      guard` still returns PASS with `files_checked: 0` in a clean repo state.
+
+      - Update the actual supported entrypoint path so zero-file changed mode is enforced
+      and does not silently succeed.
+
+
+      Acceptance:
+
+      - The exact blocked command `uv run --group dev invar guard` no longer reports
+      PASS when `files_checked: 0` in clean-state changed-files mode.
+
+      - Evidence includes the exact command output showing the new enforced behavior
+      for the zero-file case.
+
+      - Any focused regression coverage for the supported entrypoint path is updated
+      so this failure mode cannot regress.
+
+
+      remaining_blocker: supported `uv run --group dev invar guard` path still silently
+      passes with zero changed files.
+
+      why_new_loop: the prior retest proved the blocker remains on the real supported
+      entrypoint, so a new implementation loop is required rather than evidence consolidation.
+
+      out_of_scope: unrelated direct-entrypoint UX work and dependency-version changes
+      beyond what is already planned.'
+    verification: '- Main path: implement the supported-entrypoint zero-file enforcement
+      and update focused regression coverage
+
+      - Failure path: prove the clean-state command `uv run --group dev invar guard`
+      no longer yields `PASS` with `files_checked: 0`
+
+      - Proof: capture exact command output and identify the regression test(s) covering
+      this supported-entrypoint failure mode'
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

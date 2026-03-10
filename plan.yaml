@@ -29092,7 +29092,7 @@ phases:
       accept/reject behavior.'
   - id: guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence
     name: gate-fix-single-closure-owner-and-canonical-evidence
-    status: claimed
+    status: done
     description: 'HIGH-priority remediation to close the blocker reopened by `guard_followup2_cleanup.gate`
       around deterministic closure ownership, canonical enforcement, and evidence
       artifacts.
@@ -29222,6 +29222,36 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T07:22:50.383446+00:00'
+    done_at: '2026-03-10T08:08:00.687666+00:00'
+    evidence: "Commit hash(es):\n- Worker commits: 4006f1c, cad80ed\n- Main squash\
+      \ commit: da3ea0e\n\nFiles changed:\n- src/tasca/shell/guard_contract.py\n-\
+      \ src/tasca/shell/invar_runtime_policy.py\n- src/tasca/shell/invar_entrypoint.py\n\
+      - src/tasca_invar_entrypoint.py\n- tests/unit/test_guard_contract.py\n- tests/unit/test_invar_entrypoint.py\n\
+      - tests/unit/test_invar_runtime_policy.py\n- tests/unit/test_tasca_invar_entrypoint.py\n\
+      \n## Canonical Closure Remediation Evidence\nChosen closure owner: guard-contract\n\
+      Repo-owned contract path: ./scripts/invar guard --all (executed/recorded via\
+      \ guard-contract canonical owner flow)\nRaw/non-canonical command: uv run --group\
+      \ dev invar guard\n\nMain-path proof:\n- Canonical command executed:\n  TASCA_GUARD_CONTRACT_ARTIFACT_DIR=/tmp/tasca-guard-contract-artifacts\
+      \ uv run --group dev guard-contract\n- Output/result:\n  canonical owner remains\
+      \ guard-contract; raw branch is labeled non-canonical; canonical branch runs\
+      \ and records artifacts\n- Artifacts produced:\n  /tmp/tasca-guard-contract-artifacts/raw-guard.json\n\
+      \  /tmp/tasca-guard-contract-artifacts/canonical-guard.json\n  /tmp/tasca-guard-contract-artifacts/presence-check.json\n\
+      \nFailure-path proof:\n- Warning-only/zero-file regression:\n  uv run --group\
+      \ dev invar guard -> PASS with files_checked=0, explicitly non-canonical (cannot\
+      \ close gate)\n- Missing-artifact/path-mismatch regressions:\n  uv run --group\
+      \ dev pytest -q tests/unit/test_guard_contract.py::test_run_guard_contract_fails_when_presence_artifact_missing\
+      \ -> PASS\n  uv run --group dev pytest -q tests/unit/test_invar_runtime_policy.py::test_runtime_contract_resolves_relative_script_path\
+      \ -> PASS\n\nAnti-loop proof:\n- No competing closure wording remains in touched\
+      \ scope.\n- Canonical/non-canonical classification is explicit in generated\
+      \ artifacts.\n- Executable/path reconciliation is enforced at entrypoint start\
+      \ via runtime guard-contract enforcement.\n- Artifact presence checks are required\
+      \ and validated (all_present=true in presence-check output).\n\nVerification:\n\
+      - uv run --group dev pytest -q tests/unit/test_guard_contract.py tests/unit/test_invar_runtime_policy.py\
+      \ tests/unit/test_invar_entrypoint.py tests/unit/test_tasca_invar_entrypoint.py\
+      \ -> 35 passed\n- invar_guard(changed=true) -> status passed, errors=0\n\nSpec\
+      \ link:\n- plan step guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence\n\
+      \nGaps/Notes:\n- Raw uv run --group dev invar guard behavior remains PASS with\
+      \ files_checked=0, intentionally non-canonical by contract."
   - id: guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence
     name: gate-retest-single-closure-owner-and-canonical-evidence
     status: pending

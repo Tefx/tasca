@@ -23507,7 +23507,7 @@ phases:
       - No discovered issues.'
   - id: guard_followup2_boundary.boundary-l3-verify
     name: boundary-l3-verify
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`blind-tester`), validate auth/config/MCP
       boundary behavior from a black-box perspective.
 
@@ -23596,6 +23596,25 @@ phases:
     agent: blind-tester
     claimed_by: blind-tester
     claimed_at: '2026-03-10T10:09:23.399065+00:00'
+    done_at: '2026-03-10T10:12:51.537735+00:00'
+    evidence: "## Verification Report\nTester: blind-tester\nScope: auth/config/MCP\
+      \ boundary\nIndependence Level: L3\n\nTest Execution:\n- Commands executed:\n\
+      \  - invar_guard(path=<boundary-l3 worktree>, changed=true)\n  - uv run pytest\
+      \ -q tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_with_auth\
+      \ tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_requires_auth\n\
+      \  - uv run pytest -q tests/integration/test_api.py::test_mcp_endpoint_mounted\n\
+      \  - uv run pytest -q tests/unit/mcp/test_proxy.py -k \"http_401_returns_upstream_auth_failed\"\
+      \n  - uv run python tests/repro/issue_l3_mcp_smoke.py\n  - git status --short\n\
+      - Output summary:\n  - guard changed-files: passed, errors=0, warnings=0\n \
+      \ - unit api auth boundary: 2 passed\n  - mcp endpoint mount smoke: 1 passed\n\
+      \  - mcp proxy auth error path: 1 passed\n  - repro smoke: happy path and MCP\
+      \ error paths observed (NOT_FOUND / OPERATION_NOT_ALLOWED)\n  - git status clean\n\
+      \nIssues Found:\n- blocker: none\n- should_fix: none\n\nVerdict:\n- PASS\n\n\
+      Files changed:\n- none\n\nCommit hash(es):\n- none (verify-only step)\n\nVerification:\n\
+      - All required main-path and failure-path checks executed with pasted outcomes\
+      \ above\n\nSpec link:\n- guard_followup2_boundary.boundary-l3-verify\n\nGaps/Notes:\n\
+      - Repro script output was large/truncated by tool capture, but required main-path/error-path\
+      \ evidence lines were captured."
   - id: guard_followup2_boundary.gate
     name: gate
     status: pending

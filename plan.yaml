@@ -27031,7 +27031,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-fix
     name: gate-zero-file-policy-fix
-    status: claimed
+    status: done
     description: 'Priority: HIGH
 
 
@@ -27123,6 +27123,30 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T04:30:15.764061+00:00'
+    done_at: '2026-03-10T04:39:47.456360+00:00'
+    evidence: "## Remediation Evidence\n\n**Blocked command**:\n```\nuv run --group\
+      \ dev invar guard\n```\n\n**Implementation choice**: enforced supported-path\
+      \ contract\n\n**Targeted regressions**:\n- `test_runtime_contract_allows_supported_invar_tools_call_without_guard_token`\n\
+      - `test_runtime_contract_rejects_ambiguous_guard_token_for_invar_tools`\n\n\
+      **Actual command output**:\n```text\ninvar entrypoint policy: no changed Python\
+      \ files found for `invar guard` changed-mode. Use `invar guard --all` for meaningful\
+      \ verification.\n\nSupported invar guard usage from repo root:\n  - invar guard\
+      \ --all\n  - invar guard <path>\n  - uv run invar guard --all\n\nFor CI/release,\
+      \ use: invar guard --all\nFor MCP/tools, use: uvx invar-tools guard --all\n\
+      ```\n\n**Why this closes the blocker**: On the actually-invoked dev-group path,\
+      \ ambiguous changed-mode zero-file runs no longer silently PASS; invocation\
+      \ contract is checked before guard execution and the command now fails with\
+      \ explicit, actionable guidance to supported meaningful invocations.\n\nSpec\
+      \ link:\n- guard_followup2_cleanup.gate-zero-file-policy-fix\n\nCommit hash(es):\n\
+      - Worker: `cc36240fa3e7c947c7708eb871bfc1bcb2ed6757`\n- Main squash: `6d636e6`\n\
+      \nFiles changed:\n- `pyproject.toml`\n- `src/sitecustomize.py`\n- `src/tasca/shell/invar_runtime_policy.py`\n\
+      - `tests/unit/test_invar_runtime_policy.py`\n\nVerification:\n- Run: `uv run\
+      \ --group dev pytest tests/unit/test_invar_runtime_policy.py -v` -> `2 passed`.\n\
+      - Run: `uv run --group dev pytest tests/unit/test_invar_entrypoint.py -v` ->\
+      \ `11 passed`.\n- Run: `uv run --group dev invar guard` -> fails fast with zero-file\
+      \ policy guidance.\n- Run: `uv run --group dev invar guard --all` -> passes\
+      \ (`errors=0`, warnings present).\n\nGaps/Notes:\n- Existing warning-heavy areas\
+      \ were not modified in this scoped fix.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest
     name: gate-zero-file-policy-retest
     status: pending

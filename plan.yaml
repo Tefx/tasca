@@ -23254,18 +23254,20 @@ phases:
   - id: guard_followup2_boundary.mcp-server-boundary-fix
     name: mcp-server-boundary-fix
     status: pending
-    description: 'Resolve remaining MCP boundary findings in `src/tasca/shell/mcp/server.py`
-      and any final entrypoint/server wiring gap left after correctness cleanup.
+    description: 'Resolve the remaining MCP boundary findings in `src/tasca/shell/mcp/server.py`
+      and the paired entrypoint/runtime seam in `src/tasca/shell/mcp/entrypoints.py`
+      without changing the public MCP tool surface.
 
 
-      Spec refs: guard follow-up derived from current guard report and the existing
-      MCP surface already implemented.
+      Spec refs: guard follow-up derived from the current guard report, the existing
+      MCP public surface, and the already-planned boundary verification harnesses.
 
       Touch paths: `src/tasca/shell/mcp/server.py`, `src/tasca/shell/mcp/entrypoints.py`
-      only if direct server wiring alignment is required.
+      only.
 
       Harness refs: `tests/integration/test_mcp.py`, `tests/unit/mcp/test_mcp_server.py`,
-      `tests/repro/issue_l3_mcp_smoke.py` (read-only).
+      `tests/repro/issue_l3_mcp_smoke.py` (read-only unless a focused regression in
+      existing MCP test locations is required to prove a boundary failure mode).
 
 
       Goals:
@@ -23273,30 +23275,113 @@ phases:
       - Remove residual `wiring_gap`, `review_suggested`, and dead-boundary debt in
       the MCP server seam.
 
+      - Repair entrypoint -> runtime helper routing so one authoritative path is used
+      at runtime.
+
       - Keep the shared tool registry stable; avoid registry churn beyond what is
-      required to point at repaired helpers.
+      required to point existing wiring at repaired helpers.
 
       - Prefer real wiring fixes over `@invar:allow`.
 
 
+      Failure-mode checklist:
+
+      - Stale entrypoint wiring vs repaired helper precedence is explicit: old helper
+      paths must be removed, proven unreachable, or routed through the repaired authoritative
+      helper with no ambiguity.
+
+      - Source-to-sink routing invariant holds from `entrypoints.py` into `server.py`:
+      the entrypoint-selected runtime path must match the server runtime path used
+      during MCP startup and tool invocation.
+
+      - Registry mutation/churn risk is controlled: fixing the seam must not add,
+      remove, rename, or reorder exposed tools unless an existing failing contract
+      in the MCP harness requires that exact change.
+
+      - Missing helper path / fallback behavior is explicit: startup or dispatch must
+      fail in the documented way or take the intended fallback path, without silently
+      reviving stale wiring or drifting to a different registry surface.
+
+      - Partial repair must not leave split behavior where startup uses one path and
+      request dispatch uses another.
+
+
+      State semantics:
+
+      - Last-writer-wins does not apply to MCP wiring selection; there must be one
+      authoritative runtime path after cleanup.
+
+      - Preserve exactly the existing caller-visible MCP tool names, envelopes, and
+      registration surface unless the referenced harnesses already define a narrower
+      required correction.
+
+      - Backward-compatible legacy behavior means a valid MCP startup + tool call
+      that succeeds before the cleanup continues to succeed through the same public
+      seam after the cleanup.
+
+      - Failure behavior must be deterministic: missing helper or invalid boundary
+      path must not silently fall through to stale wiring, hidden alternate registries,
+      or ad hoc runtime reconstruction.
+
+
+      Regression expectations:
+
+      - Add or update a focused MCP regression if existing tests do not already prove
+      entrypoint/runtime path alignment.
+
+      - Add or update a focused regression if existing tests do not already prove
+      stale helper precedence cannot win after repair.
+
+      - Add or update a focused regression if existing tests do not already prove
+      the exposed tool registry is unchanged under both normal startup and missing-helper
+      failure conditions.
+
+      - Add or update a focused regression if existing tests do not already prove
+      missing-helper/fallback behavior is deterministic and caller-visible.
+
+
       Integration requirement:
 
-      - Evidence must show the source-to-sink path through server wiring, not just
-      static cleanup.
+      - Evidence must show the source-to-sink path through entrypoint -> server runtime
+      wiring, not just static cleanup.
+
+      - Evidence must include a no-registry-churn check from the caller perspective
+      under both the repaired main path and the highest-risk failure path.
 
 
       Out of scope:
 
       - No new MCP features.
 
-      - No edits to tests or web code.'
-    verification: '- Guard findings tied to `server.py`/remaining entrypoint boundary
-      glue are resolved
+      - No web code changes.
 
-      - Evidence identifies any remaining boundary-only allowance and why it cannot
-      be expressed as core logic
+      - Broad registry redesign, feature expansion, or unrelated call-site migration
+      beyond `server.py` and `entrypoints.py` is deferred.
 
-      - MCP tool surface remains unchanged from the caller perspective'
+      - New compatibility wrappers are out of scope unless strictly required to collapse
+      the stale boundary path into the single authoritative runtime helper.'
+    verification: '- Main path: run a focused MCP server/runtime test command that
+      exercises the real entrypoint -> server -> tool-dispatch path (for example the
+      existing integration or repro harness covering MCP startup and one representative
+      tool call) and show the expected outcome: startup succeeds, one representative
+      tool call succeeds, and the caller-visible tool surface matches baseline.
+
+      - Failure path: run a focused regression or repro command that exercises the
+      highest-risk boundary failure mode (stale helper precedence, missing helper
+      path, or mismatched entrypoint/runtime path) and show the expected outcome:
+      deterministic failure or intended fallback occurs, no stale helper wins, and
+      the exposed tool registry/tool surface does not drift.
+
+      - Proof must explicitly identify the source-to-sink route exercised (`entrypoints.py`
+      selection -> `server.py` runtime path -> tool dispatch/result envelope`).
+
+      - Proof must explicitly show no-registry-churn from the caller perspective:
+      no added/removed/renamed/reordered tools unless required by an existing failing
+      contract.
+
+      - Guard findings tied to `server.py` / `entrypoints.py` are resolved, and any
+      remaining boundary-only allowance is named with why it cannot be expressed as
+      core logic.'
     depends_on:
     - guard_followup2_boundary.auth-config-boundary-fix
     agent: python-senior

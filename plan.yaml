@@ -31037,7 +31037,7 @@ phases:
       coverage.'
   - id: guard_followup2_debt.final-guard-regression
     name: final-guard-regression
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), run the final
       guard regression for the new remediation chain and confirm all remaining warning/info
       categories were addressed or consciously bounded.
@@ -31067,6 +31067,22 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T13:26:09.060763+00:00'
+    done_at: '2026-03-10T13:29:33.180486+00:00'
+    evidence: "Artifact:\n- Full guard raw artifact captured by verifier at ~/.local/share/opencode/tool-output/tool_cd7ee6ff7001IAj6iUPC77Tt2y\n\
+      - Verification worktree remained clean (no modifications)\n\nVerification:\n\
+      - invar guard --all -> command not found in environment\n- uvx invar-tools guard\
+      \ --all -> PASS; status=passed, files_checked=74, errors=0, warnings=78, infos=4\n\
+      - category parse of guard output ->\n  warning:shell_pure_logic=46\n  warning:dead_export=20\n\
+      \  warning:file_size_warning=3\n  warning:review_suggested=2\n  warning:dead_assign=3\n\
+      \  warning:dead_param=2\n  warning:duplicate_escape_reason=2\n  info:shell_too_complex=4\n\
+      - git status --short / git diff --name-only -> clean, no edits\n- git diff --name-only\
+      \ -- plan.yaml .git/vectl/claims.json -> no changes from verify step\n\nSpec\
+      \ link:\n- guard_followup2_debt.final-guard-regression\n\nFiles changed:\n-\
+      \ none\n\nCommit hash(es):\n- none (verify-only)\n\nGaps/Notes:\n- Full guard\
+      \ required uvx fallback because invar CLI binary was unavailable in PATH.\n\
+      - This is a pass with non-zero residual debt (warnings/infos), not a zero-debt\
+      \ pass.\n- Residual warnings were accounted by category for downstream debt\
+      \ triage."
   - id: guard_followup2_debt.freeze
     name: freeze
     status: pending

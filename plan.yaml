@@ -22966,13 +22966,13 @@ phases:
       - Remaining full-guard failures are unrelated and reported separately by verifier.'
 - id: guard_followup2_boundary
   name: Guard Follow-up 2 — Boundary
-  status: pending
+  status: in_progress
   depends_on:
   - guard_followup2_cleanup
   steps:
   - id: guard_followup2_boundary.auth-config-boundary-fix
     name: auth-config-boundary-fix
-    status: pending
+    status: claimed
     description: 'Fix the remaining auth/config boundary findings in `src/tasca/shell/api/auth.py`
       and `src/tasca/config.py` without expanding scope into excluded directories.
 
@@ -23157,6 +23157,8 @@ phases:
       - Confirm no files outside the declared touch paths were modified except any
       newly added focused regression tests required by this step'
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-10T09:48:36.312496+00:00'
   - id: guard_followup2_boundary.mcp-server-boundary-fix
     name: mcp-server-boundary-fix
     status: pending

@@ -28881,7 +28881,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix
     name: gate-deterministic-closure-and-freeze-intent-fix
-    status: claimed
+    status: done
     description: 'HIGH-priority bounded remediation to close the current `guard_followup2_cleanup.gate`
       blockers around deterministic closure and freeze-head drift.
 
@@ -28947,6 +28947,53 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T07:08:07.868337+00:00'
+    done_at: '2026-03-10T07:16:43.765795+00:00'
+    evidence: 'Artifact:
+
+      - Squash-merge commit on main: 0c7546d
+
+      - Worker commit: 9559fcdf14f10b796c809d9f20eb6888b6a5c7b2
+
+
+      Verification:
+
+      - uv run pytest -q tests/unit/test_guard_contract.py -> PASS (10 passed)
+
+      - uv run --group dev guard-contract -> PASS; explicit Option B note (guard-contract
+      canonical owner; ./scripts/invar guard --all informational)
+
+      - ./scripts/invar guard --all -> PASS (status passed, errors=0) treated as informational
+      per Option B
+
+      - invar_invar_guard(changed=true) -> PASS (errors=0 warnings=4)
+
+      - git status --short (worker) -> clean
+
+
+      Spec link:
+
+      - plan step guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix
+
+
+      Files changed:
+
+      - src/tasca/shell/guard_contract.py
+
+      - tests/unit/test_guard_contract.py
+
+
+      Commit hash(es):
+
+      - 9559fcdf14f10b796c809d9f20eb6888b6a5c7b2 (worker)
+
+      - 0c7546d (main squash commit)
+
+
+      Gaps/Notes:
+
+      - Rule encoded as Option B single-owner behavior in contract/tests.
+
+      - plan.yaml not modified by worker per isolation constraints.'
   - id: guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest
     name: gate-deterministic-closure-and-freeze-intent-retest
     status: pending

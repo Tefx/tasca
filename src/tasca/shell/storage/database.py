@@ -28,7 +28,6 @@ from tasca.core.schema import (
 DEFAULT_BUSY_TIMEOUT = 5000
 
 
-# @shell_complexity: 4 branches for directory creation + WAL mode check + :memory: handling
 def init_database(db_path: Path) -> Result[sqlite3.Connection, str]:
     """
     Initialize database connection with WAL mode and busy_timeout.
@@ -55,23 +54,10 @@ def init_database(db_path: Path) -> Result[sqlite3.Connection, str]:
         >>> conn.close()
     """
     try:
-        # Create parent directories if needed (skip for :memory:)
         db_path_value = str(db_path)
-        if not is_memory_database_path(db_path_value):
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Connect to database
+        _ensure_database_directory(db_path, db_path_value)
         conn = sqlite3.connect(db_path_value)
-
-        # Enable WAL mode for better concurrency
-        conn.execute("PRAGMA journal_mode=WAL").fetchone()
-
-        # Set busy_timeout (5 seconds) for lock handling
-        conn.execute(f"PRAGMA busy_timeout={DEFAULT_BUSY_TIMEOUT}")
-
-        # Enable foreign key constraints
-        conn.execute("PRAGMA foreign_keys=ON")
-
+        _configure_connection_defaults(conn)
         return Success(conn)
 
     except sqlite3.Error as e:
@@ -201,7 +187,6 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-# @shell_complexity: 4 branches for journal/timeout/fk config parsing
 def verify_database_config(conn: sqlite3.Connection) -> Result[dict[str, int | bool | str], str]:
     """
     Verify database configuration (WAL mode, busy_timeout, foreign keys).
@@ -218,15 +203,8 @@ def verify_database_config(conn: sqlite3.Connection) -> Result[dict[str, int | b
     >>> conn.close()
     """
     try:
-        journal_result = conn.execute("PRAGMA journal_mode").fetchone()
-        timeout_result = conn.execute("PRAGMA busy_timeout").fetchone()
-        fk_result = conn.execute("PRAGMA foreign_keys").fetchone()
-
-        journal_mode = normalize_journal_mode(journal_result)
-        busy_timeout = normalize_busy_timeout(timeout_result)
-        foreign_keys = normalize_foreign_keys_enabled(fk_result)
-
-        return Success(build_database_config(journal_mode, busy_timeout, foreign_keys))
+        config = _read_database_config(conn)
+        return Success(config)
     except sqlite3.Error as e:
         return Failure(f"Failed to verify database config: {e}")
 
@@ -273,3 +251,29 @@ def list_indexes(conn: sqlite3.Connection) -> Result[list[str], str]:
         return Success([row[0] for row in cursor.fetchall()])
     except sqlite3.Error as e:
         return Failure(f"Failed to list indexes: {e}")
+
+
+def _ensure_database_directory(db_path: Path, db_path_value: str) -> None:
+    """Create database parent directory unless using :memory:."""
+    if not is_memory_database_path(db_path_value):
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _configure_connection_defaults(conn: sqlite3.Connection) -> None:
+    """Apply default SQLite pragmas for Tasca runtime."""
+    conn.execute("PRAGMA journal_mode=WAL").fetchone()
+    conn.execute(f"PRAGMA busy_timeout={DEFAULT_BUSY_TIMEOUT}")
+    conn.execute("PRAGMA foreign_keys=ON")
+
+
+# @invar:allow shell_result: Private normalizer feeds verify_database_config Result wrapper.
+def _read_database_config(conn: sqlite3.Connection) -> dict[str, int | bool | str]:
+    """Read and normalize journal, busy_timeout, and foreign_keys pragmas."""
+    journal_result = conn.execute("PRAGMA journal_mode").fetchone()
+    timeout_result = conn.execute("PRAGMA busy_timeout").fetchone()
+    fk_result = conn.execute("PRAGMA foreign_keys").fetchone()
+
+    journal_mode = normalize_journal_mode(journal_result)
+    busy_timeout = normalize_busy_timeout(timeout_result)
+    foreign_keys = normalize_foreign_keys_enabled(fk_result)
+    return build_database_config(journal_mode, busy_timeout, foreign_keys)

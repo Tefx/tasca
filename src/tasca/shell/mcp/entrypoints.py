@@ -13,7 +13,7 @@ from returns.result import Failure, Success
 
 from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
-from tasca.core.domain.seat import SPEC_STATE_TO_INTERNAL, Seat, SeatId, SeatState
+from tasca.core.domain.seat import Seat, SeatId, SeatState
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
 from tasca.core.export_service import generate_jsonl, generate_markdown
 from tasca.core.services.batch_delete_service import MAX_BATCH_SIZE, validate_batch_delete_request
@@ -86,7 +86,18 @@ from tasca.shell.mcp.entrypoint_logic import (
 from tasca.shell.mcp.entrypoint_logic import (
     validate_speaker_constraints as _validate_speaker_constraints,
 )
-from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local
+from tasca.shell.mcp.entrypoint_session_tools import (
+    connect_impl as _connect_impl,
+)
+from tasca.shell.mcp.entrypoint_session_tools import (
+    connection_status_impl as _connection_status_impl,
+)
+from tasca.shell.mcp.entrypoint_session_tools import (
+    seat_heartbeat_impl as _seat_heartbeat_impl,
+)
+from tasca.shell.mcp.entrypoint_session_tools import (
+    seat_list_impl as _seat_list_impl,
+)
 from tasca.shell.mcp.responses import error_response, success_response
 from tasca.shell.services.limited_saying_service import append_saying_with_limits
 from tasca.shell.services.table_id_generator import generate_table_id
@@ -106,11 +117,7 @@ from tasca.shell.storage.saying_repo import (
     list_sayings_by_table,
 )
 from tasca.shell.storage.seat_repo import (
-    SeatNotFoundError,
     create_seat,
-    find_seats_by_table,
-    heartbeat_seat,
-    heartbeat_seat_by_patron,
 )
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
@@ -1364,7 +1371,6 @@ async def table_wait(
 # =============================================================================
 
 
-# @shell_complexity: 8 branches for patron/seat lookup + state mapping + TTL handling + idempotency + error paths
 # @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def seat_heartbeat(
     table_id: str,
@@ -1375,97 +1381,7 @@ def seat_heartbeat(
     seat_id: str | None = None,
 ) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
-    conn = next(get_mcp_db())
-
-    # Validate: must provide either patron_id or seat_id
-    if patron_id is None and seat_id is None:
-        return error_response(
-            "INVALID_REQUEST",
-            "Either patron_id or seat_id must be provided",
-        )
-
-    # Determine the resource key for idempotency
-    # Use patron_id if available (spec-compliant), otherwise seat_id (legacy)
-    if patron_id is not None:
-        resource_key = f"seat:{table_id}:{patron_id}"
-        lookup_key = patron_id
-    else:
-        # At this point, seat_id is guaranteed not None (validated above)
-        assert seat_id is not None  # for type checker
-        resource_key = f"seat:{seat_id}"
-        lookup_key = seat_id
-
-    # Check idempotency key if provided
-    if dedup_id is not None:
-        idempotency_result = check_idempotency_key(conn, resource_key, "seat_heartbeat", dedup_id)
-        if isinstance(idempotency_result, Failure):
-            error = idempotency_result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
-
-        cached_response = idempotency_result.unwrap()
-        if cached_response is not None:
-            log_dedup_hit(logger, "seat_heartbeat", resource_key, dedup_id)
-            cached_data = cached_response["data"]
-            cached_data["_next_action"] = (
-                "IMMEDIATELY call tasca.table_wait(since_sequence=...). "
-                "Your response = tool_call, not text."
-            )
-            return success_response(cached_data)
-
-    now = datetime.now(UTC)
-
-    # Determine TTL (convert ms to seconds, default 60s)
-    ttl_seconds = int(ttl_ms / 1000) if ttl_ms is not None else DEFAULT_SEAT_TTL_SECONDS
-
-    # Map spec state to internal state
-    internal_state = None
-    if state is not None:
-        internal_state = SPEC_STATE_TO_INTERNAL.get(state)
-        if internal_state is None:
-            return error_response(
-                "INVALID_REQUEST",
-                f"Invalid state value: {state}. Must be 'running', 'idle', or 'done'",
-            )
-
-    # Get seat and update heartbeat
-    if patron_id is not None:
-        # Spec-compliant path: lookup by (table_id, patron_id)
-        result = heartbeat_seat_by_patron(conn, table_id, patron_id, now, internal_state)
-    else:
-        # Legacy path: lookup by seat_id (seat_id guaranteed not None by validation above)
-        result = heartbeat_seat(conn, SeatId(seat_id), now)  # type: ignore[arg-type]
-        # Note: legacy path doesn't support state update
-
-    if isinstance(result, Failure):
-        error = result.failure()
-        if isinstance(error, SeatNotFoundError):
-            return error_response("NOT_FOUND", f"Seat not found: {lookup_key}")
-        return error_response("DATABASE_ERROR", f"Failed to update heartbeat: {error}")
-
-    seat = result.unwrap()
-    expires_at = calculate_expiry_time(seat.last_heartbeat, ttl_seconds)
-
-    # Spec-compliant response (simple, just expires_at)
-    response_data: dict[str, Any] = {
-        "expires_at": expires_at.isoformat(),
-        "_next_action": (
-            "IMMEDIATELY call tasca.table_wait(since_sequence=...). "
-            "Your response = tool_call, not text."
-        ),
-    }
-
-    # Store in idempotency cache if dedup_id provided
-    if dedup_id is not None:
-        store_idempotency_key(
-            conn,
-            resource_key,
-            "seat_heartbeat",
-            dedup_id,
-            {"data": response_data},
-            ttl_seconds=ttl_seconds,
-            now=now,
-        )
-    return success_response(response_data)
+    return _seat_heartbeat_impl(table_id, patron_id, state, ttl_ms, dedup_id, seat_id)
 
 
 # @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
@@ -1474,40 +1390,7 @@ def seat_list(
     active_only: bool = True,
 ) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
-    conn = next(get_mcp_db())
-    now = datetime.now(UTC)
-    ttl = DEFAULT_SEAT_TTL_SECONDS
-
-    result = find_seats_by_table(conn, table_id)
-
-    if isinstance(result, Failure):
-        error = result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to list seats: {error}")
-
-    seats = result.unwrap()
-    all_seats = seats.copy()
-
-    if active_only:
-        seats = filter_active_seats(seats, ttl, now)
-
-    active_count = len(filter_active_seats(all_seats, ttl, now))
-
-    return success_response(
-        {
-            "seats": [
-                {
-                    "id": s.id,
-                    "table_id": s.table_id,
-                    "patron_id": s.patron_id,
-                    "state": s.state.value,
-                    "last_heartbeat": s.last_heartbeat.isoformat(),
-                    "joined_at": s.joined_at.isoformat(),
-                }
-                for s in seats
-            ],
-            "active_count": active_count,
-        }
-    )
+    return _seat_list_impl(table_id, active_only)
 
 
 # =============================================================================
@@ -1515,70 +1398,13 @@ def seat_list(
 # =============================================================================
 
 
-# @shell_complexity: 5 branches for session init + config state + error paths
 # @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 async def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
-    if url is not None:
-        # Switch to remote mode with session initialization
-        from tasca.shell.mcp.proxy import switch_to_remote_with_session
-
-        session_result = await switch_to_remote_with_session(url, token)
-        if isinstance(session_result, Failure):
-            err = session_result.failure()
-            return error_response(
-                "SESSION_INIT_FAILED",
-                f"Failed to initialize MCP session with upstream: {err}",
-                getattr(err, "details", {}),
-            )
-        config = session_result.unwrap()
-    else:
-        # Switch to local mode
-        switch_to_local()
-
-        # Get current config to return status
-        config_result = get_upstream_config()
-        if isinstance(config_result, Failure):
-            err = config_result.failure()
-            return error_response("CONFIG_ERROR", str(err))
-        config = config_result.unwrap()
-
-    mode = "remote" if config.is_remote else "local"
-
-    return success_response(
-        {
-            "mode": mode,
-            "url": config.url,
-            "has_token": config.token is not None,
-            "has_session": config.session_id is not None,
-        }
-    )
+    return await _connect_impl(url, token)
 
 
 # @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def connection_status() -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
-    config_result = get_upstream_config()
-    if isinstance(config_result, Failure):
-        err = config_result.failure()
-        return error_response("CONFIG_ERROR", str(err))
-
-    config = config_result.unwrap()
-    mode = "remote" if config.is_remote else "local"
-
-    # Health check:
-    # - Local mode: always healthy
-    # - Remote mode: healthy if URL is configured (lightweight check, no HTTP ping for v1)
-    if config.is_remote:
-        is_healthy = config.url is not None and len(config.url) > 0
-    else:
-        is_healthy = True
-
-    return success_response(
-        {
-            "mode": mode,
-            "url": config.url,
-            # is_healthy: True if url is configured (no HTTP ping in v1)
-            "is_healthy": is_healthy,
-        }
-    )
+    return _connection_status_impl()

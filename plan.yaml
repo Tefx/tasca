@@ -23663,7 +23663,7 @@ phases:
       \ behavior and is not treated as a product-code blocker for this phase."
   - id: guard_followup2_boundary.fix_mcp_boundary_cleanup_proof
     name: Fix MCP boundary cleanup proof
-    status: pending
+    status: claimed
     description: 'HIGH-priority bounded remediation for the unresolved MCP boundary
       cleanup proof blocker after `guard_followup2_boundary.gate`.
 
@@ -23764,6 +23764,8 @@ phases:
     depends_on:
     - guard_followup2_boundary.gate
     agent: python-executor
+    claimed_by: python-senior
+    claimed_at: '2026-03-10T10:24:16.419407+00:00'
   - id: guard_followup2_boundary.retest_l3_mcp_failure_paths
     name: Retest L3 MCP failure-path completeness
     status: pending

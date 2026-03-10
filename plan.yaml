@@ -28584,7 +28584,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       bounded Option B closure alignment from a fresh perspective after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment`.
 
@@ -28689,6 +28689,78 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T06:31:20.678017+00:00'
+    done_at: '2026-03-10T06:36:07.950326+00:00'
+    evidence: '## Independent Option B Retest Report
+
+
+      **Tester**: integration-verifier
+
+      **Scope**: guard-contract closure semantics
+
+      **Independence Level**: L1
+
+
+      ### Commands executed
+
+      ```bash
+
+      uv run --group dev guard-contract
+
+      ./scripts/invar guard --all
+
+      uv run --group dev invar guard
+
+      uv run --group dev pytest -v tests/unit/test_guard_contract.py
+
+      ```
+
+
+      ### Actual output
+
+      - `uv run --group dev guard-contract` -> emits non-canonical note for raw blocked
+      command and returns PASS under Option B rule.
+
+      - `./scripts/invar guard --all` -> PASS with full verification payload.
+
+      - `uv run --group dev invar guard` -> PASS+0-files remains observable as non-canonical
+      signal.
+
+      - `uv run --group dev pytest -v tests/unit/test_guard_contract.py` -> `5 passed`.
+
+
+      ### Verdict
+
+      - PASS: `guard-contract` aligns with single Option B closure rule; canonical
+      commands define closure evidence.
+
+
+      ### Anti-loop check
+
+      - same blocker can recur?: no under current acceptance, because contract/tests
+      explicitly classify raw command as non-canonical standalone signal and gate
+      closure requires canonical command evidence.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
+
+
+      Commit hash(es):
+
+      - none
+
+
+      Files changed:
+
+      - none
+
+
+      Gaps/Notes:
+
+      - `guard --all` warnings remain but no blocking errors for this closure step.
+
+      '
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

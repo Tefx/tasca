@@ -24770,6 +24770,10 @@ phases:
       repo-owned direct invocation path behavior, and zero-file policy behavior on
       the supported `uv run --group dev invar guard` path
 
+      - Capture the new command-resolution remediation evidence for the exact blocked
+      command, including either enforced non-pass zero-file behavior or the machine-checked
+      supported-contract change that governs that command
+
       - Capture that the dependency bump evidence shows `pyproject.toml` and `uv.lock`
       both reflect `invar-tools==1.19.7`
 
@@ -24780,11 +24784,12 @@ phases:
 
       - Freeze occurs only after the final remediation retest evidence is available,
       including direct entrypoint, repo-owned direct invocation path, the earlier
-      supported-path retest, and the new supported `uv run --group dev invar guard`
-      zero-file enforcement retest
+      supported-path retest, and the new command-resolution retest for `uv run --group
+      dev invar guard`
 
       - Freeze evidence must cite the exact blocked command output proving the supported
-      dev-group path no longer reports `PASS` with `files_checked: 0`
+      dev-group path no longer reports `PASS` with `files_checked: 0`, or proving
+      the machine-checked supported-contract behavior now governing that command
 
       - Freeze evidence also cites the dependency bump proof for `pyproject.toml`
       and `uv.lock` at `invar-tools==1.19.7`
@@ -24800,6 +24805,7 @@ phases:
     - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
     - guard_followup2_cleanup.gate-zero-file-policy-retest
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:17:12.748150+00:00'

@@ -24755,41 +24755,38 @@ phases:
   - id: guard_followup2_cleanup.freeze
     name: freeze
     status: done
-    description: 'Freeze snapshot for guard_followup2_cleanup gate review.
-
-
-      Requirements:
-
-      - Record `git rev-parse HEAD`
-
-      - Record `git status` and confirm the intended freeze state
-
-      - Declare the environment and exact verification commands used in this phase
-
-      - Capture that the final remediation retest covered both direct entrypoint behavior,
-      repo-owned direct invocation path behavior, and zero-file policy behavior on
-      the supported `uv run --group dev invar guard` path
-
-      - Capture the new command-resolution remediation evidence for the exact blocked
-      command, including either enforced non-pass zero-file behavior or the machine-checked
-      supported-contract change that governs that command
-
-      - Capture that the dependency bump evidence shows `pyproject.toml` and `uv.lock`
-      both reflect `invar-tools==1.19.7`
-
-      - State that no code changes are allowed between freeze capture and the gate
-      review result'
+    description: "Freeze snapshot for guard_followup2_cleanup gate review.\n\nRequirements:\n\
+      - Record `git rev-parse HEAD`\n- Record `git status` and confirm the intended\
+      \ freeze state\n- Declare the environment and exact verification commands used\
+      \ in this phase\n- Capture that the final remediation retest covered both direct\
+      \ entrypoint behavior, repo-owned direct invocation path behavior, and zero-file\
+      \ policy behavior on the supported path\n- Capture the strategy-remediation\
+      \ closure for the exact blocked command, including which option was chosen:\n\
+      \  - Option A: the exact blocked command `uv run --group dev invar guard` now\
+      \ directly enforces non-pass zero-file behavior\n  - Option B: the repo-owned\
+      \ canonical command is machine-checked and `uv run --group dev invar guard`\
+      \ now emits explicit canonical-contract guidance instead of ambiguous semantic\
+      \ success\n- Capture the resolution mapping between `.venv/bin/invar`, `uv run\
+      \ --group dev`, targeted regressions, and the supported contract owner in-repo\
+      \ so freeze evidence cannot rely on mismatched paths\n- Capture that the dependency\
+      \ bump evidence shows `pyproject.toml` and `uv.lock` both reflect `invar-tools==1.19.7`\n\
+      - State that no code changes are allowed between freeze capture and the gate\
+      \ review result"
     verification: '- Freeze evidence contains commit SHA, worktree status, environment
       note, and command list
 
-      - Freeze occurs only after the final remediation retest evidence is available,
-      including direct entrypoint, repo-owned direct invocation path, the earlier
-      supported-path retest, and the new command-resolution retest for `uv run --group
-      dev invar guard`
+      - Freeze occurs only after the final strategy-remediation retest evidence is
+      available, including direct entrypoint, repo-owned direct invocation path, the
+      earlier supported-path retest, and the new strategy-remediation retest for `uv
+      run --group dev invar guard`
 
-      - Freeze evidence must cite the exact blocked command output proving the supported
-      dev-group path no longer reports `PASS` with `files_checked: 0`, or proving
-      the machine-checked supported-contract behavior now governing that command
+      - Freeze evidence must cite the exact blocked command output proving either
+      Option A (direct enforced non-pass zero-file behavior) or Option B (machine-checked
+      canonical command plus explicit guidance on the blocked command)
+
+      - Freeze evidence must map the resolved executable/path for `uv run --group
+      dev` to the regression tests and repo-owned contract owner so no mismatched-path
+      proof can pass gate
 
       - Freeze evidence also cites the dependency bump proof for `pyproject.toml`
       and `uv.lock` at `invar-tools==1.19.7`
@@ -24805,7 +24802,7 @@ phases:
     - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
     - guard_followup2_cleanup.gate-zero-file-policy-retest
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
-    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:17:12.748150+00:00'

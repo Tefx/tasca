@@ -99,7 +99,7 @@ from tasca.shell.logging import (
     log_say,
     log_table_create,
 )
-from tasca.shell.mcp.database import get_mcp_db
+from tasca.shell.mcp.database import close_mcp_db, get_mcp_db
 from tasca.shell.mcp.proxy import (
     ProxyConfigError,
     SessionInitError,
@@ -667,4 +667,7 @@ def run_mcp_server(transport: TransportType = "stdio") -> None:
     Args:
         transport: Transport protocol ('stdio', 'http', 'sse').
     """
-    mcp.run(transport=transport)
+    try:
+        mcp.run(transport=transport)
+    finally:
+        close_mcp_db()

@@ -28532,6 +28532,111 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
     agent: python-senior
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
+    name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      bounded Option B closure alignment from a fresh perspective after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment`.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: `uv run --group dev guard-contract` and `./scripts/invar guard
+      --all` both succeed under one explicit closure rule
+
+      - Edge cases: raw `uv run --group dev invar guard` is still observed and documented,
+      but it is either non-canonical under Option B or now conclusively non-pass;
+      mixed interpretations are a blocker
+
+      - Error scenarios: `guard-contract` must not exit 2 only because the raw blocked
+      command reports PASS with `files_checked=0` while the canonical command passes
+
+      - Anti-loop closure: gate/freeze evidence now requires this retest output, so
+      the same blocker cannot recur without a new concrete behavior change
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1
+
+
+      Anti-loop rationale:
+
+      - This retest exists to prove the phase has one bounded closure rule and that
+      the current blocker cannot produce another semantic loop between raw and canonical
+      commands.'
+    verification: '- Execute and paste output for `uv run --group dev guard-contract`
+
+      - Execute and paste output for `./scripts/invar guard --all`
+
+      - Execute and paste output for `uv run --group dev invar guard`
+
+      - Re-run focused contract/regression tests for `guard-contract`
+
+      - Verdict is PASS only if one explicit closure rule is evidenced, `guard-contract`
+      behavior matches that rule, and the previous gate blocker cannot recur on the
+      same observed outputs'
+    evidence_template: '## Independent Option B Retest Report
+
+
+      **Tester**: integration-verifier
+
+      **Scope**: guard-contract closure semantics
+
+      **Independence Level**: L1
+
+
+      ### Commands executed
+
+      ```bash
+
+      uv run --group dev guard-contract
+
+      ./scripts/invar guard --all
+
+      uv run --group dev invar guard
+
+      uv run --group dev pytest -v tests/unit/test_guard_contract.py
+
+      ```
+
+
+      ### Actual output
+
+      ```text
+
+      <paste stdout/stderr>
+
+      ```
+
+
+      ### Verdict
+
+      - [ ] PASS: `guard-contract` aligns with the single closure rule
+
+      - [ ] ISSUES_FOUND: blocker still reproducible or closure rule still ambiguous
+
+      - [ ] INCOMPLETE: missing command/output evidence
+
+
+      ### Anti-loop check
+
+      - prior_loop: <confirm prior step ids>
+
+      - same blocker can recur?: yes/no
+
+      - if no, why not: <one sentence>
+
+      '
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

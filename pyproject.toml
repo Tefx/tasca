@@ -61,7 +61,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/tasca"]
 artifacts = ["src/tasca/web/dist/**"]
-include = ["src/tasca/**/*.md", "src/tasca_invar_entrypoint.py"]
+include = ["src/tasca/**/*.md", "src/tasca_invar_entrypoint.py", "src/sitecustomize.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -27284,7 +27284,7 @@ phases:
       \ the exact supported command path.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
     name: gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
-    status: claimed
+    status: done
     description: 'HIGH-priority fix for the blocker found by `guard_followup2_cleanup.gate-zero-file-policy-retest`.
 
 
@@ -27330,6 +27330,58 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T04:45:02.146717+00:00'
+    done_at: '2026-03-10T04:51:26.663839+00:00'
+    evidence: 'Artifact:
+
+      - PR: worker commit `f169c35837914941b733f0b8289357bede3a6461`, squashed to
+      main `d54fa78`
+
+
+      Verification:
+
+      - Run: `uv run --group dev invar guard` -> PASS with `summary.files_checked=1`
+      (no longer PASS with `files_checked=0` on blocked path).
+
+      - Run: `uv run --group dev pytest -v tests/unit/test_invar_runtime_policy.py
+      tests/unit/test_usercustomize.py` -> `3 passed`.
+
+
+      Test IDs covering supported-path failure mode:
+
+      - `tests/unit/test_invar_runtime_policy.py::test_runtime_contract_rejects_ambiguous_guard_token_for_invar_tools`
+
+      - `tests/unit/test_usercustomize.py::test_usercustomize_invokes_runtime_guard_contract`
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
+
+
+      Commit hash(es):
+
+      - Worker: `f169c35837914941b733f0b8289357bede3a6461`
+
+      - Main squash: `d54fa78`
+
+
+      Files changed:
+
+      - `pyproject.toml`
+
+      - `src/usercustomize.py`
+
+      - `tests/unit/test_invar_runtime_policy.py`
+
+      - `tests/unit/test_usercustomize.py`
+
+
+      Gaps/Notes:
+
+      - Worker reported runtime policy enforcement for this supported path is now
+      triggered via `usercustomize` import path; no orchestrator-state files touched.
+
+      '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
     status: pending

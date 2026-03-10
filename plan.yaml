@@ -31402,7 +31402,7 @@ phases:
       - Other warning categories were intentionally left for full-guard retest disposition.'
   - id: guard_followup2_debt.final-guard-regression-retest
     name: final-guard-regression-retest
-    status: claimed
+    status: done
     description: 'Re-run the full guard regression after the remediation fixes and
       produce a contradiction-free disposition for every remaining warning/info category.
 
@@ -31454,6 +31454,49 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T14:01:29.803723+00:00'
+    done_at: '2026-03-10T14:05:16.310155+00:00'
+    evidence: 'Artifact:
+
+      - Full guard run artifact from uvx invar-tools guard --all
+
+      - Parsed finding counts aligned against summary for contradiction-free accounting
+
+
+      Verification:
+
+      - invar guard --all -> command not found (CLI unavailable)
+
+      - uvx invar-tools guard --all -> PASS: files_checked=74, errors=0, warnings=73,
+      infos=0
+
+      - category parse -> shell_pure_logic=46, dead_export=20, dead_assign=3, dead_param=2,
+      review_suggested=2, info categories=0
+
+      - contradiction check -> category totals sum to warnings summary (73) and infos=0
+      matches summary
+
+      - git status --short -> clean
+
+
+      Spec link:
+
+      - guard_followup2_debt.final-guard-regression-retest
+
+
+      Files changed:
+
+      - none
+
+
+      Commit hash(es):
+
+      - none (verify-only)
+
+
+      Gaps/Notes:
+
+      - Disposition is contradiction-free, but residual warning surface remains non-zero
+      and concentrated in shell_pure_logic/dead_export categories.'
   - id: guard_followup2_debt.gate-retest
     name: gate-retest
     status: pending

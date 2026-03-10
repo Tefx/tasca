@@ -22966,7 +22966,7 @@ phases:
       - Remaining full-guard failures are unrelated and reported separately by verifier.'
 - id: guard_followup2_boundary
   name: Guard Follow-up 2 — Boundary
-  status: in_progress
+  status: done
   depends_on:
   - guard_followup2_cleanup
   steps:
@@ -24251,7 +24251,7 @@ phases:
       - No discovered issues.'
   - id: guard_followup2_boundary.retest-repro-version-conflict-waittimeout
     name: retest_repro_version_conflict_waittimeout
-    status: claimed
+    status: done
     description: 'MEDIUM-priority independent retest: verify the repaired `tests/repro/issue_l3_mcp_smoke.py`
       now reaches the intended MCP stdio failure paths and produces reliable evidence.
 
@@ -24357,6 +24357,62 @@ phases:
     agent: blind-tester
     claimed_by: blind-tester
     claimed_at: '2026-03-10T10:49:05.454575+00:00'
+    done_at: '2026-03-10T10:51:39.105189+00:00'
+    evidence: '## Repro Retest Evidence
+
+      Command executed:
+
+      - uv run python tests/repro/issue_l3_mcp_smoke.py
+
+
+      VersionConflict output:
+
+      - TEST: Error Path - VersionConflict
+
+      - table_update(stale version) response includes ok=false and error.code=VERSION_CONFLICT
+      with expected/actual version details
+
+
+      WaitTimeout output:
+
+      - TEST: Error Path - Wait Timeout
+
+      - table_wait response returns ok=true with data.timeout=true and sayings=[]
+
+
+      Assessment:
+
+      - Did repro hit VersionConflict after schema fix? yes
+
+      - Did WaitTimeout still execute through same public seam? yes
+
+
+      Verification:
+
+      - uv run python tests/repro/issue_l3_mcp_smoke.py -> both required failure paths
+      exercised and visible in script output
+
+
+      Spec link:
+
+      - guard_followup2_boundary.retest-repro-version-conflict-waittimeout
+
+
+      Files changed:
+
+      - none
+
+
+      Commit hash(es):
+
+      - none (verify-only step)
+
+
+      Gaps/Notes:
+
+      - Script message text still says "Got other error: VERSION_CONFLICT" due to
+      casing check string, but envelope confirms the intended VersionConflict path
+      and no schema-validation short-circuit.'
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: done
@@ -30780,7 +30836,7 @@ phases:
       - no discovered issues.'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
-  status: locked
+  status: pending
   depends_on:
   - guard_followup2_boundary
   steps:

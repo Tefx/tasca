@@ -24754,7 +24754,7 @@ phases:
       \ for invar.shell.commands.hooks\"\n"
   - id: guard_followup2_cleanup.freeze
     name: freeze
-    status: claimed
+    status: done
     description: 'Freeze snapshot for guard_followup2_cleanup gate review.
 
 
@@ -24796,6 +24796,60 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:17:12.748150+00:00'
+    done_at: '2026-03-10T04:19:14.441524+00:00'
+    evidence: 'Artifact:
+
+      - PR: none
+
+
+      Verification:
+
+      - Environment declaration: Darwin 25.1.0 arm64, Python 3.14.3, worktree `.vectl/worktrees/guard_followup2_cleanup.freeze`.
+
+      - Run: `git rev-parse HEAD` -> `7c9382e21dbc8672ca8c0c5622963b85836fbf11`.
+
+      - Run: `git status` -> clean worktree on branch `vectl/step-guard_followup2_cleanup.freeze`.
+
+      - Run: `git status --short` -> empty output.
+
+      - Run: `uv run pytest -v tests/unit/test_invar_entrypoint.py` -> `11 passed`.
+
+      - Run: `git rev-parse HEAD` (post-check) -> unchanged SHA `7c9382e21dbc8672ca8c0c5622963b85836fbf11`.
+
+      - Run: `git status --short` (post-check) -> empty output.
+
+      - Run: grep `invar-tools==1.19.7` in `pyproject.toml` -> present in dev dependency
+      group.
+
+      - Run: grep in `uv.lock` (`name = "invar-tools"`, `version = "1.19.7"`, `specifier
+      = "==1.19.7"`) -> all present.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.freeze
+
+
+      Commit hash(es):
+
+      - none
+
+
+      Files changed:
+
+      - none
+
+
+      Gaps/Notes:
+
+      - Freeze package captures final remediation retest coverage across: direct entrypoint
+      behavior, repo-owned direct invocation path behavior, and zero-file policy behavior.
+
+      - Dependency bump proof captured for both required artifacts (`pyproject.toml`,
+      `uv.lock`) at `invar-tools==1.19.7`.
+
+      - Freeze invariant asserted and evidenced: no code changes between freeze capture
+      and gate (HEAD and status unchanged).'
   - id: guard_followup2_cleanup.gate
     name: gate
     status: pending

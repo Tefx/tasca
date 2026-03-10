@@ -24821,7 +24821,6 @@ phases:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
-    - guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T06:41:36.314315+00:00'

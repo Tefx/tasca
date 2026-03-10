@@ -26768,7 +26768,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-repo-owned-direct-invocation-path
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-repo-owned-direct-invocation-path
-    status: claimed
+    status: done
     description: 'Priority: HIGH
 
 
@@ -26825,6 +26825,57 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T04:09:09.253622+00:00'
+    done_at: '2026-03-10T04:15:19.341617+00:00'
+    evidence: 'Artifact:
+
+      - PR: worker commit `cdf898fcdcc6ec956ed27620521bbeef00072c4c`, squashed to
+      main `e40a8ff`
+
+
+      Verification:
+
+      - Run: `uv run pytest tests/unit/test_invar_entrypoint.py tests/unit/test_tasca_invar_entrypoint.py`
+      -> `12 passed in 0.10s`.
+
+      - Run: `./scripts/invar guard` -> deterministic repo-scope policy guidance emitted
+      (zero-file message + supported commands).
+
+      - Run: `/Users/tefx/.local/bin/invar guard` -> `no such file or directory` (expected
+      absent host-global path; no longer required for verification).
+
+      - Run: `uv run invar guard` -> unchanged behavior (passes with `files_checked:
+      0`, `errors: 0`, `warnings: 0`).
+
+      - Run: `git status --short` -> clean.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-fix-repo-owned-direct-invocation-path
+
+
+      Commit hash(es):
+
+      - Worker: `cdf898fcdcc6ec956ed27620521bbeef00072c4c`
+
+      - Main squash: `e40a8ff`
+
+
+      Files changed:
+
+      - `scripts/invar`
+
+      - `src/tasca/shell/invar_entrypoint.py`
+
+      - `tests/unit/test_invar_entrypoint.py`
+
+
+      Gaps/Notes:
+
+      - Direct invocation UX now anchored to repo-owned path (`./scripts/invar`);
+      no hard dependency on absent host-global binary path.
+
+      '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     status: pending

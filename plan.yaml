@@ -24874,14 +24874,18 @@ phases:
 
       4. The final remediation loop closes the supported-entrypoint blocker by proving
       the actually-invoked `uv run --group dev invar guard` path has deterministic
-      zero-file policy behavior or an enforced, unambiguous supported-path contract.
+      zero-file policy behavior or an enforced, machine-checked supported-path contract.
 
-      5. The dependency metadata and lockfile both reflect `invar-tools==1.19.7` with
+      5. The new command-resolution remediation explicitly reconciles which `invar`
+      executable `uv run --group dev` resolves to with the path exercised by targeted
+      regression tests.
+
+      6. The dependency metadata and lockfile both reflect `invar-tools==1.19.7` with
       no unnecessary version churn.
 
-      6. Excluded directories remained untouched by the remediation scope.
+      7. Excluded directories remained untouched by the remediation scope.
 
-      7. Freeze evidence cites the final retest output for the supported dev-group
+      8. Freeze evidence cites the final retest output for the supported dev-group
       path before closure.'
     verification: '- All phase steps completed
 
@@ -24890,7 +24894,11 @@ phases:
 
       - Evidence quality acceptable, including the exact blocked-command output showing
       `uv run --group dev invar guard` no longer reports `PASS` with `files_checked:
-      0`
+      0`, or showing the machine-checked supported-contract behavior now enforced
+      for that command
+
+      - Evidence reconciles the resolved `invar` executable/path for `uv run --group
+      dev` with the regression tests claimed to cover that path
 
       - Evidence also covers direct entrypoint, repo-owned direct invocation path,
       and the supported `uv run --group dev invar guard` zero-file scenario
@@ -24914,6 +24922,7 @@ phases:
     - guard_followup2_cleanup.freeze
     - guard_followup2_cleanup.gate-zero-file-policy-retest
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
     agent: gate-reviewer
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
     name: storage-guard-fix-auth-and-entrypoint

@@ -24761,37 +24761,37 @@ phases:
       \ in this phase\n- Capture that the final remediation retest covered both direct\
       \ entrypoint behavior, repo-owned direct invocation path behavior, zero-file\
       \ policy behavior on the supported path, the canonical-contract enforcement\
-      \ loop, and the new Option B closure-alignment retest\n- Capture the Option\
-      \ B closure package for the exact blocked command:\n  - canonical repo-owned\
-      \ contract command `guard-contract`\n  - explicit enforcement command `./scripts/invar\
-      \ guard --all`\n  - explicit statement that raw `uv run --group dev invar guard`\
-      \ is non-canonical and must not by itself force gate failure when canonical\
-      \ evidence passes\n- Capture the resolution mapping between `.venv/bin/invar`,\
-      \ `uv run --group dev`, `guard-contract`, `./scripts/invar guard --all`, targeted\
-      \ regressions, and the supported contract owner in-repo so freeze evidence cannot\
-      \ rely on mismatched paths\n- Capture that the dependency bump evidence shows\
-      \ `pyproject.toml` and `uv.lock` both reflect `invar-tools==1.19.7`\n- State\
-      \ the anti-loop rationale: closure now depends on one bounded Option B rule\
-      \ specifically to prevent another retest loop where canonical evidence passes\
-      \ but `guard-contract` still fails on the known non-canonical raw-command signal\n\
-      - State that no code changes are allowed between freeze capture and the gate\
-      \ review result"
+      \ loop, the Option B closure-alignment retest, and the deterministic-closure/freeze-intent\
+      \ retest\n- Capture one single deterministic closure owner for this phase:\n\
+      \  - either `./scripts/invar guard --all` with explicit non-fatal warning semantics\
+      \ when `errors=0`\n  - or `guard-contract`, with `./scripts/invar guard --all`\
+      \ treated as informational evidence only\n- Capture that raw `uv run --group\
+      \ dev invar guard` is non-canonical and must not by itself force gate failure\n\
+      - Capture the resolution mapping between `.venv/bin/invar`, `uv run --group\
+      \ dev`, `guard-contract`, `./scripts/invar guard --all`, targeted regressions,\
+      \ and the supported contract owner in-repo so freeze evidence cannot rely on\
+      \ mismatched paths\n- Capture that the dependency bump evidence shows `pyproject.toml`\
+      \ and `uv.lock` both reflect `invar-tools==1.19.7`\n- Capture the freeze-intent\
+      \ rule explicitly: post-freeze drift is acceptable only for plan mutations in\
+      \ `plan.yaml` and `.git/vectl/**`; any code, test, script, config, lockfile,\
+      \ or docs drift invalidates the freeze and requires refresh\n- State the anti-loop\
+      \ rationale: closure now depends on one bounded deterministic rule and one bounded\
+      \ freeze-intent rule specifically to prevent another retest loop where canonical\
+      \ evidence passes but gate still fails on warning-only output or plan-only drift\n\
+      - State that no non-plan code changes are allowed between freeze capture and\
+      \ the gate review result"
     verification: '- Freeze evidence contains commit SHA, worktree status, environment
       note, and exact command list
 
-      - Freeze occurs only after the canonical-contract enforcement retest evidence
-      and the new Option B closure-alignment retest evidence are available, including
-      direct entrypoint behavior, repo-owned direct invocation path behavior, the
-      earlier supported-path retest, the strategy-remediation retest for `uv run --group
-      dev invar guard`, and the latest retest proving `guard-contract` no longer fails
-      on the known non-canonical raw-command signal when canonical evidence passes
+      - Freeze occurs only after the deterministic-closure/freeze-intent retest evidence
+      is available alongside the earlier direct-entrypoint, supported-path, strategy-remediation,
+      canonical-contract, and closure-alignment retests
 
-      - Freeze evidence cites canonical command outputs for `uv run --group dev guard-contract`
-      and `./scripts/invar guard --all`
+      - Freeze evidence cites the single chosen canonical closure command and explains
+      exactly how `./scripts/invar guard --all` is interpreted
 
       - Freeze evidence explicitly states that raw `uv run --group dev invar guard`
-      is non-canonical and must not by itself force gate failure when canonical evidence
-      passes
+      is non-canonical and must not by itself force gate failure
 
       - Freeze evidence maps the resolved executable/path for `uv run --group dev`,
       `.venv/bin/invar`, canonical commands, and regressions to the single repo-owned
@@ -24800,10 +24800,14 @@ phases:
       - Freeze evidence also cites the dependency bump proof for `pyproject.toml`
       and `uv.lock` at `invar-tools==1.19.7`
 
-      - Anti-loop proof is present: closure criteria no longer accept the same blocker
-      recurrence after canonical evidence passes
+      - Freeze evidence explicitly states whether post-freeze `plan.yaml` / `.git/vectl/**`
+      drift occurred and, if so, why it remains acceptable plan-only drift
 
-      - No code changes occur after freeze capture until gate review completes'
+      - Any post-freeze drift outside `plan.yaml` / `.git/vectl/**` invalidates the
+      freeze and requires refresh
+
+      - Anti-loop proof is present: closure and freeze criteria no longer accept the
+      same blocker recurrence after canonical evidence passes'
     depends_on:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-zero-file-enforcement
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-invocation-guidance

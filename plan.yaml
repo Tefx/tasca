@@ -26878,7 +26878,7 @@ phases:
       '
   - id: guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     name: storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
       repo-owned direct-invocation path remediation from a fresh perspective.
 
@@ -26924,6 +26924,48 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:15:31.736254+00:00'
+    done_at: '2026-03-10T04:16:43.273615+00:00'
+    evidence: 'Artifact:
+
+      - PR: none (verify-only)
+
+
+      Verification:
+
+      - Run: `./scripts/invar guard` -> deterministic policy/guidance emitted (`no
+      changed Python files found...` + supported command list).
+
+      - Run: `uv run invar guard` -> unchanged behavior (`status=passed`, `files_checked=0`,
+      `errors=0`, `warnings=0`, `verification_level=STANDARD`).
+
+      - Run: `/Users/tefx/.local/bin/invar guard` -> unavailable (`no such file or
+      directory`), and no longer required for repo verification path.
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
+
+
+      Commit hash(es):
+
+      - none
+
+
+      Files changed:
+
+      - none
+
+
+      Gaps/Notes:
+
+      - Repo-owned direct invocation path is now deterministic and sufficient; verification
+      is independent of host-global binary presence.
+
+      - Remaining non-blocking note: CI/release flows requiring substantive checks
+      should use `--all` when no changed files exist.
+
+      '
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

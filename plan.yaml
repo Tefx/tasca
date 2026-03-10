@@ -31149,7 +31149,7 @@ phases:
       - Freeze verification only; no source/docs/tests changed.'
   - id: guard_followup2_debt.gate
     name: gate
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
       `guard_followup2_debt` phase meets the quality bar for closure.
 
@@ -31175,3 +31175,5 @@ phases:
     - guard_followup2_debt.final-guard-regression
     - guard_followup2_debt.freeze
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-03-10T13:31:40.911278+00:00'

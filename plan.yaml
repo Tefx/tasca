@@ -28881,7 +28881,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix
     name: gate-deterministic-closure-and-freeze-intent-fix
-    status: pending
+    status: claimed
     description: 'HIGH-priority bounded remediation to close the current `guard_followup2_cleanup.gate`
       blockers around deterministic closure and freeze-head drift.
 
@@ -28945,6 +28945,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-10T07:08:07.868337+00:00'
   - id: guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest
     name: gate-deterministic-closure-and-freeze-intent-retest
     status: pending

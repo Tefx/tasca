@@ -28854,6 +28854,118 @@ phases:
       - `guard --all` warnings remain but no blocking errors for this closure step.
 
       '
+  - id: guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix
+    name: gate-deterministic-closure-and-freeze-intent-fix
+    status: pending
+    description: 'HIGH-priority bounded remediation to close the current `guard_followup2_cleanup.gate`
+      blockers around deterministic closure and freeze-head drift.
+
+
+      prior_loop: [guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment,
+      guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment]
+
+      remaining_blocker: `./scripts/invar guard --all` produced `status:"failed"`
+      with `errors=0` and warning-heavy output, while gate/freeze language still leaves
+      freeze-head mismatch ambiguous when only plan mutations occurred after freeze.
+
+      why_new_loop: Editing the prior loop is insufficient because the unresolved
+      issue is now the closure owner and freeze-intent semantics, not the earlier
+      raw-vs-canonical command split. A new bounded remediation is needed so the gate
+      cannot reopen on the same ambiguity.
+
+
+      Choose ONE deterministic closure rule and encode it everywhere touched by this
+      scope:
+
+      - Option A: make `./scripts/invar guard --all` deterministically PASS when warnings
+      are non-fatal and `errors=0`, with explicit contract/tests proving that warning-heavy
+      output does not flip status to failure.
+
+      - Option B: narrow canonical closure to `guard-contract`, and treat `./scripts/invar
+      guard --all` as informational evidence only; if chosen, the contract, tests,
+      freeze text, and gate text must all say so unambiguously.
+
+
+      Freeze-intent rule to encode:
+
+      - Post-freeze drift is ACCEPTABLE only when it is plan-only drift (`plan.yaml`
+      and/or `.git/vectl/**`) caused by plan mutations.
+
+      - Any post-freeze drift in product code, tests, lockfiles, runtime configs,
+      scripts, or docs invalidates the freeze and requires a refresh.
+
+      - Gate evidence must state which files changed after freeze and why the drift
+      remains plan-only.
+
+
+      Out-of-scope guardrail:
+
+      - Do not reopen earlier zero-file or entrypoint remediations unless needed to
+      support the single deterministic closure rule above.
+
+      - Do not create another fallback interpretation where both Option A and Option
+      B remain acceptable at gate time.
+
+      - Do not broaden plan-only drift allowance beyond `plan.yaml` and `.git/vectl/**`.'
+    verification: '- Main path: targeted tests and command evidence prove exactly
+      one deterministic closure rule is now enforced end-to-end
+
+      - Failure path: regression covers the warning-heavy `errors=0` case and the
+      freeze-head mismatch case where only `plan.yaml` / `.git/vectl/**` drift occurs
+      after freeze
+
+      - Proof: gate/freeze/contract language no longer permits both Option A and Option
+      B simultaneously, and freeze validity rules explicitly distinguish plan-only
+      drift from code drift'
+    depends_on:
+    - guard_followup2_cleanup.gate
+    agent: python-senior
+  - id: guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-retest
+    name: gate-deterministic-closure-and-freeze-intent-retest
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      bounded deterministic-closure and freeze-intent remediation from a fresh perspective
+      after `guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix`.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: exactly one canonical closure rule is documented and the corresponding
+      command/evidence passes under that rule
+
+      - Edge cases: warning-heavy `./scripts/invar guard --all` output with `errors=0`;
+      post-freeze drift limited to `plan.yaml` / `.git/vectl/**`
+
+      - Error scenarios: ambiguous dual ownership between `guard-contract` and `./scripts/invar
+      guard --all`; freeze invalidation hidden by non-plan drift after freeze
+
+      - Anti-loop closure: gate text, freeze text, and deterministic command behavior
+      all agree, so the same blocker cannot recur without a new behavior change
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute the chosen canonical closure command and paste actual
+      output
+
+      - Execute `./scripts/invar guard --all` and classify it according to the chosen
+      rule with pasted output
+
+      - Verify a regression or focused test covers the warning-heavy / zero-error
+      case
+
+      - Verify freeze/gate criteria explicitly allow plan-only drift (`plan.yaml`,
+      `.git/vectl/**`) and reject any other post-freeze drift'
+    depends_on:
+    - guard_followup2_cleanup.gate-deterministic-closure-and-freeze-intent-fix
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

@@ -30938,7 +30938,7 @@ phases:
       exemptions added.'
   - id: guard_followup2_debt.file-size-and-complexity-trim
     name: file-size-and-complexity-trim
-    status: pending
+    status: claimed
     description: 'Address any residual `file_size_warning` and `shell_too_complex`
       debt left after correctness/cleanup/boundary remediation.
 
@@ -30976,6 +30976,8 @@ phases:
     depends_on:
     - guard_followup2_debt.allow-policy-normalization
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-10T13:11:25.897172+00:00'
   - id: guard_followup2_debt.final-guard-regression
     name: final-guard-regression
     status: pending

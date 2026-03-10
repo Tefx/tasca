@@ -30938,7 +30938,7 @@ phases:
       exemptions added.'
   - id: guard_followup2_debt.file-size-and-complexity-trim
     name: file-size-and-complexity-trim
-    status: claimed
+    status: done
     description: 'Address any residual `file_size_warning` and `shell_too_complex`
       debt left after correctness/cleanup/boundary remediation.
 
@@ -30978,6 +30978,63 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T13:11:25.897172+00:00'
+    done_at: '2026-03-10T13:25:45.058319+00:00'
+    evidence: 'Artifact:
+
+      - Worker commit: 278f338
+
+      - Main squash commit: 1ece5c4
+
+      - Extracted seat/proxy MCP tool implementations from entrypoints into new src/tasca/shell/mcp/entrypoint_session_tools.py
+      with wrapper-preserved public signatures
+
+      - Decomposed storage database setup/config helpers and removed inline complexity
+      suppression in targeted functions
+
+
+      Verification:
+
+      - invar_invar_guard(changed=true) -> passed (errors=0)
+
+      - focused guard rule query for file_size_warning/shell_too_complex on targeted
+      files -> no matching findings
+
+      - uv run pytest -q tests/unit/mcp/test_mcp_server.py -k "seat_heartbeat or connect
+      or connection_status" -> 13 passed
+
+      - uv run pytest -q tests/unit/storage/test_batch_delete_repo.py -> 10 passed
+
+      - line-count checks confirm entrypoints.py reduced materially after extraction
+
+
+      Spec link:
+
+      - guard_followup2_debt.file-size-and-complexity-trim
+
+
+      Files changed:
+
+      - src/tasca/shell/mcp/entrypoints.py
+
+      - src/tasca/shell/mcp/entrypoint_session_tools.py
+
+      - src/tasca/shell/storage/database.py
+
+
+      Commit hash(es):
+
+      - 278f338
+
+      - 1ece5c4
+
+
+      Gaps/Notes:
+
+      - Remaining shell_too_complex items reported are outside this step scope (invar_runtime_policy.py,
+      invar_entrypoint.py, storage/control_repo.py).
+
+      - Public seams preserved via wrapper continuity and focused MCP/storage smoke
+      coverage.'
   - id: guard_followup2_debt.final-guard-regression
     name: final-guard-regression
     status: pending

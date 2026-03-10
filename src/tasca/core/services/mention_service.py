@@ -16,6 +16,8 @@ Limit: Max 10 unresolved mentions per saying (guardrail against mention spam).
 This module is pure (no I/O) - patron data is passed as parameters.
 """
 
+# @invar:allow file_size: mention parsing and resolution rules stay co-located to keep precedence order and doctest contract context in one core module.
+
 import re
 from dataclasses import dataclass
 from typing import NewType

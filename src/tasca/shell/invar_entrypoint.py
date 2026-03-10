@@ -130,6 +130,7 @@ def _list_changed_python_files(repo_root: Path) -> set[str]:
     return changed
 
 
+# @shell_complexity: policy gate branches on invocation mode, git state, and explicit failure messaging.
 def _enforce_changed_files_policy(argv: Sequence[str], repo_root: Path) -> None:
     """Fail fast when `invar guard` runs with no changed Python files.
 
@@ -188,6 +189,7 @@ def _invoke_uvx_invar_guard(argv: Sequence[str]) -> None:
     _enforce_zero_file_output_policy(argv, completed.stdout)
 
 
+# @shell_complexity: JSON guard output validation requires staged branch checks before emitting policy failure.
 def _enforce_zero_file_output_policy(argv: Sequence[str], output: str) -> None:
     """Reject runtime JSON that reports zero-file PASS for changed-mode guard."""
 

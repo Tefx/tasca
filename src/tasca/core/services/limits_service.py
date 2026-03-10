@@ -10,6 +10,8 @@ This module provides pure functions for validating various caps:
 All functions are pure (no I/O) with @pre/@post contracts and doctests.
 """
 
+# @invar:allow file_size: limits checks and aggregate status share one contract surface used together by shell boundary glue.
+
 import re
 from dataclasses import dataclass
 from enum import Enum

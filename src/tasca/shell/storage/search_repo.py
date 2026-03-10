@@ -9,6 +9,8 @@ Escape Hatch Convention (shell_result):
     Use "repo I/O" as the escape reason for database operations.
 """
 
+# @invar:allow file_size: FTS and LIKE fallback search paths remain co-located to preserve shared ranking, dedupe, and pagination semantics.
+
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime

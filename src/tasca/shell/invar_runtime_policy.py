@@ -69,6 +69,7 @@ def _ambiguous_guard_token_message(executable: Path) -> str:
     )
 
 
+# @shell_complexity: runtime contract gate needs ordered early-return branches for executable/path/token validation.
 def enforce_runtime_guard_contract(argv: list[str]) -> None:
     """Enforce strict contract for actually-invoked invar-tools entrypoint.
 

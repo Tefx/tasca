@@ -47,7 +47,7 @@ class SeatDatabaseError(SeatError):
 # =============================================================================
 
 
-# @invar:allow shell_result: Private helper - pure data transformation, not a shell operation
+# @invar:allow shell_result: seat_repo.py - private helper converts DB row to domain object, not Result
 # @shell_orchestration: Helper for row-to-domain mapping, used internally by repo functions
 def _row_to_seat(row: tuple) -> Seat:
     """Convert a database row to a Seat object."""

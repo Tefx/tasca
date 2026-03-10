@@ -35,7 +35,7 @@ else:
 from tasca.config import settings
 
 
-# @invar:allow shell_result: HTTP auth
+# @invar:allow shell_result: auth.py - HTTP auth returns bool, not Result[T, E]
 # @shell_orchestration: Co-located with FastAPI dependency to keep auth flow and failure semantics together
 def validate_bearer_token(token: str | None, expected: str | None) -> bool:
     """Compare a Bearer token against the expected value using constant-time comparison.
@@ -73,7 +73,7 @@ def validate_bearer_token(token: str | None, expected: str | None) -> bool:
     return hmac.compare_digest(normalized_token, normalized_expected)
 
 
-# @invar:allow shell_result: FastAPI security scheme instantiation - not a Result type
+# @invar:allow shell_result: auth.py - FastAPI security scheme instantiation returns HTTPBearer, not Result
 def _get_bearer_scheme() -> "HTTPBearer":
     """Lazy initialization of HTTPBearer to avoid import-time errors without fastapi."""
     return HTTPBearer(
@@ -83,7 +83,7 @@ def _get_bearer_scheme() -> "HTTPBearer":
     )
 
 
-# @invar:allow shell_result: FastAPI security scheme instantiation - not a Result type
+# @invar:allow shell_result: auth.py - FastAPI security scheme instantiation returns HTTPBearer, not Result
 # Exposed as a callable for FastAPI Depends() - initializes on first use
 def bearer_scheme() -> "HTTPBearer":
     """Get the HTTPBearer security scheme, initializing if needed."""

@@ -66,7 +66,7 @@ class TableSearchHit:
     updated_at: str
 
 
-# @invar:allow shell_result: repo I/O
+# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 # @shell_complexity: 4 branches for FTS query with optional table_id filter + error handling
 def search_sayings(
     conn: sqlite3.Connection,
@@ -148,7 +148,7 @@ def search_sayings(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: repo I/O
+# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 # @shell_complexity: 4 branches for count query with optional table_id filter + error handling
 def count_search_results(
     conn: sqlite3.Connection,
@@ -195,7 +195,7 @@ def count_search_results(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: repo I/O
+# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 def rebuild_fts_index(conn: sqlite3.Connection) -> Result[int, SearchError]:
     """Rebuild the FTS5 index from the sayings table.
 
@@ -225,7 +225,7 @@ def rebuild_fts_index(conn: sqlite3.Connection) -> Result[int, SearchError]:
         return Failure(SearchError(f"Failed to rebuild FTS index: {e}"))
 
 
-# @invar:allow shell_result: repo helper
+# @invar:allow shell_result: search_repo.py - repo helper returns raw rows for search
 # @shell_orchestration: Private helper for DB row -> domain object conversion
 def _row_to_search_result(row: tuple) -> SearchResult:
     """Convert a database row to a SearchResult.
@@ -281,7 +281,7 @@ def _row_to_search_result(row: tuple) -> SearchResult:
 # LIKE ordering and snippet selection semantics shared by search/count paths.
 
 
-# @invar:allow shell_result: repo helper orchestrates raw row retrieval for search_tables
+# @invar:allow shell_result: search_repo.py - repo helper orchestrates raw row retrieval for search_tables
 def _execute_fts_search(
     conn: sqlite3.Connection,
     query_param: str,
@@ -323,7 +323,7 @@ def _execute_fts_search(
     return [_row_to_table_hit(row) for row in rows]
 
 
-# @invar:allow shell_result: repo helper executes SQL and returns raw rows
+# @invar:allow shell_result: search_repo.py - repo helper executes SQL and returns raw rows
 def _execute_like_query(
     conn: sqlite3.Connection,
     query_param: str,
@@ -362,7 +362,7 @@ def _execute_like_query(
     return conn.execute(like_sql, params).fetchall()
 
 
-# @invar:allow shell_result: repo helper computes match_type/snippet without extra I/O
+# @invar:allow shell_result: search_repo.py - repo helper computes match_type/snippet without extra I/O
 # @shell_orchestration: Row-shape normalization stays near SQL fallback path to preserve ordering semantics
 def _build_like_hit(row: tuple, query_param: str) -> TableSearchHit | None:
     """Build LIKE-based hit if row still semantically matches the query.
@@ -402,7 +402,7 @@ def _build_like_hit(row: tuple, query_param: str) -> TableSearchHit | None:
     )
 
 
-# @invar:allow shell_result: repo helper orchestrates LIKE fallback for search_tables
+# @invar:allow shell_result: search_repo.py - repo helper orchestrates LIKE fallback for search_tables
 def _execute_like_search(
     conn: sqlite3.Connection,
     query_param: str,
@@ -438,7 +438,7 @@ def _execute_like_search(
     return hits
 
 
-# @invar:allow shell_result: repo I/O
+# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 # @shell_complexity: FTS query + LIKE fallback + status filter + pagination
 def search_tables(
     conn: sqlite3.Connection,
@@ -505,7 +505,7 @@ def search_tables(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: repo I/O
+# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 # @shell_complexity: 8 branches for count query with FTS + LIKE + status filter
 def count_table_search_results(
     conn: sqlite3.Connection,
@@ -577,7 +577,7 @@ def count_table_search_results(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: repo helper
+# @invar:allow shell_result: search_repo.py - repo helper returns raw rows for search
 # @shell_orchestration: Private helper for DB row format conversion
 def _row_to_table_hit(row: tuple) -> TableSearchHit:
     """Convert a database row to a TableSearchHit.
@@ -613,7 +613,7 @@ def _row_to_table_hit(row: tuple) -> TableSearchHit:
     )
 
 
-# @invar:allow shell_result: repo helper
+# @invar:allow shell_result: search_repo.py - repo helper returns raw rows for search
 # @shell_orchestration: Private helper for snippet truncation
 # @shell_complexity: 4 branches for text truncation logic
 def _truncate_snippet(text: str, query: str, max_len: int = 200) -> str:

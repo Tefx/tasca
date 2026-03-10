@@ -315,7 +315,7 @@ DEFAULT_HISTORY_MAX_BYTES = ep.DEFAULT_HISTORY_MAX_BYTES
 VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def patron_register(
     display_name: str | None = None,
@@ -329,13 +329,13 @@ def patron_register(
     return ep.patron_register(display_name, alias, meta, patron_id, dedup_id, name, kind)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def patron_get(patron_id: str) -> dict[str, Any]:
     return ep.patron_get(patron_id)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_create(
     question: str,
@@ -346,7 +346,7 @@ def table_create(
     return ep.table_create(question, context, creator_patron_id, dedup_id)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_join(
     table_id: str | None = None,
@@ -358,31 +358,31 @@ def table_join(
     return ep.table_join(table_id, patron_id, invite_code, history_limit, history_max_bytes)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_get(table_id: str) -> dict[str, Any]:
     return ep.table_get(table_id)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> dict[str, Any]:
     return ep.table_list(status)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_delete_batch(ids: list[str]) -> dict[str, Any]:
     return ep.table_delete_batch(ids)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_export(table_id: str, format: str = "markdown") -> dict[str, Any]:
     return ep.table_export(table_id, format)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_say(
     table_id: str,
@@ -408,13 +408,13 @@ def table_say(
     )
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_listen(table_id: str, since_sequence: int = -1, limit: int = 50) -> dict[str, Any]:
     return ep.table_listen(table_id, since_sequence, limit)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_control(
     table_id: str,
@@ -427,7 +427,7 @@ def table_control(
     return ep.table_control(table_id, action, speaker_name, patron_id, reason, dedup_id)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_update(
     table_id: str,
@@ -440,7 +440,7 @@ def table_update(
     return ep.table_update(table_id, expected_version, patch, speaker_name, patron_id, dedup_id)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_wait(
     table_id: str,
@@ -452,7 +452,7 @@ def table_wait(
     return ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def seat_heartbeat(
     table_id: str,
@@ -465,19 +465,19 @@ def seat_heartbeat(
     return ep.seat_heartbeat(table_id, patron_id, state, ttl_ms, dedup_id, seat_id)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def seat_list(table_id: str, active_only: bool = True) -> dict[str, Any]:
     return ep.seat_list(table_id, active_only)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 async def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
     return await ep.connect(url, token)
 
 
-# @invar:allow shell_result: MCP protocol
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def connection_status() -> dict[str, Any]:
     return ep.connection_status()
@@ -659,7 +659,7 @@ class ProxyMiddleware(Middleware):
 mcp.add_middleware(ProxyMiddleware())
 
 
-# @invar:allow shell_result: Entry point - no return value needed
+# @invar:allow shell_result: server.py - entry point has no return value needed
 # @shell_orchestration: Server startup is orchestration, not business logic
 def run_mcp_server(transport: TransportType = "stdio") -> None:
     """Run the MCP server.

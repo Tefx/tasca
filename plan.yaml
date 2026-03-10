@@ -24884,39 +24884,46 @@ phases:
       \ includes main-path and failure-path coverage.\n4. Option B closure is enforced\
       \ through one unambiguous repo-owned contract:\n   - canonical contract command\
       \ `guard-contract`\n   - explicit enforcement command `./scripts/invar guard\
-      \ --all`\n5. The raw blocked command `uv run --group dev invar guard` is explicitly\
-      \ treated as non-canonical and is evaluated only through the contract check,\
-      \ never as a standalone success signal.\n6. The strategy-remediation evidence\
-      \ reconciles which `invar` executable `uv run --group dev` resolves to with\
-      \ the path exercised by regressions, the canonical commands, and the repo-owned\
-      \ contract owner.\n7. The anti-loop rationale is satisfied: no remaining acceptance\
-      \ path allows targeted tests to pass while the exact blocked command remains\
-      \ ambiguous or misread as closure evidence.\n8. The dependency metadata and\
-      \ lockfile both reflect `invar-tools==1.19.7` with no unnecessary version churn.\n\
-      9. Excluded directories remained untouched by the remediation scope.\n10. Freeze\
-      \ evidence cites the canonical contract outputs and the explicit non-canonical\
-      \ classification of the raw blocked command before closure."
+      \ --all`\n5. Raw `uv run --group dev invar guard` is explicitly treated as a\
+      \ non-canonical environment signal and must not by itself fail the phase when\
+      \ canonical evidence passes.\n6. The latest closure-alignment retest proves\
+      \ `guard-contract` now matches that Option B rule, or conclusively proves the\
+      \ raw blocked command is now non-pass on this environment; both interpretations\
+      \ cannot remain alive.\n7. The strategy-remediation evidence reconciles which\
+      \ `invar` executable `uv run --group dev` resolves to with the path exercised\
+      \ by regressions, the canonical commands, and the repo-owned contract owner.\n\
+      8. The anti-loop rationale is satisfied: no remaining acceptance path allows\
+      \ canonical evidence to pass while `guard-contract` still fails on the same\
+      \ known non-canonical raw-command signal.\n9. The dependency metadata and lockfile\
+      \ both reflect `invar-tools==1.19.7` with no unnecessary version churn.\n10.\
+      \ Excluded directories remained untouched by the remediation scope.\n11. Freeze\
+      \ evidence cites the canonical contract outputs plus the new closure-alignment\
+      \ retest before closure."
     verification: '- All phase steps completed
 
-      - No unresolved blocker remains in the targeted storage files or supported guard
-      entrypoint zero-file policy
+      - No unresolved blocker remains in the targeted storage files or guard-contract
+      closure semantics
 
       - Evidence quality acceptable, including pasted canonical command outputs for
-      `guard-contract` and `./scripts/invar guard --all`
+      `uv run --group dev guard-contract` and `./scripts/invar guard --all`
 
       - Evidence explicitly states that raw `uv run --group dev invar guard` is non-canonical
-      and must be evaluated via contract check rather than as standalone success
+      and must not by itself fail the phase when canonical evidence passes, unless
+      the chosen remediation instead proves it is now conclusively non-pass
+
+      - Evidence includes the latest closure-alignment retest showing `guard-contract`
+      behavior matches the single chosen rule
 
       - Evidence reconciles the resolved `invar` executable/path for `uv run --group
       dev` with the regression tests, canonical commands, and the single repo-owned
       contract owner
 
       - Evidence covers direct entrypoint, repo-owned direct invocation path, the
-      final supported contract, and canonical contract enforcement with no residual
-      ambiguity
+      final supported contract, canonical contract enforcement, and the new bounded
+      closure-alignment retest with no residual ambiguity
 
-      - Anti-loop proof is present: acceptance no longer relies on a path that can
-      diverge from the exact blocked command while still closing the phase
+      - Anti-loop proof is present: acceptance no longer allows the current blocker
+      to recur on the same command/output shape
 
       - Dependency bump evidence confirms `pyproject.toml` and `uv.lock` both reflect
       `invar-tools==1.19.7`
@@ -24940,6 +24947,8 @@ phases:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
     - guard_followup2_cleanup.freeze
     agent: gate-reviewer
     claimed_by: gate-reviewer

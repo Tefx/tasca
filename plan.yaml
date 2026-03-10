@@ -31177,3 +31177,191 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T13:31:40.911278+00:00'
+  - id: guard_followup2_debt.duplicate-escape-reason-fix
+    name: duplicate-escape-reason-fix
+    status: pending
+    description: 'Fix unresolved `duplicate_escape_reason` findings across FastAPI
+      route files without broadening the allow surface.
+
+
+      prior_loop: `guard_followup2_debt.allow-policy-normalization`, `guard_followup2_debt.final-guard-regression`,
+      `guard_followup2_debt.gate`
+
+      remaining_blocker: full guard still reports `duplicate_escape_reason=2` and
+      the current evidence contradicts the earlier claim that the category was eliminated.
+
+      why_new_loop: gate evidence shows the original normalization pass did not close
+      the issue, so a focused remediation step is required before any further guard
+      regression is meaningful.
+
+
+      Scope:
+
+      - Normalize shared allow-reason buckets only in the affected FastAPI route files
+      and any directly coupled local helpers.
+
+      - Preserve the current allow surface; do not add new allow buckets or broaden
+      existing exemptions.
+
+
+      Acceptance hardening:
+
+      - `duplicate_escape_reason` must be zero OR every retained duplicate must be
+      explicitly moved out of phase scope with an objective rationale tied to a concrete
+      file and guard category.
+
+      - Show that each retained allow reason is either uniquely scoped or intentionally
+      deferred, with no contradictory evidence.
+
+      - Out of scope: unrelated guard categories and non-route-file cleanup beyond
+      what is necessary to remove the duplicate reason pattern.
+
+      '
+    verification: '- Main path: targeted guard or focused evidence shows `duplicate_escape_reason`
+      no longer appears for the touched route files
+
+      - Failure path: if any duplicate remains, evidence names the exact file(s),
+      reason bucket(s), and objective out-of-scope rationale proving the allow surface
+      was not broadened
+
+      - Proof: no contradictory claim remains between step evidence and the subsequent
+      full guard regression'
+    depends_on:
+    - guard_followup2_debt.gate
+    agent: python-executor
+  - id: guard_followup2_debt.residual-debt-closure-fix
+    name: residual-debt-closure-fix
+    status: pending
+    description: 'Address or explicitly justify the remaining `file_size_warning`
+      and `shell_too_complex` debt within this phase scope.
+
+
+      prior_loop: `guard_followup2_debt.file-size-and-complexity-trim`, `guard_followup2_debt.final-guard-regression`,
+      `guard_followup2_debt.gate`
+
+      remaining_blocker: residual size/complexity findings are not yet closed or justified
+      as true boundary glue.
+
+      why_new_loop: the prior trim pass reduced debt but did not provide a complete
+      closeout disposition for each remaining finding, so a bounded remediation step
+      is needed before retest.
+
+
+      Acceptance hardening:
+
+      - Each remaining `file_size_warning` and `shell_too_complex` finding must be
+      either reduced or explicitly justified as inherent boundary glue with evidence.
+
+      - Justification must be per finding, not aggregate, and must explain why the
+      boundary concern cannot be split further within current phase scope.
+
+      - If any finding is kept out of scope, record the concrete file, guard category,
+      and objective reason.
+
+      - Out of scope: unrelated refactors that broaden implementation beyond the current
+      guard-followup debt phase.
+
+      '
+    verification: '- Main path: targeted evidence shows the residual size/complexity
+      findings are reduced or closed
+
+      - Failure path: for each retained finding, evidence demonstrates why it is true
+      boundary glue, what was evaluated, and why further splitting is deferred
+
+      - Proof: every remaining `file_size_warning` and `shell_too_complex` item has
+      an individual disposition with no gaps'
+    depends_on:
+    - guard_followup2_debt.duplicate-escape-reason-fix
+    agent: python-senior
+  - id: guard_followup2_debt.final-guard-regression-retest
+    name: final-guard-regression-retest
+    status: pending
+    description: 'Re-run the full guard regression after the remediation fixes and
+      produce a contradiction-free disposition for every remaining warning/info category.
+
+
+      As an INDEPENDENT TESTER (`integration-verifier`), validate the full `guard_followup2_debt`
+      closure from a fresh perspective.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: the full guard regression reflects the duplicate-escape normalization
+      and residual debt closeout accurately
+
+      - Edge cases: retained warnings are mapped individually to `fixed`, `boundary-justified`,
+      or `out-of-scope` with objective reasons
+
+      - Error scenarios: prior evidence contradictions do not recur, and no category
+      is reported as fixed while still present in guard output
+
+
+      Acceptance hardening:
+
+      - `duplicate_escape_reason` must be zero OR every retained duplicate must be
+      explicitly marked out of scope with concrete rationale.
+
+      - `file_size_warning` and `shell_too_complex` findings must be either reduced
+      or each individually justified as inherent boundary glue with evidence.
+
+      - Final guard evidence must map every remaining warning/info category to a concrete
+      disposition: `fixed`, `boundary-justified`, or `out-of-scope` with reason.
+
+
+      Independence Level: L1'
+    verification: '- Run the full guard regression for the phase scope
+
+      - Paste actual guard output or category summary evidence sufficient to verify
+      current counts
+
+      - Show a per-category disposition table covering every remaining warning/info
+      category
+
+      - Explicitly confirm there are no contradictions between the pasted guard output
+      and the written dispositions'
+    depends_on:
+    - guard_followup2_debt.residual-debt-closure-fix
+    agent: integration-verifier
+  - id: guard_followup2_debt.gate-retest
+    name: gate-retest
+    status: pending
+    description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), reassess whether the
+      `guard_followup2_debt` phase now meets the closure bar after remediation.
+
+
+      YOU ARE THE QUALITY GATE. Block closure if:
+
+      1. `duplicate_escape_reason` is still unresolved without an objective out-of-scope
+      rationale.
+
+      2. Any residual `file_size_warning` or `shell_too_complex` finding lacks an
+      individual disposition or evidence that it is true boundary glue.
+
+      3. Final guard regression evidence contradicts itself or leaves any warning/info
+      category unmapped.
+
+
+      Review criteria:
+
+      - All remediation and retest steps completed successfully.
+
+      - Full guard regression evidence is specific, per-category, and contradiction-free.
+
+      - No unresolved blocker remains in the `guard_followup2_debt` chain.
+
+      '
+    verification: '- All remediation steps completed
+
+      - Full guard regression evidence is contradiction-free and per-category
+
+      - Duplicate escape reasons are closed or objectively deferred
+
+      - Residual size/complexity debt is reduced or individually justified
+
+      - No unresolved blocker remains before phase closure'
+    depends_on:
+    - guard_followup2_debt.final-guard-regression-retest
+    agent: gate-reviewer

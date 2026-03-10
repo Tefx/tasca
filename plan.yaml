@@ -27540,6 +27540,51 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
     agent: python-senior
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
+    name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the command-resolution
+      blocker after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch`.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: the exact blocked command `uv run --group dev invar guard` now
+      follows the intended supported resolution path and enforces non-pass zero-file
+      behavior or an explicit machine-checked supported contract
+
+      - Edge cases: clean repo state, changed-files mode, and any supported wrapper/redirect
+      behavior remain deterministic and auditable
+
+      - Error scenarios: the exact blocked command must not silently PASS with `files_checked:
+      0`, and any contract-change path must surface explicit guidance in the command
+      output
+
+      - Auditability: paste the exact command, resolved path evidence if exposed,
+      and full output used for the verdict
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1'
+    verification: '- Execute the exact blocked command `uv run --group dev invar guard`
+      in the intended repo state and paste the full output
+
+      - Re-run the focused regression tests that claim to cover the same command-resolution
+      path
+
+      - Verdict is PASS only if the exact blocked command no longer reports `PASS`
+      with `files_checked: 0`, and the pasted output matches the claimed supported
+      behavior or explicit machine-checked contract guidance'
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

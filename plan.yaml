@@ -29541,7 +29541,7 @@ phases:
       - Worker reported clean worktree after commit.'
   - id: guard_followup2_cleanup.gate-retest-presence-artifact-anti-loop-signal
     name: gate-retest-presence-artifact-anti-loop-signal
-    status: pending
+    status: claimed
     description: 'Priority: MEDIUM
 
 
@@ -29581,6 +29581,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-fix-presence-artifact-anti-loop-signal
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-03-10T08:53:21.187354+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

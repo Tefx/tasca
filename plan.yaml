@@ -24867,21 +24867,25 @@ phases:
 
       3. Evidence includes main-path and failure-path coverage.
 
-      4. The final remediation loop closed the direct entrypoint blocker by moving
-      verification to a deterministic repo-owned invocation path while preserving
-      supported guidance.
+      4. The final remediation loop closes the supported-entrypoint blocker by proving
+      the actually-invoked `uv run --group dev invar guard` path has deterministic
+      zero-file policy behavior or an enforced, unambiguous supported-path contract.
 
       5. The dependency metadata and lockfile both reflect `invar-tools==1.19.7` with
       no unnecessary version churn.
 
-      6. Excluded directories remained untouched by the remediation scope.'
+      6. Excluded directories remained untouched by the remediation scope.
+
+      7. Freeze evidence cites the final retest output for the supported dev-group
+      path before closure.'
     verification: '- All phase steps completed
 
-      - No unresolved blocker remains in the targeted storage files or repo-owned
-      guard entrypoint policy
+      - No unresolved blocker remains in the targeted storage files or supported guard
+      entrypoint zero-file policy
 
       - Evidence quality acceptable, including final retest output for direct entrypoint,
-      repo-owned direct invocation path, and zero-file scenarios
+      repo-owned direct invocation path, and the supported `uv run --group dev invar
+      guard` zero-file scenario
 
       - Dependency bump evidence confirms `pyproject.toml` and `uv.lock` both reflect
       `invar-tools==1.19.7`
@@ -24900,6 +24904,7 @@ phases:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
     - guard_followup2_cleanup.freeze
+    - guard_followup2_cleanup.gate-zero-file-policy-retest
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T04:19:31.134172+00:00'

@@ -27284,7 +27284,7 @@ phases:
       \ the exact supported command path.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
     name: gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
-    status: pending
+    status: claimed
     description: 'HIGH-priority fix for the blocker found by `guard_followup2_cleanup.gate-zero-file-policy-retest`.
 
 
@@ -27328,6 +27328,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-retest
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-10T04:45:02.146717+00:00'
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
     status: pending

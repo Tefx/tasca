@@ -24929,7 +24929,7 @@ phases:
       reviewer: planner
   - id: guard_followup2_cleanup.gate
     name: gate
-    status: claimed
+    status: pending
     description: "As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the\
       \ `guard_followup2_cleanup` phase meets the quality bar for proceeding.\n\n\
       Review criteria:\n1. Storage files were cleaned via real code changes instead\
@@ -25007,8 +25007,6 @@ phases:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-retest-option-b-closure-alignment
     - guard_followup2_cleanup.freeze
     agent: gate-reviewer
-    claimed_by: gate-reviewer
-    claimed_at: '2026-03-10T06:42:25.887632+00:00'
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
     name: storage-guard-fix-auth-and-entrypoint
     status: done

@@ -24863,48 +24863,42 @@ phases:
   - id: guard_followup2_cleanup.gate
     name: gate
     status: pending
-    description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the
-      `guard_followup2_cleanup` phase meets the quality bar for proceeding.
-
-
-      Review criteria:
-
-      1. Storage files were cleaned via real code changes instead of blanket allowances.
-
-      2. Persistence semantics remained unchanged.
-
-      3. Evidence includes main-path and failure-path coverage.
-
-      4. The final remediation loop closes the supported-entrypoint blocker by proving
-      the actually-invoked `uv run --group dev invar guard` path has deterministic
-      zero-file policy behavior or an enforced, machine-checked supported-path contract.
-
-      5. The new command-resolution remediation explicitly reconciles which `invar`
-      executable `uv run --group dev` resolves to with the path exercised by targeted
-      regression tests.
-
-      6. The dependency metadata and lockfile both reflect `invar-tools==1.19.7` with
-      no unnecessary version churn.
-
-      7. Excluded directories remained untouched by the remediation scope.
-
-      8. Freeze evidence cites the final retest output for the supported dev-group
-      path before closure.'
+    description: "As an INDEPENDENT REVIEWER (`gate-reviewer`), assess whether the\
+      \ `guard_followup2_cleanup` phase meets the quality bar for proceeding.\n\n\
+      Review criteria:\n1. Storage files were cleaned via real code changes instead\
+      \ of blanket allowances.\n2. Persistence semantics remained unchanged.\n3. Evidence\
+      \ includes main-path and failure-path coverage.\n4. The final remediation loop\
+      \ closes the persistent blocker by proving one unambiguous owned contract:\n\
+      \   - Option A: `uv run --group dev invar guard` itself now enforces deterministic\
+      \ non-pass zero-file behavior, or\n   - Option B: a repo-owned canonical command\
+      \ is machine-checked and the blocked command now emits explicit canonical-contract\
+      \ guidance instead of ambiguous success.\n5. The strategy-remediation evidence\
+      \ reconciles which `invar` executable `uv run --group dev` resolves to with\
+      \ the path exercised by regressions and the repo-owned contract owner.\n6. The\
+      \ anti-loop rationale is satisfied: no remaining acceptance path allows targeted\
+      \ tests to pass while the exact blocked command remains ambiguous.\n7. The dependency\
+      \ metadata and lockfile both reflect `invar-tools==1.19.7` with no unnecessary\
+      \ version churn.\n8. Excluded directories remained untouched by the remediation\
+      \ scope.\n9. Freeze evidence cites the post-remediation exact command output\
+      \ and the chosen ownership model before closure."
     verification: '- All phase steps completed
 
       - No unresolved blocker remains in the targeted storage files or supported guard
       entrypoint zero-file policy
 
-      - Evidence quality acceptable, including the exact blocked-command output showing
-      `uv run --group dev invar guard` no longer reports `PASS` with `files_checked:
-      0`, or showing the machine-checked supported-contract behavior now enforced
-      for that command
+      - Evidence quality acceptable, including the exact blocked-command output proving
+      either Option A direct enforcement or Option B explicit canonical-command guidance
+      with machine-checked ownership
 
       - Evidence reconciles the resolved `invar` executable/path for `uv run --group
-      dev` with the regression tests claimed to cover that path
+      dev` with the regression tests claimed to cover that path and the repo-owned
+      contract owner
 
-      - Evidence also covers direct entrypoint, repo-owned direct invocation path,
-      and the supported `uv run --group dev invar guard` zero-file scenario
+      - Evidence covers direct entrypoint, repo-owned direct invocation path, and
+      the final chosen supported contract with no residual ambiguity
+
+      - Anti-loop proof is present: acceptance no longer relies on a path that can
+      diverge from the exact blocked command
 
       - Dependency bump evidence confirms `pyproject.toml` and `uv.lock` both reflect
       `invar-tools==1.19.7`
@@ -24922,10 +24916,11 @@ phases:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-traceback-module-path-ux
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
-    - guard_followup2_cleanup.freeze
     - guard_followup2_cleanup.gate-zero-file-policy-retest
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
-    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-fix-strategy-remediation
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
+    - guard_followup2_cleanup.freeze
     agent: gate-reviewer
   - id: guard_followup2_cleanup.storage-guard-fix-auth-and-entrypoint
     name: storage-guard-fix-auth-and-entrypoint

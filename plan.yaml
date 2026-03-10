@@ -31301,7 +31301,7 @@ phases:
       classes remain for subsequent residual-debt step.'
   - id: guard_followup2_debt.residual-debt-closure-fix
     name: residual-debt-closure-fix
-    status: pending
+    status: claimed
     description: 'Address or explicitly justify the remaining `file_size_warning`
       and `shell_too_complex` debt within this phase scope.
 
@@ -31343,6 +31343,8 @@ phases:
     depends_on:
     - guard_followup2_debt.duplicate-escape-reason-fix
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-03-10T13:52:01.152064+00:00'
   - id: guard_followup2_debt.final-guard-regression-retest
     name: final-guard-regression-retest
     status: pending

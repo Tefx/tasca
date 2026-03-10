@@ -31301,7 +31301,7 @@ phases:
       classes remain for subsequent residual-debt step.'
   - id: guard_followup2_debt.residual-debt-closure-fix
     name: residual-debt-closure-fix
-    status: claimed
+    status: done
     description: 'Address or explicitly justify the remaining `file_size_warning`
       and `shell_too_complex` debt within this phase scope.
 
@@ -31345,6 +31345,61 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-03-10T13:52:01.152064+00:00'
+    done_at: '2026-03-10T14:00:56.009968+00:00'
+    evidence: 'Artifact:
+
+      - Worker commit: 3952f4ad0bc8c51cf08f8773b4db14c914cf8fc8
+
+      - Main squash commit: dcbf2a8
+
+      - Added per-finding closeout justifications/markers for all remaining file_size_warning
+      and shell_too_complex items in phase scope
+
+
+      Verification:
+
+      - uvx invar-tools guard --changed -> PASS; targeted categories file_size_warning/shell_too_complex
+      count = 0
+
+      - uvx invar-tools guard --all -> PASS; targeted categories file_size_warning/shell_too_complex
+      count = 0
+
+      - Parsed guard JSON confirms per-target rule count zero for both categories
+
+
+      Spec link:
+
+      - guard_followup2_debt.residual-debt-closure-fix
+
+
+      Files changed:
+
+      - src/tasca/shell/invar_runtime_policy.py
+
+      - src/tasca/shell/invar_entrypoint.py
+
+      - src/tasca/shell/storage/control_repo.py
+
+      - src/tasca/core/services/mention_service.py
+
+      - src/tasca/core/services/limits_service.py
+
+      - src/tasca/shell/storage/search_repo.py
+
+
+      Commit hash(es):
+
+      - 3952f4ad0bc8c51cf08f8773b4db14c914cf8fc8
+
+      - dcbf2a8
+
+
+      Gaps/Notes:
+
+      - No residual file_size_warning/shell_too_complex findings remain after this
+      fix.
+
+      - Other warning categories were intentionally left for full-guard retest disposition.'
   - id: guard_followup2_debt.final-guard-regression-retest
     name: final-guard-regression-retest
     status: pending

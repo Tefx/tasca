@@ -24131,7 +24131,7 @@ phases:
       \  - guard_followup2_boundary.retest-repro-version-conflict-waittimeout"
   - id: guard_followup2_boundary.fix-repro-table-update-schema
     name: fix_repro_table_update_schema
-    status: claimed
+    status: done
     description: 'MEDIUM-priority fix: align `tests/repro/issue_l3_mcp_smoke.py` with
       the current `table_update` schema while preserving the public-seam MCP stdio
       repro intent.
@@ -24204,6 +24204,51 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-10T10:44:27.051169+00:00'
+    done_at: '2026-03-10T10:48:39.739851+00:00'
+    evidence: 'Artifact:
+
+      - Repro schema alignment applied in tests/repro/issue_l3_mcp_smoke.py (table_update
+      payload now uses speaker_name and no speaker_kind)
+
+      - Worker commit on isolated branch: e26ce72
+
+      - Main commit containing the same scoped change: d63747b
+
+
+      Verification:
+
+      - python3 -m py_compile tests/repro/issue_l3_mcp_smoke.py -> passed
+
+      - schema field check: speaker_kind removed from repro script payload
+
+      - MCP stdio seam path preserved (MCPClient transport unchanged)
+
+      - WaitTimeout path remains intact in script flow
+
+
+      Spec link:
+
+      - guard_followup2_boundary.fix-repro-table-update-schema
+
+
+      Files changed:
+
+      - tests/repro/issue_l3_mcp_smoke.py
+
+
+      Commit hash(es):
+
+      - e26ce72
+
+      - d63747b
+
+
+      Gaps/Notes:
+
+      - Change is minimal evidence-reliability correction only; no production behavior/schema
+      change.
+
+      - No discovered issues.'
   - id: guard_followup2_boundary.retest-repro-version-conflict-waittimeout
     name: retest_repro_version_conflict_waittimeout
     status: pending

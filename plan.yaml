@@ -31085,7 +31085,7 @@ phases:
       \ triage."
   - id: guard_followup2_debt.freeze
     name: freeze
-    status: pending
+    status: claimed
     description: 'Freeze snapshot for guard_followup2_debt gate review.
 
 
@@ -31106,6 +31106,8 @@ phases:
     depends_on:
     - guard_followup2_debt.final-guard-regression
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T13:29:52.746794+00:00'
   - id: guard_followup2_debt.gate
     name: gate
     status: pending

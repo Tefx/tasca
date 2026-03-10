@@ -28199,6 +28199,96 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation
     agent: python-senior
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
+    name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
+    status: pending
+    description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate the
+      canonical-contract enforcement closure from a fresh perspective after `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement`.
+
+
+      YOUR GOAL IS TO FIND PROBLEMS, not to confirm it works.
+
+
+      Test for:
+
+      - Happy path: `guard-contract` and `./scripts/invar guard --all` now provide
+      the repo-owned canonical gate evidence with outputs that match the declared
+      contract
+
+      - Edge cases: gate/freeze language, verification commands, and ownership mapping
+      consistently point to the canonical commands rather than the blocked command
+
+      - Error scenarios: `uv run --group dev invar guard` may still return PASS with
+      `files_checked=0`, but it must now be explicitly classified as non-canonical
+      and only evaluated through the contract check; any remaining standalone-success
+      interpretation is a blocker
+
+      - Anti-loop closure: gate evidence can no longer close on narrow regression
+      success while the blocked command remains ambiguous
+
+
+      Document ALL findings. A test that discovers issues is a SUCCESS.
+
+      A test that finds nothing must justify the coverage achieved.
+
+
+      Independence Level: L1
+
+
+      Anti-loop rationale:
+
+      - This retest exists to prove the recurrence is structurally closed by ownership
+      and evidence rules, not merely hidden behind another targeted remediation loop.'
+    verification: '- Execute and paste output for `guard-contract`
+
+      - Execute and paste output for `./scripts/invar guard --all`
+
+      - Execute and paste output for `uv run --group dev invar guard`
+
+      - Re-run the focused contract/regression checks that enforce the canonical ownership
+      model
+
+      - Verdict is PASS only if canonical command outputs are present, the raw blocked
+      command is explicitly non-canonical in the resulting contract/gate evidence,
+      and no standalone-success path remains for the blocked command'
+    evidence_template: '## Independent Retest Report
+
+
+      **Canonical commands exercised**:
+
+      ```
+
+      guard-contract
+
+      ./scripts/invar guard --all
+
+      ```
+
+
+      **Raw blocked command exercised**:
+
+      ```
+
+      uv run --group dev invar guard
+
+      ```
+
+
+      **Required findings**:
+
+      - Paste actual outputs for all three commands
+
+      - State whether gate/freeze evidence now names only the canonical commands as
+      closure evidence
+
+      - State whether the raw blocked command is explicitly classified as non-canonical
+      and contract-checked only
+
+      - Record any residual path where PASS on the blocked command could still be
+      misread as phase closure'
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement
+    agent: integration-verifier
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

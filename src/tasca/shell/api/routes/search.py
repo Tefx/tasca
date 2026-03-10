@@ -66,7 +66,7 @@ class SearchResponse(BaseModel):
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: search.py search_endpoint GET route with docstrings, type hints, and error handling
 @router.get("", response_model=SearchResponse)
 async def search_endpoint(
     q: Annotated[str, Query(min_length=1, description="Search query string")],

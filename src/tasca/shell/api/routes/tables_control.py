@@ -67,7 +67,7 @@ class TableControlResponse(BaseModel):
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: tables_control.py control_table_endpoint route with docstrings, type hints, and error handling
 # @invar:allow shell_result: HTTP route returns response model, not Result
 # @invar:allow function_size: Control endpoint requires multi-step validation, saying append, and status update
 @router.post("/{table_id}/control", response_model=TableControlResponse)

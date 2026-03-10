@@ -97,7 +97,7 @@ class BatchDeleteErrorResponse(BaseModel):
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.post("", response_model=Table, status_code=status.HTTP_200_OK)
 async def create_table_endpoint(
     data: TableCreate,
@@ -163,7 +163,7 @@ async def create_table_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.get("", response_model=list[Table])
 async def list_tables_endpoint(
     conn: sqlite3.Connection = Depends(get_db),
@@ -193,7 +193,7 @@ async def list_tables_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.get("/{table_id}", response_model=Table)
 async def get_table_endpoint(
     table_id: str,
@@ -233,7 +233,7 @@ async def get_table_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.put("/{table_id}", response_model=Table)
 async def update_table_endpoint(
     table_id: str,
@@ -344,7 +344,7 @@ async def update_table_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.delete("/{table_id}", response_model=DeleteResponse)
 async def delete_table_endpoint(
     table_id: str,

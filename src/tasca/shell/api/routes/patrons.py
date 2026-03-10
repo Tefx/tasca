@@ -46,7 +46,7 @@ class PatronRegisterResponse(BaseModel):
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: patrons.py register_patron_endpoint POST route with docstrings, type hints, and error handling
 @router.post("", response_model=PatronRegisterResponse, status_code=status.HTTP_200_OK)
 async def register_patron_endpoint(
     data: PatronCreate,
@@ -123,7 +123,7 @@ async def register_patron_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: patrons.py get_patron_endpoint GET route with docstrings, type hints, and error handling
 @router.get("/{patron_id}", response_model=Patron)
 async def get_patron_endpoint(
     patron_id: str,

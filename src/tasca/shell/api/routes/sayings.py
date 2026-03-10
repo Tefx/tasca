@@ -127,7 +127,7 @@ def _get_limits_config() -> LimitsConfig:
     return settings_to_limits_config(settings)
 
 
-# @invar:allow shell_result: Helper raises HTTPException directly (no Result needed)
+# @invar:allow shell_result: _get_table_or_404 helper raises HTTPException directly (no Result needed)
 # @shell_orchestration: Database lookup + HTTP error mapping
 def _get_table_or_404(conn: sqlite3.Connection, table_id: str) -> Table:
     """Get a table by ID or raise 404.
@@ -159,7 +159,7 @@ def _get_table_or_404(conn: sqlite3.Connection, table_id: str) -> Table:
     return result.unwrap()
 
 
-# @invar:allow shell_result: Helper raises HTTPException directly (no Result needed)
+# @invar:allow shell_result: _validate_can_say helper raises HTTPException directly (no Result needed)
 # @shell_orchestration: State machine check + HTTP error mapping
 def _validate_can_say(table: Table) -> None:
     """Validate that sayings can be added to the table.
@@ -178,7 +178,7 @@ def _validate_can_say(table: Table) -> None:
         )
 
 
-# @invar:allow shell_result: Helper raises HTTPException directly (no Result needed)
+# @invar:allow shell_result: _check_limits_before_append helper raises HTTPException directly (no Result needed)
 # @shell_orchestration: Multiple database calls + limit checks + HTTP error mapping
 def _check_limits_before_append(
     conn: sqlite3.Connection,
@@ -236,7 +236,7 @@ def _check_limits_before_append(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: sayings.py append_saying_endpoint POST route with docstrings, type hints, and error handling
 @router.post("", response_model=Saying, status_code=status.HTTP_201_CREATED)
 async def append_saying_endpoint(
     table_id: str,
@@ -320,7 +320,7 @@ async def append_saying_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: sayings.py list_sayings_endpoint GET route with docstrings, type hints, and error handling
 @router.get("", response_model=SayingListResponse)
 async def list_sayings_endpoint(
     table_id: str,
@@ -406,7 +406,7 @@ DEFAULT_WAIT_TIMEOUT = 30.0
 POLL_INTERVAL = 0.5
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: sayings.py wait_for_sayings_endpoint long-poll route with docstrings, type hints, and error handling
 @router.get("/wait", response_model=WaitResponse)
 async def wait_for_sayings_endpoint(
     table_id: str,

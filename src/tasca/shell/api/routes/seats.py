@@ -77,7 +77,7 @@ def _get_seat_ttl() -> int:
     return DEFAULT_SEAT_TTL_SECONDS
 
 
-# @invar:allow shell_result: Helper raises HTTPException directly (no Result needed)
+# @invar:allow shell_result: _update_heartbeat helper raises HTTPException directly (no Result needed) in seats.py
 # @shell_orchestration: Database operation + HTTP error mapping
 def _update_heartbeat(conn: sqlite3.Connection, seat_id: str, now: datetime) -> Seat:
     """Update seat heartbeat.
@@ -96,7 +96,7 @@ def _update_heartbeat(conn: sqlite3.Connection, seat_id: str, now: datetime) -> 
     return result.unwrap()
 
 
-# @invar:allow shell_result: Helper raises HTTPException directly (no Result needed)
+# @invar:allow shell_result: _update_heartbeat helper raises HTTPException directly (no Result needed) in seats.py
 # @shell_orchestration: Database operation + HTTP error mapping
 def _list_seats_for_table(conn: sqlite3.Connection, table_id: str) -> list[Seat]:
     """List all seats for a table.
@@ -117,7 +117,7 @@ def _list_seats_for_table(conn: sqlite3.Connection, table_id: str) -> list[Seat]
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: seats.py endpoints - heartbeat and list endpoints with docstrings, type hints, and error handling
 @router.post(
     "/{seat_id}/heartbeat",
     response_model=HeartbeatResponse,
@@ -140,7 +140,7 @@ async def heartbeat_seat_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: seats.py endpoints - heartbeat and list endpoints with docstrings, type hints, and error handling
 @router.get("", response_model=SeatListResponse)
 async def list_seats_endpoint(
     table_id: str,

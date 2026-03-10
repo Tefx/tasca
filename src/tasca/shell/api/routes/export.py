@@ -75,7 +75,7 @@ def _build_export_response(
 
 
 # @shell_complexity: 4 branches for table lookup + sayings fetch + size check + error paths
-# @invar:allow shell_result: Helper raises HTTPException directly (no Result needed)
+# @invar:allow shell_result: _fetch_table_and_sayings helper raises HTTPException directly (no Result needed)
 def _fetch_table_and_sayings(
     conn: sqlite3.Connection,
     table_id: str,
@@ -138,7 +138,7 @@ def _fetch_table_and_sayings(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: export.py endpoints - JSONL/markdown export with docstrings, type hints, and error handling
 @router.get("/jsonl")
 async def export_jsonl_endpoint(
     table_id: str,
@@ -170,7 +170,7 @@ async def export_jsonl_endpoint(
     return _build_export_response(content, f"{table_id}.jsonl", download)
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with docstrings, type hints, and error handling
+# @invar:allow entry_point_too_thick: export.py endpoints - JSONL/markdown export with docstrings, type hints, and error handling
 @router.get("/markdown")
 async def export_markdown_endpoint(
     table_id: str,

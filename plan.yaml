@@ -23821,7 +23821,7 @@ phases:
       debt for this seam.'
   - id: guard_followup2_boundary.retest_l3_mcp_failure_paths
     name: Retest L3 MCP failure-path completeness
-    status: claimed
+    status: done
     description: 'HIGH-priority independent L3 retest for the remaining MCP failure-path
       evidence blocker after `guard_followup2_boundary.fix_mcp_boundary_cleanup_proof`.
 
@@ -23953,6 +23953,76 @@ phases:
     agent: blind-tester
     claimed_by: blind-tester
     claimed_at: '2026-03-10T10:30:57.570355+00:00'
+    done_at: '2026-03-10T10:35:21.301175+00:00'
+    evidence: '## L3 Failure-Path Evidence
+
+      Tester: blind-tester
+
+      Scope: MCP public boundary failure paths
+
+      Independence Level: L3
+
+
+      VersionConflict:
+
+      - Exact command: uv run python -c "...MCPClient + setup_table + stale table_update
+      expected_version..."
+
+      - Actual output: caller-visible envelope with ok=false and error.code=VERSION_CONFLICT,
+      including expected_version/actual_version details
+
+      - Public seam exercised: MCP STDIO tools/call -> table_update optimistic concurrency
+      stale-version path
+
+
+      WaitTimeout:
+
+      - Exact command: uv run python -c "...MCPClient + table_wait(wait_ms=1000, since_sequence
+      high)..."
+
+      - Actual output: ok=true payload with data.timeout=true and sayings=[]
+
+      - Public seam exercised: MCP STDIO tools/call -> table_wait timeout branch
+
+
+      Residual warning volume:
+
+      - none observed in the two boundary evidence commands for this retest
+
+
+      Verdict:
+
+      - PASS
+
+
+      Files changed:
+
+      - none
+
+
+      Commit hash(es):
+
+      - none (verify-only step)
+
+
+      Verification:
+
+      - git status --short -> clean
+
+      - VersionConflict command -> returned structured MCP envelope with VERSION_CONFLICT
+
+      - WaitTimeout command -> returned structured timeout payload with timeout=true
+
+
+      Spec link:
+
+      - guard_followup2_boundary.retest_l3_mcp_failure_paths
+
+
+      Gaps/Notes:
+
+      - WaitTimeout in this seam is a timeout-state success payload rather than an
+      error envelope; output explicitly captured.'
   - id: guard_followup2_boundary.gate_retest
     name: Boundary gate retest
     status: pending

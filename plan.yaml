@@ -28417,6 +28417,121 @@ phases:
       \ adding an explicit non-zero exit mode for raw blocked command to eliminate\
       \ possible human misread of PASS JSON.\"\n  tech_debt:\n    - \"Raw blocked\
       \ command continues to emit PASS+0-files JSON despite canonical contract guardrails.\""
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment
+    name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement-fix-option-b-closure-alignment
+    status: pending
+    description: 'HIGH-priority bounded remediation to close the current `guard_followup2_cleanup.gate`
+      blocker without another unbounded fix/retest loop.
+
+
+      prior_loop: [guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-fix-canonical-contract-enforcement,
+      guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement]
+
+      remaining_blocker: `uv run --group dev guard-contract` exits 2 because it still
+      treats raw `uv run --group dev invar guard` PASS-with-0-files output as a gate-blocking
+      condition, even when the canonical Option B evidence path passes.
+
+      why_new_loop: Editing the prior loop is insufficient because the blocker is
+      now specifically in closure semantics. The plan needs one explicit bounded decision
+      so gate review cannot keep re-opening on the same ambiguity.
+
+
+      Choose and encode Option B decisively:
+
+      - Raw `uv run --group dev invar guard` remains a non-canonical signal on this
+      environment.
+
+      - `guard-contract` must align to the Option B closure model: raw blocked-command
+      behavior is recorded and surfaced, but it does not by itself force failure when
+      the canonical repo-owned evidence path passes.
+
+      - Canonical closure evidence is the pair: `guard-contract` plus `./scripts/invar
+      guard --all`.
+
+      - Gate closure must require explicit evidence that the raw blocked command is
+      non-canonical, observed, and excluded from standalone PASS/FAIL interpretation.
+
+
+      Anti-loop rationale:
+
+      - This step must remove the re-open path where canonical evidence passes yet
+      `guard-contract` keeps failing on a known non-canonical signal.
+
+      - After this step, either the closure model is honored by `guard-contract`,
+      or the worker must prove with exact output that the raw blocked command now
+      fails conclusively. Do not leave both interpretations alive.
+
+
+      Out-of-scope guardrail:
+
+      - Do not broaden scope beyond aligning `guard-contract`, its tests, and the
+      gate-facing contract language.
+
+      - Do not re-litigate earlier zero-file-policy fixes.
+
+      - Do not add a new fallback interpretation that would let gate pass without
+      explicit canonical evidence.'
+    verification: '- Main path: focused tests and contract checks prove `guard-contract`
+      now follows the Option B closure model and does not exit non-zero solely because
+      raw `uv run --group dev invar guard` reports PASS with `files_checked=0` while
+      `./scripts/invar guard --all` passes
+
+      - Failure path: if the implementation instead makes the raw blocked command
+      non-pass conclusively, provide exact command/output proving that environment
+      behavior and update the contract accordingly
+
+      - Proof: gate-facing evidence language, command ownership mapping, and contract
+      outputs leave only one closure rule alive
+
+      - Anti-loop proof is explicit: no remaining acceptance path can fail gate on
+      the same non-canonical raw-command signal after canonical evidence passes'
+    evidence_template: '## Option B Closure Alignment Evidence
+
+
+      **Chosen closure rule**:
+
+      - [ ] Raw blocked command remains non-canonical and no longer forces `guard-contract`
+      failure when canonical evidence passes
+
+      - [ ] Raw blocked command now fails conclusively and contract text updated accordingly
+
+
+      **Exact commands executed**:
+
+      ```bash
+
+      uv run --group dev guard-contract
+
+      ./scripts/invar guard --all
+
+      uv run --group dev invar guard
+
+      uv run --group dev pytest -v tests/unit/test_guard_contract.py
+
+      ```
+
+
+      **Actual outputs**:
+
+      ```text
+
+      <paste stdout/stderr for each command>
+
+      ```
+
+
+      **Why this closes the loop**:
+
+      - prior_loop: <confirm prior step ids>
+
+      - remaining_blocker resolved by: <one sentence>
+
+      - no alternate closure interpretation remains because: <one sentence>
+
+      '
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-retest-command-resolution-mismatch-retest-strategy-remediation-retest-canonical-contract-enforcement
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

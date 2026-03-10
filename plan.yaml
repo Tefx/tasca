@@ -27399,7 +27399,7 @@ phases:
       '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
-    status: claimed
+    status: done
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), re-test the blocker
       after `guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement`.
 
@@ -27487,6 +27487,85 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:51:38.779619+00:00'
+    done_at: '2026-03-10T04:55:56.714501+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: integration-verifier (independent of implementation)
+
+      **Scope**: supported `uv run --group dev invar guard` zero-file policy enforcement
+
+      **Independence Level**: L1
+
+
+      ### Test Execution
+
+      - Exact blocked command:
+
+      ```bash
+
+      uv run --group dev invar guard
+
+      ```
+
+      - Actual output:
+
+      ```text
+
+      status: "passed"
+
+      summary.files_checked: 0
+
+      crosshair/property_tests skipped (no changed files)
+
+      ```
+
+      - Focused regression command(s):
+
+      ```bash
+
+      uv run --group dev pytest -v tests/unit/test_invar_entrypoint.py::test_uv_run_guard_zero_file_policy_rejects_zero_file_set
+      tests/unit/test_invar_entrypoint.py::test_enforce_changed_files_policy_allows_guard_all
+      tests/unit/test_invar_runtime_policy.py::test_runtime_contract_rejects_ambiguous_guard_token_for_invar_tools
+
+      ```
+
+      - Regression output: `3 passed`.
+
+
+      ### Verdict
+
+      - [ ] PASS
+
+      - [x] ISSUES_FOUND
+
+      - [ ] INCOMPLETE
+
+
+      Spec link:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
+
+
+      Commit hash(es):
+
+      - none
+
+
+      Files changed:
+
+      - none
+
+
+      Gaps/Notes:
+
+      - Blocker remains: exact supported blocked command still silently PASSes with
+      zero-file state.
+
+      - Planner remediation chain added to address command-resolution mismatch and
+      require exact blocked-command closure evidence before freeze/gate.
+
+      '
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
     name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
     status: pending

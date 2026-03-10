@@ -31499,7 +31499,7 @@ phases:
       and concentrated in shell_pure_logic/dead_export categories.'
   - id: guard_followup2_debt.gate-retest
     name: gate-retest
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), reassess whether the
       `guard_followup2_debt` phase now meets the closure bar after remediation.
 
@@ -31537,3 +31537,5 @@ phases:
     depends_on:
     - guard_followup2_debt.final-guard-regression-retest
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-03-10T14:05:42.024095+00:00'

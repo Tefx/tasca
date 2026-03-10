@@ -31037,7 +31037,7 @@ phases:
       coverage.'
   - id: guard_followup2_debt.final-guard-regression
     name: final-guard-regression
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), run the final
       guard regression for the new remediation chain and confirm all remaining warning/info
       categories were addressed or consciously bounded.
@@ -31065,6 +31065,8 @@ phases:
     depends_on:
     - guard_followup2_debt.file-size-and-complexity-trim
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T13:26:09.060763+00:00'
   - id: guard_followup2_debt.freeze
     name: freeze
     status: pending

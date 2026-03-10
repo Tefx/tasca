@@ -27472,6 +27472,74 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T04:51:38.779619+00:00'
+  - id: guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
+    name: gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement-fix-command-resolution-mismatch
+    status: pending
+    description: 'HIGH-priority fix for the blocker found by `guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement`.
+
+
+      Scope:
+
+      - Identify which `invar` executable the exact blocked command `uv run --group
+      dev invar guard` resolves to in the supported dev-group environment.
+
+      - Fix the command-resolution mismatch so this exact command enforces non-pass
+      zero-file behavior in changed-files mode, OR change the supported contract in
+      a machine-checked way and update the affected gate/freeze expectations accordingly.
+
+      - Align the actual command path, wrapper resolution, and focused regression
+      coverage so targeted tests exercise the same resolution path as the blocked
+      command.
+
+
+      Acceptance:
+
+      - Evidence identifies the resolved executable/module path for `uv run --group
+      dev invar guard` and shows what changed.
+
+      - The exact blocked command no longer reports PASS together with `files_checked:
+      0`, OR a revised supported contract is machine-checked and the command now fails/redirects
+      with explicit, auditable guidance.
+
+      - Focused regression coverage exercises the same command-resolution path as
+      the blocked command.
+
+      - Any gate/freeze criteria affected by the chosen contract path are updated
+      in-plan and referenced in implementation evidence.
+
+
+      prior_loop:
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-fix-supported-entrypoint-zero-file-enforcement
+
+      - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
+
+      remaining_blocker: exact blocked command `uv run --group dev invar guard` still
+      returns PASS with `files_checked: 0`, indicating targeted tests do not cover
+      the actual resolution path.
+
+      why_new_loop: the prior fix/retest chain updated supported-entrypoint logic,
+      but the latest blocker shows the real dev-group command still resolves through
+      a mismatched executable/module path; this requires a new implementation loop
+      rather than evidence consolidation.
+
+      out_of_scope: unrelated direct-entrypoint UX work and dependency-version churn
+      beyond what is necessary to make the exact supported command path and its contract
+      machine-checkable.'
+    verification: '- Main path: identify the executable/module resolved by `uv run
+      --group dev invar guard`, implement the chosen fix or machine-checked contract
+      update, and update focused regression coverage for that exact resolution path
+
+      - Failure path: prove the exact blocked command no longer yields `PASS` with
+      `files_checked: 0`, or emits explicit contract guidance that makes the zero-file
+      case non-pass and auditable
+
+      - Proof: implementation evidence cites the resolved command path, the changed
+      files controlling that path, and the exact regression test(s) that exercise
+      the same resolution chain'
+    depends_on:
+    - guard_followup2_cleanup.gate-zero-file-policy-retest-retest-supported-entrypoint-zero-file-enforcement
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

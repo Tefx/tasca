@@ -29384,6 +29384,89 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T08:08:15.804311+00:00'
+  - id: guard_followup2_cleanup.gate-fix-presence-artifact-anti-loop-signal
+    name: gate-fix-presence-artifact-anti-loop-signal
+    status: pending
+    description: 'Priority: MEDIUM
+
+
+      Fix the should-fix issue found by `guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence`
+      where `presence-check.json` can drop or overwrite `raw_zero_file_pass`, weakening
+      anti-loop artifact durability even though raw/canonical artifacts still prove
+      behavior.
+
+
+      prior_loop:
+
+      - guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence
+
+      - guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence
+
+
+      remaining_blocker:
+
+      - `presence-check.json` does not retain an explicit deterministic signal for
+      the raw-zero-file branch when canonical artifacts are also captured.
+
+
+      why_new_loop:
+
+      - The prior closure-alignment loop established single-owner classification and
+      canonical evidence, but independent retest found artifact durability regression
+      in the anti-loop proof surface. This needs a focused remediation rather than
+      another broad closure-policy change.
+
+
+      Scope:
+
+      - `src/tasca/shell/guard_contract.py`
+
+      - focused regression coverage for the presence artifact field behavior
+
+
+      Acceptance:
+
+      - presence artifact retains explicit anti-loop signal or provides an equivalent
+      deterministic field proving the raw-zero-file branch and canonical branch were
+      both captured
+
+      - no change to single-owner classification semantics, canonical vs non-canonical
+      ownership, or gate-closure rules
+
+      - add/update a focused regression so field regression cannot recur silently
+
+
+      Failure-mode checklist:
+
+      - raw-zero-file branch captured without being overwritten by later canonical
+      artifact writes
+
+      - canonical branch captured without removing deterministic proof of the raw
+      branch
+
+      - missing-field / renamed-field behavior fails focused regression coverage
+
+      - artifact serialization order cannot silently erase anti-loop evidence
+
+
+      Out of scope:
+
+      - changing the chosen closure owner
+
+      - changing warning-only / zero-file policy semantics
+
+      - reopening broader entrypoint or storage cleanup work'
+    verification: '- Main path: focused regression proves the presence artifact preserves
+      deterministic evidence for both raw-zero-file and canonical branches
+
+      - Failure path: regression fails when raw-zero-file signal is dropped, overwritten,
+      or no longer machine-detectable
+
+      - Proof: single-owner classification semantics remain unchanged in touched policy/contract
+      behavior'
+    depends_on:
+    - guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence
+    agent: python-senior
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

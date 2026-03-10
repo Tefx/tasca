@@ -27149,7 +27149,7 @@ phases:
       \ were not modified in this scoped fix.\n"
   - id: guard_followup2_cleanup.gate-zero-file-policy-retest
     name: gate-zero-file-policy-retest
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT TESTER (`integration-verifier`), validate that
       the blocker from `guard_followup2_cleanup.gate` is closed on the actual supported
       entrypoint path.
@@ -27250,6 +27250,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-zero-file-policy-fix
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T04:39:58.851630+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

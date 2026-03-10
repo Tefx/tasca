@@ -30842,7 +30842,7 @@ phases:
   steps:
   - id: guard_followup2_debt.allow-policy-normalization
     name: allow-policy-normalization
-    status: claimed
+    status: done
     description: 'Normalize remaining `duplicate_escape_reason` findings and codify
       where `@invar:allow` is acceptable versus where real code changes are required.
 
@@ -30882,6 +30882,60 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-03-10T10:52:09.940079+00:00'
+    done_at: '2026-03-10T11:05:28.294500+00:00'
+    evidence: 'Artifact:
+
+      - Worker commit: 1676e19
+
+      - Main squash commit: 4b93993
+
+      - Duplicate escape reasons normalized to file-local specific rationales across
+      scoped shell files
+
+
+      Verification:
+
+      - uvx invar-tools guard --all -> passed, errors=0 (duplicate_escape_reason signal
+      eliminated)
+
+      - scoped @invar:allow reason uniqueness check reported file-specific rationale
+      set (no generic duplicated reason buckets)
+
+
+      Spec link:
+
+      - guard_followup2_debt.allow-policy-normalization
+
+
+      Files changed:
+
+      - src/tasca/shell/mcp/entrypoints.py
+
+      - src/tasca/shell/mcp/server.py
+
+      - src/tasca/shell/api/auth.py
+
+      - src/tasca/shell/storage/search_repo.py
+
+      - src/tasca/shell/storage/saying_repo.py
+
+      - src/tasca/shell/storage/seat_repo.py
+
+
+      Commit hash(es):
+
+      - 1676e19
+
+      - 4b93993
+
+
+      Gaps/Notes:
+
+      - src/tasca/shell/storage/database.py had no duplicate @invar:allow reasons
+      and was not modified.
+
+      - Retained allows are boundary-specific with file-local justification; no blanket
+      exemptions added.'
   - id: guard_followup2_debt.file-size-and-complexity-trim
     name: file-size-and-complexity-trim
     status: pending

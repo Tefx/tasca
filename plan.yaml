@@ -29254,7 +29254,7 @@ phases:
       \ files_checked=0, intentionally non-canonical by contract."
   - id: guard_followup2_cleanup.gate-retest-single-closure-owner-and-canonical-evidence
     name: gate-retest-single-closure-owner-and-canonical-evidence
-    status: pending
+    status: claimed
     description: 'As an INDEPENDENT REVIEWER (`gate-reviewer`), re-test the blocker
       reported by `guard_followup2_cleanup.gate` after `guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence`.
 
@@ -29382,6 +29382,8 @@ phases:
     depends_on:
     - guard_followup2_cleanup.gate-fix-single-closure-owner-and-canonical-evidence
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-03-10T08:08:15.804311+00:00'
 - id: guard_followup2_debt
   name: Guard Follow-up 2 - Debt
   status: locked

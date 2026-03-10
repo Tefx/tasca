@@ -24754,7 +24754,7 @@ phases:
       \ for invar.shell.commands.hooks\"\n"
   - id: guard_followup2_cleanup.freeze
     name: freeze
-    status: pending
+    status: claimed
     description: 'Freeze snapshot for guard_followup2_cleanup gate review.
 
 
@@ -24794,6 +24794,8 @@ phases:
     - guard_followup2_cleanup.storage-guard-verify-retest-retest-direct-entrypoint-policy-and-guidance-retest-repo-owned-direct-invocation-path
     - guard_followup2_cleanup.bump-invar-tools-dev-dependency-1-19-7
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-03-10T04:17:12.748150+00:00'
   - id: guard_followup2_cleanup.gate
     name: gate
     status: pending

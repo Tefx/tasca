@@ -7,6 +7,7 @@ failure for ambiguous guard invocation paths that can silently report
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 
@@ -26,6 +27,20 @@ def _is_invar_tools_guard_entrypoint(executable: Path) -> bool:
     except OSError:
         return False
     return "from invar.shell.commands.guard import app" in content
+
+
+# @invar:allow shell_result: startup helper resolves executable path token
+def _resolve_invar_executable(argv0: str) -> Path | None:
+    """Resolve argv0 to the real executable path when possible."""
+
+    candidate = Path(argv0)
+    if candidate.is_absolute():
+        return candidate
+
+    resolved = shutil.which(argv0)
+    if resolved is None:
+        return None
+    return Path(resolved)
 
 
 # @invar:allow shell_result: startup policy message formatter
@@ -62,7 +77,10 @@ def enforce_runtime_guard_contract(argv: list[str]) -> None:
     if not _is_invar_executable(argv0):
         return
 
-    executable = Path(argv0)
+    executable = _resolve_invar_executable(argv0)
+    if executable is None:
+        return
+
     if not _is_invar_tools_guard_entrypoint(executable):
         return
 

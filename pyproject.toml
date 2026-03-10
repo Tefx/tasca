@@ -30,6 +30,7 @@ dependencies = [
     "deal>=4.24.0",
     "fastmcp>=0.1.0",
     "python-multipart>=0.0.12",
+    "invar-tools==1.19.7",
 ]
 
 [project.optional-dependencies]

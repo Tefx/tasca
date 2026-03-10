@@ -23438,7 +23438,7 @@ phases:
       out of scope for this boundary wiring step).'
   - id: guard_followup2_boundary.freeze
     name: freeze
-    status: claimed
+    status: done
     description: 'Freeze snapshot for L3/boundary verification in `guard_followup2_boundary`.
 
 
@@ -23463,6 +23463,48 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-03-10T10:07:47.846681+00:00'
+    done_at: '2026-03-10T10:09:03.160421+00:00'
+    evidence: 'Artifact:
+
+      - freeze_head: b14777aecff6b9965feb302378e8365c0ed842f1
+
+      - freeze_status: clean working tree on vectl/step-guard_followup2_boundary.freeze
+      at capture time
+
+
+      Verification:
+
+      - git rev-parse HEAD -> b14777aecff6b9965feb302378e8365c0ed842f1
+
+      - git status --short --branch -> branch header only, no modified/untracked entries
+
+      - git status -> nothing to commit, working tree clean
+
+      - pwd/date/uname snapshot recorded environment and command context in freeze
+      evidence
+
+
+      Spec link:
+
+      - guard_followup2_boundary.freeze
+
+
+      Files changed:
+
+      - none
+
+
+      Commit hash(es):
+
+      - none (verify-only freeze step)
+
+
+      Gaps/Notes:
+
+      - Freeze boundary captured with explicit rule: no code changes allowed between
+      freeze capture and subsequent L3 verification + gate result.
+
+      - No discovered issues.'
   - id: guard_followup2_boundary.boundary-l3-verify
     name: boundary-l3-verify
     status: pending

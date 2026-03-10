@@ -23647,6 +23647,109 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-03-10T10:13:18.205985+00:00'
+  - id: guard_followup2_boundary.fix_mcp_boundary_cleanup_proof
+    name: Fix MCP boundary cleanup proof
+    status: pending
+    description: 'HIGH-priority bounded remediation for the unresolved MCP boundary
+      cleanup proof blocker after `guard_followup2_boundary.gate`.
+
+
+      Scope:
+
+      - Investigate and fix or narrowly justify the remaining `dead_export` signal
+      at the MCP boundary wiring seam centered on `src/tasca/shell/mcp/database.py::close_mcp_db`.
+
+      - Keep scope bounded to MCP boundary wiring / cleanup proof only; no feature
+      work, no public-surface expansion, no unrelated refactors.
+
+      - If the signal is a true dead export, remove or rewire it through the authoritative
+      public boundary path.
+
+      - If the signal is intentionally retained outside boundary scope, provide objective
+      proof showing why it is not part of the boundary defect and why keeping it does
+      not leave a stale or split wiring path.
+
+
+      Spec refs:
+
+      - Guard-followup boundary gate requirements for MCP wiring/import cleanup.
+
+      - Derived acceptance for this remediation: boundary cleanup proof must conclusively
+      resolve or objectively justify the `dead_export` signal.
+
+
+      Touch paths:
+
+      - `src/tasca/shell/mcp/database.py`
+
+      - `src/tasca/shell/mcp/server.py` only if required to prove authoritative wiring
+
+      - `src/tasca/shell/mcp/entrypoints.py` only if required to prove authoritative
+      wiring
+
+      - Existing MCP tests/smokes only for focused regression evidence
+
+
+      Harness refs:
+
+      - `tests/integration/test_mcp.py`
+
+      - `tests/repro/issue_l3_mcp_smoke.py`
+
+
+      Failure-mode checklist:
+
+      - Dead export vs active boundary seam is resolved: the retained symbol is either
+      exercised through the intended public seam or removed from the boundary path.
+
+      - Startup/cleanup path does not leave split ownership where one runtime path
+      opens the DB and another orphaned path closes it.
+
+      - Boundary cleanup proof is caller-visible and objective; static suppression
+      alone is insufficient.
+
+      - Any remaining shell/dead_export warning tied to this seam is either eliminated
+      or justified with specific evidence showing it is outside this boundary step''s
+      scope.
+
+
+      State semantics:
+
+      - There must be one authoritative MCP boundary cleanup path.
+
+      - Preserve exactly the existing public MCP behavior; this step is cleanup-proof
+      only, not feature work.
+
+      - Backward-compatible legacy behavior means startup, request handling, and cleanup
+      still behave the same from the public seam except for removal of stale/unreachable
+      cleanup wiring.
+
+
+      Out of scope:
+
+      - No new MCP tools or database behavior.
+
+      - No general shell warning cleanup outside the boundary seam.
+
+      - No excluded-directory work.
+
+      '
+    verification: '- Show objective proof that the `dead_export` issue around `src/tasca/shell/mcp/database.py::close_mcp_db`
+      is either resolved or explicitly justified outside boundary scope
+
+      - If resolved, include the exact guard or focused analyzer output showing the
+      signal is gone
+
+      - If justified outside scope, include concrete reference evidence showing no
+      live MCP boundary path depends on the retained export and why gate confidence
+      should not treat it as an unresolved boundary blocker
+
+      - Record any remaining boundary-related warning volume separately so it can
+      be judged as non-blocking `should_fix` debt rather than conflated with this
+      blocker'
+    depends_on:
+    - guard_followup2_boundary.gate
+    agent: python-executor
 - id: guard_followup2_correctness
   name: Guard Follow-up 2 - Correctness
   status: done

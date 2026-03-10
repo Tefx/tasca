@@ -22973,25 +22973,73 @@ phases:
   - id: guard_followup2_boundary.auth-config-boundary-fix
     name: auth-config-boundary-fix
     status: pending
-    description: 'Fix remaining boundary findings in `src/tasca/shell/api/auth.py`
+    description: 'Fix the remaining auth/config boundary findings in `src/tasca/shell/api/auth.py`
       and `src/tasca/config.py` without expanding scope into excluded directories.
 
 
-      Spec refs: auth/config behavior already established by existing API/MCP phases;
-      this is guard-driven remediation.
+      Spec refs: auth/config boundary behavior already established by the existing
+      API and MCP phases; this is guard-driven remediation of the same public contract.
 
-      Touch paths: `src/tasca/shell/api/auth.py`, `src/tasca/config.py`.
+      Touch paths: `src/tasca/shell/api/auth.py`, `src/tasca/config.py` only.
 
       Harness refs: `tests/integration/test_api.py`, `tests/integration/test_mcp.py`,
-      `tests/unit/api/test_tables_routes.py` (read-only).
+      `tests/unit/api/test_tables_routes.py` (read-only unless a focused auth/config
+      regression must be added outside excluded paths).
 
 
       Goals:
 
       - Remove the remaining `internal_import`, `wiring_gap`, and `review_suggested`
-      debt affecting auth/config boundaries.
+      debt affecting the auth/config boundary.
 
       - Prefer real import/wiring corrections over suppressions.
+
+      - Collapse stale helper or duplicate auth/config decision paths so one authoritative
+      path remains.
+
+
+      Failure-mode checklist:
+
+      - Env var vs config precedence is explicit and deterministic for auth token
+      loading, including env present, env absent, and env empty-string cases.
+
+      - Missing token, empty token, and explicit clear/null semantics do not silently
+      preserve stale values or reopen access.
+
+      - Stale helper/path precedence is removed or proven unreachable; dead-branch
+      elimination must not change the intended public auth contract.
+
+      - Auth decision path invariants hold for both API and MCP surfaces: no permissive
+      fallback on config read failure, blank token normalization, or helper-path divergence.
+
+
+      State semantics:
+
+      - Last-writer-wins applies only where the config source-of-truth is intentionally
+      resolved; the chosen precedence rule must be implemented consistently across
+      API and MCP.
+
+      - Explicit empty/null clear behavior must be intentional: clearing a token must
+      not leave a previously loaded token active.
+
+      - Preserve exactly the existing deny behavior for missing/invalid auth on public
+      seams unless a current test contract in the referenced harnesses requires a
+      narrower change.
+
+      - Backward-compatible legacy behavior means valid Bearer-token requests that
+      currently succeed through the public API/MCP seam still succeed after the cleanup.
+
+
+      Regression expectations:
+
+      - Add or update a focused regression for precedence behavior if existing tests
+      do not already cover env-present, env-empty, and config-fallback cases.
+
+      - Add or update a focused regression for explicit clear/null semantics if existing
+      tests do not already prove stale token values cannot survive a clear.
+
+      - Add or update a focused regression for no permissive fallback on API/MCP auth
+      failure paths.
 
 
       `@invar:allow` policy:
@@ -22999,22 +23047,115 @@ phases:
       - Acceptable only for deliberate environment or framework boundary reads that
       cannot be represented in core.
 
-      - Not acceptable for auth decision logic, token comparison flow, or dead helper
-      branches.
+      - Not acceptable for auth decision logic, token comparison flow, precedence
+      resolution, or dead helper branches.
 
 
       Out of scope:
 
       - No auth feature redesign.
 
-      - No changes to excluded test files beyond execution as read-only verification
-      inputs.'
-    verification: '- Targeted guard output for auth/config is clean or reduced to
-      explicitly justified boundary-only allowances
+      - No new config source.
 
-      - Existing auth/API/MCP smokes remain compatible
+      - No changes to excluded directories beyond execution as read-only verification
+      inputs.
 
-      - Evidence distinguishes real code fixes from any retained boundary allowances'
+      - Broader call-site migration or compatibility wrappers outside these two touch
+      paths are deferred unless required to eliminate a stale helper still referenced
+      by these files.'
+    verification: '- Main path: run focused regressions that prove valid configured
+      auth still works through both public seams, using `pytest tests/integration/test_api.py
+      -k "auth or token" -v` and `pytest tests/integration/test_mcp.py -k "auth or
+      token" -v`
+
+      - Failure path: run focused regressions that prove missing/invalid/cleared token
+      states deny access with no permissive fallback; evidence must cover env-present,
+      env-empty, config-fallback, and explicit-clear/null cases, with updated or added
+      targeted tests if the named suites do not already cover them
+
+      - Guard proof: run `invar guard` on the changed fileset and show that auth/config
+      findings are clean or reduced to narrowly justified boundary-only allowances
+
+      - Dead-branch proof: show that no stale helper/path remains on the auth decision
+      path where migration scope requires removal, or document the single retained
+      path and why it is authoritative
+
+      - API/MCP contract proof: evidence must include the concrete failing-path assertion/result
+      for unauthorized access (for example the existing MCP 401/`Invalid or missing
+      token` contract) and the matching success-path evidence for a valid configured
+      token'
+    evidence_template: '## Auth/Config Boundary Evidence
+
+
+      **Touched paths**:
+
+      - `src/tasca/shell/api/auth.py`
+
+      - `src/tasca/config.py`
+
+
+      **Precedence decision implemented**:
+
+      - Env present: <behavior>
+
+      - Env empty/clear: <behavior>
+
+      - Config fallback: <behavior>
+
+
+      **Main-path commands**:
+
+      ```bash
+
+      pytest tests/integration/test_api.py -k "auth or token" -v
+
+      pytest tests/integration/test_mcp.py -k "auth or token" -v
+
+      ```
+
+
+      **Failure-path commands / targeted regressions**:
+
+      ```bash
+
+      <exact regression command covering env-vs-config precedence>
+
+      <exact regression command covering clear/null and no-permissive-fallback>
+
+      ```
+
+
+      **Actual results**:
+
+      - Success path: <paste key passing assertions/output>
+
+      - Highest-risk failure path: <paste 401/error assertions/output>
+
+
+      **Dead-branch / stale-helper proof**:
+
+      - Removed path(s): <list>
+
+      - Remaining authoritative path: <one path>
+
+      - Why no permissive fallback remains: <brief explanation>
+
+
+      **Guard proof**:
+
+      ```bash
+
+      invar guard
+
+      ```
+
+      - Result: <paste relevant auth/config findings or clean output>
+
+
+      **Scope guardrail**:
+
+      - Confirm no files outside the declared touch paths were modified except any
+      newly added focused regression tests required by this step'
     agent: python-senior
   - id: guard_followup2_boundary.mcp-server-boundary-fix
     name: mcp-server-boundary-fix

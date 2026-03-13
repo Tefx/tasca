@@ -46,7 +46,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "types-python-dateutil>=2.9.0",
-    "invar-tools==1.19.7",
+    "invar-tools==1.20.1",
 ]
 
 [project.scripts]

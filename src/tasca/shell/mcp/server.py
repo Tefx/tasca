@@ -338,12 +338,12 @@ VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def patron_register(
-    display_name: Annotated[str | None, Field(description="Agent or human display name shown in sayings")] = None,
-    alias: Annotated[str | None, Field(description="Optional short handle for mentions (e.g. '@arch')")] = None,
-    meta: Annotated[dict[str, Any] | None, Field(description="Arbitrary JSON metadata attached to the patron")] = None,
-    patron_id: Annotated[str | None, Field(description="UUID for the patron; auto-generated if omitted")] = None,
-    dedup_id: Annotated[str | None, Field(description="Idempotency key (24h TTL); reuse to avoid duplicate registration")] = None,
-    name: Annotated[str | None, Field(description="Deprecated alias for display_name; use display_name instead")] = None,
+    display_name: Annotated[str, Field(description="Agent or human display name shown in sayings")] = None,
+    alias: Annotated[str, Field(description="Optional short handle for mentions (e.g. '@arch')")] = None,
+    meta: Annotated[dict[str, Any], Field(description="Arbitrary JSON metadata attached to the patron")] = None,
+    patron_id: Annotated[str, Field(description="UUID for the patron; auto-generated if omitted")] = None,
+    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL); reuse to avoid duplicate registration")] = None,
+    name: Annotated[str, Field(description="Deprecated alias for display_name; use display_name instead")] = None,
     kind: Annotated[Literal["agent", "human"], Field(description="Patron type: 'agent' (default) or 'human'")] = "agent",
 ) -> dict[str, Any]:
     """Register a new agent or human patron with a stable identity.
@@ -371,9 +371,9 @@ def patron_get(
 @mcp.tool
 def table_create(
     question: Annotated[str, Field(description="Discussion topic or question for the table")],
-    context: Annotated[str | None, Field(description="Optional background context to frame the discussion")] = None,
-    creator_patron_id: Annotated[str | None, Field(description="Patron UUID of the table creator; omit if not registered yet")] = None,
-    dedup_id: Annotated[str | None, Field(description="Idempotency key (24h TTL); reuse to avoid creating duplicate tables")] = None,
+    context: Annotated[str, Field(description="Optional background context to frame the discussion")] = None,
+    creator_patron_id: Annotated[str, Field(description="Patron UUID of the table creator; omit if not registered yet")] = None,
+    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL); reuse to avoid creating duplicate tables")] = None,
 ) -> dict[str, Any]:
     """Create a new discussion table.
 
@@ -387,11 +387,11 @@ def table_create(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_join(
-    table_id: Annotated[str | None, Field(description="UUID of the table to join (provide this OR invite_code)")] = None,
-    patron_id: Annotated[str | None, Field(description="UUID of the joining patron; auto-registers if omitted")] = None,
-    invite_code: Annotated[str | None, Field(description="Short invite code (alternative to table_id)")] = None,
-    history_limit: Annotated[int | None, Field(description="Max number of recent sayings to return (default 10)")] = DEFAULT_HISTORY_LIMIT,
-    history_max_bytes: Annotated[int | None, Field(description="Max total bytes of history to return (default 65536 = 64 KiB)")] = DEFAULT_HISTORY_MAX_BYTES,
+    table_id: Annotated[str, Field(description="UUID of the table to join (provide this OR invite_code)")] = None,
+    patron_id: Annotated[str, Field(description="UUID of the joining patron; auto-registers if omitted")] = None,
+    invite_code: Annotated[str, Field(description="Short invite code (alternative to table_id)")] = None,
+    history_limit: Annotated[int, Field(description="Max number of recent sayings to return (default 10)")] = DEFAULT_HISTORY_LIMIT,
+    history_max_bytes: Annotated[int, Field(description="Max total bytes of history to return (default 65536 = 64 KiB)")] = DEFAULT_HISTORY_MAX_BYTES,
 ) -> dict[str, Any]:
     """Join an existing table and get initial history.
 
@@ -461,12 +461,12 @@ def table_say(
     table_id: Annotated[str, Field(description="UUID of the table to post to")],
     content: Annotated[str, Field(description="Message body (max 65536 bytes)")],
     speaker_kind: Annotated[Literal["agent", "human"], Field(description="Speaker type: 'agent' (default) or 'human'")] = "agent",
-    patron_id: Annotated[str | None, Field(description="Patron UUID; required for agents. If omitted with speaker_kind='agent', auto-registers using speaker_name")] = None,
-    speaker_name: Annotated[str | None, Field(description="Display name for the speaker; used for auto-registration if patron_id is omitted")] = None,
-    saying_type: Annotated[Literal["text", "control", "system"] | None, Field(description="Saying type: 'text' (default), 'control', or 'system'")] = None,
-    mentions: Annotated[list[str] | None, Field(description="List of mention targets: patron UUIDs, aliases, display names, or 'all'. Error if a handle matches multiple patrons")] = None,
-    reply_to_sequence: Annotated[int | None, Field(description="Sequence number of the saying being replied to (informational in v0.1)")] = None,
-    dedup_id: Annotated[str | None, Field(description="Idempotency key (24h TTL); reuse on retry to avoid duplicate sayings")] = None,
+    patron_id: Annotated[str, Field(description="Patron UUID; required for agents. If omitted with speaker_kind='agent', auto-registers using speaker_name")] = None,
+    speaker_name: Annotated[str, Field(description="Display name for the speaker; used for auto-registration if patron_id is omitted")] = None,
+    saying_type: Annotated[Literal["text", "control", "system"], Field(description="Saying type: 'text' (default), 'control', or 'system'")] = None,
+    mentions: Annotated[list[str], Field(description="List of mention targets: patron UUIDs, aliases, display names, or 'all'. Error if a handle matches multiple patrons")] = None,
+    reply_to_sequence: Annotated[int, Field(description="Sequence number of the saying being replied to (informational in v0.1)")] = None,
+    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL); reuse on retry to avoid duplicate sayings")] = None,
 ) -> dict[str, Any]:
     """Append a message (saying) to a table.
 
@@ -515,9 +515,9 @@ def table_control(
     table_id: Annotated[str, Field(description="UUID of the table to control")],
     action: Annotated[Literal["pause", "resume", "close"], Field(description="State transition: 'pause' (open→paused), 'resume' (paused→open), 'close' (open|paused→closed, terminal)")],
     speaker_name: Annotated[str, Field(description="Display name of the actor performing the action")],
-    patron_id: Annotated[str | None, Field(description="Patron UUID of the actor (optional)")] = None,
-    reason: Annotated[str | None, Field(description="Optional human-readable reason for the action")] = None,
-    dedup_id: Annotated[str | None, Field(description="Idempotency key (24h TTL)")] = None,
+    patron_id: Annotated[str, Field(description="Patron UUID of the actor (optional)")] = None,
+    reason: Annotated[str, Field(description="Optional human-readable reason for the action")] = None,
+    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL)")] = None,
 ) -> dict[str, Any]:
     """Pause, resume, or close a table.
 
@@ -537,8 +537,8 @@ def table_update(
     expected_version: Annotated[int, Field(description="Current table version for optimistic concurrency; get from table_get or table_join")],
     patch: Annotated[dict[str, Any], Field(description="Fields to update. Allowed keys: 'host_ids' (list[str]), 'metadata' (dict), 'policy' (dict), 'board' (dict)")],
     speaker_name: Annotated[str, Field(description="Display name of the actor performing the update")],
-    patron_id: Annotated[str | None, Field(description="Patron UUID of the actor (optional)")] = None,
-    dedup_id: Annotated[str | None, Field(description="Idempotency key (24h TTL)")] = None,
+    patron_id: Annotated[str, Field(description="Patron UUID of the actor (optional)")] = None,
+    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL)")] = None,
 ) -> dict[str, Any]:
     """Update table metadata using optimistic concurrency.
 
@@ -575,11 +575,11 @@ def table_wait(
 @mcp.tool
 def seat_heartbeat(
     table_id: Annotated[str, Field(description="UUID of the table")],
-    patron_id: Annotated[str | None, Field(description="Patron UUID (required unless seat_id is provided)")] = None,
-    state: Annotated[Literal["running", "idle", "done"] | None, Field(description="Seat state: 'running' (active), 'idle' (paused), or 'done' (finished, signals departure)")] = None,
-    ttl_ms: Annotated[int | None, Field(description="Time-to-live in ms before the seat expires (default 60000 = 60s)")] = None,
-    dedup_id: Annotated[str | None, Field(description="Idempotency key")] = None,
-    seat_id: Annotated[str | None, Field(description="Legacy: seat UUID for direct reference; prefer patron_id")] = None,
+    patron_id: Annotated[str, Field(description="Patron UUID (required unless seat_id is provided)")] = None,
+    state: Annotated[Literal["running", "idle", "done"], Field(description="Seat state: 'running' (active), 'idle' (paused), or 'done' (finished, signals departure)")] = None,
+    ttl_ms: Annotated[int, Field(description="Time-to-live in ms before the seat expires (default 60000 = 60s)")] = None,
+    dedup_id: Annotated[str, Field(description="Idempotency key")] = None,
+    seat_id: Annotated[str, Field(description="Legacy: seat UUID for direct reference; prefer patron_id")] = None,
 ) -> dict[str, Any]:
     """Maintain seat presence at a table (TTL-based keepalive).
 
@@ -607,8 +607,8 @@ def seat_list(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 async def connect(
-    url: Annotated[str | None, Field(description="Remote server URL to connect to; omit to switch back to local mode")] = None,
-    token: Annotated[str | None, Field(description="MCP session token for authenticating with the remote server")] = None,
+    url: Annotated[str, Field(description="Remote server URL to connect to; omit to switch back to local mode")] = None,
+    token: Annotated[str, Field(description="MCP session token for authenticating with the remote server")] = None,
 ) -> dict[str, Any]:
     """Switch between local and remote MCP mode.
 

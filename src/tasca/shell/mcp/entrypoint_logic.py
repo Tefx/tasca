@@ -195,7 +195,7 @@ def build_control_response(new_status: TableStatus, control_sequence: int) -> di
         )
     else:
         next_action = (
-            f"Table is now {new_status.value}. Call tasca.table_leave, then report to the user."
+            f"Table is now {new_status.value}. Call tasca.seat_heartbeat(state='done'), then report to the user."
         )
     return {
         "table_status": new_status.value,
@@ -359,7 +359,7 @@ def _silence_last_chance(empty_waits: int, threshold: int, next_sequence: int) -
 def _silence_exit(threshold: int) -> str:
     return (
         f"Empty waits reached {threshold}. Discussion is over. "
-        "IMMEDIATELY call tasca.table_leave, then report to the user."
+        "IMMEDIATELY call tasca.seat_heartbeat(state='done'), then report to the user."
     )
 
 

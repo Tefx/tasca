@@ -32241,6 +32241,68 @@ phases:
     - dup_foundation.create-register-ops
     - dup_foundation.delete-export-ops
     agent: gate-reviewer-tacit
+  - id: dup_foundation.mcp-tool-contracts-source
+    name: Create MCP tool-contract source of truth
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      agent: python-senior-tacit\n\nAnchors:\n- spec_refs:\n  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/recommended-defaults-v0-1\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/error-response-shape\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools\n\
+      - touch_paths:\n  - src/tasca/shell/mcp/tool_contracts.py\n  - src/tasca/shell/mcp/server.py\n\
+      \  - src/tasca/shell/mcp/entrypoints.py\n- harness_refs:\n  - tests/unit/mcp/test_mcp_server.py\n\
+      \  - tests/integration/test_mcp.py\n- authoritative_interface: NONE PINNED\n\
+      - effective_truth_owner: shell/mcp/tool_contracts.py\n- consumer_surfaces:\n\
+      \  - MCP server registration\n  - MCP tests and docs drift checks\n\nCreate\
+      \ a single source of truth for MCP tool names, defaults, parameter docs, and\
+      \ surface metadata. This step creates the source module only; server/runtime\
+      \ adoption happens later in dup_adoption.\n\n## Gate Preview (what the gate\
+      \ WILL reject)\n1. A metadata file that still requires server.py and tests to\
+      \ hand-maintain duplicate defaults/docs\n2. A metadata shape that embeds runtime\
+      \ behavior instead of declarative contract data\n3. Any design that narrows\
+      \ the MCP server surface to internal helpers only\n\n## Completion Criteria\
+      \ (stub exclusion)\nThis is an IMPLEMENTATION step. Stub-only completion is\
+      \ NOT acceptable.\nEach deliverable MUST contain real metadata structures sufficient\
+      \ for downstream server wiring and test assertions.\n\n## Out-of-scope guardrail\n\
+      - Do not re-register tools in server.py yet\n- Do not move business logic out\
+      \ of entrypoints.py in this step"
+    verification: '- local-check: declarative tool-contract source exists and covers
+      tool names, defaults, and documentation anchors now duplicated in server.py
+
+      - shared metadata remains transport/runtime declarative and does not absorb
+      behavior
+
+      - downstream server-adoption step can consume this source without redefining
+      contracts again'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Tool-Contract Source Evidence
+
+      - New source module:
+
+      - Tools covered:
+
+      - Defaults/docs centralized:
+
+
+      ## Scope Guardrail
+
+      - Runtime registration changed in this step: NO
+
+      - Business behavior moved in this step: NO
+
+      '
+    depends_on:
+    - dup_foundation.mid-gate
+    agent: python-senior-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

@@ -31582,10 +31582,11 @@ phases:
       - Non-blocking warning debt remains in other categories (shell_pure_logic/dead_export/dead_assign/dead_param/review_suggested)
       but does not violate this gate’s explicit blocker conditions.'
 - id: dup_guardrails
-  name: Duplicate-Abstraction Guardrails
+  name: '[Historical] Absorbed into dup_foundation'
   status: pending
-  gate: Preserve authoritative REST/MCP behavior and expose current atomic-control
-    drift before structural remediation.
+  gate: Historical placeholder after compaction; guardrail steps now live in dup_foundation.
+  context: No remaining steps. This phase was compacted into dup_foundation to reduce
+    phase overhead without reducing verification or review strength.
   depends_on:
   - guard_followup2_debt
 - id: dup_foundation

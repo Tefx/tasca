@@ -33591,3 +33591,54 @@ phases:
     depends_on:
     - finalization.deep-wiring-audit
     agent: software-architect-tacit
+  - id: finalization.deep-contract-strength
+    name: Deep contract-strength and closure review
+    status: pending
+    description: 'step_type: review
+
+      verification_scope: full-plan-check
+
+      agent: gate-reviewer-tacit
+
+
+      Perform a deep closure review on contract strength, not just green tests.
+
+
+      Check for:
+
+      - weak evidence hiding behavioral ambiguity
+
+      - cleanup candidates incorrectly treated as binding contracts or vice versa
+
+      - error/body/default drift that still lacks authoritative disposition
+
+      - places where refactor removed duplication but weakened explicit guarantees'
+    verification: '- full-plan-check: closure evidence is strong enough for post-remediation
+      sign-off
+
+      - any remaining ambiguity is explicit, ranked, and dispositioned'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Contract-Strength Review
+
+      - Weak evidence spots:
+
+      - Ambiguities remaining:
+
+      - Explicit guarantees strengthened:
+
+      - Verdict:
+
+      '
+    depends_on:
+    - finalization.deep-wiring-audit
+    agent: gate-reviewer-tacit

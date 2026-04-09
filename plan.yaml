@@ -32098,6 +32098,84 @@ phases:
 
       '
     agent: python-senior-tacit
+  - id: dup_foundation.delete-export-ops
+    name: Extract shared batch-delete and export operations
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      agent: python-senior-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
+      \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables\n\
+      \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/export\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-2-table/tasca-table-create\n\
+      \  - docs/tasca-technical-design-v0.1.md#technical-design-tasca-discussion-service-v0-1/7-export-contracts/7-1-jsonl-export-must\n\
+      \  - docs/tasca-technical-design-v0.1.md#technical-design-tasca-discussion-service-v0-1/7-export-contracts/7-2-markdown-export-must\n\
+      - touch_paths:\n  - src/tasca/shell/services/operations/batch_delete.py\n  -\
+      \ src/tasca/shell/services/operations/table_export.py\n  - src/tasca/core/services/batch_delete_service.py\n\
+      \  - src/tasca/core/export_service.py\n  - src/tasca/shell/storage/table_repo.py\n\
+      \  - src/tasca/shell/storage/saying_repo.py\n- harness_refs:\n  - tests/unit/api/test_export_routes.py\n\
+      \  - tests/unit/storage/test_batch_delete_repo.py\n  - tests/unit/mcp/test_mcp_server.py\n\
+      - authoritative_interface: NONE PINNED\n- effective_truth_owner: shell/services/operations/batch_delete.py\
+      \ + table_export.py\n- consumer_surfaces:\n  - REST batch delete + export routes\n\
+      \  - MCP table_delete_batch + table_export tools\n- cross_cutting_policy:\n\
+      \  - export formatting remains core-owned; fetch/validation/size mapping becomes\
+      \ shared shell-application logic\n\nCreate shared transport-neutral operations\
+      \ for batch-delete precondition orchestration and export fetch/format selection.\n\
+      \n⚠️ KNOWN RISKS (from project history):\n- Export behavior tends to drift at\
+      \ the boundary between fetch logic and format generation. Keep pure string formatting\
+      \ in core/export_service and move only fetch/selection/error disposition into\
+      \ the shared operation.\n- Batch delete is all-or-nothing. Do not let transports\
+      \ re-derive rejection reasons independently.\n\n## Gate Preview (what the gate\
+      \ WILL reject)\n1. Any export operation that duplicates JSONL/Markdown contract\
+      \ logic outside core/export_service\n2. Any batch-delete path where REST and\
+      \ MCP can diverge on rejection details or deleted id sets\n3. Any shared helper\
+      \ that hides size-limit vs not-found dispositions in string parsing without\
+      \ typed outcomes\n\n## Completion Criteria (stub exclusion)\nThis is an IMPLEMENTATION\
+      \ step. Stub-only completion is NOT acceptable.\nEach deliverable MUST contain\
+      \ substantive orchestration logic that fetches, validates, and returns typed\
+      \ outcomes for both transports.\n\n## Out-of-scope guardrail\n- No route or\
+      \ MCP rewiring in this step"
+    verification: '- local-check: batch-delete and export orchestration each have
+      one shared owner module
+
+      - integration readiness: shared operations return enough typed data for REST
+      and MCP to render their local payloads without re-fetching business state
+
+      - failure path: not-found, precondition failure, and size-limit dispositions
+      remain explicit'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Operation Extraction Evidence
+
+      - New owner modules:
+
+      - Export fetch/format boundary:
+
+      - Batch-delete validation boundary:
+
+
+      ## Failure-Path Proof
+
+      - Typed not-found/precondition/limit dispositions:
+
+      - Places where string parsing was removed or reduced:
+
+
+      ## Integration Evidence
+
+      - Expected REST callers:
+
+      - Expected MCP callers:
+
+      '
+    agent: python-senior-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

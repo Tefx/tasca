@@ -32752,6 +32752,65 @@ phases:
 
       '
     agent: python-refactor-master-tacit
+  - id: dup_adoption.mid-gate
+    name: Mid-gate transport adoption boundary review
+    status: pending
+    description: 'step_type: gate
+
+      verification_scope: phase-check
+
+      agent: gate-reviewer-tacit
+
+
+      Quick gate required because this phase contains 4 implementation steps and changes
+      two runnable/public transport surfaces.
+
+
+      review_depth: THOROUGH
+
+      focus:
+
+      - REST and MCP are each consuming shared operations rather than re-deriving
+      business truth
+
+      - transport-local shaping remains local
+
+      - no runtime/entrypoint seam has been silently narrowed away
+
+
+      Block progression if either transport still owns duplicated business orchestration
+      or if shared operations were forced to absorb transport concerns.'
+    verification: '- Safe to proceed with server/tool-contract adoption
+
+      - No blocker-class transport duplication remains in already-adopted surfaces'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Mid-Gate Review
+
+      | Surface | Shared owner used? | Transport leakage? | Notes |
+
+      | ------- | ------------------ | ------------------ | ----- |
+
+
+      ## Decision
+
+      - PROCEED or BLOCKED
+
+      '
+    depends_on:
+    - dup_adoption.rest-control-limits-adoption
+    - dup_adoption.rest-crud-export-adoption
+    - dup_adoption.mcp-shared-ops-adoption
+    agent: gate-reviewer-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

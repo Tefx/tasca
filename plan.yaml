@@ -32811,6 +32811,63 @@ phases:
     - dup_adoption.rest-crud-export-adoption
     - dup_adoption.mcp-shared-ops-adoption
     agent: gate-reviewer-tacit
+  - id: dup_adoption.server-tool-contract-adoption
+    name: Adopt tool-contract source in MCP server runtime
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/recommended-defaults-v0-1\n\
+      - touch_paths:\n  - src/tasca/shell/mcp/server.py\n  - src/tasca/shell/mcp/tool_contracts.py\n\
+      \  - tests/unit/mcp/test_mcp_server.py\n- harness_refs:\n  - tests/integration/test_mcp.py\n\
+      - authoritative_interface: NONE PINNED\n- consumer_surfaces:\n  - MCP server\
+      \ runtime registration\n  - tool discovery/tests\n\nMake server.py consume the\
+      \ centralized tool-contract metadata so names/defaults/docs have one owner while\
+      \ the MCP server remains fully runnable.\n\n## Gate Preview (what the gate WILL\
+      \ reject)\n1. Runtime registration that still duplicates defaults/docs by hand\n\
+      2. Registration code that makes the MCP server non-runnable or narrows public\
+      \ tool semantics\n3. Tests that still assert against stale local literals instead\
+      \ of the centralized contract source\n\n## Completion Criteria (stub exclusion)\n\
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable.\nEach\
+      \ deliverable MUST contain real runtime wiring from server.py to tool_contracts.py\
+      \ and preserve a runnable MCP surface."
+    verification: '- local-check: server runtime reads tool defaults/docs from centralized
+      source
+
+      - runnable-surface contract preserved: tool names/signatures/defaults remain
+      discoverable
+
+      - no duplicate contract literals remain where migration scope requires removal'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Runtime Wiring Evidence
+
+      - Registration path changed:
+
+      - Contract source consumed:
+
+      - Duplicate literals removed:
+
+
+      ## Runnable Surface Proof
+
+      - MCP server registration remains executable:
+
+      - Tool discovery path after wiring:
+
+      '
+    depends_on:
+    - dup_adoption.mid-gate
+    agent: python-refactor-master-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

@@ -3,8 +3,8 @@
 # This file is owned by vectl. Direct edits bypass CAS write
 # protection, lock recalculation, and schema validation.
 #
-# Use: uvx vectl <command>  OR  vectl_* MCP tools
-# Docs: uvx vectl guide
+# Use: vectl_* MCP tools (preferred)  OR  vectl <command> (CLI fallback)
+# Docs: vectl guide  OR  MCP: vectl_guide
 # =============================================================
 version: 1
 project: tasca
@@ -31581,3 +31581,10 @@ phases:
 
       - Non-blocking warning debt remains in other categories (shell_pure_logic/dead_export/dead_assign/dead_param/review_suggested)
       but does not violate this gate’s explicit blocker conditions.'
+- id: dup_guardrails
+  name: Duplicate-Abstraction Guardrails
+  status: pending
+  gate: Preserve authoritative REST/MCP behavior and expose current atomic-control
+    drift before structural remediation.
+  depends_on:
+  - guard_followup2_debt

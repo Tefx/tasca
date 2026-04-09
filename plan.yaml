@@ -31752,6 +31752,8 @@ phases:
       shim only
 
       '
+    depends_on:
+    - dup_guardrails.gate
     agent: python-senior-tacit
   - id: dup_foundation.delete-export-ops
     name: Extract shared batch-delete and export operations

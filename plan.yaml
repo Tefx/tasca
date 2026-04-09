@@ -31856,6 +31856,85 @@ phases:
     depends_on:
     - dup_guardrails.parity-contract-capture
     agent: integration-verifier-tacit
+  - id: dup_guardrails.gate
+    name: Gate duplicate-abstraction guardrails
+    status: pending
+    description: 'step_type: gate
+
+      verification_scope: phase-check
+
+      agent: gate-reviewer-tacit
+
+
+      Gate review: verify the guardrail phase has frozen the acceptance boundary for
+      duplicate-abstraction remediation.
+
+
+      review_depth: THOROUGH
+
+      review_depth_rationale:
+
+      - known drift already exists between REST and MCP control handling
+
+      - downstream work changes deployability-bearing API and MCP surfaces
+
+      - blocker-class atomicity obligations must be preserved before refactor
+
+
+      cross_cutting_focus:
+
+      - shared semantics vs transport-local shaping are clearly separated
+
+      - red tests expose atomic-control and limits-adoption gaps without product edits
+
+      - no required backward-compatible field was left unclassified
+
+
+      Independence: you MUST NOT be the same agent as any implementation agent in
+      downstream remediation phases.'
+    verification: '- All guardrail steps completed with concrete evidence
+
+      - Preservation register is sufficient to constrain shared-operation extraction
+
+      - Red regressions name the exact blocker-class gaps to close
+
+      - Ready for dup_foundation without unresolved authority conflict'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Gate Review Report
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      | ------- | ------ | ---------------- | -------- |
+
+
+      ## Decision Basis
+
+      - Shared semantics frozen:
+
+      - Transport-local shaping frozen:
+
+      - Remaining blocker-class ambiguity:
+
+
+      ## Gate Decision
+
+      - OPEN or BLOCKED with required actions
+
+      '
+    depends_on:
+    - dup_guardrails.parity-contract-capture
+    - dup_guardrails.control-atomicity-red-tests
+    agent: gate-reviewer-tacit
 - id: dup_foundation
   name: Shared Application Foundation
   status: locked

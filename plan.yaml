@@ -31603,3 +31603,10 @@ phases:
     and consumer boundaries agree on resolved facts.
   depends_on:
   - dup_foundation
+- id: finalization
+  name: Finalization (Full Verify + Doc Sync + Deep Review)
+  status: locked
+  gate: Repo-wide verification, documentation sync, and independent deep review are
+    complete with no unresolved blocker-class drift.
+  depends_on:
+  - dup_adoption

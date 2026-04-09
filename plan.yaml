@@ -31596,3 +31596,10 @@ phases:
     adoption.
   depends_on:
   - dup_guardrails
+- id: dup_adoption
+  name: Transport Adoption + Runtime Conformance
+  status: locked
+  gate: REST and MCP consume the same shared operations, runtime surfaces remain runnable,
+    and consumer boundaries agree on resolved facts.
+  depends_on:
+  - dup_foundation

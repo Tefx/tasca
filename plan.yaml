@@ -32466,6 +32466,88 @@ phases:
     - dup_foundation.mid-gate
     - dup_foundation.mcp-tool-contracts-source
     agent: spec-verifier-tacit
+  - id: dup_foundation.gate
+    name: Gate shared application foundation
+    status: pending
+    description: 'step_type: gate
+
+      verification_scope: phase-check
+
+      agent: gate-reviewer-tacit
+
+
+      Gate review: verify the shared foundation is stable enough for transport adoption.
+
+
+      review_depth: THOROUGH
+
+      review_depth_rationale:
+
+      - phase establishes new source-of-truth modules used by both REST and MCP
+
+      - atomic control and export boundaries are known drift areas
+
+      - a wiring miss here would poison all later runtime surfaces
+
+
+      cross_cutting_focus:
+
+      - no transport leakage into shell application modules
+
+      - shared-operation ownership is singular and explicit
+
+      - MCP tool-contract source is declarative and adoption-ready
+
+      - wiring/spec checks closed the blocker-class gaps from the review
+
+
+      A BLOCK decision here must name exactly which ownership seam is still unsafe.'
+    verification: '- All foundation steps completed successfully
+
+      - Wiring audit passed or blocker issues were remediated in-phase
+
+      - Spec conformance has no unresolved blocker-class divergence
+
+      - Ready for dup_adoption'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Gate Review Report
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      | ------- | ------ | ---------------- | -------- |
+
+
+      ## Issues Identified
+
+      | Severity | Description | Related Step | Blocking? |
+
+      | -------- | ----------- | ------------ | --------- |
+
+
+      ## Gate Decision
+
+      - OPEN or BLOCKED with required actions
+
+      '
+    depends_on:
+    - dup_foundation.table-control-operation
+    - dup_foundation.create-register-ops
+    - dup_foundation.delete-export-ops
+    - dup_foundation.mid-gate
+    - dup_foundation.mcp-tool-contracts-source
+    - dup_foundation.wiring-audit
+    - dup_foundation.spec-conformance
+    agent: gate-reviewer-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

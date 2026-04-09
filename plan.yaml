@@ -31830,6 +31830,8 @@ phases:
       - Expected MCP callers:
 
       '
+    depends_on:
+    - dup_guardrails.gate
     agent: python-senior-tacit
   - id: dup_foundation.mid-gate
     name: Mid-gate shared-operation boundary review

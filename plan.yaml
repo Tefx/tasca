@@ -33642,3 +33642,69 @@ phases:
     depends_on:
     - finalization.deep-wiring-audit
     agent: gate-reviewer-tacit
+  - id: finalization.deep-black-box-verification
+    name: Black-box verification of consolidated public surfaces
+    status: pending
+    description: 'step_type: verification
+
+      verification_scope: full-plan-check
+
+      agent: blind-tester-tacit
+
+
+      Using only the public HTTP/MCP contracts and documented formats:
+
+      - create fixtures from the HTTP and MCP specs
+
+      - verify patron/table/control/say/export flows through public surfaces
+
+      - verify centralized MCP tool defaults/docs are externally observable through
+      tool discovery
+
+      - verify control semantics and limits behavior from the outside without relying
+      on implementation details'
+    verification: '- full-plan-check: public surfaces behave correctly from the outside
+      using only documented contracts
+
+      - at least one black-box scenario covers the previously drifting control path
+
+      - documented tool defaults/docs are observable in runtime discovery or responses'
+    evidence_template: '## Verification Report
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ### Black-Box Scenarios
+
+      - HTTP scenarios:
+
+      - MCP scenarios:
+
+      - Discovery/default visibility checks:
+
+
+      ### Actual Outputs
+
+      ```
+
+      <paste outputs>
+
+      ```
+
+
+      ### Verdict
+
+      - PASS / ISSUES_FOUND / INCOMPLETE
+
+      '
+    depends_on:
+    - finalization.deep-spec-conformance
+    agent: blind-tester-tacit

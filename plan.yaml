@@ -32303,6 +32303,89 @@ phases:
     depends_on:
     - dup_foundation.mid-gate
     agent: python-senior-tacit
+  - id: dup_foundation.wiring-audit
+    name: Wiring completeness audit for shared operation foundation
+    status: pending
+    description: 'step_type: verification
+
+      verification_scope: phase-check
+
+      agent: wiring-auditor
+
+
+      Wiring completeness audit: verify every new public symbol introduced by the
+      shared-operation foundation is reachable and coherent.
+
+
+      REQUIRED CHECKS:
+
+      1. Export reachability: every shared operation or tool-contract symbol intended
+      for downstream use has an import site outside its defining module
+
+      2. No accidental transport leakage: shared operation modules do not import HTTPException,
+      FastAPI request/response types, or MCP envelope helpers
+
+      3. MCP contract consumption: tool_contracts data is consumable by server/runtime
+      code without duplicate redeclaration
+
+      4. Contract consumption: any new Result/outcome/error types are used by a non-test
+      caller
+
+
+      Use grep/import-trace output as evidence, not assertions.'
+    verification: '- phase-check: no orphan shared symbol or dead contract source
+      remains in the foundation phase
+
+      - explicit evidence identifies import/usage paths for each new shared owner
+
+      - no transport-only imports leak into shared operation modules'
+    evidence_template: '## Wiring Audit Report
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      **Orphan shared symbols**:
+
+      ```
+
+      <grep output or "none found">
+
+      ```
+
+      **Transport leakage into shared ops**:
+
+      ```
+
+      <grep output or "none found">
+
+      ```
+
+      **Unconsumed tool-contract metadata**:
+
+      ```
+
+      <grep output or "none found">
+
+      ```
+
+      **Verdict**: PASS | ISSUES_FOUND
+
+      '
+    depends_on:
+    - dup_foundation.table-control-operation
+    - dup_foundation.create-register-ops
+    - dup_foundation.delete-export-ops
+    - dup_foundation.mid-gate
+    - dup_foundation.mcp-tool-contracts-source
+    agent: wiring-auditor
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

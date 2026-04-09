@@ -33708,3 +33708,84 @@ phases:
     depends_on:
     - finalization.deep-spec-conformance
     agent: blind-tester-tacit
+  - id: finalization.gate
+    name: Final gate for duplicate-abstraction remediation
+    status: pending
+    description: 'step_type: gate
+
+      verification_scope: full-plan-check
+
+      agent: gate-reviewer-tacit
+
+
+      Gate review: final sign-off for duplicate-abstraction remediation.
+
+
+      review_depth: THOROUGH
+
+      review_depth_rationale:
+
+      - post-completion audit found systemic cross-surface duplication and drift
+
+      - this finalization phase consolidates repo-wide verification, doc sync, and
+      deep review
+
+      - public REST and MCP surfaces must remain deployable and behaviorally aligned
+
+
+      cross_cutting_focus:
+
+      - atomic control semantics proven across all surfaces
+
+      - shared-owner vs transport-local boundary remains intact
+
+      - centralized MCP contract source is real and externally reflected
+
+      - documentation and black-box behavior agree with the implementation
+
+
+      OPEN only when each blocker-class behavioral obligation is PROVEN or has explicit
+      non-intersection evidence.'
+    verification: '- Full-plan verification completed
+
+      - Documentation synced
+
+      - Deep review artifacts complete
+
+      - No unresolved blocker-class drift remains'
+    evidence_template: '## Gate Review Report
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ### Decision Basis
+
+      - Full-plan verify result:
+
+      - Doc-sync result:
+
+      - Deep wiring/spec/architecture/contract/black-box reviews:
+
+      - Unresolved statuses and closure paths:
+
+
+      ### Gate Decision
+
+      - OPEN or BLOCKED with required actions
+
+      '
+    depends_on:
+    - finalization.doc-sync
+    - finalization.deep-spec-conformance
+    - finalization.deep-architecture-review
+    - finalization.deep-contract-strength
+    - finalization.deep-black-box-verification
+    agent: gate-reviewer-tacit

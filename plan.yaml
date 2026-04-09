@@ -31678,6 +31678,8 @@ phases:
       shim only
 
       '
+    depends_on:
+    - dup_guardrails.gate
     agent: python-senior-tacit
   - id: dup_foundation.create-register-ops
     name: Extract shared patron-registration and table-creation operations

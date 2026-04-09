@@ -32410,6 +32410,8 @@ phases:
       - Implementation steps expected to close the gaps:
 
       '
+    depends_on:
+    - dup_guardrails.parity-contract-capture
     agent: integration-verifier-tacit
   - id: dup_guardrails.parity-contract-capture
     name: Capture REST/MCP parity contract

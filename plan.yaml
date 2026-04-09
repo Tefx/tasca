@@ -31589,13 +31589,15 @@ phases:
   depends_on:
   - guard_followup2_debt
 - id: dup_foundation
-  name: Shared Application Foundation
-  status: locked
-  gate: Shared shell-application operations exist, atomic control semantics have one
-    owner, and new shared symbols have passed wiring/spec checks before transport
-    adoption.
+  name: Consolidation Foundation (Guardrails + Shared Ops)
+  status: pending
+  gate: Guardrails and shared shell-application owners are both established before
+    transport adoption; no transport leakage or atomic-control drift remains.
+  context: 'Compacted structure: duplicate-abstraction guardrails absorbed into this
+    phase. Guardrail review/test steps now run first inside the phase, then shared-operation
+    extraction, then wiring/spec/gate checks.'
   depends_on:
-  - dup_guardrails
+  - guard_followup2_debt
   steps:
   - id: dup_foundation.table-control-operation
     name: Extract transport-neutral atomic table-control operation

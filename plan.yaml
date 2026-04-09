@@ -31943,6 +31943,89 @@ phases:
     adoption.
   depends_on:
   - dup_guardrails
+  steps:
+  - id: dup_foundation.table-control-operation
+    name: Extract transport-neutral atomic table-control operation
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      agent: python-senior-tacit\n\nAnchors:\n- spec_refs:\n  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-1-table-state-machine-normative/valid-transitions\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-2-table/tasca-table-control\n\
+      \  - docs/tasca-technical-design-v0.1.md#technical-design-tasca-discussion-service-v0-1/3-core-invariants-must/3-3-table-state-machine\n\
+      \  - docs/tasca-technical-design-v0.1.md#technical-design-tasca-discussion-service-v0-1/4-storage-consistency-model-sqlite/4-2-required-atomic-operations-transaction-boundaries\n\
+      - touch_paths:\n  - src/tasca/shell/services/operations/table_control.py\n \
+      \ - src/tasca/shell/storage/control_repo.py\n  - src/tasca/shell/mcp/entrypoint_logic.py\n\
+      - harness_refs:\n  - tests/unit/storage/test_control_repo.py\n  - tests/unit/mcp/test_mcp_server.py\n\
+      - authoritative_interface: NONE PINNED\n- effective_truth_owner: shell/services/operations/table_control.py\n\
+      - consumer_surfaces:\n  - REST table control route\n  - MCP table_control tool\n\
+      - state_strata:\n  - core lifecycle rules\n  - transactional storage mutation\n\
+      \  - transport-local response shaping\n- cross_cutting_policy:\n  - one atomic\
+      \ control truth shared by all transports\n\nCreate a shared shell-application\
+      \ operation that owns validation-normalized action handling and delegates the\
+      \ mutation to atomic_control_table(). Do NOT wire REST or MCP callers in this\
+      \ step; build the shared operation and typed outcome/error surface only.\n\n\
+      ⚠️ KNOWN RISKS (from review history):\n- Split control flow can commit a CONTROL\
+      \ saying without the status transition. The shared operation MUST treat this\
+      \ as blocker-class debt and eliminate the split-truth path.\n- CONTROL content\
+      \ formatting already drifted between REST and MCP. Make canonical content generation\
+      \ explicit in the shared operation rather than duplicating string assembly.\n\
+      \n## Gate Preview (what the gate WILL reject)\n1. Any design that still allows\
+      \ MCP to bypass the atomic control path\n2. Any shared operation that emits\
+      \ HTTPException or MCP envelopes directly\n3. Any new shared type without clear\
+      \ ownership between storage, application, and transport layers\n\n## Completion\
+      \ Criteria (stub exclusion)\nThis is an IMPLEMENTATION step. Stub-only completion\
+      \ is NOT acceptable.\nEach deliverable MUST contain substantive logic that validates\
+      \ inputs, normalizes control content, calls the atomic storage primitive, and\
+      \ returns a transport-neutral outcome/error surface.\n\n## Failure-mode checklist\n\
+      - missing-table and invalid-transition paths stay explicit\n- version-conflict\
+      \ behavior remains typed and lossless\n- no orphan CONTROL saying can survive\
+      \ failed status mutation\n- stale-definition vs new-state precedence is explicit\n\
+      - transaction failure paths preserve all-or-nothing semantics\n\n## Out-of-scope\
+      \ guardrail\n- No route or MCP entrypoint rewiring in this step; transport adoption\
+      \ is deferred to dup_adoption."
+    verification: '- local-check: shared operation exists with typed outcome/error
+      surface and no transport exceptions/envelopes
+
+      - failure path: regression fixture demonstrates the operation cannot leave split
+      audit/state outcomes
+
+      - proof: atomic_control_table remains the sole mutation primitive behind shared
+      table control'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Shared Operation Evidence
+
+      - New owner module:
+
+      - Outcome/error types:
+
+      - Canonical control-content rule:
+
+      - Atomic primitive used:
+
+
+      ## Failure-Path Proof
+
+      - Test/command covering version conflict or transaction rollback:
+
+      - Evidence that no orphan CONTROL saying survives failure:
+
+
+      ## Scope Guardrail
+
+      - Transport files changed in this step: NONE or explicitly justified minimal
+      shim only
+
+      '
+    agent: python-senior-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

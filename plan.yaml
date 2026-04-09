@@ -32176,6 +32176,71 @@ phases:
 
       '
     agent: python-senior-tacit
+  - id: dup_foundation.mid-gate
+    name: Mid-gate shared-operation boundary review
+    status: pending
+    description: 'step_type: gate
+
+      verification_scope: phase-check
+
+      agent: gate-reviewer-tacit
+
+
+      Quick gate required because this phase contains 4 implementation steps and touches
+      known rework patterns (transaction semantics, export contract boundaries, and
+      cross-transport dedup/create flows).
+
+
+      review_depth: THOROUGH
+
+      focus:
+
+      - operation ownership is stable before adding MCP tool-contract source-of-truth
+
+      - no implementation step leaked transport-local concerns into shared modules
+
+      - atomic control, create/register, and delete/export extractions are individually
+      coherent
+
+
+      Block progression if any shared module still depends on HTTPException, MCP envelopes,
+      or transport-only caller state.'
+    verification: '- Shared-operation boundaries are acceptable for continued foundation
+      work
+
+      - No blocker-class transport leakage remains in extracted modules
+
+      - Safe to proceed with MCP tool-contract source-of-truth extraction'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Mid-Gate Review
+
+      | Area | Status | Leakage risk | Notes |
+
+      | ---- | ------ | ------------ | ----- |
+
+
+      ## Decision
+
+      - PROCEED or BLOCKED
+
+      - Required corrections before continuing:
+
+      '
+    depends_on:
+    - dup_foundation.table-control-operation
+    - dup_foundation.create-register-ops
+    - dup_foundation.delete-export-ops
+    agent: gate-reviewer-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

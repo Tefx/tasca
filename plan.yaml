@@ -33342,3 +33342,62 @@ phases:
 
       '
     agent: integration-verifier-tacit
+  - id: finalization.doc-sync
+    name: Sync documentation with consolidated transport behavior
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      agent: doc-reviewer-tacit
+
+
+      Sync project documentation with the implemented shared-operation ownership and
+      transport behavior.
+
+
+      Required checks:
+
+      - HTTP endpoint docs match actual shared-operation-backed behavior
+
+      - MCP tool docs/defaults/signatures match centralized tool contracts
+
+      - Technical design documents describe the new shell-application ownership boundaries
+
+      - Remove stale notes implying duplicated business logic still lives in routes/entrypoints
+
+
+      This step is documentation-only and must not introduce new product behavior.'
+    verification: '- Documentation reflects implemented behavior and ownership boundaries
+
+      - No stale contract text remains for changed REST/MCP surfaces
+
+      - Doc updates are evidence-backed by implementation refs'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Doc Sync Report
+
+      - Docs updated:
+
+      - Stale text removed:
+
+      - Behavior/ownership sections aligned:
+
+
+      ## Evidence Links
+
+      - Implementation refs used for each doc change:
+
+      '
+    depends_on:
+    - finalization.verify-full-plan
+    agent: doc-reviewer-tacit

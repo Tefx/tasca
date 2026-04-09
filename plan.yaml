@@ -32868,6 +32868,112 @@ phases:
     depends_on:
     - dup_adoption.mid-gate
     agent: python-refactor-master-tacit
+  - id: dup_adoption.transport-conformance
+    name: Verify REST/MCP consumer-boundary conformance
+    status: pending
+    description: 'step_type: verification
+
+      verification_scope: phase-check
+
+      agent: integration-verifier-tacit
+
+      tags:
+
+      - integration
+
+
+      Consumer-boundary conformance check: prove that the listed consumer surfaces
+      interpret the same resolved facts consistently after adoption.
+
+
+      Surfaces to compare:
+
+      - REST API responses
+
+      - MCP tool responses
+
+      - persisted state as read back from storage/export paths
+
+
+      Shared facts that must no longer be re-derived independently:
+
+      - control action outcome and resulting table status/version sequence
+
+      - saying limits disposition and error semantics
+
+      - patron/table create and batch-delete result semantics
+
+      - export fetch/format selection boundary
+
+
+      Required evidence: one shared fixture or scenario per fact showing REST -> storage
+      and MCP -> storage resolve to the same business truth, while transport-local
+      shaping remains intentionally different where documented.'
+    verification: '- phase-check: REST, MCP, and persisted-state readers agree on
+      the same resolved business facts for the targeted operations
+
+      - evidence includes at least one real path per fact from caller through transport
+      to storage and back
+
+      - transport-local differences are documented rather than accidental'
+    evidence_template: '## Integration Evidence
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      **Shared fixture/scenario**:
+
+      ```
+
+      <exact scenario ids or commands>
+
+      ```
+
+
+      **Actual output**:
+
+      ```
+
+      <paste stdout/stderr or test runner output>
+
+      ```
+
+
+      **Path exercised**:
+
+      - REST path:
+
+      - MCP path:
+
+      - persisted-state readback:
+
+
+      **Resolved facts compared**:
+
+      - control outcome:
+
+      - limits outcome:
+
+      - create/delete outcome:
+
+      - export boundary:
+
+      '
+    depends_on:
+    - dup_adoption.rest-control-limits-adoption
+    - dup_adoption.rest-crud-export-adoption
+    - dup_adoption.mcp-shared-ops-adoption
+    - dup_adoption.mid-gate
+    - dup_adoption.server-tool-contract-adoption
+    agent: integration-verifier-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

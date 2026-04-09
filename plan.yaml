@@ -31588,6 +31588,138 @@ phases:
     drift before structural remediation.
   depends_on:
   - guard_followup2_debt
+  steps:
+  - id: dup_guardrails.parity-contract-capture
+    name: Capture REST/MCP parity contract
+    status: pending
+    description: 'step_type: review
+
+      verification_scope: phase-check
+
+      work_type: technical_debt_remediation
+
+      agent: spec-verifier-tacit
+
+
+      Preserve-scope guardrail before structural remediation.
+
+
+      spec_refs:
+
+      - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/patron-identity
+
+      - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables
+
+      - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/export
+
+      - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-1-patron-identity/tasca-patron-register
+
+      - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-2-table/tasca-table-create
+
+      - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-2-table/tasca-table-control
+
+      - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/3-idempotency-deduplication
+
+      - docs/tasca-technical-design-v0.1.md#technical-design-tasca-discussion-service-v0-1/4-storage-consistency-model-sqlite/4-2-required-atomic-operations-transaction-boundaries
+
+      - docs/tasca-technical-design-v0.1.md#technical-design-tasca-discussion-service-v0-1/5-public-contract-consolidation
+
+
+      touch_paths:
+
+      - src/tasca/shell/api/routes/patrons.py
+
+      - src/tasca/shell/api/routes/tables.py
+
+      - src/tasca/shell/api/routes/export.py
+
+      - src/tasca/shell/api/routes/tables_control.py
+
+      - src/tasca/shell/api/routes/sayings.py
+
+      - src/tasca/shell/mcp/entrypoints.py
+
+      - src/tasca/shell/mcp/server.py
+
+      - src/tasca/shell/mcp/entrypoint_logic.py
+
+
+      harness_refs:
+
+      - tests/unit/api/test_tables_routes.py
+
+      - tests/unit/api/test_export_routes.py
+
+      - tests/unit/mcp/test_mcp_server.py
+
+      - tests/integration/test_mcp.py
+
+
+      authoritative_interface: NONE PINNED
+
+
+      Produce a preservation register that separates:
+
+      1. shared business semantics that MUST be unified across transports
+
+      2. transport-local response shaping that MUST remain local
+
+      3. backward-compatibility fields that are binding vs cleanup candidates
+
+
+      Explicitly classify patron registration, table creation, batch delete, export,
+      control, and saying-limit enforcement.
+
+
+      This check protects downstream gates by preventing refactor work from silently
+      deleting required transport-local fields or preserving accidental drift as if
+      it were contract.'
+    verification: '- phase-check: preservation register maps each targeted operation
+      to shared semantics vs transport-local shaping
+
+      - behavioral/runtime obligations for control atomicity, limits enforcement,
+      export formatting, and tool-schema ownership are explicitly classified
+
+      - output names exact source refs and implementation file:line anchors for all
+      blocker-class obligations'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Preservation Register
+
+      | Operation | Spec ref | Current REST owner | Current MCP owner | Shared semantic
+      to preserve | Transport-local shaping to keep local | Disposition |
+
+
+      ## Blocker-Class Drift
+
+      - Atomic control semantics:
+
+      - Limits enforcement ownership:
+
+      - Export orchestration ownership:
+
+      - MCP tool-schema ownership:
+
+
+      ## Authority Notes
+
+      - Backward-compatible fields that are binding:
+
+      - Fields that are cleanup candidates:
+
+      - Remaining ambiguities:
+
+      '
+    agent: spec-verifier-tacit
 - id: dup_foundation
   name: Shared Application Foundation
   status: locked

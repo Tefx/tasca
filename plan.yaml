@@ -31588,3 +31588,11 @@ phases:
     drift before structural remediation.
   depends_on:
   - guard_followup2_debt
+- id: dup_foundation
+  name: Shared Application Foundation
+  status: locked
+  gate: Shared shell-application operations exist, atomic control semantics have one
+    owner, and new shared symbols have passed wiring/spec checks before transport
+    adoption.
+  depends_on:
+  - dup_guardrails

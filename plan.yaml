@@ -33159,6 +33159,97 @@ phases:
     - dup_adoption.mid-gate
     - dup_adoption.server-tool-contract-adoption
     agent: spec-verifier-tacit
+  - id: dup_adoption.gate
+    name: Gate transport adoption and runtime conformance
+    status: pending
+    description: 'step_type: gate
+
+      verification_scope: phase-check
+
+      agent: gate-reviewer-tacit
+
+
+      Gate review: verify transport adoption preserves runnable REST/MCP surfaces
+      while eliminating duplicated business truth.
+
+
+      review_depth: THOROUGH
+
+      review_depth_rationale:
+
+      - phase changes two deployability-bearing public surfaces
+
+      - atomic control drift is blocker-class and easily missed without runtime scrutiny
+
+      - tool-schema ownership and response-shaping ownership must stay separated
+
+
+      cross_cutting_focus:
+
+      - no remaining business duplication in REST/MCP adapters
+
+      - consumer-boundary conformance evidence is concrete
+
+      - liveness probe proves both runtimes still start and serve documented operations
+
+      - spec conformance covers changed public behaviors
+
+
+      This gate MUST block if any blocker-class behavioral/runtime obligation remains
+      unproven.'
+    verification: '- All phase steps completed successfully
+
+      - Runnable-surface evidence present for REST and MCP entrypoints
+
+      - No unresolved blocker-class drift in changed public behaviors
+
+      - Ready for full-plan finalization'
+    evidence_template: '## Gate Review Report
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ### Step-by-Step Review
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      | ------- | ------ | ---------------- | -------- |
+
+
+      ### Gate Decision Basis
+
+      - Runnable REST surface proven:
+
+      - Runnable MCP surface proven:
+
+      - Consumer-boundary conformance proven:
+
+      - Remaining unresolved statuses:
+
+
+      ### Gate Decision
+
+      - OPEN or BLOCKED with required actions
+
+      '
+    depends_on:
+    - dup_adoption.rest-control-limits-adoption
+    - dup_adoption.rest-crud-export-adoption
+    - dup_adoption.mcp-shared-ops-adoption
+    - dup_adoption.mid-gate
+    - dup_adoption.server-tool-contract-adoption
+    - dup_adoption.transport-conformance
+    - dup_adoption.liveness-probe
+    - dup_adoption.spec-conformance
+    agent: gate-reviewer-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

@@ -32555,6 +32555,73 @@ phases:
     and consumer boundaries agree on resolved facts.
   depends_on:
   - dup_foundation
+  steps:
+  - id: dup_adoption.rest-control-limits-adoption
+    name: Adopt shared control and limits operations in REST routes
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
+      \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables\n\
+      \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/sayings\n\
+      \  - docs/tasca-technical-design-v0.1.md#technical-design-tasca-discussion-service-v0-1/4-storage-consistency-model-sqlite/4-2-required-atomic-operations-transaction-boundaries\n\
+      - touch_paths:\n  - src/tasca/shell/api/routes/tables_control.py\n  - src/tasca/shell/api/routes/sayings.py\n\
+      \  - src/tasca/shell/services/operations/table_control.py\n  - src/tasca/shell/services/limited_saying_service.py\n\
+      - harness_refs:\n  - tests/unit/api/test_tables_routes.py\n  - tests/unit/api/test_sayings_routes.py\n\
+      \  - tests/integration/test_api.py\n- authoritative_interface: NONE PINNED\n\
+      - consumer_surfaces:\n  - REST table control endpoint\n  - REST sayings endpoint\n\
+      \nReplace in-route business duplication with calls into the shared table-control\
+      \ operation and the existing limited_saying_service.\n\n⚠️ KNOWN RISKS (from\
+      \ project history):\n- HTTP error-body drift is easy to introduce when moving\
+      \ route logic into shared services. Preserve status codes and detail payload\
+      \ shapes exactly unless the guardrail phase explicitly classified them as cleanup\
+      \ candidates.\n- Control semantics must remain atomic after refactor; route\
+      \ code must not reconstruct split update paths.\n\n## Gate Preview (what the\
+      \ gate WILL reject)\n1. Route code that still manually re-counts history/bytes\
+      \ before calling append\n2. Route code that reconstructs control content or\
+      \ transaction behavior itself\n3. HTTP status/detail regressions hidden behind\
+      \ broad exception mapping\n\n## Frontline completion criteria\n- Route handlers\
+      \ become thin transport adapters: auth/parse -> shared operation -> HTTP mapping\n\
+      - Shared limits service owns the limit check path\n- No duplicate control content\
+      \ assembly remains in REST routes\n\n## Completion Criteria (stub exclusion)\n\
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable.\nEach\
+      \ deliverable MUST contain substantive route rewiring and exact HTTP mapping\
+      \ logic."
+    verification: '- local-check: REST routes no longer duplicate control or limits
+      business logic
+
+      - main path: existing API tests for control/sayings pass through shared operations
+
+      - failure path: atomic control conflict and limit-exceeded mappings remain stable'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## REST Adoption Evidence
+
+      - Routes rewired:
+
+      - Shared operations/services called:
+
+      - Remaining transport-local HTTP mapping:
+
+
+      ## Failure-Path Proof
+
+      - Control conflict mapping:
+
+      - Limit exceeded mapping:
+
+      - Duplicate route logic removed:
+
+      '
+    agent: python-refactor-master-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

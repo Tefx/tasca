@@ -33536,3 +33536,58 @@ phases:
     depends_on:
     - finalization.deep-wiring-audit
     agent: spec-verifier-tacit
+  - id: finalization.deep-architecture-review
+    name: Deep architecture and boundary review
+    status: pending
+    description: 'step_type: review
+
+      verification_scope: full-plan-check
+
+      agent: software-architect-tacit
+
+
+      Review module boundaries, dependency direction, and transport/application/storage
+      separation after consolidation.
+
+
+      Specifically check:
+
+      - shell_application modules remain transport-neutral
+
+      - storage remains the owner of transaction primitives
+
+      - REST and MCP remain runnable/public surfaces rather than internal helper wrappers
+
+      - tool-schema ownership stays in MCP contract metadata, not spread across runtime
+      behavior again
+
+      - no new split-truth path was introduced between shared owners and transports'
+    verification: '- full-plan-check: ownership matrix from architecture_basis still
+      holds after implementation
+
+      - no boundary inversion or transport leakage remains'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Architecture Review
+
+      - Boundary violations found:
+
+      - Dependency direction issues:
+
+      - Split-truth paths:
+
+      - Verdict:
+
+      '
+    depends_on:
+    - finalization.deep-wiring-audit
+    agent: software-architect-tacit

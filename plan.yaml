@@ -32276,6 +32276,8 @@ phases:
       - OPEN or BLOCKED with required actions
 
       '
+    depends_on:
+    - dup_guardrails.control-atomicity-red-tests
     agent: gate-reviewer-tacit
   - id: dup_guardrails.control-atomicity-red-tests
     name: Define red regressions for atomic control and refactor guardrails

@@ -31583,12 +31583,14 @@ phases:
       but does not violate this gate’s explicit blocker conditions.'
 - id: dup_guardrails
   name: '[Historical] Absorbed into dup_foundation'
-  status: pending
+  status: done
   gate: Historical placeholder after compaction; guardrail steps now live in dup_foundation.
   context: No remaining steps. This phase was compacted into dup_foundation to reduce
     phase overhead without reducing verification or review strength.
   depends_on:
   - guard_followup2_debt
+  evidence: 'Phase compaction applied: all former guardrail steps moved into dup_foundation;
+    no remaining work items in dup_guardrails.'
 - id: dup_foundation
   name: Consolidation Foundation (Guardrails + Shared Ops)
   status: pending

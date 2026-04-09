@@ -33401,3 +33401,74 @@ phases:
     depends_on:
     - finalization.verify-full-plan
     agent: doc-reviewer-tacit
+  - id: finalization.deep-wiring-audit
+    name: Deep wiring audit after consolidation
+    status: pending
+    description: 'step_type: verification
+
+      verification_scope: full-plan-check
+
+      agent: wiring-auditor
+
+
+      Complete system wiring audit. Verify:
+
+      - every shared operation intended for runtime use has a real caller
+
+      - REST routes and MCP entrypoints both consume the intended shared owners
+
+      - MCP tool-contract source is actually used by server runtime/tests
+
+      - no NotImplementedError stubs remain in the new shared-operation or contract
+      source modules
+
+      - no write-only outcome/metadata fields were introduced during consolidation'
+    verification: '- full-plan-check: all new shared owners are wired into at least
+      one real runtime caller
+
+      - no dead or orphan shared symbol remains
+
+      - no new write-only contract field or metadata layer remains unconsumed'
+    evidence_template: '## Wiring Audit Report
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      **Orphan exports / shared owners**:
+
+      ```
+
+      <grep output or "none found">
+
+      ```
+
+      **Unconsumed tool-contract metadata**:
+
+      ```
+
+      <grep output or "none found">
+
+      ```
+
+      **Stubs or write-only fields**:
+
+      ```
+
+      <grep output or "none found">
+
+      ```
+
+      **Verdict**: PASS | ISSUES_FOUND
+
+      '
+    depends_on:
+    - finalization.verify-full-plan
+    agent: wiring-auditor

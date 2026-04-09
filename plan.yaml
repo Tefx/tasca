@@ -32685,6 +32685,73 @@ phases:
 
       '
     agent: python-refactor-master-tacit
+  - id: dup_adoption.mcp-shared-ops-adoption
+    name: Adopt shared operations in MCP entrypoints
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/error-response-shape\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/3-idempotency-deduplication\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-1-patron-identity/tasca-patron-register\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-2-table/tasca-table-control\n\
+      \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-3-sayings-messages/tasca-table-say\n\
+      - touch_paths:\n  - src/tasca/shell/mcp/entrypoints.py\n  - src/tasca/shell/mcp/entrypoint_logic.py\n\
+      \  - src/tasca/shell/services/operations/table_control.py\n  - src/tasca/shell/services/operations/patron_registration.py\n\
+      \  - src/tasca/shell/services/operations/table_creation.py\n  - src/tasca/shell/services/operations/batch_delete.py\n\
+      \  - src/tasca/shell/services/operations/table_export.py\n  - src/tasca/shell/services/limited_saying_service.py\n\
+      - harness_refs:\n  - tests/unit/mcp/test_mcp_server.py\n  - tests/integration/test_mcp.py\n\
+      - authoritative_interface: NONE PINNED\n- consumer_surfaces:\n  - MCP patron/table/delete/export/control/say\
+      \ tools\n- state_strata:\n  - shared business outcomes\n  - MCP envelope shaping\n\
+      \  - idempotency cache\n  - loop guidance state\n\nRewire MCP entrypoints to\
+      \ consume the shared operations while keeping MCP-only envelope assembly, `_next_action`,\
+      \ and idempotency/resource-key behavior local.\n\n⚠️ KNOWN RISKS (from review\
+      \ history):\n- MCP control currently drifts from the atomic path. This step\
+      \ MUST route control through the shared atomic operation and remove the split\
+      \ append+update flow.\n- MCP envelope and `_next_action` fields are transport-local;\
+      \ do not move them into shared operations.\n\n## Gate Preview (what the gate\
+      \ WILL reject)\n1. Any remaining split control path in entrypoints.py\n2. Shared\
+      \ operations polluted with MCP envelope or `_next_action` logic\n3. Drift in\
+      \ dedup/resource-key handling caused by moving orchestration\n\n## Completion\
+      \ Criteria (stub exclusion)\nThis is an IMPLEMENTATION step. Stub-only completion\
+      \ is NOT acceptable.\nEach deliverable MUST contain real entrypoint rewiring\
+      \ and envelope adaptation over shared outcomes."
+    verification: '- local-check: MCP entrypoints no longer duplicate shared business
+      orchestration
+
+      - main path: MCP envelope assembly remains local and correct
+
+      - failure path: atomic control, limit-exceeded, and dedup-hit behavior remain
+      explicit and transport-local'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## MCP Adoption Evidence
+
+      - Entrypoints rewired:
+
+      - Shared operations/services called:
+
+      - Remaining MCP-local envelope/dedup logic:
+
+
+      ## Failure-Path Proof
+
+      - Control now uses atomic shared operation:
+
+      - Limit error mapping:
+
+      - Dedup-hit path still local:
+
+      '
+    agent: python-refactor-master-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

@@ -32974,6 +32974,103 @@ phases:
     - dup_adoption.mid-gate
     - dup_adoption.server-tool-contract-adoption
     agent: integration-verifier-tacit
+  - id: dup_adoption.liveness-probe
+    name: Liveness probe for REST and MCP runtime surfaces
+    status: pending
+    description: 'step_type: verification
+
+      verification_scope: phase-check
+
+      agent: blind-tester-tacit
+
+
+      Runnable-surface liveness probe (Mode D): actually run the entry points affected
+      by this phase.
+
+
+      Required probes:
+
+      - REST API starts and accepts at least one create/control/say or export request
+      through the real FastAPI entrypoint
+
+      - MCP server starts and serves at least one patron/table/control tool through
+      the real registration path
+
+      - At least one documented operation reaches the real entrypoint path end-to-end
+      after the tool-contract adoption
+
+
+      Entry point starts, stays alive where appropriate, accepts at least one operation,
+      and produces expected output. Handler-only proof is insufficient.'
+    verification: '- phase-check: REST and MCP runtime surfaces both start and accept
+      at least one documented operation
+
+      - exact launch/invocation commands are captured
+
+      - proof shows the declared transport actually runs, not just unit handlers'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: blind-tester-tacit
+
+      **Scope**: REST + MCP liveness probe
+
+      **Independence Level**: L2
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ### Test Execution
+
+      - Launch commands:
+
+      ```
+
+      <exact commands>
+
+      ```
+
+      - Invocation commands:
+
+      ```
+
+      <exact requests/tool calls>
+
+      ```
+
+      - Actual output:
+
+      ```
+
+      <paste output>
+
+      ```
+
+
+      ### Verdict
+
+      - REST runnable: PASS/FAIL
+
+      - MCP runnable: PASS/FAIL
+
+      - End-to-end entrypoint path reached: PASS/FAIL
+
+      '
+    depends_on:
+    - dup_adoption.rest-control-limits-adoption
+    - dup_adoption.rest-crud-export-adoption
+    - dup_adoption.mcp-shared-ops-adoption
+    - dup_adoption.mid-gate
+    - dup_adoption.server-tool-contract-adoption
+    agent: blind-tester-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

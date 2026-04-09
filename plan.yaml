@@ -33071,6 +33071,94 @@ phases:
     - dup_adoption.mid-gate
     - dup_adoption.server-tool-contract-adoption
     agent: blind-tester-tacit
+  - id: dup_adoption.spec-conformance
+    name: Verify adopted transports against HTTP/MCP specs
+    status: pending
+    description: 'step_type: verification
+
+      verification_scope: phase-check
+
+      agent: spec-verifier-tacit
+
+
+      Spec conformance verification via adversarial divergence hunting.
+
+
+      SCOPE: The REST and MCP public behaviors changed by this phase:
+
+      - patron registration
+
+      - table creation
+
+      - batch delete
+
+      - table control
+
+      - table say limits handling
+
+      - export
+
+      - MCP tool defaults/docs/signatures
+
+
+      For EACH requirement, cite the spec section AND implementation file:line.
+
+      Behavioral precedence claims MUST be flagged as NEEDS_TEST with a concrete test
+      suggestion, not asserted as CONFORMS.'
+    verification: '- phase-check: adopted REST/MCP surfaces conform to authoritative
+      docs for the changed operations
+
+      - blocker-class divergences are surfaced before finalization
+
+      - NEEDS_TEST items point to focused runtime checks rather than hand-wavy notes'
+    evidence_template: '## Spec Conformance Report
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Requirements Register
+
+      | R# | Spec Section | Requirement | Level | Checkable? |
+
+
+      ## Evidence Table
+
+      | R# | Spec Section | Requirement | Implementation | Verdict | Notes |
+
+
+      ## Coverage Summary
+
+      - Total requirements:
+
+      - CONFORMS:
+
+      - DIVERGES:
+
+      - PARTIAL:
+
+      - NEEDS_TEST:
+
+
+      ## Top Risks
+
+      - <ranked risks>
+
+      '
+    depends_on:
+    - dup_adoption.rest-control-limits-adoption
+    - dup_adoption.rest-crud-export-adoption
+    - dup_adoption.mcp-shared-ops-adoption
+    - dup_adoption.mid-gate
+    - dup_adoption.server-tool-contract-adoption
+    agent: spec-verifier-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

@@ -32101,7 +32101,7 @@ phases:
       - REST/MCP adapter rewiring not done per out-of-scope guardrail.'
   - id: dup_foundation.mid-gate
     name: Mid-gate shared-operation boundary review
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -32166,6 +32166,67 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T13:42:07.101810+00:00'
+    done_at: '2026-05-12T13:57:13.857932+00:00'
+    evidence: '## Mid-Gate Review Outcome
+
+      Headline: REJECTED / BLOCKED. This gate detected blocker-class issue B1 and
+      remediation ownership has been created before progression.
+
+
+      ## refs Read Confirmation (MANDATORY)
+
+      No refs for this step. Objective artifacts inspected by gate reviewer: shared
+      operation modules, control/saying storage modules, and operation tests.
+
+
+      ## Detected Issues Batched
+
+      - B1 (blocker): `src/tasca/shell/services/operations/__init__.py:7`; scoped
+      ruff command exited 1 with `I001 import block unsorted`.
+
+      - Runtime tests passed: targeted pytest set reported 52 passed.
+
+      - Static boundary inspection found low transport-leakage risk and no HTTPException/FastAPI/MCP
+      envelope runtime dependency in shared operations.
+
+
+      ## Decision
+
+      - BLOCKED for immediate progression.
+
+      - Required correction: organize imports in `src/tasca/shell/services/operations/__init__.py`,
+      rerun exact scoped ruff command, preserve targeted tests.
+
+
+      ## Batched Fix Ownership Created
+
+      Planner remediation applied:
+
+      - `fix-mid-gate-ruff-import-order` — one batched fix step for the ruff import-order
+      blocker.
+
+      - `retest-mid-gate` — independent retest/gate requiring `verdict: PASS`, `blockers:
+      []`, `gate_open_allowed: true`.
+
+      Pending successors were rewired behind `retest-mid-gate`, so failed gate detection
+      cannot unblock downstream work by itself.
+
+
+      ## Verification commands/output from gate reviewer
+
+      - Scoped ruff command: failed with I001 import block unsorted.
+
+      - Targeted pytest command: 52 passed.
+
+      - invar_guard changed=true: passed but checked zero Python files due only uv.lock
+      diff in verifier worktree.
+
+
+      ## Closure rationale
+
+      Original gate step is completed as an issue-detection artifact per batched-fix
+      protocol; progression remains blocked by the created fix/retest path until retest
+      passes.'
   - id: dup_foundation.mcp-tool-contracts-source
     name: Create MCP tool-contract source of truth
     status: pending

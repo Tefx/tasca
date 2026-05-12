@@ -33347,7 +33347,7 @@ phases:
       - None.'
   - id: retest-mid-gate
     name: Retest mid-gate after ruff import-order fix
-    status: pending
+    status: claimed
     description: "step_type: test\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: phase-check\nagent: gate-reviewer\npriority: HIGH\n\nRetest/gate\
       \ step for `dup_foundation.mid-gate` after the batched ruff import-order remediation.\n\
@@ -33403,6 +33403,8 @@ phases:
     depends_on:
     - fix-mid-gate-ruff-import-order
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-05-12T14:17:05.287758+00:00'
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

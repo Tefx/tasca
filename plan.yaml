@@ -36003,6 +36003,254 @@ phases:
     - dup_adoption.liveness-probe
     - dup_adoption.spec-conformance
     agent: gate-reviewer-tacit
+  - id: dup_adoption.transport-say-append-shared-operation-fix
+    name: transport-say-append-shared-operation-fix
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: defect_repair
+
+      agent: python-refactor-master-tacit
+
+      tags:
+
+      - integration
+
+      - remediation
+
+
+      Batched fix for failed dup_adoption.mid-gate.
+
+
+      ## Test-to-Fix Context (authoritative)
+
+      Failed gate step: dup_adoption.mid-gate
+
+      Gate returned: headline=FAIL, verdict=FAIL, proof_gap_status=BLOCKING, blocking_status=OPEN,
+      gate_open_allowed=false, orchestrator_action_hint=DO_NOT_COMPLETE.
+
+      Tests passed, but architecture/wiring blocker remains.
+
+
+      Blocker B1: REST/MCP saying append still duplicates business orchestration across
+      transports.
+
+      Evidence:
+
+      - REST saying path duplicates table lookup/state/speaker orchestration in src/tasca/shell/api/routes/sayings.py:129-175
+      and 237-256.
+
+      - MCP saying path independently owns table lookup/state/speaker resolution/append
+      error mapping in src/tasca/shell/mcp/entrypoints.py:836-887.
+
+      - Existing shared service src/tasca/shell/services/limited_saying_service.py:69-90
+      owns only limits+append, not full table_say/append business truth.
+
+
+      Why it matters: mid-gate explicitly blocks progression if transports still own
+      duplicated business orchestration. The business truth for whether/how a saying
+      may be appended remains split across REST and MCP.
+
+
+      ## Required remediation
+
+      Extract a transport-neutral shell operation for table_say / append-saying that
+      owns:
+
+      - table lookup
+
+      - table state validation
+
+      - speaker resolution and constraints where transport-neutral
+
+      - limit enforcement
+
+      - append
+
+      - typed outcome/error classification
+
+
+      Keep ONLY these concerns in transports:
+
+      - HTTP/MCP request parsing
+
+      - auth
+
+      - response envelope shaping
+
+      - idempotency compatibility fields
+
+      - transport-specific response/status/next-action mapping
+
+
+      ## Scope and target files
+
+      Expected touch paths:
+
+      - src/tasca/shell/services/limited_saying_service.py or a sibling shell service
+      for the new operation
+
+      - src/tasca/shell/api/routes/sayings.py
+
+      - src/tasca/shell/mcp/entrypoints.py
+
+      - focused tests under tests/unit or tests/integration covering the new shared
+      operation and both adapters
+
+
+      ## Architecture constraints
+
+      - Transport-neutral shell operation owns business truth; REST and MCP adapters
+      must consume it rather than re-derive table/speaker/state/limit/append orchestration.
+
+      - Do not move HTTP/MCP envelope semantics into the shared operation.
+
+      - Preserve local REST status codes/response shapes and MCP response envelope/next-action
+      semantics.
+
+      - Preserve idempotency compatibility fields where existing API/MCP behavior
+      requires them.
+
+      - Follow project Shell/Core boundary rules: I/O and transport adapters stay
+      in Shell; Core code needs @pre/@post contracts and doctests if touched.
+
+
+      ## Failure-mode checklist
+
+      - Missing table lookup maps to typed transport-neutral outcome, then local REST/MCP
+      mapping.
+
+      - Closed/paused/non-open table state maps through shared operation without duplicate
+      adapter branching.
+
+      - Speaker resolution/constraints are handled once where transport-neutral; auth/identity
+      parsing remains adapter-local.
+
+      - Limit enforcement behavior remains identical and no longer lives as a partial
+      service seam only.
+
+      - Append failures and idempotency compatibility outcomes are typed once and
+      mapped locally.
+
+
+      ## Gate Preview (what the retest WILL reject)
+
+      1. REST or MCP still directly owns full table lookup/state/speaker/append business
+      orchestration.
+
+      2. Shared operation only wraps limits+append while adapters retain the business
+      decision tree.
+
+      3. Transport-neutral operation absorbs HTTP status codes, MCP envelope fields,
+      auth parsing, or response-shaping details.
+
+      4. Tests prove only one transport path, or assert only passing status without
+      proving shared-operation consumption.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. The
+      shared operation MUST contain substantive logic that processes inputs and produces
+      typed outcomes that vary based on table state, speaker resolution, limits, and
+      append result.
+
+
+      ## Behavioral test requirements
+
+      Add/update tests proving:
+
+      - New shared operation handles happy path and at least one blocker-class failure
+      path (missing/closed table, speaker constraint failure, or limit violation).
+
+      - REST saying adapter consumes the shared operation and preserves local HTTP
+      status/response/envelope semantics.
+
+      - MCP saying adapter consumes the shared operation and preserves local MCP response
+      envelope/error/next-action semantics.
+
+      - Both adapters no longer duplicate the business orchestration sequence; they
+      retain only transport-local parsing/auth/envelope/status mapping.'
+    verification: '- Main path: behavioral tests for the new shared table_say/append
+      operation pass and prove one transport-neutral operation owns table lookup,
+      state validation, speaker constraints, limit enforcement, append, and typed
+      outcome/error classification.
+
+      - Failure path: at least one regression covers missing/closed table, speaker
+      constraint, limit violation, or append error mapping through the shared operation.
+
+      - Wiring proof: REST and MCP adapter tests prove both consume the shared operation
+      and preserve local response shapes/status/envelope/next-action semantics.
+
+      - Duplication proof: evidence identifies removed duplicated orchestration in
+      REST and MCP and shows transport code now keeps only request parsing/auth/response
+      mapping/idempotency compatibility concerns.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - src/tasca/shell/api/routes/sayings.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoints.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/services/limited_saying_service.py — key passage or "NOT READ:
+      <reason>"
+
+      - AGENTS.md — key passage or "NOT READ: <reason>"
+
+      - INVAR.md — key passage or "NOT READ: <reason>"
+
+
+      ## Fix Evidence
+
+
+      ### Shared operation
+
+      - New/updated operation path:
+
+      - Owned transport-neutral responsibilities:
+
+      - Typed outcomes/errors added or reused:
+
+
+      ### Adapter boundary proof
+
+      - REST retained local-only concerns:
+
+      - MCP retained local-only concerns:
+
+      - Business orchestration removed from REST locations:
+
+      - Business orchestration removed from MCP locations:
+
+
+      ### Tests added/updated
+
+      - Shared operation behavioral tests:
+
+      - REST adapter tests preserving response shape/status/envelope:
+
+      - MCP adapter tests preserving response envelope/error/next-action semantics:
+
+
+      ### Commands executed
+
+      ```
+
+      <paste focused test commands and outputs>
+
+      ```
+
+
+      ### Remaining gaps
+
+      - <none, or explicit non-intersection rationale>
+
+      '
+    depends_on:
+    - dup_adoption.mid-gate
+    agent: python-refactor-master-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

@@ -34680,6 +34680,112 @@ phases:
       \ are None; table_create has all expected params\",\n    \"runtime_probe\":\
       \ \"exit 0; table_create dedup/default/invite/web behavior proven\"\n  },\n\
       \  \"product_implementation_files_modified\": false\n}\n```"
+  - id: fix-foundation-gate-blockers
+    name: Fix all dup_foundation gate blockers
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      agent: python-senior\npriority: HIGH\nsymbolic_testing: false\n\nBatched remediation\
+      \ for the failed dup_foundation.gate review. Fix ALL blocker families below\
+      \ in one coherent pass; do not create serial sibling fix chains.\n\n## Test-to-Fix\
+      \ Context (ALL blockers)\n\n### B1: Full regression suite failure\n- Command\
+      \ observed by gate: `.venv/bin/python -m pytest -q`\n- Result: `5 failed, 1098\
+      \ passed`\n- Required: make the focused blocker tests pass and make the full\
+      \ regression command pass, or record an explicit gate-intersection statement\
+      \ for any residual failure.\n\n### B2: REST shared-operation ownership seam\
+      \ remains unsafe\n- Shared owners exist at:\n  - `src/tasca/shell/services/operations/table_control.py:175`\n\
+      \  - `src/tasca/shell/services/operations/table_creation.py:59`\n  - `src/tasca/shell/services/operations/batch_delete.py:50`\n\
+      \  - `src/tasca/shell/services/operations/table_export.py:53`\n  - `src/tasca/shell/services/operations/patron_registration.py:68`\n\
+      - MCP already uses shared ops at `src/tasca/shell/mcp/entrypoints.py:209`, `:306`,\
+      \ `:583`, `:626`, `:1054`.\n- REST bypasses lower-level services/repos at:\n\
+      \  - `src/tasca/shell/api/routes/tables.py:123`, `:144`, `:445`\n  - `src/tasca/shell/api/routes/tables_control.py:164`\n\
+      - Required: REST adapters must adopt shared operation owners or provide explicit\
+      \ non-intersection proof. Because this is a gate-blocking ownership seam, default\
+      \ to fixing/wiring rather than deferring.\n\n### B3: REST control documented\
+      \ payload and canonical audit blockers\n- `tests/unit/test_dup_guardrails_control_red.py:126-139`:\
+      \ REST control route does not accept documented HTTP payload without `speaker_name`;\
+      \ current route requires `speaker_name` at `src/tasca/shell/api/routes/tables_control.py:50-55`.\n\
+      - `tests/unit/test_dup_guardrails_control_red.py:142-175`: REST and MCP control\
+      \ audit content diverges; REST builds `Completed` without `Reason:` at `src/tasca/shell/api/routes/tables_control.py:153-156`.\n\
+      - Direct atomic call at `src/tasca/shell/api/routes/tables_control.py:164` must\
+      \ be replaced by `execute_table_control` or equivalent shared owner.\n\n###\
+      \ B4: REST table creation and batch-delete bypass shared owners\n- `src/tasca/shell/api/routes/tables.py:123-144`\
+      \ and `:445` call lower-level services/repos instead of `create_discussion_table`\
+      \ / `delete_tables_batch`.\n- Required: wire REST routes through shared owners\
+      \ while preserving HTTP status/detail semantics.\n\n### B5: CLI markdown export\
+      \ regression\n- `tests/unit/test_cli_export.py:148` expects metadata table row\
+      \ absent from current output.\n- Current markdown shape from `src/tasca/core/export_service.py:306-313`\
+      \ no longer matches test expectation.\n- Required: reconcile CLI export test/behavior\
+      \ with current canonical markdown export format without weakening spec coverage.\
+      \ Preserve CLI surface semantics.\n\n### B6: Startup policy wiring regression\n\
+      - `tests/unit/test_usercustomize.py:17` cannot import `tasca.shell.invar_runtime_policy`.\n\
+      - Required: restore/adjust startup policy wiring so test and runtime import\
+      \ path are valid, or update tests only if spec path intentionally changed and\
+      \ non-intersection proof is explicit.\n\n### B7: Worktree hygiene warning (non-blocking\
+      \ unless touched)\n- Gate reviewer observed dirty `uv.lock` version drift (`0.1.28`\
+      \ -> `0.1.29`) from bootstrap.\n- Avoid committing or relying on unowned lockfile\
+      \ drift unless the fix genuinely requires it; if touched, explain why and how\
+      \ it intersects the gate.\n\n## Root Cause vs Symptom\n- Root cause: shared-operation\
+      \ ownership and canonical surface contracts are only partially adopted across\
+      \ REST/CLI/startup seams.\n- Symptoms: regression failures, REST/MCP audit divergence,\
+      \ route bypasses, CLI markdown mismatch, and startup import failure.\n- Why\
+      \ this fix is not surface-level: it must close the ownership seam by routing\
+      \ REST through shared owners and then prove every listed blocker family with\
+      \ focused and full commands.\n\n## Gate-Intersection Requirement\nFor every\
+      \ unresolved issue, evidence MUST state whether it intersects dup_foundation.gate,\
+      \ dup_adoption transport adoption, finalization full regression, invar guard,\
+      \ or CLI surface preservation. If it intersects any remaining gate, this step\
+      \ must own remediation now; do not label it merely pre-existing or out-of-scope.\n\
+      \n## Completion Criteria (stub exclusion)\nThis is an IMPLEMENTATION step. Stub-only\
+      \ completion is NOT acceptable. Each deliverable MUST contain substantive route/startup/export\
+      \ logic that processes inputs and produces outputs that vary based on those\
+      \ inputs.\n\n## Out-of-Scope Guardrail\nDo not broaden into unrelated refactors.\
+      \ Do not weaken red/guardrail tests to make them pass. Do not introduce unowned\
+      \ lockfile drift."
+    verification: '- Focused tests for the listed blocker families pass, including
+      `tests/unit/test_dup_guardrails_control_red.py`, `tests/unit/test_cli_export.py`,
+      and `tests/unit/test_usercustomize.py`.
+
+      - Full regression proof: `.venv/bin/python -m pytest -q` passes, or `uv run
+      pytest -q` passes on mainline-equivalent environment with command-family differences
+      explained.
+
+      - Invar guard proof: run the project guard command and include output; failures
+      that intersect remaining gates must be fixed in this step.
+
+      - Wiring proof: REST control/table-create/batch-delete adapters consume shared
+      operation owners or provide explicit non-intersection proof accepted by the
+      retest gate.
+
+      - CLI proof: markdown export behavior and tests preserve the canonical export
+      format without weakening spec coverage.
+
+      - Hygiene proof: no unowned `uv.lock` drift is introduced unless explicitly
+      justified as gate-intersecting.'
+    evidence_template: "## refs Read Confirmation (MANDATORY)\nFor each ref in this\
+      \ step:\n- <filename> — key passage or \"NOT READ: <reason>\"\n\nIf no refs\
+      \ were provided, state: \"No refs for this step.\"\n\n## Batched Gate Blocker\
+      \ Fix Evidence\n\n### Blockers Fixed\n| Blocker | Files changed | Fix summary\
+      \ | Focused proof |\n| --- | --- | --- | --- |\n| B1 full regression | <files>\
+      \ | <summary> | <command/output> |\n| B2 REST shared ops seam | <files> | <summary>\
+      \ | <command/output> |\n| B3 REST control payload/audit | <files> | <summary>\
+      \ | <command/output> |\n| B4 REST create/delete owners | <files> | <summary>\
+      \ | <command/output> |\n| B5 CLI markdown export | <files> | <summary> | <command/output>\
+      \ |\n| B6 startup policy wiring | <files> | <summary> | <command/output> |\n\
+      | B7 uv.lock hygiene | <files or none> | <summary> | <status> |\n\n### Required\
+      \ Commands\n- Focused tests:\n  ```\n  <paste commands and output for affected\
+      \ focused tests>\n  ```\n- Full regression:\n  ```\n  .venv/bin/python -m pytest\
+      \ -q\n  <paste output>\n  ```\n- Invar guard:\n  ```\n  <paste exact guard command\
+      \ and output>\n  ```\n\n### Ownership/Wiring Proof\n- REST table_control route\
+      \ calls shared owner: YES/NO + evidence\n- REST table create route calls shared\
+      \ owner: YES/NO + evidence\n- REST batch-delete route calls shared owner: YES/NO\
+      \ + evidence\n- REST/MCP canonical control audit content matches: YES/NO + evidence\n\
+      \n### Gate-Intersection Statement\nFor each unresolved issue, state: `issue`,\
+      \ `provenance`, `disposition`, `remaining gate intersection`, and `owner`. Use\
+      \ `non-blocking` only with explicit non-intersection evidence.\n\n### Headline\n\
+      PASS | PASS_WITH_DEBT | FAIL"
+    depends_on:
+    - dup_foundation.gate
+    agent: python-senior
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

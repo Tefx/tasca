@@ -34503,7 +34503,7 @@ phases:
       \ before worker commit.\n  - Not Done / Blockers: none."
   - id: retest-foundation-mcp-table-create-defaults
     name: Retest MCP table.create surface and ParameterContract defaults
-    status: pending
+    status: claimed
     description: "step_type: gate\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: phase-check protecting dup_foundation.gate and dup_adoption\
       \ unlock path\nagent: gate-reviewer-tacit\npriority: HIGH\nsource_failed_steps:\n\
@@ -34578,6 +34578,8 @@ phases:
     depends_on:
     - fix-foundation-mcp-table-create-defaults
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-12T16:18:02.665869+00:00'
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

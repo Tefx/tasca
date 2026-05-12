@@ -37258,7 +37258,7 @@ phases:
       \ confirmation."
   - id: spec-conformance-retest-b1-b9
     name: Retest spec conformance for B1-B9 remediation
-    status: pending
+    status: claimed
     description: 'step_type: test
 
       step_intent: retest_green
@@ -37463,6 +37463,8 @@ phases:
     depends_on:
     - batched-spec-conformance-remediation
     agent: spec-verifier-tacit
+    claimed_by: spec-verifier-tacit
+    claimed_at: '2026-05-12T19:51:43.518979+00:00'
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

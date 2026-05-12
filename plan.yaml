@@ -37989,7 +37989,7 @@ phases:
       a new mainline commit.'
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
-  status: pending
+  status: in_progress
   gate: Repo-wide verification, documentation sync, and independent deep review are
     complete with no unresolved blocker-class drift. Finalization also covers the
     Web Mermaid stream rendering fix before plan closure.
@@ -37999,7 +37999,7 @@ phases:
   steps:
   - id: finalization.verify-full-plan
     name: Full-plan verification after transport consolidation and Web Mermaid fix
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       verification_scope: full-plan-check
@@ -38119,6 +38119,8 @@ phases:
     - docs/adr-001-mermaid-rendering.md
     - docs/adr-002-mermaid-svg-sanitization.md
     agent: integration-verifier-tacit
+    claimed_by: integration-verifier-tacit
+    claimed_at: '2026-05-12T20:14:16.765254+00:00'
   - id: finalization.doc-sync
     name: Sync documentation with consolidated transport behavior
     status: pending

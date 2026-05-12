@@ -35153,8 +35153,17 @@ phases:
 
       - All phase steps completed with specific, verifiable evidence.
 
+      - Remediation closure evidence from `web_mermaid_stream_fix.retest-spec-conformance-blockers`
+      is complete before this gate runs.
+
       - Gate decision basis maps each Mermaid/Markdown/SVG requirement to evidence
       refs and unresolved statuses.
+
+      - Gate blocks unless B1/B2/B3 have `verdict: PASS`, `blockers: []`, and `gate_open_allowed:
+      true` from the retest step.
+
+      - Gate blocks unless R8 has explicit REMEDIATED, NON_BLOCKING_NON_INTERSECTING,
+      or SPEC_STALE_OR_ADVISORY disposition with rationale.
 
       - Gate blocks on missing visible rendering evidence, missing security-boundary
       evidence, or unresolved DIVERGES/PARTIAL/NEEDS_TEST items.
@@ -35201,6 +35210,7 @@ phases:
     - web_mermaid_stream_fix.green-retest
     - web_mermaid_stream_fix.uiux-audit
     - web_mermaid_stream_fix.spec-conformance
+    - web_mermaid_stream_fix.retest-spec-conformance-blockers
     agent: gate-reviewer
   - id: web_mermaid_stream_fix.fix-spec-conformance-blockers
     name: Fix spec-conformance blockers for Mermaid stream rendering

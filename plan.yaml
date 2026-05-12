@@ -31593,7 +31593,7 @@ phases:
     no remaining work items in dup_guardrails.'
 - id: dup_foundation
   name: Consolidation Foundation (Guardrails + Shared Ops)
-  status: in_progress
+  status: done
   gate: Guardrails and shared shell-application owners are both established before
     transport adoption; no transport leakage or atomic-control drift remains.
   context: 'Compacted structure: duplicate-abstraction guardrails absorbed into this
@@ -34969,7 +34969,7 @@ phases:
       \ was not committed."
   - id: retest-foundation-gate-blockers
     name: Retest dup_foundation gate blocker closure
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       step_intent: retest_green
@@ -35103,9 +35103,85 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T16:57:12.372242+00:00'
+    done_at: '2026-05-12T17:13:51.889888+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Gate Retest Report\n\n**Reviewer**: gate-reviewer-tacit (independent of fix\
+      \ agent)\n**Phase**: dup_foundation\n**Retested fix step**: fix-foundation-gate-blockers\n\
+      \n### Decision Fields (MANDATORY)\n```yaml\nheadline: \"PASS_WITH_DEBT\"\nverdict:\
+      \ \"PASS\"\nblockers: []\nproof_gap_status: \"CLOSED\"\nblocking_status: \"\
+      CLOSED\"\ngate_open_allowed: true\norchestrator_action_hint: \"COMPLETE_GATE\"\
+      \n```\n\n### Blocker Family Retest Matrix\n| Family | Evidence reviewed | Verdict\
+      \ | Remaining blocker? |\n| --- | --- | --- | --- |\n| Full regression | `.venv/bin/python\
+      \ -m pytest -q` → `1103 passed in 12.35s` | PASS | NO |\n| REST shared ops ownership\
+      \ | `tables_control.py:24-27,97`; `tables.py:31-35,121`; `tables.py:31,412`;\
+      \ MCP parity `entrypoints.py:96-110,306,583,1054` | PASS | NO |\n| REST control\
+      \ payload/audit | `TableControlRequest` accepts default `speaker_name` and `dedup_id`\
+      \ at `tables_control.py:37-44`; canonical shared operation formats content at\
+      \ `table_control.py:100-114,223-232`; tests `test_dup_guardrails_control_red.py:132-181`\
+      \ passed | PASS | NO |\n| REST create/delete owners | REST create calls `create_discussion_table`\
+      \ at `tables.py:121`; REST batch-delete calls `delete_tables_batch` at `tables.py:412`;\
+      \ endpoint tests passed in focused suite | PASS | NO |\n| CLI markdown export\
+      \ | `test_cli_export.py:184-207` verifies Mermaid markdown fence preserved and\
+      \ no SVG rendering; focused suite passed | PASS | NO |\n| Startup policy wiring\
+      \ | `usercustomize.py:7-9`; `invar_runtime_policy.py:13-27`; smoke import printed\
+      \ `startup-policy-ok`; full regression includes `tests/unit/test_usercustomize.py\
+      \ .` | PASS | NO |\n| uv.lock hygiene | Initial/final `git status --short --branch`\
+      \ showed only uncommitted `M uv.lock`; diff is package metadata version `0.1.28\
+      \ -> 0.1.29`. Not committed by this retest; report as debt for orchestrator\
+      \ cleanup. | PASS_WITH_DEBT | NO |\n\n### Wiring Audit\n- REST control owner\
+      \ evidence: `src/tasca/shell/api/routes/tables_control.py:24-27` imports `execute_table_control`;\
+      \ `tables_control.py:97` calls it; shared owner implements canonical transition/audit/atomic\
+      \ call at `src/tasca/shell/services/operations/table_control.py:174-244`.\n\
+      - REST table-create owner evidence: `src/tasca/shell/api/routes/tables.py:31-35`\
+      \ imports `create_discussion_table`; `tables.py:121` calls it.\n- REST batch-delete\
+      \ owner evidence: `src/tasca/shell/api/routes/tables.py:31` imports `delete_tables_batch`;\
+      \ `tables.py:412` calls it.\n- MCP parity evidence: `src/tasca/shell/mcp/entrypoints.py:96-110`\
+      \ imports the same shared owners; `entrypoints.py:306-318` uses `create_discussion_table`;\
+      \ `entrypoints.py:583` uses `delete_tables_batch`; `entrypoints.py:1054` uses\
+      \ `execute_table_control`.\n\n### Escape Hatch Audit\n- Guardrail bypass / skip\
+      \ marker scan: targeted scans of touched tests found no `pytest.mark.skip`,\
+      \ `pytest.mark.xfail`, `skip(`, `xfail(`, `pragma: no cover`, `pass`, `TODO`,\
+      \ or `FIXME`.\n- @invar:allow changes: route files retain explicit route-thickness/shell-result\
+      \ allowances; `.venv/bin/invar guard` passed with `errors: 0`, `warnings: 0`.\n\
+      - Test weakening check: blocker tests remain behavioral for documented payload\
+      \ shape, REST/MCP canonical audit parity, and CLI markdown preservation.\n\n\
+      ### CLI Surface Preservation\n- CLI touched? yes (`tests/unit/test_cli_export.py`)\n\
+      - Commands/proofs: focused suite ran `tests/unit/test_cli_export.py` and all\
+      \ 19 export tests passed; full regression also included `tests/unit/test_cli_export.py`.\n\
+      \n### Smoke / Liveness Evidence\n- Gate retest liveness: focused suite exercised\
+      \ FastAPI `TestClient` REST routes for create/control/batch-delete and CLI export\
+      \ command path.\n- Fixture-vs-real distinction: REST tests use in-memory SQLite\
+      \ + real route adapters/shared operations; CLI tests patch DB path/connect but\
+      \ execute `cmd_export` with real storage/export formatting.\n\n### Verification\
+      \ Commands\n- Focused tests:\n  ```text\n  .venv/bin/python -m pytest -q tests/unit/test_dup_guardrails_control_red.py\
+      \ tests/unit/test_cli_export.py tests/unit/api/test_tables_routes.py tests/unit/services/operations/test_table_control.py\
+      \ tests/unit/services/test_registration_creation_operations.py tests/unit/storage/test_batch_delete_repo.py\n\
+      \  90 passed in 10.01s\n  ```\n- Full regression:\n  ```text\n  .venv/bin/python\
+      \ -m pytest -q\n  1103 passed in 12.35s\n  ```\n- Invar guard:\n  ```text\n\
+      \  .venv/bin/invar guard\n  status=passed; errors=0; warnings=0\n  ```\n- Startup\
+      \ smoke:\n  ```text\n  .venv/bin/python -c \"import sys; import usercustomize;\
+      \ from tasca.shell.invar_runtime_policy import enforce_runtime_guard_contract;\
+      \ enforce_runtime_guard_contract(list(sys.argv)); print('startup-policy-ok')\"\
+      \n  startup-policy-ok\n  ```\n\n### Auxiliary Blind-Tester Mode D Liveness Evidence\n\
+      - Verdict: PASS; blockers: []\n- Probes:\n  - REST TestClient create/control/batch-delete\
+      \ + subprocess CLI export: exit 0; REST create/control/batch-delete PASS; canonical\
+      \ control audit contained `Reason: Blind liveness canonical reason`; CLI markdown\
+      \ export contained title, metadata, Board, Transcript, seq, speaker, content.\n\
+      \  - Startup imports: `tasca.shell.invar_runtime_policy` and `usercustomize`\
+      \ import successfully.\n  - Focused route/CLI tests: `4 passed in 0.64s`.\n\
+      - Public surface evidence: POST `/api/v1/tables`; POST `/api/v1/tables/{table_id}/sayings`;\
+      \ GET sayings; POST control; POST batch-delete; GET table after deletion; `python\
+      \ -m tasca.cli export`; startup imports.\n\n### Files changed\n- Commit hash(es):\
+      \ none — read-only verification; no retest commit created.\n- Files changed:\
+      \ none by reviewer.\n- Residual debt: uncommitted/unowned `uv.lock` drift (`tasca`\
+      \ version `0.1.28 -> 0.1.29`) observed in isolated worktree. It is not part\
+      \ of reviewer changes and does not block gate opening.\n\n### Programmatic Handoff\
+      \ JSON\n```json\n{\"headline\":\"PASS_WITH_DEBT\",\"verdict\":\"PASS\",\"blockers\"\
+      :[],\"proof_gap_status\":\"CLOSED\",\"blocking_status\":\"CLOSED\",\"gate_open_allowed\"\
+      :true,\"orchestrator_action_hint\":\"COMPLETE_GATE\"}\n```"
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
-  status: locked
+  status: pending
   gate: REST and MCP consume the same shared operations, runtime surfaces remain runnable,
     and consumer boundaries agree on resolved facts.
   depends_on:

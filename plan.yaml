@@ -35784,7 +35784,7 @@ phases:
       by the execution agent.'
   - id: dup_adoption.transport-conformance
     name: Verify REST/MCP consumer-boundary conformance
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -35891,6 +35891,58 @@ phases:
     agent: integration-verifier-tacit
     claimed_by: integration-verifier-tacit
     claimed_at: '2026-05-12T18:46:38.908282+00:00'
+    done_at: '2026-05-12T19:01:25.831517+00:00'
+    evidence: "## Integration Evidence\n\n### refs Read Confirmation (MANDATORY)\n\
+      No refs for this step.\n\n**Shared fixture/scenario**:\n- `transport_conformance_rest_mcp_tool_storage_2026_05_13`\n\
+      - Commands:\n  - `.venv/bin/python -m pytest -q tests/unit/test_dup_guardrails_control_red.py\
+      \ tests/unit/api/test_export_routes.py::TestExportOperation tests/unit/services/test_registration_creation_operations.py\
+      \ tests/unit/api/test_tables_routes.py::TestBatchDeleteTables -vv`\n  - Inline\
+      \ Python scenario invoking FastAPI REST routes via `TestClient`, MCP public\
+      \ tool wrapper functions from `tasca.shell.mcp.server`, and SQLite storage readback\
+      \ from a persistent temp DB.\n\n**Actual output**:\n- Targeted pytest: exit\
+      \ 0; `20 passed in 1.44s`.\n- Conformance scenario: exit 0; emitted JSON facts\
+      \ showing:\n  - control: REST and MCP both returned `table_status: closed`,\
+      \ `control_saying_sequence: 0`; storage readback had `status: closed`, `version:\
+      \ 2`; stored CONTROL saying content matched.\n  - limits: REST returned HTTP\
+      \ 400 with `error: limit_exceeded`; MCP returned `ok: false`, `code: LIMIT_EXCEEDED`;\
+      \ both agreed on `limit_kind: content`, `limit: 5`, `actual: 6`; storage readback\
+      \ had no sayings.\n  - create/delete: REST and MCP table creates stored `status:\
+      \ open`, `version: 1`; batch delete removed both rows from storage.\n  - export:\
+      \ REST `/export/jsonl` and MCP `table_export(format=\"jsonl\")` both produced\
+      \ record types `export_header`, `table`, `saying` and saying content `export-content`;\
+      \ storage readback matched.\n\n**Path exercised**:\n- REST path: FastAPI route\
+      \ handlers for `/tables`, `/tables/{id}/control`, `/tables/{id}/sayings`, `/patrons`,\
+      \ `/tables/actions/batch-delete`, `/tables/{id}/export/jsonl`.\n- MCP path:\
+      \ public MCP tool wrapper functions in `tasca.shell.mcp.server` for `table_create`,\
+      \ `table_control`, `table_say`, `patron_register`, `table_delete_batch`, and\
+      \ `table_export`.\n- persisted-state readback: direct SQLite readback from same\
+      \ persistent temp DB file plus export payload parsing.\n\n**Resolved facts compared**:\n\
+      - control outcome: PROVEN — both transports resolved close to closed/v2 with\
+      \ sequence 0 and identical canonical CONTROL content; MCP additionally returned\
+      \ documented `_next_action`.\n- limits outcome: PROVEN — both transports rejected\
+      \ over-limit content with same business facts; REST shaped as HTTP 400/detail,\
+      \ MCP shaped as `ok:false` error envelope.\n- create/delete outcome: PROVEN\
+      \ — both transports created open/v1 rows and batch delete removed closed tables;\
+      \ response envelopes differ intentionally.\n- export boundary: PROVEN — both\
+      \ transports selected JSONL and fetched the same stored saying facts; REST returned\
+      \ text/plain body, MCP returned content inside tool envelope.\n\n## Closure\
+      \ Fields\nstep_intent: verification\nexpected_result: green\nobserved_result:\
+      \ REST, MCP tool wrappers, and persisted SQLite/export readers agree on targeted\
+      \ resolved business facts.\nfailure_alignment: none\nverdict: PASS\nblockers:\
+      \ []\norchestrator_action_hint: COMPLETE\nproduct_implementation_files_modified:\
+      \ no\nCommit hash(es): none — verification-only step; worktree remained clean,\
+      \ no artificial commit created.\nbehavioral_proof_register:\n  - behavior: control\
+      \ action outcome and resulting table status/version sequence\n    proof_status:\
+      \ PROVEN\n  - behavior: saying limits disposition and error semantics\n    proof_status:\
+      \ PROVEN\n  - behavior: patron/table create and batch-delete result semantics\n\
+      \    proof_status: PROVEN\n  - behavior: export fetch/format selection boundary\n\
+      \    proof_status: PROVEN\ngate_open_allowed: true\nuncertainty_sources:\n \
+      \ - MCP was exercised through public tool wrapper functions, not a full JSON-RPC\
+      \ stdio/HTTP MCP session; liveness probe separately covered real MCP stdio server/tool\
+      \ path.\n\n## Mainline Merge/Verification Barrier\n- Branch `vectl/step-dup_adoption.transport-conformance`\
+      \ was clean and verification-only.\n- `git merge --squash vectl/step-dup_adoption.transport-conformance`\
+      \ reported `Already up to date. (nothing to squash)`, so no product delta required\
+      \ a new mainline commit."
   - id: dup_adoption.liveness-probe
     name: Liveness probe for REST and MCP runtime surfaces
     status: done

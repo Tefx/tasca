@@ -35629,7 +35629,7 @@ phases:
     agent: gate-reviewer
   - id: web_mermaid_stream_fix.fix-spec-conformance-blockers
     name: Fix spec-conformance blockers for Mermaid stream rendering
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       agent: frontend-engineer
@@ -35839,6 +35839,88 @@ phases:
     agent: frontend-engineer
     claimed_by: frontend-engineer
     claimed_at: '2026-05-12T13:05:48.670943+00:00'
+    done_at: '2026-05-12T13:41:21.997369+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - docs/adr-002-mermaid-svg-sanitization.md — strict SVG tag/attr allowlist;
+      `use` forbidden by default; style/inline style forbidden; only `#id` and `url(#id)`
+      internal refs allowed; prefer DOMParser/imported nodes over innerHTML.
+
+      - docs/adr-001-mermaid-rendering.md — Mermaid renders client-side; rendered
+      SVG sanitized; exports keep Mermaid as code blocks and do not embed SVG.
+
+      - docs/tasca-web-uiux-v0.1.md — Mermaid fenced blocks render client-side while
+      raw Markdown is stored; SVG is untrusted.
+
+      - docs/tasca-technical-design-v0.1.md — export contracts preserve raw JSONL/Markdown
+      content; rendering security repeats internal-fragment-only policy.
+
+      - web/src/rendering/svg-sanitizer.ts — broad allowlists/template.innerHTML identified
+      and replaced.
+
+      - web/src/rendering/svg-sanitizer.security.test.ts — strengthened strict ADR
+      element/attribute and URL policy coverage.
+
+      - tests/unit/api/test_export_routes.py — added Mermaid preservation proof.
+
+      - tests/unit/test_cli_export.py — added Mermaid preservation proof.
+
+      - src/tasca/core/export_service.py — read; not changed because raw Mermaid preservation
+      already works.
+
+
+      ## Remediation Evidence
+
+      - B1 sanitizer strict allowlist changes: ADR-002 element/attribute allowlists
+      only; removed `use`, `symbol`, `title`, `desc`, `textPath`, broad marker/gradient/transform/link/accessibility
+      attrs, event handlers, style, and non-ADR attrs.
+
+      - B2 URL/reference policy changes: only internal fragment `url(#id)` / `#id`
+      style refs allowed where enabled; href/xlink/style are stripped; javascript/data/file/http(s)/mailto/relative
+      URL-like values rejected.
+
+      - B3 export runtime proof added: API and CLI tests assert Mermaid fenced blocks
+      remain raw Markdown code fences in JSONL/Markdown exports and no `<svg` appears.
+
+      - R8 disposition: REMEDIATED. web/src/rendering/mermaid.tsx no longer uses dangerouslySetInnerHTML;
+      sanitized SVG parsed with DOMParser and imported via document.importNode/replaceChildren.
+
+
+      ## Files changed
+
+      - web/src/rendering/svg-sanitizer.ts
+
+      - web/src/rendering/svg-sanitizer.security.test.ts
+
+      - web/src/rendering/mermaid.tsx
+
+      - tests/unit/api/test_export_routes.py
+
+      - tests/unit/test_cli_export.py
+
+
+      ## Verification
+
+      Worktree: `npm test -- --run src/rendering/svg-sanitizer.security.test.ts` =>
+      57 passed; `npm run build` => success with existing chunk-size warnings; focused
+      Python Mermaid export nodes => 4 passed; full touched export tests => 43 passed;
+      commit ccb4675516d105af7608dea5df649a6fd9be85b9.
+
+      Mainline final-state gate after squash merge: `npm --prefix web test -- --run
+      src/rendering/svg-sanitizer.security.test.ts` => 57 passed; `npm --prefix web
+      run build` => success with existing chunk-size warnings; `uv run pytest tests/unit/api/test_export_routes.py
+      tests/unit/test_cli_export.py` => 47 passed.
+
+      Mainline commit: ae1435f [vectl] step-web_mermaid_stream_fix.fix-spec-conformance-blockers
+      completed.
+
+
+      ## Gaps/Notes
+
+      - node_modules remained ignored/uncommitted.
+
+      - src/tasca/core/export_service.py was not changed; tests proved existing raw
+      Markdown preservation.'
   - id: web_mermaid_stream_fix.retest-spec-conformance-blockers
     name: Retest spec-conformance blockers for Mermaid stream rendering
     status: pending

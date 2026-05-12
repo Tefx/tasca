@@ -273,9 +273,15 @@ def patron_get(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_create(
-    question: Annotated[str, parameter_field("table_create", "question")],
+    title: Annotated[str, parameter_field("table_create", "title")] = None,
+    question: Annotated[str, parameter_field("table_create", "question")] = None,
     context: Annotated[str, parameter_field("table_create", "context")] = None,
     creator_patron_id: Annotated[str, parameter_field("table_create", "creator_patron_id")] = None,
+    created_by: Annotated[str, parameter_field("table_create", "created_by")] = None,
+    host_ids: Annotated[list[str], parameter_field("table_create", "host_ids")] = None,
+    metadata: Annotated[dict[str, Any], parameter_field("table_create", "metadata")] = None,
+    policy: Annotated[dict[str, Any], parameter_field("table_create", "policy")] = None,
+    board: Annotated[dict[str, Any], parameter_field("table_create", "board")] = None,
     dedup_id: Annotated[str, parameter_field("table_create", "dedup_id")] = None,
 ) -> dict[str, Any]:
     """Create a new discussion table.
@@ -284,7 +290,18 @@ def table_create(
     and created_at timestamp. If dedup_id matches a recent creation, returns
     the original table.
     """
-    return ep.table_create(question, context, creator_patron_id, dedup_id)
+    return ep.table_create(
+        question=question,
+        context=context,
+        creator_patron_id=creator_patron_id,
+        dedup_id=dedup_id,
+        title=title,
+        created_by=created_by,
+        host_ids=host_ids,
+        metadata=metadata,
+        policy=policy,
+        board=board,
+    )
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]

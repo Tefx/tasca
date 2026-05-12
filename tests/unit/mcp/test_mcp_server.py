@@ -208,6 +208,49 @@ class TestTableCreate:
         assert result["ok"] is True
         assert result["data"]["context"] == "Building a new web application"
 
+    def test_create_table_accepts_spec_fields_and_defaults_legacy_aliases(self) -> None:
+        """MCP table_create accepts and surfaces documented v0.1 inputs."""
+        result = table_create(
+            title="Spec title",
+            created_by="patron-spec-1",
+            host_ids=["patron-spec-1", "patron-host-2"],
+            metadata={"space": "foundation"},
+            policy={"mode": "critique", "params": {"rounds": 2}, "custom": {}},
+            board={"notes": ["pin"]},
+        )
+
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["title"] == "Spec title"
+        assert data["question"] == "Spec title"
+        assert data["creator_id"] == "patron-spec-1"
+        assert data["created_by"] == "patron-spec-1"
+        assert data["host_ids"] == ["patron-spec-1", "patron-host-2"]
+        assert data["metadata"] == {"space": "foundation"}
+        assert data["policy"] == {"mode": "critique", "params": {"rounds": 2}, "custom": {}}
+        assert data["board"] == {"notes": ["pin"]}
+        assert data["invite_code"] == data["table_id"]
+        assert data["web_url"] == f"/tables/{data['table_id']}"
+
+    def test_create_table_defaults_spec_fields_when_omitted(self) -> None:
+        """MCP table_create returns deployability-bearing default fields."""
+        result = table_create(title="Defaulted title", created_by="patron-default")
+
+        assert result["ok"] is True
+        data = result["data"]
+        assert data["host_ids"] == ["patron-default"]
+        assert data["metadata"] == {}
+        assert data["policy"] == {"mode": None, "params": {}, "custom": {}}
+        assert data["board"] == {}
+
+    def test_create_table_rejects_missing_title_and_question(self) -> None:
+        """Runtime surface can default both aliases but operation enforces one."""
+        result = table_create()
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "DATABASE_ERROR"
+        assert "Either title or question is required" in result["error"]["message"]
+
 
 class TestTableGet:
     """Tests for table_get MCP tool."""

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
+
+from tasca.shell.mcp import server
 from tasca.shell.mcp.tool_contracts import (
     DEFAULTS_SPEC_ANCHOR,
     ERROR_RESPONSE_SHAPE,
@@ -72,9 +75,66 @@ def test_parameter_contract_defaults_match_spec_defaults() -> None:
 
     assert SPEC_PARAMETER_DEFAULTS["table_say.saying_type"] == "text"
     assert table_say_defaults["saying_type"] == "text"
+    assert table_say_defaults["mentions"] is None
+    assert table_say_defaults["reply_to_sequence"] is None
     assert SPEC_PARAMETER_DEFAULTS["seat_heartbeat.ttl_ms"] == 60000
     assert heartbeat_defaults["ttl_ms"] == 60000
     assert heartbeat_defaults["state"] == "running"
+
+
+def test_table_create_contract_covers_spec_and_legacy_inputs() -> None:
+    """table_create metadata exposes the v0.1 input surface plus aliases."""
+    table_create_defaults = {
+        parameter.name: parameter.default
+        for parameter in TOOL_CONTRACTS_BY_NAME["table_create"].parameters
+    }
+
+    assert set(table_create_defaults) == {
+        "title",
+        "question",
+        "context",
+        "creator_patron_id",
+        "created_by",
+        "host_ids",
+        "metadata",
+        "policy",
+        "board",
+        "dedup_id",
+    }
+    assert all(default is None for default in table_create_defaults.values())
+
+
+def test_optional_parameter_contract_defaults_match_server_signatures() -> None:
+    """Every optional/defaulted contract parameter agrees with runtime defaults."""
+    mismatches: list[tuple[str, str, object, object]] = []
+    covered_defaults: list[str] = []
+
+    for contract in TOOL_CONTRACTS:
+        runtime = getattr(server, contract.tool_name)
+        signature = inspect.signature(runtime)
+        for parameter in contract.parameters:
+            runtime_parameter = signature.parameters[parameter.name]
+            runtime_default = runtime_parameter.default
+            if parameter.required:
+                assert runtime_default is inspect.Signature.empty, (
+                    f"{contract.tool_name}.{parameter.name} is required in contract "
+                    "but defaulted at runtime"
+                )
+                continue
+
+            covered_defaults.append(f"{contract.tool_name}.{parameter.name}")
+            if runtime_default != parameter.default:
+                mismatches.append((
+                    contract.tool_name,
+                    parameter.name,
+                    parameter.default,
+                    runtime_default,
+                ))
+
+    assert "table_say.mentions" in covered_defaults
+    assert "table_say.reply_to_sequence" in covered_defaults
+    assert "table_create.title" in covered_defaults
+    assert not mismatches
 
 
 def test_runtime_field_metadata_is_built_from_tool_contracts() -> None:

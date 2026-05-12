@@ -408,6 +408,65 @@ def test_mcp_table_create(mcp_session: MCPSession) -> None:
     assert "result" in data
 
 
+def test_mcp_table_create_accepts_documented_spec_fields(mcp_session: MCPSession) -> None:
+    """MCP protocol boundary accepts/defaults table.create v0.1 fields."""
+    call_tool = make_call_tool(mcp_session, [20], _extract_tool_result_strict)
+
+    result = call_tool(
+        "table_create",
+        {
+            "title": "Spec protocol table",
+            "created_by": "patron-protocol-1",
+            "host_ids": ["patron-protocol-1", "patron-protocol-host"],
+            "metadata": {"space": "dup_foundation"},
+            "policy": {"mode": "moderated", "params": {"limit": 3}, "custom": {}},
+            "board": {"agenda": ["defaults"]},
+        },
+    )
+
+    assert result["ok"] is True
+    data = result["data"]
+    assert data["title"] == "Spec protocol table"
+    assert data["question"] == "Spec protocol table"
+    assert data["creator_id"] == "patron-protocol-1"
+    assert data["created_by"] == "patron-protocol-1"
+    assert data["host_ids"] == ["patron-protocol-1", "patron-protocol-host"]
+    assert data["metadata"] == {"space": "dup_foundation"}
+    assert data["policy"] == {"mode": "moderated", "params": {"limit": 3}, "custom": {}}
+    assert data["board"] == {"agenda": ["defaults"]}
+    assert data["invite_code"] == data["table_id"]
+    assert data["web_url"] == f"/tables/{data['table_id']}"
+
+
+def test_mcp_tools_list_table_create_schema_exposes_spec_fields(mcp_session: MCPSession) -> None:
+    """Tool discovery includes table_create documented and alias inputs."""
+    response = mcp_session["client"].post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 21, "method": "tools/list", "params": {}},
+        headers=mcp_session["headers"],
+    )
+
+    assert response.status_code == 200
+    data = _parse_sse_response(response.text)
+    table_create_tool = next(
+        tool for tool in data["result"].get("tools", []) if tool["name"] == "table_create"
+    )
+    properties = table_create_tool["inputSchema"]["properties"]
+
+    assert {
+        "title",
+        "question",
+        "context",
+        "creator_patron_id",
+        "created_by",
+        "host_ids",
+        "metadata",
+        "policy",
+        "board",
+        "dedup_id",
+    } <= set(properties)
+
+
 def test_mcp_table_join(mcp_session: MCPSession) -> None:
     """Test table_join tool.
 

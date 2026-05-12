@@ -270,10 +270,17 @@ def patron_get(patron_id: str) -> dict[str, Any]:
 # @shell_complexity: 5 branches for table creation + dedup store + idempotency + error handling
 # @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_create(
-    question: str,
+    question: str | None = None,
     context: str | None = None,
     creator_patron_id: str | None = None,
     dedup_id: str | None = None,
+    *,
+    title: str | None = None,
+    created_by: str | None = None,
+    host_ids: list[str] | None = None,
+    metadata: dict[str, Any] | None = None,
+    policy: dict[str, Any] | None = None,
+    board: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
@@ -299,8 +306,14 @@ def table_create(
     result = create_discussion_table(
         conn,
         question,
+        title=title,
         context=context,
         creator_patron_id=creator_patron_id,
+        created_by=created_by,
+        host_ids=host_ids,
+        metadata=metadata,
+        policy=policy,
+        board=board,
         now=now,
     )
     if isinstance(result, Failure):

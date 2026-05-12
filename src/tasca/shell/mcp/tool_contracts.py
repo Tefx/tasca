@@ -108,9 +108,10 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
         "table_create",
         "tasca.table.create",
         "Create a new discussion table.",
-        "Returns the table id, question, context, status ('open'), version (1), and created_at timestamp. If dedup_id matches a recent creation, returns the original table.",
+        "Returns the table id, invite_code, web_url, status ('open'), version (1), creator_id, host_ids, metadata, policy, and board. If dedup_id matches a recent creation, returns the original table.",
         (
-            P("question", "Discussion topic or question for the table", True),
+            P("title", "MCP-spec table title; required unless legacy question is provided", False, None),
+            P("question", "Legacy alias for title; accepted for backward compatibility", False, None),
             P("context", "Optional background context to frame the discussion", False, None),
             P(
                 "creator_patron_id",
@@ -118,6 +119,11 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
                 False,
                 None,
             ),
+            P("created_by", "MCP-spec creator patron id; preferred over creator_patron_id", False, None),
+            P("host_ids", "MCP-spec host patron ids; defaults to creator when omitted", False, None),
+            P("metadata", "MCP-spec arbitrary table metadata", False, None),
+            P("policy", "MCP-spec neutral policy object stored and surfaced by Tasca", False, None),
+            P("board", "MCP-spec shared board object stored and surfaced by Tasca", False, None),
             P(
                 "dedup_id",
                 "Idempotency key (24h TTL); reuse to avoid creating duplicate tables",
@@ -225,13 +231,13 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
                 "mentions",
                 "List of mention targets: patron UUIDs, aliases, display names, or 'all'. Error if a handle matches multiple patrons",
                 False,
-                SPEC_PARAMETER_DEFAULTS["seat_heartbeat.state"],
+                None,
             ),
             P(
                 "reply_to_sequence",
                 "Sequence number of the saying being replied to (informational in v0.1)",
                 False,
-                SPEC_PARAMETER_DEFAULTS["seat_heartbeat.ttl_ms"],
+                None,
             ),
             P(
                 "dedup_id",
@@ -426,8 +432,8 @@ def parameter_contract(tool_name: str, parameter_name: str) -> ParameterContract
 def parameter_field(tool_name: str, parameter_name: str) -> FieldInfo:
     """Build a Pydantic Field from centralized MCP contract metadata.
 
-    >>> parameter_field("table_create", "question").description
-    'Discussion topic or question for the table'
+    >>> parameter_field("table_create", "title").description
+    'MCP-spec table title; required unless legacy question is provided'
     """
     parameter = parameter_contract(tool_name, parameter_name)
     return Field(description=parameter.description)

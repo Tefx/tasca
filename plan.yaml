@@ -35505,7 +35505,7 @@ phases:
       \ was reverted before worker commit."
   - id: dup_adoption.mid-gate
     name: Mid-gate transport adoption boundary review
-    status: pending
+    status: claimed
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -35562,6 +35562,8 @@ phases:
     - dup_adoption.rest-crud-export-adoption
     - dup_adoption.mcp-shared-ops-adoption
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-12T17:32:09.556182+00:00'
   - id: dup_adoption.server-tool-contract-adoption
     name: Adopt tool-contract source in MCP server runtime
     status: pending

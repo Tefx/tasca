@@ -36089,7 +36089,7 @@ phases:
     agent: gate-reviewer-tacit
   - id: dup_adoption.transport-say-append-shared-operation-fix
     name: transport-say-append-shared-operation-fix
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: defect_repair
@@ -36337,6 +36337,59 @@ phases:
     agent: python-refactor-master-tacit
     claimed_by: python-refactor-master-tacit
     claimed_at: '2026-05-12T17:44:46.722134+00:00'
+    done_at: '2026-05-12T18:02:55.525590+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n- `src/tasca/shell/api/routes/sayings.py`\
+      \ — REST append duplicated table lookup/state validation/speaker creation before\
+      \ append in prior POST path.\n- `src/tasca/shell/mcp/entrypoints.py` — MCP `table_say`\
+      \ independently performed speaker validation, table lookup, can_say guard, speaker\
+      \ resolution, append-limit mapping.\n- `src/tasca/shell/services/limited_saying_service.py`\
+      \ — existing service only owned count/bytes limit checks and `append_saying_with_limits`.\n\
+      - `AGENTS.md` — not present in isolated worktree per worker read attempt; applied\
+      \ injected project instruction for Shell/Core boundary, invar guard, and no\
+      \ plan-state edits.\n- `INVAR.md` — cited rules: use Shell for I/O; Shell functions\
+      \ return Result; run invar guard after changes.\n\n## Fix Evidence\n### Shared\
+      \ operation\n- Commit hash(es):\n  - Worker commit: `a34c641 refactor table_say\
+      \ append orchestration`\n  - Mainline squash commit: `241634d [vectl] step-dup_adoption.transport-say-append-shared-operation-fix\
+      \ completed`\n- Files changed:\n  - `src/tasca/shell/services/limited_saying_service.py`\n\
+      \  - `src/tasca/shell/api/routes/sayings.py`\n  - `src/tasca/shell/mcp/entrypoints.py`\n\
+      \  - `tests/unit/services/test_limited_saying_service.py`\n  - `tests/unit/api/test_sayings_routes.py`\n\
+      \  - `tests/unit/mcp/test_mcp_server.py`\n- New/updated operation path: `tasca.shell.services.limited_saying_service.append_saying_operation`\n\
+      - Owned transport-neutral responsibilities: table lookup, table state validation,\
+      \ speaker constraint validation, speaker resolution, limit enforcement, append,\
+      \ typed outcome/error classification.\n- Typed outcomes/errors added or reused:\
+      \ `TableSayOutcome`, `TableSayError`, `TableSayErrorKind`.\n\n### Adapter boundary\
+      \ proof\n- REST retained local-only concerns: request model parsing, auth dependency,\
+      \ HTTPException/status/detail mapping, logging.\n- MCP retained local-only concerns:\
+      \ optional field compatibility logging, auto-register compatibility, idempotency\
+      \ cache, mention envelope fields, MCP success/error envelope and next-action\
+      \ semantics.\n- Business orchestration removed from REST locations: append endpoint\
+      \ no longer calls `_get_table_or_404` / `_validate_can_say` or constructs `Speaker`\
+      \ directly; delegates to `append_saying_operation`.\n- Business orchestration\
+      \ removed from MCP locations: removed local table lookup/can_say/speaker resolution/append\
+      \ error classification from `table_say`; delegates to `append_saying_operation`.\n\
+      \n### Tests added/updated\n- Shared operation behavioral tests: `tests/unit/services/test_limited_saying_service.py`\
+      \ covers successful lookup/speaker/limit/append plus closed table, speaker constraint,\
+      \ and limit violation classification.\n- REST adapter tests preserving response\
+      \ shape/status/envelope: `tests/unit/api/test_sayings_routes.py::TestAppendSaying::test_append_saying_maps_shared_operation_error`.\n\
+      - MCP adapter tests preserving response shape/status/envelope: `tests/unit/mcp/test_mcp_server.py::TestStateGuardsTableSay::test_table_say_maps_shared_operation_error`.\n\
+      \n### Verification\n- Worker baseline:\n  ```text\n  .venv/bin/python -m pytest\
+      \ tests/unit/api/test_sayings_routes.py tests/unit/mcp/test_mcp_server.py::TestStateGuardsTableSay\
+      \ tests/unit/mcp/test_mcp_server.py::TestLimitsEnforcementTableSay\n  34 passed\n\
+      \  ```\n  ```text\n  .venv/bin/python -m compileall -q targeted files\n  passed\n\
+      \  ```\n- Worker post-change:\n  ```text\n  .venv/bin/python -m ruff check changed\
+      \ files\n  All checks passed\n  ```\n  ```text\n  .venv/bin/python -m pytest\
+      \ tests/unit/services/test_limited_saying_service.py tests/unit/api/test_sayings_routes.py\
+      \ tests/unit/mcp/test_mcp_server.py::TestStateGuardsTableSay tests/unit/mcp/test_mcp_server.py::TestLimitsEnforcementTableSay\n\
+      \  40 passed\n  ```\n  ```text\n  invar_guard changed=true\n  status passed;\
+      \ static errors 0\n  ```\n- Mainline final-state verification after squash merge:\n\
+      \  ```text\n  uv run pytest tests/unit/services/test_limited_saying_service.py\
+      \ tests/unit/api/test_sayings_routes.py tests/unit/mcp/test_mcp_server.py::TestStateGuardsTableSay\
+      \ tests/unit/mcp/test_mcp_server.py::TestLimitsEnforcementTableSay -q\n  40\
+      \ passed in 2.30s\n  ```\n  ```text\n  uv run invar guard\n  status passed;\
+      \ errors=0; warnings=20; infos=3\n  ```\n- Gaps/Notes:\n  - Invar warnings/infos\
+      \ are non-failing shell architecture findings; no errors.\n  - Pre-existing\
+      \ unstaged `uv.lock` drift was not modified/committed.\n  - No downstream retest\
+      \ or other plan steps were started by worker.\n  - Blockers: none."
   - id: dup_adoption.transport-say-append-shared-operation-retest
     name: transport-say-append-shared-operation-retest
     status: pending

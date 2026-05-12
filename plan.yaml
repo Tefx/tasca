@@ -32292,7 +32292,7 @@ phases:
     agent: gate-reviewer-tacit
   - id: dup_guardrails.control-atomicity-red-tests
     name: Define red regressions for atomic control and refactor guardrails
-    status: claimed
+    status: done
     description: 'step_type: test
 
       step_intent: test_define_red
@@ -32428,6 +32428,59 @@ phases:
     agent: integration-verifier-tacit
     claimed_by: integration-verifier-tacit
     claimed_at: '2026-05-12T09:45:52.570556+00:00'
+    done_at: '2026-05-12T10:02:52.240836+00:00'
+    evidence: "## refs Read Confirmation\n- docs/tasca-mcp-interface-v0.1.md — table.control\
+      \ MUST append CONTROL saying and update status; append/status SHOULD be atomic;\
+      \ write tools accept dedup_id; closed is terminal.\n- docs/tasca-http-api-v0.1.md\
+      \ — REST POST /api/v1/tables/{table_id}/control documented body is exactly action/reason/dedup_id,\
+      \ with no speaker_name convenience field.\n- docs/tasca-technical-design-v0.1.md\
+      \ — required atomic operation: table.control append audit saying + update tables.status\
+      \ all-or-nothing.\n- tests/unit/storage/test_control_repo.py — storage-level\
+      \ atomic_control_table already tests rollback on version conflict/non-sqlite\
+      \ exceptions.\n- tests/unit/api/test_tables_routes.py — REST control tests currently\
+      \ use convenience speaker_name and assert CONTROL content contains markdown\
+      \ action/reason.\n- tests/unit/mcp/test_mcp_server.py — MCP table_control coverage\
+      \ exists; MCP table_say limit failures use LIMIT_EXCEEDED envelope.\n- tests/integration/test_mcp.py\
+      \ — MCP integration calls tools/call over /mcp with JSON-RPC params {name, arguments}.\n\
+      - tests/integration/test_api.py — REST integration uses in-process ASGI harness\
+      \ and admin bearer token for protected table operations.\n- tests/integration/harness.py\
+      \ — harness wraps REST/MCP transports and convenience methods; MCP tool wrappers\
+      \ do not use exact nested table.control speaker shape.\n\n## Test-Only Scope\
+      \ Confirmation\n- Modified files: tests/unit/test_dup_guardrails_control_red.py\n\
+      - Non-test product files changed: NONE\n- product_implementation_files_modified:\
+      \ false\n\n## Expected Red Evidence\nstep_intent: test_define_red\nexpected_result:\
+      \ red\nobserved_result: targeted pytest exited 1 with 3 expected failures and\
+      \ 1 passing compatibility guard\nfailure_alignment: failures match declared\
+      \ gaps: MCP control leaves audit saying after forced status-update failure;\
+      \ REST rejects exact documented HTTP control payload with 422; REST/MCP reason\
+      \ formatting differs.\nverdict: PASS\nblockers: []\nEXPECTED_RED_ACCEPTED: focused\
+      \ test-only red suite exposes pre-implementation drift for downstream adopters.\n\
+      \n- Commands/tests added: `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py\
+      \ -vv`\n- Expected failures / exposed_gaps:\n  - `test_mcp_control_rolls_back_control_saying_when_status_update_fails`:\
+      \ observed CONTROL saying remains committed.\n  - `test_rest_control_accepts_exact_documented_http_payload_shape`:\
+      \ observed 422 vs expected 200.\n  - `test_rest_and_mcp_control_reason_format_converges_on_canonical_rule`:\
+      \ observed REST `**CONTROL: CLOSE**\\n\\nCompleted` vs canonical/MCP `Reason:\
+      \ Completed`.\n- Atomic-control failure path exposed: YES — forced MCP update_table\
+      \ Failure leaves one CONTROL saying row.\n- Limits/body compatibility gap exposed:\
+      \ compatibility guard added and currently passes for REST 400 detail body shape.\n\
+      \n## Spec-Derived Fixtures\n- Fixture path: `tests/unit/test_dup_guardrails_control_red.py::DOC_HTTP_CONTROL_PAYLOAD`\n\
+      - Spec section cited: docs/tasca-http-api-v0.1.md section 3 Tables control body\n\
+      - Minimal documented shape used: `{\"action\": \"close\", \"reason\": \"Completed\"\
+      , \"dedup_id\": \"doc-http-control-dedup-1\"}`\n\n## Behavioral Proof Register\n\
+      - mcp_control_atomic_rollback: UNPROVEN (expected-red gap)\n- rest_exact_control_payload_acceptance:\
+      \ UNPROVEN (expected-red gap)\n- rest_mcp_control_reason_format_convergence:\
+      \ UNPROVEN (expected-red gap)\n- rest_sayings_limit_failure_body_compatibility:\
+      \ PROVEN\n\n## Downstream Owner\n- Implementation steps expected to close the\
+      \ gaps:\n  - dup_foundation.table-control-operation\n  - dup_adoption.mcp-shared-ops-adoption\n\
+      \  - dup_adoption.rest-control-limits-adoption\n\n## Commit and Verification\n\
+      - Worker commit hash: 9fdd708\n- Mainline squash commit: 492e565\n- Worker command:\
+      \ `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py\
+      \ -vv` → exit 1, expected red accepted.\n- Mainline final-state verification:\
+      \ `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py\
+      \ -vv` → exit 1 with same expected 3 failed / 1 passed pattern.\n- Artifacts\
+      \ Modified: tests/unit/test_dup_guardrails_control_red.py only.\n- Gaps/Notes:\
+      \ Required references were read; no vectl commands/tools used; no product implementation\
+      \ files modified."
   - id: dup_guardrails.parity-contract-capture
     name: Capture REST/MCP parity contract
     status: done

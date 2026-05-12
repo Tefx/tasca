@@ -35202,3 +35202,213 @@ phases:
     - web_mermaid_stream_fix.uiux-audit
     - web_mermaid_stream_fix.spec-conformance
     agent: gate-reviewer
+  - id: web_mermaid_stream_fix.fix-spec-conformance-blockers
+    name: Fix spec-conformance blockers for Mermaid stream rendering
+    status: pending
+    description: 'step_type: implementation
+
+      agent: frontend-engineer
+
+      tags: ["frontend", "security", "spec-conformance-remediation"]
+
+
+      Batched remediation ownership for semantic FAIL from `web_mermaid_stream_fix.spec-conformance`.
+
+
+      Failure evidence to close verbatim:
+
+
+      B1: SVG sanitizer is not ADR-002 strict allowlist-first. It allows non-ADR elements/attrs
+      such as `use`, `symbol`, `title`, `desc`, `textpath`, and many attributes beyond
+      ADR-002. `use` is explicitly forbidden by default in ADR-002 unless separately
+      reviewed and strictly constrained.
+
+
+      B2: URL/reference policy is weaker than ADR-002. Relative URLs, `file:`, `mailto:`,
+      and `url(...)` values are not comprehensively constrained to internal fragments.
+      ADR-002 allows internal fragments only (`#id`, `url(#id)`) and rejects javascript/data/file/http(s)/relative
+      URLs.
+
+
+      B3: Export behavior has no Mermaid-specific runtime proof. Static code suggests
+      raw content preservation, but no JSONL/Markdown export tests assert a Mermaid
+      fenced block remains a code block and no `<svg` is embedded.
+
+
+      R8 disposition requirement: ADR-002 guidance prefers DOMParser/imported nodes
+      and says do not inject raw strings via innerHTML; current renderer uses sanitized
+      string with `dangerouslySetInnerHTML`. Either remediate this in-scope, or leave
+      it for the retest/spec step with explicit non-intersection or spec-staleness
+      rationale. Do not silently ignore it.
+
+
+      Touch paths / ownership:
+
+      - `web/src/rendering/svg-sanitizer.ts` — enforce ADR-002 strict allowlist-first
+      SVG element/attribute policy.
+
+      - `web/src/rendering/svg-sanitizer.security.test.ts` — add/strengthen negative
+      sanitizer tests for forbidden extra elements/attributes and URL/reference rules.
+
+      - `tests/unit/api/test_export_routes.py` and/or `tests/unit/test_cli_export.py`
+      — add Mermaid export runtime proof for JSONL/Markdown.
+
+      - `src/tasca/core/export_service.py` — touch only if export proof reveals a
+      real defect in raw Markdown/Mermaid preservation.
+
+
+      Scope constraints:
+
+      - Cover ALL blockers B1/B2/B3 in this one batched fix step; do not split into
+      sibling implementation fixes for this failure family.
+
+      - No weakening of Markdown or Mermaid rendering behavior that is already green.
+
+      - No route/API changes unless required by export tests to preserve documented
+      export behavior.
+
+      - Preserve raw Markdown fenced-code semantics for Mermaid exports; exports must
+      not embed rendered SVG.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs.
+
+
+      ## Gate Preview (what the gate WILL reject)
+
+      1. Sanitizer still permits non-ADR elements/attrs such as `use`, `symbol`, `title`,
+      `desc`, `textpath`, broad event/style/link attributes, or any unreviewed URL-bearing
+      value.
+
+      2. URL/reference policy accepts anything other than internal fragments (`#id`,
+      `url(#id)`) for SVG URL-like references.
+
+      3. Export evidence remains static-only and lacks JSONL/Markdown runtime tests
+      proving Mermaid fenced blocks remain code blocks with no `<svg` embedded.
+
+      4. R8 is neither remediated nor explicitly classified with non-intersection/spec-staleness
+      rationale in the retest handoff.'
+    verification: '- Sanitizer negative tests prove forbidden extra elements/attrs
+      from B1 are removed/rejected, including `use`, `symbol`, `title`, `desc`, `textpath`,
+      `script`, `foreignObject`, event handlers, and broad non-ADR attributes.
+
+      - URL/reference tests prove only internal fragments are allowed (`#id`, `url(#id)`)
+      and javascript/data/file/http(s)/relative/mailto URLs are rejected across href/xlink/style/url-like
+      values.
+
+      - Export tests prove Mermaid fenced blocks remain Markdown code fences in JSONL
+      and Markdown exports and no `<svg` appears in exported content.
+
+      - Frontend/security test/build commands are run and pasted in evidence; include
+      `web` sanitizer/security tests and the relevant frontend build/typecheck command
+      available in this repo.
+
+      - Python export tests are run for the touched export surface; include the exact
+      pytest node(s) used.
+
+      - Evidence states whether R8 was remediated or intentionally left for retest
+      disposition, with rationale.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - docs/adr-002-mermaid-svg-sanitization.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-001-mermaid-rendering.md — key passage or "NOT READ: <reason>"
+
+      - docs/tasca-web-uiux-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - docs/tasca-technical-design-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/svg-sanitizer.ts — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/svg-sanitizer.security.test.ts — key passage or "NOT READ:
+      <reason>"
+
+      - tests/unit/api/test_export_routes.py — key passage or "NOT READ: <reason>"
+
+      - tests/unit/test_cli_export.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/core/export_service.py — key passage or "NOT READ: <reason>"
+
+
+      ## Remediation Evidence
+
+
+      **B1 sanitizer strict allowlist changes**:
+
+      ```
+
+      <summary with file/function names and rejected elements/attrs>
+
+      ```
+
+
+      **B2 URL/reference policy changes**:
+
+      ```
+
+      <summary with allowed internal fragment examples and rejected scheme/reference
+      examples>
+
+      ```
+
+
+      **B3 export runtime proof added**:
+
+      ```
+
+      <test names proving JSONL/Markdown retain Mermaid fenced blocks and contain
+      no <svg>
+
+      ```
+
+
+      **R8 handling**: REMEDIATED | LEFT_FOR_RETEST_DISPOSITION
+
+      Rationale:
+
+      ```
+
+      <why this closes or safely defers R8>
+
+      ```
+
+
+      **Commands executed**:
+
+      ```
+
+      <frontend sanitizer/security tests>
+
+      <frontend build/typecheck command>
+
+      <pytest export tests>
+
+      ```
+
+
+      **Actual output**:
+
+      ```
+
+      <paste relevant command output>
+
+      ```
+
+
+      **Non-goals honored**:
+
+      - Markdown/Mermaid rendering weakened: yes/no
+
+      - Route/API changed: yes/no and justification if yes
+
+      - Export changed to embed SVG: yes/no'
+    depends_on:
+    - web_mermaid_stream_fix.spec-conformance
+    agent: frontend-engineer

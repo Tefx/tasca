@@ -32229,7 +32229,7 @@ phases:
       passes.'
   - id: dup_foundation.mcp-tool-contracts-source
     name: Create MCP tool-contract source of truth
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior-tacit\n\nAnchors:\n- spec_refs:\n  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/recommended-defaults-v0-1\n\
       \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/error-response-shape\n\
@@ -32291,6 +32291,85 @@ phases:
     agent: python-senior-tacit
     claimed_by: python-senior-tacit
     claimed_at: '2026-05-12T14:22:38.640876+00:00'
+    done_at: '2026-05-12T14:33:32.703502+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - docs/tasca-mcp-interface-v0.1.md — read defaults, error envelope shape, and
+      section 5 tool definitions.
+
+      - src/tasca/shell/mcp/server.py — read current MCP tool registrations, parameter
+      docs/defaults, and handler forwarding pattern.
+
+      - src/tasca/shell/mcp/entrypoints.py — read runtime defaults and entrypoint
+      implementations; no business logic moved.
+
+      - tests/unit/mcp/test_mcp_server.py — read expected MCP unit surface.
+
+      - tests/integration/test_mcp.py — read MCP protocol/tool discovery integration
+      expectations.
+
+
+      ## Tool-Contract Source Evidence
+
+      - New source module: src/tasca/shell/mcp/tool_contracts.py.
+
+      - Tools covered: patron_register, patron_get, table_create, table_join, table_get,
+      table_list, table_delete_batch, table_export, table_say, table_listen, table_control,
+      table_update, table_wait, seat_heartbeat, seat_list, connect, connection_status.
+
+      - Defaults/docs centralized: RECOMMENDED_DEFAULTS, ERROR_RESPONSE_SHAPE, TOOL_CONTRACTS,
+      TOOL_CONTRACTS_BY_NAME carry tool names, spec names, parameter docs, defaults,
+      spec/source anchors, and runtime entrypoint strings without runtime behavior.
+
+
+      ## Scope Guardrail
+
+      - Runtime registration changed in this step: NO.
+
+      - Business behavior moved in this step: NO.
+
+
+      ## Commit hash(es)
+
+      - Worktree commit: f0ad5230f52af43b90d01b142aba592def6702f3.
+
+      - Mainline squash commit: 77cd0d7 [vectl] step-dup_foundation.mcp-tool-contracts-source
+      completed.
+
+
+      ## Files changed
+
+      - src/tasca/shell/mcp/tool_contracts.py
+
+      - tests/unit/mcp/test_tool_contracts.py
+
+
+      ## Verification commands/output
+
+      Worktree: ruff passed; pytest tests/unit/mcp/test_tool_contracts.py -q => 4
+      passed; invar_guard(changed=True) passed.
+
+      Mainline final-state gate: `uv run ruff check src/tasca/shell/mcp/tool_contracts.py
+      tests/unit/mcp/test_tool_contracts.py` => all checks passed; `uv run pytest
+      tests/unit/mcp/test_tool_contracts.py tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py`
+      => 142 passed; `uv run invar guard --changed` => passed, 0 errors/warnings.
+
+
+      ## Spec link
+
+      - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/recommended-defaults-v0-1
+
+      - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/error-response-shape
+
+      - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools
+
+
+      ## Gaps/Notes
+
+      - Server adoption is intentionally deferred.
+
+      - server.py and entrypoints.py still hand-maintain docs/defaults until downstream
+      adoption consumes tool_contracts.py.'
   - id: dup_foundation.wiring-audit
     name: Wiring completeness audit for shared operation foundation
     status: pending

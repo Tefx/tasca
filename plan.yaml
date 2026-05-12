@@ -32705,6 +32705,10 @@ phases:
       proves closure for both failed reports: dup_foundation.spec-conformance and
       dup_foundation.wiring-audit
 
+      - Follow-up retest step retest-foundation-mcp-table-create-defaults is OPEN/PASS
+      and proves closure for the remaining B2 table_create runtime/tool-contract surface
+      and B4 ParameterContract default blockers
+
       - No unresolved blocker-class divergence remains for patron.register dedup/idempotency,
       table.create shape/defaults, Markdown export format, MCP ParameterContract defaults,
       stale-version/concurrent control proof, shared-op runtime adoption, tool_contracts
@@ -32713,8 +32717,8 @@ phases:
       - Batch-delete spec ambiguity has explicit clarification ownership or non-intersection
       proof
 
-      - Ready for dup_adoption only after the aggregated retest provides a structured
-      gate decision basis'
+      - Ready for dup_adoption only after both retest steps provide structured gate
+      decision bases with gate_open_allowed=true'
     evidence_template: '## refs Read Confirmation (MANDATORY)
 
 

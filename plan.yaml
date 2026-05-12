@@ -37258,7 +37258,7 @@ phases:
       \ confirmation."
   - id: spec-conformance-retest-b1-b9
     name: Retest spec conformance for B1-B9 remediation
-    status: claimed
+    status: done
     description: 'step_type: test
 
       step_intent: retest_green
@@ -37465,6 +37465,135 @@ phases:
     agent: spec-verifier-tacit
     claimed_by: spec-verifier-tacit
     claimed_at: '2026-05-12T19:51:43.518979+00:00'
+    done_at: '2026-05-12T19:58:46.644009+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - `docs/tasca-mcp-interface-v0.1.md`: READ. Key passages: error envelope `error.code/message/details`;
+      closed-state rejects and dedup exception; dedup `return_existing`; control/update
+      permissions; table create/get shapes; table.control append+status; mentions
+      and table.say patron rules; listen/export sequence semantics.
+
+      - `docs/tasca-http-api-v0.1.md`: READ. Key passages: admin auth and standard
+      error envelope; REST table/patron/saying/control mappings.
+
+      - `docs/tasca-technical-design-v0.1.md`: READ. Key passages: closed-state rejects;
+      idempotent writes; atomic table.control; HTTP+MCP error envelope; permission
+      matrix; mention strictness; export JSONL order/control inclusion.
+
+      - `docs/foundation-conformance-wiring-dispositions.md`: READ. Key passages:
+      patron dedup return-existing split; table create canonical shape ownership/non-intersections;
+      batch-delete ambiguity and downstream clarification.
+
+
+      ## Spec-Conformance Retest Closure
+
+      verdict: PASS
+
+      blockers: []
+
+      gate_open_allowed: true
+
+
+      ## B1-B9 Closure Matrix
+
+      - B1_auth_error_envelope: PASS — REST unauthenticated admin endpoint returns
+      standard `{error:{code,message,details}}`; proof in focused pytest and API auth/error
+      helpers.
+
+      - B2_standard_error_envelope: PASS — REST and MCP errors include `code`, `message`,
+      `details` where required; proof in focused pytest and ad hoc assertions.
+
+      - B3_rest_dedup_missing: PASS — REST patron/table create dedup returns original
+      successful response; proof in focused pytest.
+
+      - B4_rest_patron_shape: PASS — REST patron register/get expose canonical shape;
+      proof in focused pytest.
+
+      - B5_rest_table_create_shape: PASS — REST table create exposes canonical table
+      shape plus compatibility fields; proof in focused pytest.
+
+      - B6_mcp_control_update_permissions: PASS — creator/host/human-admin may control/update;
+      unauthorized attempts fail before mutation; proof in focused pytest and ad hoc
+      runtime proof.
+
+      - B7_table_say_agent_patron_required: PASS — agent `table_say` requires `patron_id`;
+      missing patron_id returns error and no saying is persisted.
+
+      - B8_table_say_limit_and_mention_order: PASS — ambiguous mentions and over-limit
+      content reject before append; default content max 65536 verified.
+
+      - B9_batch_delete_response_contract: PASS — batch delete returns `deleted_count`
+      and `failed`, retaining `deleted_ids` compatibility.
+
+
+      ## NEEDS_TEST Closure Matrix
+
+      - dedup return-existing behavior: PROVEN — repeated writes with same `dedup_id`
+      return same IDs/sequences/responses.
+
+      - control atomic append/status behavior: PROVEN — control sayings and status/version
+      mutation are atomic; failures do not partially mutate.
+
+      - closed-control dedup precedence: PROVEN — repeated close with same dedup after
+      closed returns cached success and appends no extra saying.
+
+      - closed/paused table.say behavior: PROVEN — paused say succeeds; closed say
+      fails and does not append.
+
+      - export order/control events: PROVEN — JSONL saying lines ordered `[0,1,2]`
+      include pause/close control events.
+
+
+      ## Runtime Evidence
+
+      - `./.venv/bin/python -m pytest tests/integration/test_rest_spec_conformance_remediation.py
+      tests/unit/mcp/test_spec_conformance_remediation.py -q` → 9 passed.
+
+      - Ad hoc MCP behavioral proof: unauthorized error codes `PERMISSION_DENIED/PERMISSION_DENIED`;
+      ambiguous code `AMBIGUOUS_MENTION`; limit code `LIMIT_EXCEEDED`; closed say
+      code `OPERATION_NOT_ALLOWED`; persisted sequences after failures `[0,1,2]`;
+      export saying sequences `[0,1,2]`; export control events pause/close.
+
+      - `./.venv/bin/python -m pytest tests/unit/api/test_tables_routes.py::TestBatchDeleteTables::test_batch_delete_closed_tables
+      -q` → 1 passed.
+
+      - Worktree `git status --short`: clean.
+
+
+      ## Closure Fields
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      observed_result: green
+
+      failure_alignment: Prior B1-B9 blockers and NEEDS_TEST items retested as closed;
+      no remaining blocker-class divergence, unproven behavior, or blocking ambiguity
+      found.
+
+      verdict: PASS
+
+      blockers: []
+
+      orchestrator_action_hint: COMPLETE
+
+      product_implementation_files_modified: no
+
+      Commit hash(es): none
+
+      gate_open_allowed: true
+
+      uncertainty_sources: []
+
+
+      ## Mainline Merge/Verification Barrier
+
+      - Branch `vectl/step-spec-conformance-retest-b1-b9` was clean and verification-only.
+
+      - `git merge --squash vectl/step-spec-conformance-retest-b1-b9` reported `Already
+      up to date. (nothing to squash)`, so no product delta required a new mainline
+      commit.'
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

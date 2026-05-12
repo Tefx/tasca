@@ -33991,7 +33991,7 @@ phases:
   steps:
   - id: web_mermaid_stream_fix.reproduce-red
     name: Reproduce Mermaid stream rendering gap
-    status: claimed
+    status: done
     description: "step_type: test\nstep_intent: test_define_red\nexpected_result:\
       \ red\nagent: integration-verifier\n\nDefine a focused regression test that\
       \ exposes the current discussion-stream Mermaid rendering gap before product\
@@ -34089,6 +34089,57 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-05-12T09:27:29.692342+00:00'
+    done_at: '2026-05-12T09:45:00.443431+00:00'
+    evidence: "## refs Read Confirmation\n- docs/tasca-web-uiux-v0.1.md — Markdown\
+      \ rendering MVP requires saying `content` to render Markdown, including Mermaid\
+      \ diagrams as fenced code blocks using official Mermaid parse/render with SVG\
+      \ sanitization.\n- docs/adr-001-mermaid-rendering.md — ADR accepts client-side\
+      \ Mermaid rendering and says Mermaid diagrams are fenced code blocks; exports\
+      \ remain code blocks, but Web UI renders diagrams.\n- docs/tasca-technical-design-v0.1.md\
+      \ — §8.2 requires client-side Mermaid rendering, forbids init directives, and\
+      \ requires sanitized SVG output.\n- web/src/components/Stream.tsx — Stream currently\
+      \ renders `saying.content` through `ReactMarkdown` with `remarkGfm` only; no\
+      \ Mermaid renderer is wired into the Markdown `code` component path.\n- web/src/components/Stream.test.tsx\
+      \ — Existing Stream coverage only covered live-region announcement behavior;\
+      \ no Mermaid fenced block regression existed.\n- web/src/rendering/mermaid.tsx\
+      \ — Existing secure `MermaidRenderer` renders sanitized Mermaid SVG with `aria-label=\"\
+      Mermaid diagram\"` and strips init directives.\n\n## Expected-Red Test Definition\
+      \ Evidence\nstep_intent: test_define_red\nexpected_result: red\nobserved_result:\
+      \ `npm test -- Stream.test.tsx` exits non-zero with 1 failing test because `<code\
+      \ class=\"language-mermaid\">` is still present.\nfailure_alignment: The focused\
+      \ test fails exactly because Mermaid fenced Markdown in `saying.content` renders\
+      \ as ordinary Markdown code instead of a Mermaid diagram.\nverdict: PASS\nblockers:\
+      \ []\nproduct_implementation_files_modified: false\nEXPECTED_RED_ACCEPTED: Focused\
+      \ regression test exposes the pre-fix Stream Mermaid rendering gap without product\
+      \ code changes.\n\n## Structured Receipt\n1. Action Summary: Added an expected-red\
+      \ Stream regression test for documented Mermaid fenced Markdown in `saying.content`.\n\
+      2. Verification Run:\n   - Worker: `npm test -- Stream.test.tsx -t \"renders\
+      \ documented mermaid fences\"` → exit 1, expected red.\n   - Worker: `npm test\
+      \ -- Stream.test.tsx` → exit 1, expected red with 3 existing tests passing and\
+      \ 1 new test failing.\n   - Mainline final-state verification: `npm test --\
+      \ Stream.test.tsx -t \"renders documented mermaid fences\"` exited 1 with the\
+      \ expected failure that `code.language-mermaid` is still present.\n3. Artifacts\
+      \ Modified: `web/src/components/Stream.test.tsx`\n\n## Behavioral Proof Register\n\
+      - Stream saying.content Mermaid fence renders as Mermaid diagram: UNPROVEN (intended\
+      \ downstream gap)\n- Expected-red regression exposes ordinary-code rendering\
+      \ gap: PROVEN\n- Product implementation untouched by test step: PROVEN\n\n**Test\
+      \ file(s) changed**:\n```\nweb/src/components/Stream.test.tsx\n```\n\n**Product\
+      \ files modified**: none\n\n**Spec-derived fixture**:\n```markdown\n```mermaid\n\
+      flowchart TD\n  A --> B\n```\n```\n\n**Command executed**:\n```\nnpm test --\
+      \ Stream.test.tsx -t \"renders documented mermaid fences\"\nnpm test -- Stream.test.tsx\n\
+      ```\n\n**Observed pre-fix result**:\n```\nFAIL src/components/Stream.test.tsx\
+      \ > Stream Mermaid Markdown rendering > renders documented mermaid fences in\
+      \ saying content as diagrams, not ordinary code\nError: expect(element).not.toBeInTheDocument()\n\
+      \nexpected document not to contain element, found <code class=\"language-mermaid\"\
+      >flowchart TD A --> B</code> instead\n\nTest Files 1 failed (1)\nTests 1 failed\
+      \ | 3 passed (4)\n```\n\n**Exposed gaps**:\n- `Stream` still renders Mermaid\
+      \ fenced `saying.content` as `<code class=\"language-mermaid\">` rather than\
+      \ using the secure Mermaid renderer.\n\n**Downstream implementation owner**:\
+      \ web_mermaid_stream_fix.wire-renderer\n\n**Commit hash(es)**: worker a1557280079c11ff4b0d635af595ecbd6c23886e;\
+      \ mainline squash 7643641\n**Files changed**: web/src/components/Stream.test.tsx\n\
+      **Spec link**: docs/tasca-web-uiux-v0.1.md Markdown rendering MVP; ADR-001;\
+      \ docs/tasca-technical-design-v0.1 §8.2\n**Gaps/Notes**: Expected-red accepted.\
+      \ No product implementation files were modified."
   - id: web_mermaid_stream_fix.wire-renderer
     name: Wire Stream Markdown code fences to secure MermaidRenderer
     status: pending

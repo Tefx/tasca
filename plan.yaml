@@ -35289,7 +35289,7 @@ phases:
       \ or plan state were inspected/mutated by worker."
   - id: dup_adoption.rest-crud-export-adoption
     name: Adopt shared create/delete/export operations in REST routes
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
       \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/patron-identity\n\
@@ -35352,6 +35352,50 @@ phases:
     agent: python-refactor-master-tacit
     claimed_by: python-refactor-master-tacit
     claimed_at: '2026-05-12T17:15:26.403383+00:00'
+    done_at: '2026-05-12T17:31:29.594718+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nRead:\n- `docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/patron-identity`\n\
+      - `docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables`\n\
+      - `docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/export`\n\
+      \n## REST Adoption Evidence\n- Commit hash(es):\n  - Worker commit: `f18eeb14c0f383d7c270f733e9019c69c00d6acb`\n\
+      \  - Mainline squash commit: `dddff5d [vectl] step-dup_adoption.rest-crud-export-adoption\
+      \ completed`\n- Files changed:\n  - `src/tasca/shell/api/routes/patrons.py`\n\
+      \  - `src/tasca/shell/api/routes/tables.py`\n  - `src/tasca/shell/api/routes/export.py`\n\
+      \  - `src/tasca/shell/services/operations/batch_delete.py`\n- Routes rewired:\n\
+      \  - POST `/patrons` now calls shared `register_patron` operation.\n  - POST\
+      \ `/tables` was already on `create_discussion_table`; retained explicit outcome\
+      \ mapping.\n  - POST `/tables/actions/batch-delete` consumes shared `BatchDeleteOperationResult.rejection_details`.\n\
+      \  - GET `/export/jsonl` and GET `/export/markdown` now consume shared `TableExportOperationResult`\
+      \ content and filename.\n- Shared operation outcomes consumed:\n  - `PatronRegistrationOutcome`\
+      \ / `PatronLookupError` / `PatronCreateError` / `PatronIdempotencyError`\n \
+      \ - `BatchDeleteOperationResult.rejection_details`\n  - `TableExportOperationResult.content`\
+      \ and filename\n- Remaining HTTP-only logic:\n  - FastAPI dependency injection/auth.\n\
+      \  - `HTTPException` status/detail mapping.\n  - Response model and Content-Disposition/media-type\
+      \ response assembly.\n  - REST structured logging.\n\n## Behavior Preservation\n\
+      - Patron register response mapping: preserves id/name/kind/created_at/is_new\
+      \ and legacy 500 detail prefixes.\n- Table create response mapping: preserved\
+      \ status 200 Table body and admin auth/logging behavior.\n- Batch delete response\
+      \ mapping: preserves 200 deleted_ids, 422 invalid_request, and 409 BATCH_PRECONDITION_FAILED\
+      \ detail shape.\n- Export header/body mapping: preserves text/plain vs application/octet-stream,\
+      \ optional Content-Disposition, and filenames from shared export outcome.\n\n\
+      ## Verification\n- Worker baseline:\n  ```text\n  .venv/bin/python -m pytest\
+      \ tests/unit/api/test_patrons_routes.py tests/unit/api/test_tables_routes.py\
+      \ tests/unit/api/test_export_routes.py tests/integration/test_api.py\n  89 passed\
+      \ in 2.76s\n  ```\n- Worker static baseline:\n  ```text\n  .venv/bin/python\
+      \ -m compileall -q src/tasca/shell/api/routes src/tasca/shell/services/operations\n\
+      \  passed\n  ```\n- Worker regression:\n  ```text\n  .venv/bin/python -m pytest\
+      \ tests/unit/api/test_patrons_routes.py tests/unit/api/test_tables_routes.py\
+      \ tests/unit/api/test_export_routes.py tests/integration/test_api.py\n  89 passed\
+      \ in 0.98s\n  ```\n- Worker invar guard changed=true: passed, 0 errors, 0 warnings.\n\
+      - Mainline final-state verification after squash merge:\n  ```text\n  uv run\
+      \ pytest tests/unit/api/test_patrons_routes.py tests/unit/api/test_tables_routes.py\
+      \ tests/unit/api/test_export_routes.py tests/integration/test_api.py -q\n  89\
+      \ passed in 1.00s\n  ```\n  ```text\n  uv run python -m compileall -q src/tasca/shell/api/routes\
+      \ src/tasca/shell/services/operations\n  passed\n  ```\n  ```text\n  uv run\
+      \ invar guard\n  status passed; errors=0; warnings=0\n  ```\n- Gaps/Notes:\n\
+      \  - Single DELETE `/tables/{table_id}` was not rewired because no shared single-delete\
+      \ operation exists in scoped touch paths; changing it to batch-delete would\
+      \ alter open-table delete semantics.\n  - Worktree clean after worker commit.\n\
+      \  - No related adoption steps started; no vectl state touched by worker."
   - id: dup_adoption.mcp-shared-ops-adoption
     name: Adopt shared operations in MCP entrypoints
     status: done

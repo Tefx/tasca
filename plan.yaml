@@ -33270,7 +33270,7 @@ phases:
   - web_mermaid_stream_fix
   steps:
   - id: finalization.verify-full-plan
-    name: Full-plan verification after transport consolidation
+    name: Full-plan verification after transport consolidation and Web Mermaid fix
     status: pending
     description: 'step_type: verification
 
@@ -33279,7 +33279,8 @@ phases:
       agent: integration-verifier-tacit
 
 
-      Full-plan-check at the nearest boundary after cross-module integration.
+      Full-plan-check at the nearest boundary after cross-module integration and the
+      Web Mermaid stream rendering fix.
 
 
       Downstream gate protected:
@@ -33294,8 +33295,12 @@ phases:
       - targeted REST/MCP/API/unit/integration suites covering changed transport and
       shared-operation seams
 
-      - regression evidence for atomic control, limits adoption, export, and tool-schema
-      consolidation
+      - frontend rendering/security regression checks covering `web_mermaid_stream_fix`,
+      including Stream Mermaid rendering, Markdown raw-HTML protection, Mermaid init
+      stripping, and SVG sanitizer tests
+
+      - regression evidence for atomic control, limits adoption, export, tool-schema
+      consolidation, and Web Mermaid discussion rendering
 
 
       If this step finds blocker-class issues, remediation ownership must be created
@@ -33304,54 +33309,87 @@ phases:
       this remediation run at this boundary, not deferred to a later surprise gate
 
       - evidence covers both main path and highest-risk failure path (atomic control
-      + limits/body mapping)
+      + limits/body mapping + Web Mermaid Stream rendering/security)
+
+      - frontend evidence includes Stream Mermaid rendering regression, Markdown security,
+      Mermaid init stripping, SVG sanitization, and build/typecheck coverage
 
       - any discovered blocker gets explicit disposition'
-    evidence_template: '## Verification Report
+    evidence_template: '## refs Read Confirmation (MANDATORY)
 
-
-      ### refs Read Confirmation (MANDATORY)
 
       For each ref in this step:
 
-      - <filename> — key passage or "NOT READ: <reason>"
+      - web/src/components/Stream.tsx — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/mermaid.tsx — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/svg-sanitizer.ts — key passage or "NOT READ: <reason>"
+
+      - docs/tasca-web-uiux-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-001-mermaid-rendering.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-002-mermaid-svg-sanitization.md — key passage or "NOT READ: <reason>"
 
 
       If no refs were provided, state: "No refs for this step."
 
 
-      ### Full-Plan Commands
+      ## Full-Plan Verification Evidence
+
+
+      **Commands executed**:
 
       ```
 
-      <exact commands>
-
-      ```
-
-
-      ### Output Summary
-
-      ```
-
-      <actual output>
+      <paste full repo/backend/frontend commands>
 
       ```
 
 
-      ### Highest-Risk Failure Path
+      **Transport/shared-operation results**:
 
-      - Atomic control regression:
+      ```
 
-      - Limits/body regression:
+      <paste relevant output>
 
-      - Tool-schema/runtime regression:
+      ```
 
 
-      ### Disposition
+      **Web Mermaid regression results**:
 
-      - PASS / ISSUES_FOUND / INCOMPLETE
+      ```
+
+      <paste Stream/Mermaid/Markdown/SVG sanitizer/build output>
+
+      ```
+
+
+      **Behavioral Proof Register**:
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      | --- | --- | --- | --- | --- | --- | --- |
+
+      | web_mermaid_stream_fix | Discussion stream Mermaid rendering remains green
+      at full-plan boundary | frontend focused tests/build | <ref> | PROVEN/NEEDS_TEST/UNPROVEN
+      | <path> | <basis> |
+
+
+      **Blocking disposition**:
+
+      - <none or list blockers with remediation owner>
 
       '
+    refs:
+    - web/src/components/Stream.tsx
+    - web/src/rendering/mermaid.tsx
+    - web/src/rendering/svg-sanitizer.ts
+    - docs/tasca-web-uiux-v0.1.md
+    - docs/adr-001-mermaid-rendering.md
+    - docs/adr-002-mermaid-svg-sanitization.md
     agent: integration-verifier-tacit
   - id: finalization.doc-sync
     name: Sync documentation with consolidated transport behavior

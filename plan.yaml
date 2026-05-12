@@ -33808,7 +33808,7 @@ phases:
   - ux_a11y
   - security_fix3
   steps:
-  - id: reproduce-red
+  - id: web_mermaid_stream_fix.reproduce-red
     name: Reproduce Mermaid stream rendering gap
     status: pending
     description: "step_type: test\nstep_intent: test_define_red\nexpected_result:\

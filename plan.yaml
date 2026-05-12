@@ -32428,7 +32428,7 @@ phases:
     agent: integration-verifier-tacit
   - id: dup_guardrails.parity-contract-capture
     name: Capture REST/MCP parity contract
-    status: claimed
+    status: done
     description: 'step_type: review
 
       verification_scope: phase-check
@@ -32559,6 +32559,145 @@ phases:
     agent: spec-verifier-tacit
     claimed_by: spec-verifier-tacit
     claimed_at: '2026-05-12T09:25:40.035639+00:00'
+    done_at: '2026-05-12T09:43:30.274946+00:00'
+    evidence: '## refs Read Confirmation
+
+      - docs/tasca-http-api-v0.1.md — Read endpoint mappings, admin requirements,
+      human saying constraints, and export endpoints.
+
+      - docs/tasca-mcp-interface-v0.1.md — Read invariants, idempotency scope/return-existing
+      behavior, patron/table/control/say contracts.
+
+      - docs/tasca-technical-design-v0.1.md — Read atomic operation requirements,
+      public contract consolidation, and export formatting requirements.
+
+      - src/tasca/shell/api/routes/patrons.py — Read REST patron response/dedup-by-name
+      behavior.
+
+      - src/tasca/shell/api/routes/tables.py — Read REST table create/update/delete/batch-delete
+      owners.
+
+      - src/tasca/shell/api/routes/export.py — Read REST export orchestration and
+      response-header shaping.
+
+      - src/tasca/shell/api/routes/tables_control.py — Read REST control transition
+      validation and atomic_control_table delegation.
+
+      - src/tasca/shell/api/routes/sayings.py — Read REST saying state/limit enforcement
+      and wait/listen shapes.
+
+      - src/tasca/shell/mcp/entrypoints.py — Read MCP patron/table/batch-delete/export/say/control
+      implementations.
+
+      - src/tasca/shell/mcp/server.py — Read MCP tool schema/signature owner.
+
+      - src/tasca/shell/mcp/entrypoint_logic.py — Read MCP payload shaping and compatibility
+      fields.
+
+      - tests/unit/api/test_tables_routes.py — Read REST auth, batch-delete, control,
+      and conflict tests.
+
+      - tests/unit/api/test_export_routes.py — Read REST export ordering/delegation/download
+      tests.
+
+      - tests/unit/mcp/test_mcp_server.py — Read MCP compatibility, batch-delete,
+      export, and error envelope tests.
+
+      - tests/integration/test_mcp.py — Read MCP discovery, full-cycle, closed-table,
+      dedup, and batch-delete integration tests.
+
+
+      ## Preservation Register
+
+      | Operation | Spec ref | Current REST owner | Current MCP owner | Shared semantic
+      to preserve | Transport-local shaping to keep local | Disposition |
+
+      | --- | --- | --- | --- | --- | --- | --- |
+
+      | Patron registration | HTTP patron; MCP patron.register; idempotency | patrons.py
+      | server.py/entrypoints.py/entrypoint_logic.py | Stable identity and return-existing
+      semantics | REST direct model vs MCP envelope/compat fields | Preserve MCP compatibility
+      fields; note REST dedup_id drift |
+
+      | Table creation | HTTP tables; MCP table.create | tables.py | server.py/entrypoints.py
+      | Open table, version 1, generated ID, context/creator | REST admin + Table
+      model; MCP tool envelope/current id/question shape | Preserve current surfaces
+      pending migration |
+
+      | Batch delete | Current public REST/MCP behavior | tables.py | server.py/entrypoints.py
+      | Closed-only all-or-nothing cascade delete | REST HTTP 409 detail vs MCP error
+      envelope | Shared semantics; response wrapping local |
+
+      | Export | HTTP export; tech design export | export.py | server.py/entrypoints.py
+      | Fetch table/all sayings and delegate to core formatting | REST raw text/download
+      headers; MCP content/format/table_id envelope | Preserve shared core formatting
+      and local wrappers |
+
+      | Control | HTTP control; MCP table.control; tech atomicity | tables_control.py
+      | server.py/entrypoints.py/entrypoint_logic.py | State transitions, terminal
+      closed, control audit saying + status | REST admin-human request; MCP patron/dedup/_next_action
+      | Blocker-class MCP atomicity drift captured |
+
+      | Saying-limit enforcement | MCP limits; HTTP human say | sayings.py | server.py/entrypoints.py
+      | Closed rejection, paused soft behavior, server-side limits | REST human/admin/Saying
+      model; MCP mentions/dedup/guidance fields | Preserve shared limit semantics;
+      test before moving ownership |
+
+
+      ## Blocker-Class Drift
+
+      - Atomic control semantics: REST delegates to atomic_control_table; MCP appends
+      control saying then updates status separately, so MCP atomicity must not be
+      preserved as contract.
+
+      - Limits enforcement ownership: REST and MCP enforce through different paths;
+      add cross-transport limit tests before deletion/refactor.
+
+      - Export orchestration ownership: shared core formatting is correct; REST headers/download
+      and MCP envelope remain local.
+
+      - MCP tool-schema ownership: server.py is public schema surface; add schema
+      snapshot tests for field drift.
+
+
+      ## Authority Notes
+
+      - Backward-compatible fields that are binding: MCP patron name/id/name/kind/is_new
+      fields; table id/question/context fields; table_join initial_sayings; table_say
+      compat + mentions fields; REST export download headers.
+
+      - Fields that are cleanup candidates: MCP batch-delete docstring mismatch, MCP
+      table_create spec drift, REST patron missing dedup/alias/meta, REST control
+      missing dedup_id, MCP table_say ignored saying_type/reply_to_sequence.
+
+      - Remaining ambiguities: HTTP thin-wrapper language conflicts with current direct
+      REST shapes; HTTP error envelope drift is broader than this guardrail; MCP control
+      idempotency scope omits speaker key.
+
+
+      ## Artifact and Commit
+
+      - Worker artifact: evidence/dup_guardrails-parity-contract-capture.md
+
+      - Worker commit: 8562569aa0904e122248aa013da2753c06fb2c27
+
+      - Mainline squash commit: 886b0736b0f9428891ba6c704755a1e11725e1c7
+
+
+      ## Verification
+
+      - Worker commands: git status --short; git diff -- evidence/dup_guardrails-parity-contract-capture.md;
+      git log -5 --oneline; git add; git commit; git rev-parse HEAD.
+
+      - Mainline final-state verification: `git show --name-only --format=oneline
+      -1 && test -f evidence/dup_guardrails-parity-contract-capture.md && git diff
+      --quiet HEAD~1 -- src web` passed.
+
+      - Files changed: evidence/dup_guardrails-parity-contract-capture.md
+
+      - Product code modified: none.
+
+      - Gaps/Notes: Static review artifact only; no product code modified.'
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

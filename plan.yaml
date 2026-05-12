@@ -32229,7 +32229,7 @@ phases:
       passes.'
   - id: dup_foundation.mcp-tool-contracts-source
     name: Create MCP tool-contract source of truth
-    status: pending
+    status: claimed
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior-tacit\n\nAnchors:\n- spec_refs:\n  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/recommended-defaults-v0-1\n\
       \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/error-response-shape\n\
@@ -32289,6 +32289,8 @@ phases:
     depends_on:
     - retest-mid-gate
     agent: python-senior-tacit
+    claimed_by: python-senior-tacit
+    claimed_at: '2026-05-12T14:22:38.640876+00:00'
   - id: dup_foundation.wiring-audit
     name: Wiring completeness audit for shared operation foundation
     status: pending

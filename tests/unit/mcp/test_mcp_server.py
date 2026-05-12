@@ -33,6 +33,7 @@ from tasca.shell.mcp.server import (
     table_update,
     table_wait,
 )
+from tasca.shell.mcp.tool_contracts import TOOL_CONTRACTS, TOOL_CONTRACTS_BY_NAME
 from tasca.shell.services.limited_saying_service import TableSayError, TableSayErrorKind
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.table_repo import create_table, update_table
@@ -75,6 +76,39 @@ def override_db(test_db: sqlite3.Connection) -> Generator[None]:
 def unique_name(base: str = "Agent") -> str:
     """Generate a unique name using UUID."""
     return f"{base}-{uuid.uuid4().hex[:8]}"
+
+
+@pytest.mark.asyncio
+async def test_mcp_runtime_registration_uses_centralized_tool_contracts() -> None:
+    """Runtime tool discovery reads names, docs, and defaults from tool_contracts.py."""
+    import tasca.shell.mcp.server as server
+
+    registered = {tool.name: tool for tool in await server.mcp.list_tools()}
+
+    assert set(registered) == {contract.tool_name for contract in TOOL_CONTRACTS}
+
+    for contract in TOOL_CONTRACTS:
+        tool = registered[contract.tool_name]
+        assert tool.description == contract.description
+        assert set(tool.parameters["properties"]) == {
+            parameter.name for parameter in contract.parameters
+        }
+        for parameter in contract.parameters:
+            schema = tool.parameters["properties"][parameter.name]
+            assert schema["description"] == parameter.description
+            if parameter.required:
+                assert parameter.name in tool.parameters["required"]
+            else:
+                assert schema.get("default") == parameter.default
+
+    table_wait_defaults = {
+        parameter.name: parameter.default
+        for parameter in TOOL_CONTRACTS_BY_NAME["table_wait"].parameters
+    }
+    assert (
+        registered["table_wait"].parameters["properties"]["limit"]["default"]
+        == table_wait_defaults["limit"]
+    )
 
 
 # =============================================================================

@@ -1,9 +1,9 @@
 """Declarative MCP tool surface contracts.
 
-This module is intentionally data-only: it names the public MCP tools and records
-their parameter defaults, parameter documentation, and source anchors for future
+This module is intentionally runtime-neutral: it names the public MCP tools and
+records their parameter defaults, parameter documentation, and source anchors for
 server registration. Runtime handlers and transport behavior remain in
-``server.py``/``entrypoints.py`` until the adoption step wires this source in.
+``server.py``/``entrypoints.py``.
 """
 
 from __future__ import annotations
@@ -110,8 +110,18 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
         "Create a new discussion table.",
         "Returns the table id, invite_code, web_url, status ('open'), version (1), creator_id, host_ids, metadata, policy, and board. If dedup_id matches a recent creation, returns the original table.",
         (
-            P("title", "MCP-spec table title; required unless legacy question is provided", False, None),
-            P("question", "Legacy alias for title; accepted for backward compatibility", False, None),
+            P(
+                "title",
+                "MCP-spec table title; required unless legacy question is provided",
+                False,
+                None,
+            ),
+            P(
+                "question",
+                "Legacy alias for title; accepted for backward compatibility",
+                False,
+                None,
+            ),
             P("context", "Optional background context to frame the discussion", False, None),
             P(
                 "creator_patron_id",
@@ -119,8 +129,18 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
                 False,
                 None,
             ),
-            P("created_by", "MCP-spec creator patron id; preferred over creator_patron_id", False, None),
-            P("host_ids", "MCP-spec host patron ids; defaults to creator when omitted", False, None),
+            P(
+                "created_by",
+                "MCP-spec creator patron id; preferred over creator_patron_id",
+                False,
+                None,
+            ),
+            P(
+                "host_ids",
+                "MCP-spec host patron ids; defaults to creator when omitted",
+                False,
+                None,
+            ),
             P("metadata", "MCP-spec arbitrary table metadata", False, None),
             P("policy", "MCP-spec neutral policy object stored and surfaced by Tasca", False, None),
             P("board", "MCP-spec shared board object stored and surfaced by Tasca", False, None),
@@ -226,7 +246,12 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
                 False,
                 None,
             ),
-            P("saying_type", "Saying type: 'text' (default), 'control', or 'system'", False, SPEC_PARAMETER_DEFAULTS["table_say.saying_type"]),
+            P(
+                "saying_type",
+                "Saying type: 'text' (default), 'control', or 'system'",
+                False,
+                SPEC_PARAMETER_DEFAULTS["table_say.saying_type"],
+            ),
             P(
                 "mentions",
                 "List of mention targets: patron UUIDs, aliases, display names, or 'all'. Error if a handle matches multiple patrons",
@@ -426,6 +451,28 @@ def parameter_contract(tool_name: str, parameter_name: str) -> ParameterContract
         if parameter.name == parameter_name:
             return parameter
     raise KeyError(f"Unknown MCP parameter: {tool_name}.{parameter_name}")
+
+
+# @invar:allow shell_result: Declarative MCP metadata lookup for runtime registration, not an I/O boundary.
+def tool_contract(tool_name: str) -> ToolContract:
+    """Return the authoritative ToolContract for runtime registration.
+
+    >>> tool_contract("table_wait").description.startswith("This is the primary loop tool")
+    True
+    """
+    return TOOL_CONTRACTS_BY_NAME[tool_name]
+
+
+# @invar:allow shell_result: Declarative MCP metadata lookup for runtime defaults, not an I/O boundary.
+def parameter_default(tool_name: str, parameter_name: str) -> object | None:
+    """Return the runtime default from centralized MCP parameter metadata.
+
+    >>> parameter_default("table_join", "history_limit")
+    10
+    >>> parameter_default("table_say", "mentions") is None
+    True
+    """
+    return parameter_contract(tool_name, parameter_name).default
 
 
 # @invar:allow shell_result: Declarative MCP metadata adapter returns Pydantic FieldInfo for FastMCP.

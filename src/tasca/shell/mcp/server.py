@@ -63,7 +63,11 @@ from tasca.shell.mcp.proxy import (
 # Tools that must always run locally (never forwarded to upstream)
 LOCAL_ONLY_TOOLS: frozenset[str] = frozenset({"connect", "connection_status"})
 from tasca.shell.mcp.responses import error_response  # noqa: E402
-from tasca.shell.mcp.tool_contracts import SPEC_PARAMETER_DEFAULTS, parameter_field  # noqa: E402
+from tasca.shell.mcp.tool_contracts import (  # noqa: E402
+    parameter_default,
+    parameter_field,
+    tool_contract,
+)
 
 # Transport types for MCP server
 TransportType = Literal["stdio", "http", "sse", "streamable-http"]
@@ -233,63 +237,88 @@ logger = get_logger(__name__)
 
 from tasca.shell.mcp import entrypoints as ep  # noqa: E402
 
-DEFAULT_HISTORY_LIMIT = ep.DEFAULT_HISTORY_LIMIT
-DEFAULT_HISTORY_MAX_BYTES = ep.DEFAULT_HISTORY_MAX_BYTES
 VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
-def patron_register(
-    display_name: Annotated[str, parameter_field("patron_register", "display_name")] = None,
-    alias: Annotated[str, parameter_field("patron_register", "alias")] = None,
-    meta: Annotated[dict[str, Any], parameter_field("patron_register", "meta")] = None,
-    patron_id: Annotated[str, parameter_field("patron_register", "patron_id")] = None,
-    dedup_id: Annotated[str, parameter_field("patron_register", "dedup_id")] = None,
-    name: Annotated[str, parameter_field("patron_register", "name")] = None,
-    kind: Annotated[Literal["agent", "human"], parameter_field("patron_register", "kind")] = "agent",
-) -> dict[str, Any]:
-    """Register a new agent or human patron with a stable identity.
+def _contract_tool(tool_name: str):
+    """Register an MCP tool using centralized contract metadata."""
+    contract = tool_contract(tool_name)
+    return mcp.tool(name=contract.tool_name, description=contract.description)
 
-    Returns the patron_id, display_name, alias, meta, and created_at timestamp.
-    If dedup_id matches a recent registration (within 24h), returns the original patron.
-    """
+
+# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
+@_contract_tool("patron_register")
+def patron_register(
+    display_name: Annotated[
+        str, parameter_field("patron_register", "display_name")
+    ] = parameter_default("patron_register", "display_name"),
+    alias: Annotated[str, parameter_field("patron_register", "alias")] = parameter_default(
+        "patron_register", "alias"
+    ),
+    meta: Annotated[dict[str, Any], parameter_field("patron_register", "meta")] = parameter_default(
+        "patron_register", "meta"
+    ),
+    patron_id: Annotated[str, parameter_field("patron_register", "patron_id")] = parameter_default(
+        "patron_register", "patron_id"
+    ),
+    dedup_id: Annotated[str, parameter_field("patron_register", "dedup_id")] = parameter_default(
+        "patron_register", "dedup_id"
+    ),
+    name: Annotated[str, parameter_field("patron_register", "name")] = parameter_default(
+        "patron_register", "name"
+    ),
+    kind: Annotated[
+        Literal["agent", "human"], parameter_field("patron_register", "kind")
+    ] = parameter_default("patron_register", "kind"),
+) -> dict[str, Any]:
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.patron_register(display_name, alias, meta, patron_id, dedup_id, name, kind)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("patron_get")
 def patron_get(
     patron_id: Annotated[str, parameter_field("patron_get", "patron_id")],
 ) -> dict[str, Any]:
-    """Retrieve patron details by ID.
-
-    Returns the patron's display_name, alias, meta, and registration info.
-    Error: NOT_FOUND if the patron_id does not exist.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.patron_get(patron_id)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_create")
 def table_create(
-    title: Annotated[str, parameter_field("table_create", "title")] = None,
-    question: Annotated[str, parameter_field("table_create", "question")] = None,
-    context: Annotated[str, parameter_field("table_create", "context")] = None,
-    creator_patron_id: Annotated[str, parameter_field("table_create", "creator_patron_id")] = None,
-    created_by: Annotated[str, parameter_field("table_create", "created_by")] = None,
-    host_ids: Annotated[list[str], parameter_field("table_create", "host_ids")] = None,
-    metadata: Annotated[dict[str, Any], parameter_field("table_create", "metadata")] = None,
-    policy: Annotated[dict[str, Any], parameter_field("table_create", "policy")] = None,
-    board: Annotated[dict[str, Any], parameter_field("table_create", "board")] = None,
-    dedup_id: Annotated[str, parameter_field("table_create", "dedup_id")] = None,
+    title: Annotated[str, parameter_field("table_create", "title")] = parameter_default(
+        "table_create", "title"
+    ),
+    question: Annotated[str, parameter_field("table_create", "question")] = parameter_default(
+        "table_create", "question"
+    ),
+    context: Annotated[str, parameter_field("table_create", "context")] = parameter_default(
+        "table_create", "context"
+    ),
+    creator_patron_id: Annotated[
+        str, parameter_field("table_create", "creator_patron_id")
+    ] = parameter_default("table_create", "creator_patron_id"),
+    created_by: Annotated[str, parameter_field("table_create", "created_by")] = parameter_default(
+        "table_create", "created_by"
+    ),
+    host_ids: Annotated[list[str], parameter_field("table_create", "host_ids")] = parameter_default(
+        "table_create", "host_ids"
+    ),
+    metadata: Annotated[
+        dict[str, Any], parameter_field("table_create", "metadata")
+    ] = parameter_default("table_create", "metadata"),
+    policy: Annotated[
+        dict[str, Any], parameter_field("table_create", "policy")
+    ] = parameter_default("table_create", "policy"),
+    board: Annotated[dict[str, Any], parameter_field("table_create", "board")] = parameter_default(
+        "table_create", "board"
+    ),
+    dedup_id: Annotated[str, parameter_field("table_create", "dedup_id")] = parameter_default(
+        "table_create", "dedup_id"
+    ),
 ) -> dict[str, Any]:
-    """Create a new discussion table.
-
-    Returns the table id, question, context, status ('open'), version (1),
-    and created_at timestamp. If dedup_id matches a recent creation, returns
-    the original table.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_create(
         question=question,
         context=context,
@@ -305,100 +334,97 @@ def table_create(
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_join")
 def table_join(
-    table_id: Annotated[str, parameter_field("table_join", "table_id")] = None,
-    patron_id: Annotated[str, parameter_field("table_join", "patron_id")] = None,
-    invite_code: Annotated[str, parameter_field("table_join", "invite_code")] = None,
-    history_limit: Annotated[int, parameter_field("table_join", "history_limit")] = DEFAULT_HISTORY_LIMIT,
-    history_max_bytes: Annotated[int, parameter_field("table_join", "history_max_bytes")] = DEFAULT_HISTORY_MAX_BYTES,
+    table_id: Annotated[str, parameter_field("table_join", "table_id")] = parameter_default(
+        "table_join", "table_id"
+    ),
+    patron_id: Annotated[str, parameter_field("table_join", "patron_id")] = parameter_default(
+        "table_join", "patron_id"
+    ),
+    invite_code: Annotated[str, parameter_field("table_join", "invite_code")] = parameter_default(
+        "table_join", "invite_code"
+    ),
+    history_limit: Annotated[
+        int, parameter_field("table_join", "history_limit")
+    ] = parameter_default("table_join", "history_limit"),
+    history_max_bytes: Annotated[
+        int, parameter_field("table_join", "history_max_bytes")
+    ] = parameter_default("table_join", "history_max_bytes"),
 ) -> dict[str, Any]:
-    """Join an existing table and get initial history.
-
-    Returns table metadata, sequence_latest, and an initial block containing
-    recent sayings and next_sequence. Use next_sequence as since_sequence in
-    your first table_wait call.
-
-    Error: NOT_FOUND if table_id/invite_code is invalid.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_join(table_id, patron_id, invite_code, history_limit, history_max_bytes)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_get")
 def table_get(
     table_id: Annotated[str, parameter_field("table_get", "table_id")],
 ) -> dict[str, Any]:
-    """Get current table state including status, version, and metadata.
-
-    Error: NOT_FOUND if the table does not exist.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_get(table_id)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_list")
 def table_list(
-    status: Annotated[Literal["open", "closed", "paused", "all"], parameter_field("table_list", "status")] = "open",
+    status: Annotated[
+        Literal["open", "closed", "paused", "all"], parameter_field("table_list", "status")
+    ] = parameter_default("table_list", "status"),
 ) -> dict[str, Any]:
-    """List tables with optional status filter.
-
-    Returns a tables array and total_count. Defaults to showing only open tables.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_list(status)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_delete_batch")
 def table_delete_batch(
     ids: Annotated[list[str], parameter_field("table_delete_batch", "ids")],
 ) -> dict[str, Any]:
-    """Batch-delete multiple tables.
-
-    Returns deleted_count and a failed array for any IDs that could not be deleted.
-    Error: INVALID_REQUEST if more than 100 IDs are provided.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_delete_batch(ids)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_export")
 def table_export(
     table_id: Annotated[str, parameter_field("table_export", "table_id")],
-    format: Annotated[Literal["markdown", "jsonl"], parameter_field("table_export", "format")] = "markdown",
+    format: Annotated[
+        Literal["markdown", "jsonl"], parameter_field("table_export", "format")
+    ] = parameter_default("table_export", "format"),
 ) -> dict[str, Any]:
-    """Export the full discussion from a table.
-
-    Returns the formatted content and a suggested filename.
-    Error: NOT_FOUND if the table does not exist.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_export(table_id, format)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_say")
 def table_say(
     table_id: Annotated[str, parameter_field("table_say", "table_id")],
     content: Annotated[str, parameter_field("table_say", "content")],
-    speaker_kind: Annotated[Literal["agent", "human"], parameter_field("table_say", "speaker_kind")] = "agent",
-    patron_id: Annotated[str, parameter_field("table_say", "patron_id")] = None,
-    speaker_name: Annotated[str, parameter_field("table_say", "speaker_name")] = None,
-    saying_type: Annotated[Literal["text", "control", "system"], parameter_field("table_say", "saying_type")] = SPEC_PARAMETER_DEFAULTS["table_say.saying_type"],
-    mentions: Annotated[list[str], parameter_field("table_say", "mentions")] = None,
-    reply_to_sequence: Annotated[int, parameter_field("table_say", "reply_to_sequence")] = None,
-    dedup_id: Annotated[str, parameter_field("table_say", "dedup_id")] = None,
+    speaker_kind: Annotated[
+        Literal["agent", "human"], parameter_field("table_say", "speaker_kind")
+    ] = parameter_default("table_say", "speaker_kind"),
+    patron_id: Annotated[str, parameter_field("table_say", "patron_id")] = parameter_default(
+        "table_say", "patron_id"
+    ),
+    speaker_name: Annotated[str, parameter_field("table_say", "speaker_name")] = parameter_default(
+        "table_say", "speaker_name"
+    ),
+    saying_type: Annotated[
+        Literal["text", "control", "system"], parameter_field("table_say", "saying_type")
+    ] = parameter_default("table_say", "saying_type"),
+    mentions: Annotated[list[str], parameter_field("table_say", "mentions")] = parameter_default(
+        "table_say", "mentions"
+    ),
+    reply_to_sequence: Annotated[
+        int, parameter_field("table_say", "reply_to_sequence")
+    ] = parameter_default("table_say", "reply_to_sequence"),
+    dedup_id: Annotated[str, parameter_field("table_say", "dedup_id")] = parameter_default(
+        "table_say", "dedup_id"
+    ),
 ) -> dict[str, Any]:
-    """Append a message (saying) to a table.
-
-    Returns saying_id, sequence number, created_at, and mention resolution
-    results (mentions_all, mentions_resolved, mentions_unresolved).
-
-    Errors:
-    - NOT_FOUND: table does not exist
-    - OPERATION_NOT_ALLOWED: table is closed
-    - LIMIT_EXCEEDED: content exceeds max size; shorten and retry
-    - AMBIGUOUS_MENTION: a mention handle matched multiple patrons; use patron_id
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_say(
         table_id,
         content,
@@ -413,140 +439,133 @@ def table_say(
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_listen")
 def table_listen(
     table_id: Annotated[str, parameter_field("table_listen", "table_id")],
-    since_sequence: Annotated[int, parameter_field("table_listen", "since_sequence")] = -1,
-    limit: Annotated[int, parameter_field("table_listen", "limit")] = 50,
+    since_sequence: Annotated[
+        int, parameter_field("table_listen", "since_sequence")
+    ] = parameter_default("table_listen", "since_sequence"),
+    limit: Annotated[int, parameter_field("table_listen", "limit")] = parameter_default(
+        "table_listen", "limit"
+    ),
 ) -> dict[str, Any]:
-    """Get recent sayings from a table (non-blocking).
-
-    Returns immediately with any sayings newer than since_sequence. Use
-    table_wait instead if you want to block until new sayings arrive.
-
-    Returns sayings array, next_sequence, and current table status/version.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_listen(table_id, since_sequence, limit)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_control")
 def table_control(
     table_id: Annotated[str, parameter_field("table_control", "table_id")],
-    action: Annotated[Literal["pause", "resume", "close"], parameter_field("table_control", "action")],
+    action: Annotated[
+        Literal["pause", "resume", "close"], parameter_field("table_control", "action")
+    ],
     speaker_name: Annotated[str, parameter_field("table_control", "speaker_name")],
-    patron_id: Annotated[str, parameter_field("table_control", "patron_id")] = None,
-    reason: Annotated[str, parameter_field("table_control", "reason")] = None,
-    dedup_id: Annotated[str, parameter_field("table_control", "dedup_id")] = None,
+    patron_id: Annotated[str, parameter_field("table_control", "patron_id")] = parameter_default(
+        "table_control", "patron_id"
+    ),
+    reason: Annotated[str, parameter_field("table_control", "reason")] = parameter_default(
+        "table_control", "reason"
+    ),
+    dedup_id: Annotated[str, parameter_field("table_control", "dedup_id")] = parameter_default(
+        "table_control", "dedup_id"
+    ),
 ) -> dict[str, Any]:
-    """Pause, resume, or close a table.
-
-    Appends a CONTROL saying for audit trail. Only the table creator, hosts,
-    or human admins can perform control actions.
-
-    Returns table_status and control_saying_sequence.
-    Errors: INVALID_STATE if the transition is not allowed, PERMISSION_DENIED.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_control(table_id, action, speaker_name, patron_id, reason, dedup_id)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_update")
 def table_update(
     table_id: Annotated[str, parameter_field("table_update", "table_id")],
     expected_version: Annotated[int, parameter_field("table_update", "expected_version")],
     patch: Annotated[dict[str, Any], parameter_field("table_update", "patch")],
     speaker_name: Annotated[str, parameter_field("table_update", "speaker_name")],
-    patron_id: Annotated[str, parameter_field("table_update", "patron_id")] = None,
-    dedup_id: Annotated[str, parameter_field("table_update", "dedup_id")] = None,
+    patron_id: Annotated[str, parameter_field("table_update", "patron_id")] = parameter_default(
+        "table_update", "patron_id"
+    ),
+    dedup_id: Annotated[str, parameter_field("table_update", "dedup_id")] = parameter_default(
+        "table_update", "dedup_id"
+    ),
 ) -> dict[str, Any]:
-    """Update table metadata using optimistic concurrency.
-
-    Use this to set host_ids, moderation policy, shared board notes, or
-    arbitrary metadata. The table version is bumped on success.
-
-    Returns the updated table with new version.
-    Errors: VERSION_CONFLICT (includes actual_version for retry), PERMISSION_DENIED.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_update(table_id, expected_version, patch, speaker_name, patron_id, dedup_id)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("table_wait")
 def table_wait(
     table_id: Annotated[str, parameter_field("table_wait", "table_id")],
-    since_sequence: Annotated[int, parameter_field("table_wait", "since_sequence")] = -1,
-    wait_ms: Annotated[int, parameter_field("table_wait", "wait_ms")] = 10000,
-    limit: Annotated[int, parameter_field("table_wait", "limit")] = 50,
-    include_table: Annotated[bool, parameter_field("table_wait", "include_table")] = False,
+    since_sequence: Annotated[
+        int, parameter_field("table_wait", "since_sequence")
+    ] = parameter_default("table_wait", "since_sequence"),
+    wait_ms: Annotated[int, parameter_field("table_wait", "wait_ms")] = parameter_default(
+        "table_wait", "wait_ms"
+    ),
+    limit: Annotated[int, parameter_field("table_wait", "limit")] = parameter_default(
+        "table_wait", "limit"
+    ),
+    include_table: Annotated[
+        bool, parameter_field("table_wait", "include_table")
+    ] = parameter_default("table_wait", "include_table"),
 ) -> dict[str, Any]:
-    """Long-poll for new sayings (blocks up to wait_ms).
-
-    This is the primary loop tool. Returns when new sayings arrive or timeout
-    expires. An empty sayings array on timeout is normal (not an error).
-
-    Returns sayings array and next_sequence. Pass next_sequence as
-    since_sequence in your next call.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("seat_heartbeat")
 def seat_heartbeat(
     table_id: Annotated[str, parameter_field("seat_heartbeat", "table_id")],
-    patron_id: Annotated[str, parameter_field("seat_heartbeat", "patron_id")] = None,
-    state: Annotated[Literal["running", "idle", "done"], parameter_field("seat_heartbeat", "state")] = SPEC_PARAMETER_DEFAULTS["seat_heartbeat.state"],
-    ttl_ms: Annotated[int, parameter_field("seat_heartbeat", "ttl_ms")] = SPEC_PARAMETER_DEFAULTS["seat_heartbeat.ttl_ms"],
-    dedup_id: Annotated[str, parameter_field("seat_heartbeat", "dedup_id")] = None,
-    seat_id: Annotated[str, parameter_field("seat_heartbeat", "seat_id")] = None,
+    patron_id: Annotated[str, parameter_field("seat_heartbeat", "patron_id")] = parameter_default(
+        "seat_heartbeat", "patron_id"
+    ),
+    state: Annotated[
+        Literal["running", "idle", "done"], parameter_field("seat_heartbeat", "state")
+    ] = parameter_default("seat_heartbeat", "state"),
+    ttl_ms: Annotated[int, parameter_field("seat_heartbeat", "ttl_ms")] = parameter_default(
+        "seat_heartbeat", "ttl_ms"
+    ),
+    dedup_id: Annotated[str, parameter_field("seat_heartbeat", "dedup_id")] = parameter_default(
+        "seat_heartbeat", "dedup_id"
+    ),
+    seat_id: Annotated[str, parameter_field("seat_heartbeat", "seat_id")] = parameter_default(
+        "seat_heartbeat", "seat_id"
+    ),
 ) -> dict[str, Any]:
-    """Maintain seat presence at a table (TTL-based keepalive).
-
-    Call every ~60s during the loop to signal you are still active.
-    Set state='done' when exiting the discussion to cleanly depart.
-
-    Returns expires_at timestamp.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.seat_heartbeat(table_id, patron_id, state, ttl_ms, dedup_id, seat_id)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("seat_list")
 def seat_list(
     table_id: Annotated[str, parameter_field("seat_list", "table_id")],
-    active_only: Annotated[bool, parameter_field("seat_list", "active_only")] = True,
+    active_only: Annotated[bool, parameter_field("seat_list", "active_only")] = parameter_default(
+        "seat_list", "active_only"
+    ),
 ) -> dict[str, Any]:
-    """List seats at a table to see who is present.
-
-    Returns seats array (with patron_id, state, last_heartbeat) and active_count.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.seat_list(table_id, active_only)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("connect")
 async def connect(
-    url: Annotated[str, parameter_field("connect", "url")] = None,
-    token: Annotated[str, parameter_field("connect", "token")] = None,
+    url: Annotated[str, parameter_field("connect", "url")] = parameter_default("connect", "url"),
+    token: Annotated[str, parameter_field("connect", "token")] = parameter_default(
+        "connect", "token"
+    ),
 ) -> dict[str, Any]:
-    """Switch between local and remote MCP mode.
-
-    With url + optional token: connect to a remote Tasca server.
-    With no arguments: disconnect and return to local (standalone) mode.
-
-    Returns mode ('local' or 'remote'), url, and connection health info.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return await ep.connect(url, token)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
-@mcp.tool
+@_contract_tool("connection_status")
 def connection_status() -> dict[str, Any]:
-    """Check current connection mode and health.
-
-    Returns mode ('local' or 'remote'), url, and is_healthy flag.
-    """
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.connection_status()
 
 

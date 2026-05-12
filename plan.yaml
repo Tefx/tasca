@@ -35925,7 +35925,7 @@ phases:
       Markdown preservation.'
   - id: web_mermaid_stream_fix.retest-spec-conformance-blockers
     name: Retest spec-conformance blockers for Mermaid stream rendering
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       step_intent: retest_green
@@ -36097,3 +36097,116 @@ phases:
     agent: spec-verifier
     claimed_by: spec-verifier
     claimed_at: '2026-05-12T13:42:12.225272+00:00'
+    done_at: '2026-05-12T13:51:33.359711+00:00'
+    evidence: '**Headline**: PASS
+
+      **Blocking Status**: CLOSED
+
+      **Proof-Gap Status**: NONE
+
+      **Verdict**: PASS
+
+
+      ## refs Read Confirmation (MANDATORY)
+
+      - docs/adr-002-mermaid-svg-sanitization.md — strict allowlist, `use` forbidden
+      by default, internal fragment URLs only, DOMParser/imported nodes preferred,
+      tests fail if forbidden tag/attr survives.
+
+      - docs/adr-001-mermaid-rendering.md — client-side Mermaid, strict sanitizer,
+      exports keep Mermaid as code blocks and never rendered SVG.
+
+      - docs/tasca-web-uiux-v0.1.md — Mermaid fenced code rendering with raw Markdown
+      stored and sanitized SVG before display.
+
+      - docs/tasca-technical-design-v0.1.md — JSONL/Markdown export contracts and
+      ADR-002 rendering security requirements.
+
+      - web/src/rendering/svg-sanitizer.ts — ADR-002 explicit element/attr sets, URL
+      regexes for internal fragments, DOMParser/importNode/XMLSerializer flow, removal
+      of unallowed elements/attrs.
+
+      - web/src/rendering/svg-sanitizer.security.test.ts — forbidden elements/attrs
+      and unsafe URL/reference corpus.
+
+      - tests/unit/api/test_export_routes.py — JSONL/Markdown Mermaid export preservation
+      tests.
+
+      - tests/unit/test_cli_export.py — CLI Markdown/JSONL Mermaid export preservation
+      tests.
+
+      - src/tasca/core/export_service.py — raw saying.content emitted in JSONL/Markdown;
+      no rendering/truncation.
+
+
+      ## Spec Conformance Retest Report
+
+      - Original failed step: web_mermaid_stream_fix.spec-conformance.
+
+      - Fix step reviewed: web_mermaid_stream_fix.fix-spec-conformance-blockers.
+
+      - B1 disposition: CLOSED / PASS. ADR-002 strict allowlist implemented and covered
+      by tests.
+
+      - B2 disposition: CLOSED / PASS. Only internal fragments are allowed; unsafe
+      schemes/relative/mailto variants covered by tests.
+
+      - B3 disposition: CLOSED / PASS. API and CLI JSONL/Markdown export tests prove
+      Mermaid fenced blocks remain code blocks and no `<svg` is emitted.
+
+      - R8 disposition: REMEDIATED. Mermaid SVG path uses DOMParser + document.importNode
+      + replaceChildren; unrelated KaTeX dangerouslySetInnerHTML is non-intersecting.
+
+
+      ## Behavioral Proof Register
+
+      - B1_strict_allowlist: PROVEN
+
+      - B2_internal_url_reference_only: PROVEN
+
+      - B3_exports_keep_mermaid_code_blocks_no_svg: PROVEN
+
+      - R8_no_raw_svg_innerHTML: PROVEN
+
+
+      ## Runtime Evidence
+
+      Verifier worktree: `npm test -- svg-sanitizer.security.test.ts` => 57 passed
+      after local npm ci; `./.venv/bin/python -m pytest tests/unit/api/test_export_routes.py
+      tests/unit/test_cli_export.py` => 47 passed; `npm run build` => success with
+      chunk-size warnings only.
+
+      Mainline final-state gate: `npm --prefix web test -- --run src/rendering/svg-sanitizer.security.test.ts`
+      => 57 passed; `npm --prefix web run build` => success with chunk-size warnings
+      only; `uv run pytest tests/unit/api/test_export_routes.py tests/unit/test_cli_export.py`
+      => 47 passed.
+
+
+      ## Closure Fields
+
+      verdict: PASS
+
+      blockers: []
+
+      gate_open_allowed: true
+
+      orchestrator_action_hint: COMPLETE
+
+
+      ## Commit hash(es)
+
+      - none (verify-only)
+
+      - Reviewed fix lineage: ae1435f; verifier worktree HEAD: 08d0b532ee82d45f644a43ed64da59103bcd2cd6.
+
+
+      ## Files changed
+
+      - Auditor changes: none.
+
+
+      ## Gaps/Notes
+
+      - No blockers remain for B1/B2/B3/R8.
+
+      - No empty commit created.'

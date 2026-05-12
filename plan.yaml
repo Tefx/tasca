@@ -33906,3 +33906,190 @@ phases:
 
       '
     agent: integration-verifier
+  - id: web_mermaid_stream_fix.wire-renderer
+    name: Wire Stream Markdown code fences to secure MermaidRenderer
+    status: pending
+    description: 'step_type: implementation
+
+      tags: [integration]
+
+      agent: frontend-engineer
+
+
+      Complete the existing discussion-stream Markdown rendering pipeline so `saying.content`
+      Mermaid fenced code blocks render through the already-hardened MermaidRenderer.
+
+
+      Required path:
+
+      - Source: `web/src/components/Stream.tsx` receives `saying.content` Markdown.
+
+      - Transform: ReactMarkdown code component override detects block code fences
+      with `language-mermaid` / `mermaid` class names.
+
+      - Sink: `web/src/rendering/mermaid.tsx::MermaidRenderer` renders SVG via Mermaid
+      and `sanitizeSvg()` before DOM insertion.
+
+
+      Implementation constraints:
+
+      - Reuse the existing `MermaidRenderer`; do NOT create a second Mermaid/SVG injection
+      path.
+
+      - Do NOT add `rehype-raw`; raw HTML in Markdown must remain disabled.
+
+      - Do NOT bypass `stripMermaidInitDirectives()` or `sanitizeSvg()`.
+
+      - Preserve normal inline code and non-Mermaid fenced code behavior.
+
+      - Add or update stream CSS so diagrams fit inside log blocks without horizontal
+      layout breakage.
+
+      - Keep export behavior unchanged: JSONL/Markdown exports retain Mermaid as code
+      blocks.
+
+
+      ## Known Risks (from project history)
+
+      - Mermaid security controls previously existed in isolation while the Stream
+      path bypassed them. Verify the source-to-sink path, not only the renderer module.
+
+      - Output/rendering changes can regress ordinary code blocks and Markdown security.
+      Check Mermaid, normal code, and raw HTML cases together.
+
+
+      ## Gate Preview (what the gate WILL reject)
+
+      1. Mermaid fences still render as ordinary code blocks in the discussion stream.
+
+      2. A new unsanitized `dangerouslySetInnerHTML` or raw SVG insertion path is
+      added outside `MermaidRenderer`.
+
+      3. Raw HTML rendering is enabled or `rehype-raw` is added without a separate
+      approved security design.
+
+      4. Mermaid init directives survive into rendered output.
+
+      5. Ordinary fenced code, inline code, or GFM table rendering regresses.
+
+      6. The visible diagram overflows/breaks the log block layout on narrow widths.
+
+
+      ## Frontend Completion Criteria (rendering required)
+
+      This is a FRONTEND IMPLEMENTATION step. Completion requires BOTH:
+
+      1. Logic correctness: Mermaid code fence detection routes only Mermaid block
+      code to MermaidRenderer.
+
+      2. Rendering completeness: a saying containing Mermaid Markdown produces visible
+      DOM/SVG diagram output.
+
+
+      A component that only computes routing decisions without visible rendered output
+      does NOT satisfy this step. Evidence MUST include rendered output proof (DOM
+      snapshot, test renderer output, or screenshot).
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes inputs and produces
+      outputs that vary based on those inputs. Private stub classes or placeholder
+      components do not satisfy this requirement.'
+    verification: '- local-check protecting `web_mermaid_stream_fix.gate`
+
+      - Main path: a Stream test renders a saying.content Mermaid fence as a Mermaid
+      diagram through `MermaidRenderer`.
+
+      - Failure path: invalid Mermaid and init-directive cases fail gracefully while
+      preserving sanitizer/security behavior.
+
+      - Integration proof: evidence shows `saying.content` → ReactMarkdown code override
+      → MermaidRenderer → sanitized SVG DOM output.
+
+      - Frontend build and relevant rendering/security tests pass.'
+    evidence_template: '## Integration Evidence
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - docs/tasca-web-uiux-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-001-mermaid-rendering.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-002-mermaid-svg-sanitization.md — key passage or "NOT READ: <reason>"
+
+      - docs/tasca-technical-design-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - web/src/components/Stream.tsx — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/mermaid.tsx — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/svg-sanitizer.ts — key passage or "NOT READ: <reason>"
+
+      - web/src/styles/table/stream.css — key passage or "NOT READ: <reason>"
+
+      - web/src/components/Stream.test.tsx — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      **Command or test exercising the full path**:
+
+      ```
+
+      <paste exact focused test/build commands>
+
+      ```
+
+
+      **Actual output** (paste, not "tests pass"):
+
+      ```
+
+      <paste stdout/stderr or test runner output>
+
+      ```
+
+
+      **Path exercised**: `saying.content` → `Stream.tsx` → `ReactMarkdown` code override
+      → `MermaidRenderer` → `sanitizeSvg` → rendered DOM/SVG
+
+
+      **Visible rendering proof**:
+
+      ```
+
+      <paste DOM snapshot/test renderer output/screenshot reference showing rendered
+      diagram>
+
+      ```
+
+
+      **Security boundary proof**:
+
+      - raw HTML remains disabled: <evidence>
+
+      - Mermaid init directive stripping still covered: <evidence>
+
+      - SVG sanitizer still used: <evidence>
+
+      - no new unsanitized SVG insertion path: <evidence>
+
+
+      **Regression notes**:
+
+      - ordinary fenced code behavior: <evidence>
+
+      - inline code behavior: <evidence>
+
+      - invalid Mermaid fallback: <evidence>
+
+      '
+    depends_on:
+    - web_mermaid_stream_fix.reproduce-red
+    agent: frontend-engineer

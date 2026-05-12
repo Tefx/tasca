@@ -33708,7 +33708,7 @@ phases:
       final verifier worktree clean.'
   - id: fix-foundation-conformance-wiring
     name: Fix foundation conformance and wiring blockers
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -33964,6 +33964,128 @@ phases:
     agent: python-senior-tacit
     claimed_by: python-senior-tacit
     claimed_at: '2026-05-12T14:50:59.164090+00:00'
+    done_at: '2026-05-12T15:29:10.613682+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      Read shared operation modules, tool_contracts, server.py, entrypoints.py, export_service.py,
+      REST export route, unit/integration tests, and relevant MCP/HTTP/technical export
+      specs.
+
+
+      ## Aggregated Blocker Closure Report
+
+      Source failed steps: dup_foundation.spec-conformance; dup_foundation.wiring-audit.
+
+
+      | Family | Status | Files changed | Root cause | Closure proof | Deferred owner
+      / non-intersection proof |
+
+      | --- | --- | --- | --- | --- | --- |
+
+      | B1 patron.register dedup/idempotency | CLOSED | patron_registration.py, entrypoints.py,
+      tests | display_name was used as dedup identity and dedup_id omitted | explicit
+      dedup_id idempotency plus same-name compatibility tests pass | N/A |
+
+      | B2 table.create shape/defaults | CLOSED with bounded deferral | table_creation.py,
+      entrypoints.py, dispositions doc, tests | shared op modeled only legacy question/context/creator
+      | MCP response now includes spec alias/default objects; deferrals documented
+      | metadata/policy/board persistence and real invite/web URL routing deferred
+      to dup_adoption with non-intersection rationale |
+
+      | B3 Markdown export format/board order | CLOSED | export_service.py, table_export.py,
+      export route, tests | formatter used headed transcript blocks and no board section
+      | metadata block, stable Board section, `[seq=...] timestamp (speaker): content`
+      transcript; tests pass | N/A |
+
+      | B4 MCP ParameterContract defaults | CLOSED | tool_contracts.py, server.py,
+      tests | parameter defaults drifted from centralized defaults | defaults aligned
+      for table_say.saying_type, seat_heartbeat.state/ttl_ms; server builds FieldInfo
+      from contracts | N/A |
+
+      | R3 stale-version/concurrent control runtime proof | CLOSED | entrypoints.py,
+      test_mcp.py | proof was local/unit only | MCP integration racing-control test
+      passes | N/A |
+
+      | W-B1 shared ops production adoption | CLOSED | entrypoints.py, export route,
+      operation files | adapters bypassed shared operations | MCP uses shared patron/table
+      create/export/control/batch-delete; REST export uses shared export op | N/A
+      |
+
+      | W-B2 tool_contracts runtime consumption | CLOSED | tool_contracts.py, server.py,
+      tests | Field descriptions/defaults duplicated | server builds FastMCP FieldInfo
+      from tool_contracts; regression covers runtime metadata source | N/A |
+
+      | W-B3 dead_export hatch density | CLOSED | operation files | hatches masked
+      test-only shared ops | all dead_export hatches under services/operations removed;
+      production callers exist | N/A |
+
+      | Batch-delete spec ambiguity | CLOSED | entrypoints.py, dispositions doc |
+      metadata exists but normative spec section ambiguous | MCP runtime wired to
+      shared batch-delete op; clarification owner documented | dup_adoption.batch-delete-spec-clarification;
+      non-intersecting with foundation wiring gate |
+
+
+      ## Root Cause vs Symptom
+
+      Root cause: shared operations and declarative MCP contracts were introduced
+      without production runtime adoption, creating duplicate/partial truth surfaces.
+      Symptoms included stale defaults, dead_export hatches, display-name dedup behavior,
+      Markdown drift, and missing runtime race proof.
+
+
+      ## Commit hash(es)
+
+      - Worktree commits: be93c9fbccb902ea0273e0de5b16378d43f1c6ed, 30f371278bdfdcbad675fbd94691028cab654466.
+
+      - Mainline squash commit: 82dcc64 [vectl] step-fix-foundation-conformance-wiring
+      completed.
+
+
+      ## Files changed
+
+      - docs/foundation-conformance-wiring-dispositions.md
+
+      - src/tasca/core/export_service.py
+
+      - src/tasca/shell/api/routes/export.py
+
+      - src/tasca/shell/mcp/entrypoints.py
+
+      - src/tasca/shell/mcp/server.py
+
+      - src/tasca/shell/mcp/tool_contracts.py
+
+      - src/tasca/shell/services/operations/*.py
+
+      - tests/integration/test_mcp.py
+
+      - tests/unit/api/test_export_routes.py
+
+      - tests/unit/mcp/test_mcp_server.py
+
+      - tests/unit/mcp/test_tool_contracts.py
+
+      - tests/unit/services/test_registration_creation_operations.py
+
+
+      ## Verification
+
+      Worktree final retry: full expanded pytest command => 185 passed; ruff changed
+      files => all checks passed; invar_guard(changed=True) => passed.
+
+      Mainline final-state gate: `uv run ruff check ...` => all checks passed; `uv
+      run pytest tests/unit/services/test_registration_creation_operations.py tests/unit/services/operations/test_table_control.py
+      tests/unit/mcp/test_tool_contracts.py tests/unit/mcp/test_mcp_server.py tests/unit/api/test_export_routes.py
+      tests/integration/test_mcp.py` => 185 passed; `uv run invar guard --changed`
+      => status passed, 0 errors, 24 warnings, property tests passed.
+
+
+      ## Gaps/Notes
+
+      - Invar warnings are shell_pure_logic/dead_param style warnings, not dead_export
+      hatches; retest must decide if any warning intersects gate.
+
+      - Pre-existing uv.lock dirty state was not committed.'
   - id: retest-foundation-conformance-wiring
     name: Retest foundation conformance and wiring blocker closure
     status: pending

@@ -34349,7 +34349,7 @@ phases:
       \ report."
   - id: fix-foundation-mcp-table-create-defaults
     name: Fix MCP table.create surface and ParameterContract defaults
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: defect_repair\nagent: python-senior\n\
       priority: HIGH\nverification_scope: local-check protecting dup_foundation.gate\
       \ and dup_adoption unlock path\nsource_failed_steps:\n- dup_foundation.spec-conformance\n\
@@ -34442,6 +34442,65 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-12T16:04:07.697494+00:00'
+    done_at: '2026-05-12T16:17:13.911131+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n\n- docs/tasca-mcp-interface-v0.1.md\
+      \ — Lines 231-241 define `tasca.table.create` inputs: `created_by`, `title`,\
+      \ `host_ids`, `metadata`, `policy`, `board`, `dedup_id`; lines 244-254 define\
+      \ response fields including `table_id`, `invite_code`, `web_url`, `creator_id`,\
+      \ `host_ids`.\n- docs/tasca-http-api-v0.1.md — Lines 46-49 state HTTP endpoints\
+      \ are thin wrappers over MCP tools; lines 57-63 map `POST /api/v1/tables` to\
+      \ `tasca.table.create`.\n- src/tasca/shell/mcp/server.py — Lines 273-287 previously\
+      \ showed runtime `table_create` only accepted `question`, `context`, `creator_patron_id`,\
+      \ `dedup_id`, confirming B2 drift at the MCP entrypoint boundary.\n- src/tasca/shell/mcp/tool_contracts.py\
+      \ — Lines 107-127 previously showed `table_create` contract omitted spec fields;\
+      \ lines 223-234 had wrong `mentions`/`reply_to_sequence` defaults.\n- src/tasca/shell/services/operations/table_creation.py\
+      \ — Lines 59-72 show shared operation already supports `title`, `created_by`,\
+      \ `host_ids`, `metadata`, `policy`, `board`; lines 141-149 show defaults for\
+      \ host_ids/metadata/policy/board.\n\n## Fix Evidence\n- Commit hash(es):\n \
+      \ - Worker branch commit: `6e06f95 fix MCP table create defaults`\n  - Mainline\
+      \ squash commit: `fa0a0f1 [vectl] step-fix-foundation-mcp-table-create-defaults\
+      \ completed`\n\n- Files changed:\n  - `src/tasca/shell/mcp/server.py`\n  - `src/tasca/shell/mcp/entrypoints.py`\n\
+      \  - `src/tasca/shell/mcp/tool_contracts.py`\n  - `tests/unit/mcp/test_tool_contracts.py`\n\
+      \  - `tests/unit/mcp/test_mcp_server.py`\n  - `tests/integration/test_mcp.py`\n\
+      \n- Spec link:\n  - `docs/tasca-mcp-interface-v0.1.md` `tasca.table.create`\
+      \ input/output contract.\n  - `docs/tasca-http-api-v0.1.md` tool-to-HTTP mapping.\n\
+      \n- B2 closure evidence:\n  - Runtime now accepts `title`, `question`, `context`,\
+      \ `creator_patron_id`, `created_by`, `host_ids`, `metadata`, `policy`, `board`,\
+      \ `dedup_id`.\n  - Entrypoint forwards spec fields to `create_discussion_table(...)`.\n\
+      \  - `table_create` contract now includes spec fields plus legacy aliases: `title`,\
+      \ `question`, `context`, `creator_patron_id`, `created_by`, `host_ids`, `metadata`,\
+      \ `policy`, `board`, `dedup_id`.\n  - No deferred field gap remains for `table_create`;\
+      \ all documented input-surface fields are wired at MCP contract/server/entrypoint\
+      \ boundary.\n  - Regression tests prove accepted spec fields and defaulted `host_ids`,\
+      \ `metadata`, `policy`, `board`.\n  - No remaining `table_create` field gap\
+      \ intersects `dup_foundation.gate` or `dup_adoption`.\n\n- B4 closure evidence:\n\
+      \  - Optional/defaulted ParameterContract inspection output from worker:\n \
+      \   ```text\n    table_create signature: (title= None, question= None, context=\
+      \ None, creator_patron_id= None, created_by= None, host_ids= None, metadata=\
+      \ None, policy= None, board= None, dedup_id= None)\n    table_create contract\
+      \ defaults: {'title': None, 'question': None, 'context': None, 'creator_patron_id':\
+      \ None, 'created_by': None, 'host_ids': None, 'metadata': None, 'policy': None,\
+      \ 'board': None, 'dedup_id': None}\n    table_say contract defaults: {'speaker_kind':\
+      \ 'agent', 'patron_id': None, 'speaker_name': None, 'saying_type': 'text', 'mentions':\
+      \ None, 'reply_to_sequence': None, 'dedup_id': None}\n    mentions_is_none=\
+      \ True\n    reply_to_sequence_is_none= True\n    ```\n  - `tests/unit/mcp/test_tool_contracts.py::test_optional_parameter_contract_defaults_match_server_signatures`\
+      \ covers every optional/defaulted MCP ParameterContract against runtime signatures.\n\
+      \  - Explicit assertions cover `table_say.mentions is None`, `table_say.reply_to_sequence\
+      \ is None`, and `table_create.title`/spec defaults.\n\n- Commands/tests run\
+      \ by worker:\n  ```text\n  .venv/bin/python -m pytest tests/unit/mcp/test_tool_contracts.py\
+      \ tests/unit/mcp/test_mcp_server.py::TestTableCreate tests/integration/test_mcp.py::test_mcp_table_create_accepts_documented_spec_fields\
+      \ tests/integration/test_mcp.py::test_mcp_tools_list_table_create_schema_exposes_spec_fields\
+      \ -q\n  15 passed in 0.63s\n  ```\n  ```text\n  invar_guard(changed=True)\n\
+      \  status: passed; static errors=0, warnings=23; doctest passed; crosshair/property_tests\
+      \ skipped (no core files)\n  ```\n\n- Mainline final-state verification after\
+      \ squash merge:\n  ```text\n  uv run pytest tests/unit/mcp/test_tool_contracts.py\
+      \ tests/unit/mcp/test_mcp_server.py::TestTableCreate tests/integration/test_mcp.py::test_mcp_table_create_accepts_documented_spec_fields\
+      \ tests/integration/test_mcp.py::test_mcp_tools_list_table_create_schema_exposes_spec_fields\
+      \ -q\n  15 passed in 0.90s\n  ```\n  ```text\n  uv run invar guard\n  status:\
+      \ passed; errors=0; warnings=23\n  ```\n\n- Gaps/Notes:\n  - Invar reported\
+      \ existing shell warnings only; no errors.\n  - No plan/orchestrator files modified\
+      \ by worker.\n  - Unexpected `uv.lock` version drift from tooling was reverted\
+      \ before worker commit.\n  - Not Done / Blockers: none."
   - id: retest-foundation-mcp-table-create-defaults
     name: Retest MCP table.create surface and ParameterContract defaults
     status: pending

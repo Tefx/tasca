@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from returns.result import Success
+from returns.result import Failure, Success
 
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
 from tasca.shell.mcp.server import (
@@ -33,6 +33,7 @@ from tasca.shell.mcp.server import (
     table_update,
     table_wait,
 )
+from tasca.shell.services.limited_saying_service import TableSayError, TableSayErrorKind
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.table_repo import create_table, update_table
 
@@ -1801,6 +1802,52 @@ class TestStateGuardsTableSay:
 
         assert result["ok"] is True
         assert result["data"]["content"] == "This should work on paused table"
+
+    def test_table_say_maps_shared_operation_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """MCP adapter delegates append business orchestration to shared operation."""
+        from tasca.shell.mcp import entrypoints
+
+        calls: list[dict[str, str | None]] = []
+
+        def fake_operation(*_args: object, **kwargs: object) -> Failure[TableSayError]:
+            calls.append(
+                {
+                    "table_id": str(kwargs["table_id"]),
+                    "speaker_kind": str(kwargs["speaker_kind"]),
+                    "patron_id": kwargs["patron_id"],
+                    "speaker_name": str(kwargs["speaker_name"]),
+                }
+            )
+            return Failure(
+                TableSayError(
+                    kind=TableSayErrorKind.OPERATION_NOT_ALLOWED,
+                    message="Cannot add saying to table with status 'closed'. Table must be OPEN or PAUSED.",
+                    table_status="closed",
+                )
+            )
+
+        monkeypatch.setattr(entrypoints, "append_saying_operation", fake_operation)
+
+        result = table_say(
+            table_id="shared-op-table",
+            content="Hello",
+            speaker_kind="human",
+            speaker_name="Alice",
+        )
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "OPERATION_NOT_ALLOWED"
+        assert result["error"]["details"] == {"table_status": "closed"}
+        assert calls == [
+            {
+                "table_id": "shared-op-table",
+                "speaker_kind": "human",
+                "patron_id": None,
+                "speaker_name": "Alice",
+            }
+        ]
 
 
 # =============================================================================

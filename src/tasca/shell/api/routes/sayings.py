@@ -12,34 +12,31 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 import time
-from typing import TYPE_CHECKING
 
-from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from returns.result import Failure, Success
+from returns.result import Failure
 
 from tasca.config import settings
-from tasca.core.domain.patron import PatronId
-from tasca.core.domain.saying import Saying, Speaker, SpeakerKind
+from tasca.core.domain.saying import Saying
 from tasca.core.domain.table import Table, TableId
 from tasca.core.services.limits_service import (
-    LimitError,
     LimitsConfig,
     settings_to_limits_config,
 )
-from tasca.core.table_state_machine import can_say
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
-from tasca.shell.services.limited_saying_service import append_saying_with_limits
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
+from tasca.shell.logging import get_logger, log_say, log_wait_returned, log_wait_timeout
+from tasca.shell.services.limited_saying_service import (
+    TableSayError,
+    TableSayErrorKind,
+    append_saying_operation,
+)
 from tasca.shell.storage.saying_repo import (
     get_table_max_sequence,
     list_sayings_by_table,
 )
 from tasca.shell.storage.table_repo import TableNotFoundError, get_table
-from tasca.shell.logging import get_logger, log_say, log_wait_timeout, log_wait_returned
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -156,44 +153,34 @@ def _get_table_or_404(conn: sqlite3.Connection, table_id: str) -> Table:
     return result.unwrap()
 
 
-# @invar:allow shell_result: _validate_can_say helper raises HTTPException directly (no Result needed)
-# @shell_orchestration: State machine check + HTTP error mapping
-def _validate_can_say(table: Table) -> None:
-    """Validate that sayings can be added to the table.
-
-    Args:
-        table: The table to validate.
-
-    Raises:
-        HTTPException: 403 if table does not allow sayings.
-    """
-    if not can_say(table.status):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Cannot add saying to table with status '{table.status.value}'. "
-            f"Table must be OPEN or PAUSED.",
-        )
-
-
 # @invar:allow shell_result: Maps service Result failures into existing HTTP response shapes.
 # @shell_orchestration: Transport-local HTTP status/detail mapping only.
-def _raise_append_failure(error: LimitError | str) -> None:
-    """Raise the legacy HTTP response for an append-with-limits failure."""
-    if isinstance(error, LimitError):
+def _raise_table_say_failure(error: TableSayError) -> None:
+    """Raise the legacy HTTP response for a shared table_say failure."""
+    if error.kind == TableSayErrorKind.LIMIT_EXCEEDED and error.limit_error is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=LimitErrorResponse(
                 error="limit_exceeded",
-                limit_kind=error.kind.value,
-                limit=error.limit,
-                actual=error.actual,
-                message=error.message,
+                limit_kind=error.limit_error.kind.value,
+                limit=error.limit_error.limit,
+                actual=error.limit_error.actual,
+                message=error.limit_error.message,
             ).model_dump(),
         )
 
+    if error.kind == TableSayErrorKind.TABLE_NOT_FOUND:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error.message)
+
+    if error.kind == TableSayErrorKind.OPERATION_NOT_ALLOWED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error.message)
+
+    if error.kind == TableSayErrorKind.INVALID_SPEAKER:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error.message)
+
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Failed to append saying: {error}",
+        detail=error.message,
     )
 
 
@@ -234,31 +221,21 @@ async def append_saying_endpoint(
         HTTPException: 400 if limits exceeded.
         HTTPException: 500 if database operation fails.
     """
-    # Get table and validate state
-    table = _get_table_or_404(conn, table_id)
-    _validate_can_say(table)
-
-    # Create speaker
-    if data.patron_id is not None:
-        speaker = Speaker(
-            kind=SpeakerKind.AGENT,
-            name=data.speaker_name,
-            patron_id=PatronId(data.patron_id),
-        )
-    else:
-        speaker = Speaker(
-            kind=SpeakerKind.HUMAN,
-            name=data.speaker_name,
-            patron_id=None,
-        )
-
-    # Append saying through the shared service that owns limit enforcement.
-    result = append_saying_with_limits(conn, table_id, speaker, data.content, _get_limits_config())
+    speaker_kind = "agent" if data.patron_id is not None else "human"
+    result = append_saying_operation(
+        conn,
+        table_id=table_id,
+        content=data.content,
+        speaker_kind=speaker_kind,
+        patron_id=data.patron_id,
+        speaker_name=data.speaker_name,
+        limits=_get_limits_config(),
+    )
 
     if isinstance(result, Failure):
-        _raise_append_failure(result.failure())
+        _raise_table_say_failure(result.failure())
 
-    saying = result.unwrap()
+    saying = result.unwrap().saying
 
     # Log saying append
     log_say(

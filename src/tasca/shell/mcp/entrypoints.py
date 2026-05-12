@@ -15,7 +15,7 @@ from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.seat import Seat, SeatId, SeatState
 from tasca.core.domain.table import TableId, Version
-from tasca.core.services.limits_service import LimitError, LimitsConfig, settings_to_limits_config
+from tasca.core.services.limits_service import LimitsConfig, settings_to_limits_config
 from tasca.core.services.mention_service import (
     PatronMatch,
     has_ambiguous_mentions,
@@ -27,7 +27,6 @@ from tasca.core.services.seat_service import (
 )
 from tasca.core.table_state_machine import (
     can_join,
-    can_say,
 )
 from tasca.shell.logging import (
     get_logger,
@@ -76,9 +75,6 @@ from tasca.shell.mcp.entrypoint_logic import (
 from tasca.shell.mcp.entrypoint_logic import (
     silence_next_action as _silence_next_action,
 )
-from tasca.shell.mcp.entrypoint_logic import (
-    validate_speaker_constraints as _validate_speaker_constraints,
-)
 from tasca.shell.mcp.entrypoint_session_tools import (
     connect_impl as _connect_impl,
 )
@@ -92,7 +88,12 @@ from tasca.shell.mcp.entrypoint_session_tools import (
     seat_list_impl as _seat_list_impl,
 )
 from tasca.shell.mcp.responses import error_response, success_response
-from tasca.shell.services.limited_saying_service import append_saying_with_limits
+from tasca.shell.services.limited_saying_service import (
+    TableSayError,
+    TableSayErrorKind,
+    append_saying_operation,
+    validate_table_say_speaker_constraints,
+)
 from tasca.shell.services.operations.batch_delete import delete_tables_batch
 from tasca.shell.services.operations.patron_registration import (
     PatronCreateError,
@@ -676,57 +677,26 @@ def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | 
 
 
 # @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
-# @shell_complexity: Resolves optional identity across DB lookup and speaker-kind branches.
-def _resolve_speaker_for_say(
-    conn: Any,
-    actual_speaker_kind: str,
-    patron_id: str | None,
-    speaker_name: str | None,
-) -> tuple[Speaker, str, dict[str, Any] | None]:
-    """Implementation detail for MCP tool behavior."""
-    resolved_name = speaker_name
-    if resolved_name is None:
-        if patron_id is not None:
-            patron_result = get_patron(conn, PatronId(patron_id))
-            if isinstance(patron_result, Failure):
-                error = patron_result.failure()
-                if isinstance(error, PatronNotFoundError):
-                    return (
-                        Speaker(
-                            kind=SpeakerKind.AGENT,
-                            name="Unknown",
-                            patron_id=None,
-                        ),
-                        "",
-                        error_response("NOT_FOUND", f"Patron not found: {patron_id}"),
-                    )
-                return (
-                    Speaker(
-                        kind=SpeakerKind.AGENT,
-                        name="Unknown",
-                        patron_id=None,
-                    ),
-                    "",
-                    error_response("DATABASE_ERROR", f"Failed to get patron: {error}"),
-                )
-            patron = patron_result.unwrap()
-            resolved_name = patron.name
-        else:
-            resolved_name = "Human"
-
-    if actual_speaker_kind == "agent":
-        assert patron_id is not None  # validated earlier
-        return (
-            Speaker(kind=SpeakerKind.AGENT, name=resolved_name, patron_id=PatronId(patron_id)),
-            patron_id,
-            None,
+def _table_say_error_to_mcp_response(error: TableSayError) -> dict[str, Any]:
+    """Map shared table_say errors to the legacy MCP response envelope."""
+    if error.kind == TableSayErrorKind.TABLE_NOT_FOUND:
+        return error_response("NOT_FOUND", error.message)
+    if error.kind == TableSayErrorKind.OPERATION_NOT_ALLOWED:
+        return error_response(
+            "OPERATION_NOT_ALLOWED",
+            error.message,
+            {"table_status": error.table_status},
         )
-    else:
-        return (
-            Speaker(kind=SpeakerKind.HUMAN, name=resolved_name, patron_id=None),
-            "human",
-            None,
-        )
+    if error.kind == TableSayErrorKind.INVALID_SPEAKER:
+        details: dict[str, Any] = {"speaker_kind": error.speaker_kind}
+        if error.patron_id is not None:
+            details["patron_id"] = error.patron_id
+        return error_response("INVALID_REQUEST", error.message, details)
+    if error.kind == TableSayErrorKind.PATRON_NOT_FOUND:
+        return error_response("NOT_FOUND", error.message)
+    if error.kind == TableSayErrorKind.LIMIT_EXCEEDED and error.limit_error is not None:
+        return _limit_error_to_response(error.limit_error)
+    return error_response("DATABASE_ERROR", error.message)
 
 
 # @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
@@ -811,7 +781,7 @@ def _check_say_idempotency(
     return None, False
 
 
-# @shell_complexity: table lookup + can_say guard + limits enforcement + error paths
+# @shell_complexity: MCP adapter keeps idempotency/mentions/response envelope around shared table_say operation.
 # @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_say(
     table_id: str,
@@ -838,35 +808,12 @@ def table_say(
     if speaker_kind == "agent" and patron_id is None:
         patron_id = _auto_register_patron_for_say(conn, speaker_name)
 
-    # Validate speaker_kind + patron_id constraints
-    validation_error = _validate_speaker_constraints(actual_speaker_kind, patron_id)
+    validation_error = validate_table_say_speaker_constraints(actual_speaker_kind, patron_id)
     if validation_error is not None:
-        return validation_error
+        return _table_say_error_to_mcp_response(validation_error)
 
-    # Verify table exists
-    table_result = get_table(conn, TableId(table_id))
-    if isinstance(table_result, Failure):
-        error = table_result.failure()
-        if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
-
-    table = table_result.unwrap()
-
-    # Check state machine guard: CLOSED tables cannot have sayings added
-    if not can_say(table.status):
-        return error_response(
-            "OPERATION_NOT_ALLOWED",
-            f"Cannot add saying to table with status '{table.status.value}'. Table must be OPEN or PAUSED.",
-            {"table_status": table.status.value},
-        )
-
-    # Resolve speaker
-    speaker, speaker_key, speaker_error = _resolve_speaker_for_say(
-        conn, actual_speaker_kind, patron_id, speaker_name
-    )
-    if speaker_error is not None:
-        return speaker_error
+    speaker_key = patron_id if actual_speaker_kind == "agent" else "human"
+    assert speaker_key is not None
 
     # Resource key for idempotency scope: {table_id, speaker_key}
     resource_key = f"saying:{table_id}:{speaker_key}"
@@ -876,17 +823,20 @@ def table_say(
     if should_return and cached_response is not None:
         return cached_response
 
-    # Get limits configuration and append with limits check
-    limits = _limits_config_from_settings()
-    result = append_saying_with_limits(conn, table_id, speaker, content, limits)
+    result = append_saying_operation(
+        conn,
+        table_id=table_id,
+        content=content,
+        speaker_kind=actual_speaker_kind,
+        patron_id=patron_id,
+        speaker_name=speaker_name,
+        limits=_limits_config_from_settings(),
+    )
 
     if isinstance(result, Failure):
-        error = result.failure()
-        if isinstance(error, LimitError):
-            return _limit_error_to_response(error)
-        return error_response("DATABASE_ERROR", f"Failed to append saying: {error}")
+        return _table_say_error_to_mcp_response(result.failure())
 
-    saying = result.unwrap()
+    saying = result.unwrap().saying
 
     # Resolve mentions if provided
     mentions_all, mentions_resolved, mentions_unresolved, mentions_error = (

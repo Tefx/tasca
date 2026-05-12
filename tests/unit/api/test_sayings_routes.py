@@ -7,21 +7,25 @@ Uses FastAPI TestClient with an in-memory SQLite database.
 from __future__ import annotations
 
 import sqlite3
-from typing import Generator
+from collections.abc import Generator
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from returns.result import Failure
 
+from tasca.core.domain.patron import Patron, PatronId
+from tasca.core.domain.table import Table, TableId, TableStatus
 from tasca.shell.api.routes.sayings import router
+from tasca.shell.services.limited_saying_service import (
+    TableSayError,
+    TableSayErrorKind,
+)
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.patron_repo import create_patron
 from tasca.shell.storage.table_repo import create_table
-from tasca.core.domain.patron import Patron, PatronId
-from tasca.core.domain.table import Table, TableId, TableStatus
-from datetime import datetime, UTC
-
 
 # =============================================================================
 # Test Fixtures
@@ -29,7 +33,7 @@ from datetime import datetime, UTC
 
 
 @pytest.fixture
-def test_db() -> Generator[sqlite3.Connection, None, None]:
+def test_db() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with schema."""
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     apply_schema(conn)
@@ -42,7 +46,7 @@ def app(test_db: sqlite3.Connection) -> FastAPI:
     """Create a FastAPI app with sayings router and test database."""
     app = FastAPI()
 
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
+    def get_test_db() -> Generator[sqlite3.Connection]:
         yield test_db
 
     from tasca.shell.api.deps import get_db
@@ -59,7 +63,7 @@ def client(app: FastAPI) -> TestClient:
 
 
 @pytest.fixture
-def admin_client(app: FastAPI) -> Generator[TestClient, None, None]:
+def admin_client(app: FastAPI) -> Generator[TestClient]:
     """Create a test client with admin auth enabled."""
     from tasca.config import settings
 
@@ -219,6 +223,51 @@ class TestAppendSaying:
                 json={"speaker_name": "Alice", "content": "Hello"},
             )
             assert response.status_code == 401
+
+    def test_append_saying_maps_shared_operation_error(
+        self, admin_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """REST adapter delegates business append orchestration to shared operation."""
+        from tasca.shell.api.routes import sayings as sayings_route
+
+        calls: list[dict[str, str | None]] = []
+
+        def fake_operation(*_args: object, **kwargs: object) -> Failure[TableSayError]:
+            calls.append(
+                {
+                    "table_id": str(kwargs["table_id"]),
+                    "speaker_kind": str(kwargs["speaker_kind"]),
+                    "patron_id": kwargs["patron_id"],
+                    "speaker_name": str(kwargs["speaker_name"]),
+                }
+            )
+            return Failure(
+                TableSayError(
+                    kind=TableSayErrorKind.OPERATION_NOT_ALLOWED,
+                    message="Cannot add saying to table with status 'closed'. Table must be OPEN or PAUSED.",
+                    table_status="closed",
+                )
+            )
+
+        monkeypatch.setattr(sayings_route, "append_saying_operation", fake_operation)
+
+        response = admin_client.post(
+            "/tables/shared-op-table/sayings",
+            json={"speaker_name": "Alice", "content": "Hello"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == (
+            "Cannot add saying to table with status 'closed'. Table must be OPEN or PAUSED."
+        )
+        assert calls == [
+            {
+                "table_id": "shared-op-table",
+                "speaker_kind": "human",
+                "patron_id": None,
+                "speaker_name": "Alice",
+            }
+        ]
 
 
 # =============================================================================

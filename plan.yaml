@@ -32457,7 +32457,7 @@ phases:
     claimed_at: '2026-05-12T14:34:01.130275+00:00'
   - id: dup_foundation.spec-conformance
     name: Verify shared foundation against HTTP/MCP specs
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -32537,6 +32537,71 @@ phases:
     agent: spec-verifier-tacit
     claimed_by: spec-verifier-tacit
     claimed_at: '2026-05-12T14:33:55.404047+00:00'
+    done_at: '2026-05-12T14:49:48.435387+00:00'
+    evidence: '## Spec Conformance Report Outcome
+
+      Headline: FAIL / BLOCKED. This phase-check surfaced blocker-class divergences
+      and aggregated remediation ownership has been created before progression.
+
+
+      ## refs Read Confirmation (MANDATORY)
+
+      Spec verifier read: docs/tasca-http-api-v0.1.md, docs/tasca-mcp-interface-v0.1.md,
+      docs/tasca-technical-design-v0.1.md, shared operation modules, tool_contracts.py,
+      control/saying repos, and relevant tests.
+
+
+      ## Detected Blockers
+
+      - B1: patron.register dedup semantics diverge / shared operation omits dedup_id;
+      display_name dedup may collapse distinct patrons.
+
+      - B2: table.create shared operation partial vs MCP shape/defaults.
+
+      - B3: Markdown export format diverges from technical design template.
+
+      - B4: MCP defaults metadata inconsistent across centralized constants vs ParameterContract
+      defaults.
+
+      - R3 NEEDS_TEST: stale-version/concurrent table-control precedence needs transport/runtime
+      proof.
+
+      - Batch-delete spec coverage ambiguous and must receive explicit disposition.
+
+
+      ## Broad Verifier Disposition
+
+      All blocker-class items were promoted to owned remediation; none were left as
+      pre-existing/out-of-scope notes.
+
+
+      ## Batched Fix Ownership Created
+
+      Planner aggregated this failure with `dup_foundation.wiring-audit` and added:
+
+      - `fix-foundation-conformance-wiring`
+
+      - `retest-foundation-conformance-wiring`
+
+      `dup_foundation.gate` now depends on the aggregated retest, so dup_foundation/dup_adoption
+      progression remains blocked until closure is proven.
+
+
+      ## Closure rationale
+
+      Original spec-conformance step is completed as a failure/issue-detection artifact
+      per batched-fix protocol; the created fix/retest path owns actual closure.
+
+
+      ## Closure Fields
+
+      verdict: FAIL
+
+      blockers: [B1, B2, B3, B4, R3_NEEDS_TEST]
+
+      gate_open_allowed: false
+
+      orchestrator_action_hint: DO_NOT_COMPLETE'
   - id: dup_foundation.gate
     name: Gate shared application foundation
     status: pending

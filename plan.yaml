@@ -36251,6 +36251,203 @@ phases:
     depends_on:
     - dup_adoption.mid-gate
     agent: python-refactor-master-tacit
+  - id: dup_adoption.transport-say-append-shared-operation-retest
+    name: transport-say-append-shared-operation-retest
+    status: pending
+    description: 'step_type: gate
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: phase-check
+
+      agent: gate-reviewer-tacit
+
+      tags:
+
+      - integration
+
+      - retest
+
+
+      Independent retest/gate for the dup_adoption.mid-gate B1 blocker after shared
+      operation extraction.
+
+
+      As an INDEPENDENT REVIEWER, decide whether progression beyond dup_adoption.mid-gate
+      is now allowed. This retest replaces the failed OPEN/BLOCK decision for the
+      specific B1 blocker and MUST block if REST/MCP saying append business orchestration
+      remains split.
+
+
+      ## Required decision fields
+
+      Evidence MUST include these exact decision fields:
+
+      - headline: PASS | FAIL
+
+      - verdict: PASS | FAIL
+
+      - proof_gap_status: CLOSED | BLOCKING
+
+      - blocking_status: CLOSED | OPEN
+
+      - gate_open_allowed: true | false
+
+      - orchestrator_action_hint: PROCEED | DO_NOT_COMPLETE
+
+      - requirement_ref: dup_adoption.mid-gate/B1
+
+      - behavior_claim: REST and MCP saying append consume the same transport-neutral
+      shell operation for business orchestration while preserving transport-local
+      shaping.
+
+      - runtime_proof_expected: focused behavioral tests plus adapter/wiring audit
+      evidence.
+
+      - evidence_ref: <test names, commands, and file:line citations>
+
+      - closure_path: <why CLOSED, or required follow-up if OPEN>
+
+      - gate_decision_basis: <why downstream dup_adoption progression is safe or blocked>
+
+
+      ## Wiring audit required
+
+      Prove REST/MCP saying append business orchestration is shared and transport-local
+      shaping remains local:
+
+      1. Identify the shared operation and cite its file:line range.
+
+      2. Cite REST adapter call site(s) showing consumption of the shared operation.
+
+      3. Cite MCP adapter call site(s) showing consumption of the shared operation.
+
+      4. Confirm REST/MCP no longer independently own the full table lookup/state/speaker/limit/append
+      decision tree.
+
+      5. Confirm transports still own only HTTP/MCP request parsing, auth, response
+      envelope/status/next-action mapping, and idempotency compatibility fields.
+
+      6. Confirm behavioral tests cover the shared operation plus REST and MCP adapter
+      preservation.
+
+
+      Finding unresolved duplication is a SUCCESSFUL retest outcome but MUST result
+      in headline/verdict FAIL and gate_open_allowed=false.'
+    verification: '- phase-check: B1 is closed only if REST and MCP saying append
+      both consume one shared transport-neutral shell operation for table lookup,
+      state validation, speaker constraints, limit enforcement, append, and typed
+      outcome/error classification.
+
+      - Required green evidence: behavioral tests against the shared operation pass;
+      REST adapter tests pass and preserve HTTP status/response/envelope/idempotency
+      semantics; MCP adapter tests pass and preserve response envelope/error/next-action
+      semantics.
+
+      - Wiring audit: reviewer cites shared operation file:line, REST call site file:line,
+      MCP call site file:line, and verifies adapters retain only transport-local shaping.
+
+      - Decision basis: evidence includes headline/verdict/proof_gap_status/blocking_status/gate_open_allowed/orchestrator_action_hint
+      and closes or reopens the B1 proof obligation explicitly.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - src/tasca/shell/api/routes/sayings.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoints.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/services/limited_saying_service.py — key passage or "NOT READ:
+      <reason>"
+
+      - AGENTS.md — key passage or "NOT READ: <reason>"
+
+      - INVAR.md — key passage or "NOT READ: <reason>"
+
+
+      ## Retest Decision Register
+
+      - headline: PASS | FAIL
+
+      - verdict: PASS | FAIL
+
+      - proof_gap_status: CLOSED | BLOCKING
+
+      - blocking_status: CLOSED | OPEN
+
+      - gate_open_allowed: true | false
+
+      - orchestrator_action_hint: PROCEED | DO_NOT_COMPLETE
+
+      - requirement_ref: dup_adoption.mid-gate/B1
+
+      - behavior_claim: REST and MCP saying append consume the same transport-neutral
+      shell operation for business orchestration while preserving transport-local
+      shaping.
+
+      - runtime_proof_expected: focused behavioral tests plus adapter/wiring audit
+      evidence.
+
+      - evidence_ref: <test names, commands, and file:line citations>
+
+      - closure_path: <why CLOSED, or required follow-up if OPEN>
+
+      - gate_decision_basis: <why downstream dup_adoption progression is safe or blocked>
+
+
+      ## Wiring Audit
+
+      | Check | Evidence file:line | Verdict | Notes |
+
+      | --- | --- | --- | --- |
+
+      | Shared operation owns table lookup/state/speaker/limits/append/outcome classification
+      |  | PASS/FAIL |  |
+
+      | REST consumes shared operation |  | PASS/FAIL |  |
+
+      | MCP consumes shared operation |  | PASS/FAIL |  |
+
+      | REST retains only transport-local shaping |  | PASS/FAIL |  |
+
+      | MCP retains only transport-local shaping |  | PASS/FAIL |  |
+
+      | No duplicated full business orchestration remains in REST/MCP |  | PASS/FAIL
+      |  |
+
+
+      ## Behavioral Test Evidence
+
+      - Shared operation tests:
+
+      - REST adapter tests preserving status/response/envelope/idempotency semantics:
+
+      - MCP adapter tests preserving response envelope/error/next-action semantics:
+
+
+      ## Commands executed
+
+      ```
+
+      <paste exact commands and outputs>
+
+      ```
+
+
+      ## Headline
+
+      - [ ] PASS: B1 closed; progression may continue.
+
+      - [ ] FAIL: B1 remains open or evidence is insufficient; progression remains
+      blocked.
+
+      '
+    depends_on:
+    - dup_adoption.transport-say-append-shared-operation-fix
+    agent: gate-reviewer-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

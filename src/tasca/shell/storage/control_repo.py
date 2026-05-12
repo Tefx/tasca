@@ -13,16 +13,13 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from returns.result import Failure, Result, Success
 
 from tasca.core.domain.saying import Saying, SayingId, Speaker
-from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
+from tasca.core.domain.table import Table, TableStatus, TableUpdate, Version
 from tasca.core.services.saying_service import compute_next_sequence
-from tasca.core.services.table_service import VersionMismatchError
-from tasca.shell.storage.table_repo import TableNotFoundError, VersionConflictError
-
 
 # =============================================================================
 # Error Types
@@ -31,8 +28,6 @@ from tasca.shell.storage.table_repo import TableNotFoundError, VersionConflictEr
 
 class ControlError(Exception):
     """Base error for control operations."""
-
-    pass
 
 
 class ControlVersionConflictError(ControlError):
@@ -46,9 +41,17 @@ class ControlVersionConflictError(ControlError):
         expected_version: The version the client expected.
     """
 
-    def __init__(self, table_id: str, expected_version: int) -> None:
+    def __init__(
+        self,
+        table_id: str,
+        expected_version: int,
+        actual_version: int | None = None,
+        actual_status: TableStatus | None = None,
+    ) -> None:
         self.table_id = table_id
-        self.expected_version = expected_version
+        self.expected_version = Version(expected_version)
+        self.actual_version = Version(actual_version) if actual_version is not None else None
+        self.actual_status = actual_status
         super().__init__(
             f"Version conflict for table {table_id}: expected {expected_version}, but was modified"
         )
@@ -63,6 +66,8 @@ class ControlVersionConflictError(ControlError):
             "error": "version_conflict",
             "table_id": self.table_id,
             "expected_version": self.expected_version,
+            "actual_version": self.actual_version,
+            "actual_status": self.actual_status.value if self.actual_status is not None else None,
             "message": str(self),
         }
 
@@ -74,13 +79,9 @@ class ControlIntegrityError(ControlError):
     sequence number.
     """
 
-    pass
-
 
 class ControlDatabaseError(ControlError):
     """Database error during control operation."""
-
-    pass
 
 
 # @shell_orchestration: Multi-step atomic operation (BEGIN IMMEDIATE, insert saying, update table, COMMIT)
@@ -197,8 +198,22 @@ def atomic_control_table(
             # Check if update succeeded (version matched)
             if cursor.rowcount == 0:
                 # Version mismatch - concurrent modification
+                cursor.execute(
+                    "SELECT version, status FROM tables WHERE id = ?",
+                    (table_id,),
+                )
+                conflict_row = cursor.fetchone()
+                actual_version = int(conflict_row[0]) if conflict_row is not None else None
+                actual_status = TableStatus(conflict_row[1]) if conflict_row is not None else None
                 conn.rollback()
-                return Failure(ControlVersionConflictError(table_id, current_table.version))
+                return Failure(
+                    ControlVersionConflictError(
+                        table_id,
+                        current_table.version,
+                        actual_version,
+                        actual_status,
+                    )
+                )
 
             # Step 4: Commit the transaction
             conn.commit()

@@ -259,6 +259,23 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps): JSX.
     renderDiagram()
   }, [renderDiagram])
 
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !svgContent) {
+      return
+    }
+
+    const parsed = new DOMParser().parseFromString(svgContent, 'image/svg+xml')
+    const svg = parsed.documentElement
+    if (parsed.querySelector('parsererror') || svg.tagName.toLowerCase() !== 'svg') {
+      container.replaceChildren()
+      return
+    }
+
+    const importedSvg = document.importNode(svg, true)
+    container.replaceChildren(importedSvg)
+  }, [svgContent])
+
   // Handle rendering states
   if (renderState === 'rendering') {
     return (
@@ -290,16 +307,13 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps): JSX.
     )
   }
 
-  // SECURITY: svgContent has been sanitized by sanitizeSvg()
-  // It's safe to use dangerouslySetInnerHTML here because:
-  // 1. It came from mermaid.render(), not arbitrary user input
-  // 2. It was filtered through sanitizeSvg() which removes dangerous elements
-  // 3. Input was pre-sanitized by stripMermaidInitDirectives()
+  // SECURITY: svgContent has been sanitized by sanitizeSvg() and is imported
+  // via DOMParser/document.importNode in the lifecycle effect above. This avoids
+  // injecting SVG strings with innerHTML/dangerouslySetInnerHTML per ADR-002 §5.
   return (
     <div
       ref={containerRef}
       className={className}
-      dangerouslySetInnerHTML={{ __html: svgContent }}
       aria-label="Mermaid diagram"
       role="img"
     />

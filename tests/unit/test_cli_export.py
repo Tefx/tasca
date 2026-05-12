@@ -97,6 +97,15 @@ def create_test_saying(
     result.unwrap()
 
 
+MERMAID_FENCED_BLOCK = """Plan diagram:
+
+```mermaid
+graph TD
+    A[Start] --> B[Done]
+```
+"""
+
+
 # =============================================================================
 # Test: Markdown Output to Stdout
 # =============================================================================
@@ -170,6 +179,31 @@ class TestExportMarkdownStdout:
         output = stdout.getvalue()
         assert "# Empty question?" in output
         assert "_No sayings yet._" in output
+
+    def test_export_markdown_preserves_mermaid_code_fence(
+        self, test_db: sqlite3.Connection
+    ) -> None:
+        """CLI Markdown export preserves Mermaid code fences and emits no rendered SVG."""
+        table = create_test_table(test_db, "mermaid-md-table", "Mermaid markdown?")
+        create_test_saying(test_db, table.id, MERMAID_FENCED_BLOCK, speaker_name="Diagrammer")
+
+        args = argparse.Namespace(table_id=table.id, format="md", output=None)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout):
+            with redirect_stderr(stderr):
+                with patch("tasca.cli.settings") as mock_settings:
+                    mock_settings.db_path = ":memory:"
+                    with patch("sqlite3.connect", return_value=test_db):
+                        result = cmd_export(args)
+
+        output = stdout.getvalue()
+        assert result == 0
+        assert "```mermaid" in output
+        assert "graph TD" in output
+        assert "A[Start] --> B[Done]" in output
+        assert "<svg" not in output.lower()
 
 
 # =============================================================================
@@ -266,6 +300,33 @@ class TestExportJsonlStdout:
         for i, line in enumerate(lines[2:], start=0):
             saying = json.loads(line)
             assert saying["saying"]["sequence"] == i
+
+    def test_export_jsonl_preserves_mermaid_code_fence(
+        self, test_db: sqlite3.Connection
+    ) -> None:
+        """CLI JSONL export preserves raw Mermaid code fences and emits no rendered SVG."""
+        table = create_test_table(test_db, "mermaid-jsonl-table", "Mermaid jsonl?")
+        create_test_saying(test_db, table.id, MERMAID_FENCED_BLOCK, speaker_name="Diagrammer")
+
+        args = argparse.Namespace(table_id=table.id, format="jsonl", output=None)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout):
+            with redirect_stderr(stderr):
+                with patch("tasca.cli.settings") as mock_settings:
+                    mock_settings.db_path = ":memory:"
+                    with patch("sqlite3.connect", return_value=test_db):
+                        result = cmd_export(args)
+
+        output = stdout.getvalue()
+        content = json.loads(output.strip().split("\n")[2])["saying"]["content"]
+        assert result == 0
+        assert "```mermaid" in content
+        assert "graph TD" in content
+        assert "A[Start] --> B[Done]" in content
+        assert "<svg" not in content.lower()
+        assert "<svg" not in output.lower()
 
 
 # =============================================================================

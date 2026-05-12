@@ -102,6 +102,15 @@ def create_test_saying(
     result.unwrap()
 
 
+MERMAID_FENCED_BLOCK = """Plan diagram:
+
+```mermaid
+graph TD
+    A[Start] --> B[Done]
+```
+"""
+
+
 # =============================================================================
 # GET /tables/{table_id}/export/jsonl - JSONL Export Tests
 # =============================================================================
@@ -164,6 +173,27 @@ class TestExportJSONL:
             assert saying["type"] == "saying"
             assert saying["saying"]["sequence"] == i
             assert saying["saying"]["table_id"] == table.id
+
+    def test_export_jsonl_preserves_mermaid_as_raw_code_fence(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """JSONL export preserves Mermaid Markdown and never embeds rendered SVG."""
+        table = create_test_table(test_db, "table-1", "Mermaid export?")
+        create_test_saying(test_db, table.id, MERMAID_FENCED_BLOCK, speaker_name="Diagrammer")
+
+        response = client.get(f"/tables/{table.id}/export/jsonl")
+        assert response.status_code == 200
+
+        lines = response.text.strip().split("\n")
+        saying = json.loads(lines[2])
+        content = saying["saying"]["content"]
+
+        assert "```mermaid" in content
+        assert "graph TD" in content
+        assert "A[Start] --> B[Done]" in content
+        assert "```" in content
+        assert "<svg" not in content.lower()
+        assert "<svg" not in response.text.lower()
 
     def test_export_jsonl_speaker_info(
         self, client: TestClient, test_db: sqlite3.Connection
@@ -292,6 +322,23 @@ class TestExportMarkdown:
         assert "Second message here" in md
         # Horizontal rule between sayings
         assert "---" in md
+
+    def test_export_markdown_preserves_mermaid_as_code_fence(
+        self, client: TestClient, test_db: sqlite3.Connection
+    ) -> None:
+        """Markdown export preserves Mermaid fenced code and never embeds rendered SVG."""
+        table = create_test_table(test_db, "table-1", "Mermaid export?")
+        create_test_saying(test_db, table.id, MERMAID_FENCED_BLOCK, speaker_name="Diagrammer")
+
+        response = client.get(f"/tables/{table.id}/export/markdown")
+        assert response.status_code == 200
+
+        md = response.text
+        assert "```mermaid" in md
+        assert "graph TD" in md
+        assert "A[Start] --> B[Done]" in md
+        assert md.count("```") >= 2
+        assert "<svg" not in md.lower()
 
     def test_export_markdown_speaker_format(
         self, client: TestClient, test_db: sqlite3.Connection

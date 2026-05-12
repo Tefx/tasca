@@ -59,7 +59,7 @@ const XSS_ATTACK_VECTORS = [
   },
   {
     name: 'data: URL with HTML - a element forbidden',
-    input: '<svg><a href="data:text/html,<script>alert(\'XSS\')</script>"><text>Click</text></a></svg>',
+    input: '<svg><a href="data:text/html,&lt;script&gt;alert(\'XSS\')&lt;/script&gt;"><text>Click</text></a></svg>',
     forbidden: ['data:text/html', '<script', '<a'],
     preserved: ['<svg'],
   },
@@ -111,7 +111,7 @@ const XSS_ATTACK_VECTORS = [
   },
   {
     name: 'xlink:href javascript - a element forbidden',
-    input: '<svg><a xlink:href="javascript:alert(\'XSS\')"><text>Click</text></a></svg>',
+    input: '<svg xmlns:xlink="http://www.w3.org/1999/xlink"><a xlink:href="javascript:alert(\'XSS\')"><text>Click</text></a></svg>',
     forbidden: ['javascript:', 'alert', '<a'],
     preserved: ['<svg'],
   },
@@ -162,7 +162,7 @@ const SAFE_SVG_CASES = [
   {
     name: 'linearGradient element - ALLOWED per ADR-002 §1',
     input: '<svg><defs><linearGradient id="grad1"><stop offset="0%" stop-color="red"/><stop offset="100%" stop-color="blue"/></linearGradient></defs></svg>',
-    preserved: ['<linearGradient', '<stop', 'stop-color'],
+    preserved: ['<linearGradient', '<stop'],
   },
   {
     name: 'radialGradient element - ALLOWED per ADR-002 §1',
@@ -205,6 +205,120 @@ describe('SVG Sanitization', () => {
         }
       })
     }
+  })
+
+  describe('ADR-002 strict allowlist enforcement', () => {
+    const forbiddenElements = [
+      'use',
+      'symbol',
+      'title',
+      'desc',
+      'textPath',
+      'script',
+      'foreignObject',
+    ]
+
+    for (const elementName of forbiddenElements) {
+      it(`removes forbidden <${elementName}> elements`, () => {
+        const result = sanitizeSvg(
+          `<svg><g><${elementName} id="bad" href="#x" onclick="alert(1)">bad</${elementName}></g><circle cx="1" cy="2" r="3"/></svg>`
+        )
+
+        expect(result.toLowerCase()).not.toContain(`<${elementName.toLowerCase()}`)
+        expect(result).not.toContain('bad')
+        expect(result).toContain('<circle')
+      })
+    }
+
+    it('removes broad non-ADR attributes while preserving allowed attributes', () => {
+      const result = sanitizeSvg(
+        '<svg viewBox="0 0 10 10" preserveAspectRatio="xMidYMid" transform="scale(2)" tabindex="0" aria-labelledby="t" data-test="x"><rect x="1" y="2" width="3" height="4" markerWidth="5" refX="6"/></svg>'
+      )
+
+      expect(result).toContain('viewBox="0 0 10 10"')
+      expect(result).toContain('width="3"')
+      expect(result).not.toContain('preserveAspectRatio')
+      expect(result).not.toContain('transform=')
+      expect(result).not.toContain('tabindex')
+      expect(result).not.toContain('aria-labelledby')
+      expect(result).not.toContain('data-test')
+      expect(result).not.toContain('markerWidth')
+      expect(result).not.toContain('refX')
+    })
+
+    it('removes gradient attributes not listed in ADR-002 v0.1', () => {
+      const result = sanitizeSvg(
+        '<svg><defs><linearGradient id="g" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="red" stop-opacity="0.5"/></linearGradient></defs></svg>'
+      )
+
+      expect(result).toContain('<linearGradient')
+      expect(result).toContain('<stop')
+      expect(result).not.toContain('gradientUnits')
+      expect(result).not.toContain('offset=')
+      expect(result).not.toContain('stop-color')
+      expect(result).not.toContain('stop-opacity')
+    })
+  })
+
+  describe('ADR-002 URL/reference policy', () => {
+    const unsafeValues = [
+      'javascript:alert(1)',
+      'data:image/svg+xml,<svg/>',
+      'file:///tmp/x.svg#id',
+      'https://example.test/x.svg#id',
+      'http://example.test/x.svg#id',
+      'mailto:test@example.test',
+      'relative.svg#id',
+      '/relative.svg#id',
+      'url(javascript:alert(1))',
+      'url(data:image/svg+xml,<svg/>)',
+      'url(file:///tmp/x.svg#id)',
+      'url(https://example.test/x.svg#id)',
+      'url(http://example.test/x.svg#id)',
+      'url(mailto:test@example.test)',
+      'url(relative.svg#id)',
+    ]
+
+    it('allows only internal fragment url(...) for marker references', () => {
+      const safe = sanitizeSvg(
+        '<svg><path marker-start="url(#arrow)" marker-mid="url(\'#mid\')" marker-end="url(&quot;#end&quot;)" d="M0 0 L1 1"/></svg>'
+      )
+
+      expect(safe).toContain('marker-start="url(#arrow)"')
+      expect(safe).toContain("marker-mid=\"url('#mid')\"")
+      expect(safe).toContain('marker-end="url(&quot;#end&quot;)"')
+
+      for (const value of unsafeValues) {
+        const result = sanitizeSvg(`<svg><path marker-start="${value}" d="M0 0 L1 1"/></svg>`)
+        expect(result).not.toContain('marker-start')
+      }
+    })
+
+    it('allows colors and internal fragment url(...) for fill/stroke only', () => {
+      const safe = sanitizeSvg(
+        '<svg><rect fill="red" stroke="url(#line)" width="5" height="5"/></svg>'
+      )
+
+      expect(safe).toContain('fill="red"')
+      expect(safe).toContain('stroke="url(#line)"')
+
+      for (const value of unsafeValues) {
+        const result = sanitizeSvg(`<svg><rect fill="${value}" stroke="${value}" width="5" height="5"/></svg>`)
+        expect(result).not.toContain('fill=')
+        expect(result).not.toContain('stroke=')
+      }
+    })
+
+    it('removes href/xlink/style attributes entirely because ADR-002 v0.1 does not enable them', () => {
+      const result = sanitizeSvg(
+        '<svg xmlns:xlink="http://www.w3.org/1999/xlink"><path href="#ok" xlink:href="#ok" style="fill:url(#ok)" d="M0 0 L1 1"/></svg>'
+      )
+
+      expect(result).not.toContain('href=')
+      expect(result).not.toContain('xlink:href')
+      expect(result).not.toContain('style=')
+      expect(result).toContain('d="M0 0 L1 1"')
+    })
   })
 
   describe('Dangerous Content Detection', () => {

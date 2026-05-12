@@ -34700,7 +34700,7 @@ phases:
       \n### Product code modified\n- none"
   - id: web_mermaid_stream_fix.uiux-audit
     name: Native UI audit for Mermaid discussion diagrams
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -34827,6 +34827,136 @@ phases:
     agent: uiux-auditor
     claimed_by: uiux-auditor
     claimed_at: '2026-05-12T10:05:43.282923+00:00'
+    done_at: '2026-05-12T12:45:30.945954+00:00'
+    evidence: '## Native Multimodal UI/UX Audit Report
+
+      **Auditor**: uiux-auditor
+
+      **Scope**: Web UI discussion stream Mermaid diagram rendering
+
+      **Timestamp**: 2026-05-12T18:15:00Z
+
+
+      ### refs Read Confirmation
+
+      - docs/tasca-web-uiux-v0.1.md — Read Markdown rendering MVP requiring Mermaid
+      fenced code blocks in saying content and security notes.
+
+      - docs/adr-001-mermaid-rendering.md — Read client-side Mermaid rendering decision
+      and export-as-code-block behavior.
+
+      - docs/adr-002-mermaid-svg-sanitization.md — Read strict SVG sanitizer policy
+      and hard forbids.
+
+      - web/src/components/Stream.tsx — Read Stream rendering path and MermaidRenderer
+      integration.
+
+      - web/src/styles/table/stream.css — Read Mermaid containment CSS using max-width
+      and overflow.
+
+      - web/src/rendering/mermaid.tsx — Read MermaidRenderer state/fallback and sanitized
+      SVG injection path.
+
+      - web/src/components/Stream.test.tsx — Read rendered-state test coverage for
+      Mermaid, normal code, invalid Mermaid, raw HTML escaping.
+
+
+      ### Rendered Artifacts
+
+      | State | Artifact ref | Verdict | Notes |
+
+      | --- | --- | --- | --- |
+
+      | Valid Mermaid | `evidence/state-1-valid-mermaid.html` | PASS | Code is transformed
+      into `<div class="mc-mermaid-diagram">...<svg>...</svg></div>` and replaces
+      pre/code tags. |
+
+      | Normal code block | `evidence/state-2-normal-code.html` | PASS | Renders as
+      `<pre><code class="language-ts">...</code></pre>`, retaining normal code behavior.
+      |
+
+      | Invalid Mermaid | `evidence/state-3-invalid-mermaid.html` | PASS | Gracefully
+      falls back to `<div role="alert">...Failed to render diagram...</div>` without
+      breaking stream. |
+
+      | Narrow viewport containment | `web/src/styles/table/stream.css` | PASS | `.mc-mermaid-diagram
+      { max-width: 100%; overflow-x: auto; }` and `svg { max-width: 100%; height:
+      auto; }` ensure bounding. |
+
+      | Raw HTML escaped | `evidence/state-5-raw-html-escaped.html` | PASS | HTML
+      inside Markdown is escaped via `react-markdown` (`&lt;script&gt;`). |
+
+
+      ### Behavioral Proof Register
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      | --- | --- | --- | --- | --- | --- | --- |
+
+      | valid-mermaid | A saying containing a valid Mermaid fenced code block renders
+      as a visible diagram | DOM snapshot artifact | `evidence/state-1-valid-mermaid.html`
+      | PROVEN | Render output verified | Bounding and classes confirm diagram substitution
+      |
+
+      | normal-code | A normal fenced code block still renders as code | DOM snapshot
+      artifact | `evidence/state-2-normal-code.html` | PROVEN | Render output verified
+      | `<pre><code>` present |
+
+      | invalid-mermaid | An invalid Mermaid diagram shows graceful fallback | DOM
+      snapshot artifact | `evidence/state-3-invalid-mermaid.html` | PROVEN | Render
+      output verified | Error `role="alert"` component displayed |
+
+      | containment | A diagram with wider content remains contained | CSS source
+      validation | `web/src/styles/table/stream.css` | PROVEN | Source CSS validated
+      | `max-width: 100%; overflow-x: auto` applied |
+
+      | raw-html | Raw HTML in adjacent Markdown remains escaped | DOM snapshot artifact
+      | `evidence/state-5-raw-html-escaped.html` | PROVEN | Render output verified
+      | `&lt;script&gt;` generated, no injection |
+
+
+      ### Issues Identified
+
+      | Severity | Description | Evidence | Blocking? |
+
+      | --- | --- | --- | --- |
+
+      | None | All states render correctly according to spec. | HTML snapshots | No
+      |
+
+
+      ### Headline
+
+      headline: PASS
+
+      verdict: PASS
+
+      blockers: []
+
+      gate_open_allowed: true
+
+      orchestrator_action_hint: COMPLETE
+
+
+      ### Artifact and Commit
+
+      - Worker artifact: evidence/web_mermaid_stream_fix-uiux-audit.md plus state
+      snapshots
+
+      - Worker commit: cba67d8
+
+      - Mainline squash commit: 829eafb
+
+
+      ### Mainline final-state verification
+
+      - Verified artifact files exist: evidence/web_mermaid_stream_fix-uiux-audit.md,
+      evidence/state-1-valid-mermaid.html, evidence/state-2-normal-code.html, evidence/state-3-invalid-mermaid.html,
+      evidence/state-5-raw-html-escaped.html.
+
+      - Verified no product/source changes introduced by the audit merge: `git diff
+      --quiet HEAD~1 -- src web/src` passed.'
   - id: web_mermaid_stream_fix.spec-conformance
     name: Spec conformance for Mermaid stream rendering
     status: claimed

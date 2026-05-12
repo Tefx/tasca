@@ -35189,7 +35189,7 @@ phases:
   steps:
   - id: dup_adoption.rest-control-limits-adoption
     name: Adopt shared control and limits operations in REST routes
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
       \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables\n\
@@ -35255,6 +35255,38 @@ phases:
     agent: python-refactor-master-tacit
     claimed_by: python-refactor-master-tacit
     claimed_at: '2026-05-12T17:15:19.936813+00:00'
+    done_at: '2026-05-12T17:29:51.483890+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nRead:\n- `docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables`\n\
+      - `docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/sayings`\n\
+      - `docs/tasca-technical-design-v0.1.md#technical-design-tasca-discussion-service-v0-1/4-storage-consistency-model-sqlite/4-2-required-atomic-operations-transaction-boundaries`\n\
+      \n## REST Adoption Evidence\n- Commit hash(es):\n  - Worker commit: `c36669b`\n\
+      \  - Mainline squash commit: `c922fba [vectl] step-dup_adoption.rest-control-limits-adoption\
+      \ completed`\n- Files changed:\n  - `src/tasca/shell/api/routes/sayings.py`\n\
+      - Routes rewired:\n  - POST `/tables/{table_id}/sayings` now delegates append+limit\
+      \ enforcement to `append_saying_with_limits`.\n  - POST `/tables/{table_id}/control`\
+      \ was already thin over `execute_table_control`; no route control-content duplication\
+      \ found/added.\n- Shared operations/services called:\n  - `tasca.shell.services.limited_saying_service.append_saying_with_limits`\n\
+      \  - existing `tasca.shell.services.operations.table_control.execute_table_control`\n\
+      - Remaining transport-local HTTP mapping:\n  - table lookup 404/500\n  - can_say\
+      \ 403\n  - `LimitError` -> HTTP 400 existing detail shape\n  - non-limit append\
+      \ failures -> HTTP 500 existing append detail shape\n\n## Failure-Path Proof\n\
+      - Control conflict mapping:\n  - `tests/unit/api/test_tables_routes.py::TestControlTable::test_control_version_conflict_returns_structured_error`\
+      \ passed.\n- Limit exceeded mapping:\n  - `tests/unit/test_dup_guardrails_control_red.py::test_rest_sayings_limit_failure_preserves_status_error_and_body_semantics`\
+      \ passed.\n- Duplicate route logic removed:\n  - Removed in-route `count_sayings_by_table`\
+      \ / `get_table_content_bytes` / `check_content_limits` path and direct `append_saying`\
+      \ call from REST sayings route.\n\n## Verification\n- Worker baseline:\n  ```text\n\
+      \  .venv/bin/python -m pytest tests/unit/api/test_tables_routes.py tests/unit/api/test_sayings_routes.py\
+      \ tests/integration/test_api.py\n  78 passed in 3.81s\n  ```\n- Worker post-change:\n\
+      \  ```text\n  .venv/bin/python -m pytest tests/unit/api/test_tables_routes.py\
+      \ tests/unit/api/test_sayings_routes.py tests/integration/test_api.py tests/unit/test_dup_guardrails_control_red.py\n\
+      \  82 passed in 2.20s\n  ```\n- Worker invar guard changed=True: passed; files_checked=1;\
+      \ errors=0; warnings=0.\n- Mainline final-state verification after squash merge:\n\
+      \  ```text\n  uv run pytest tests/unit/api/test_tables_routes.py tests/unit/api/test_sayings_routes.py\
+      \ tests/integration/test_api.py tests/unit/test_dup_guardrails_control_red.py\
+      \ -q\n  82 passed in 2.20s\n  ```\n  ```text\n  uv run invar guard\n  status\
+      \ passed; errors=0; warnings=0\n  ```\n- Gaps/Notes:\n  - `uv.lock` had a pre-existing\
+      \ uncommitted version bump and was not touched or committed.\n  - No vectl tools\
+      \ or plan state were inspected/mutated by worker."
   - id: dup_adoption.rest-crud-export-adoption
     name: Adopt shared create/delete/export operations in REST routes
     status: claimed

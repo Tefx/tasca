@@ -34503,7 +34503,7 @@ phases:
       \ before worker commit.\n  - Not Done / Blockers: none."
   - id: retest-foundation-mcp-table-create-defaults
     name: Retest MCP table.create surface and ParameterContract defaults
-    status: claimed
+    status: done
     description: "step_type: gate\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: phase-check protecting dup_foundation.gate and dup_adoption\
       \ unlock path\nagent: gate-reviewer-tacit\npriority: HIGH\nsource_failed_steps:\n\
@@ -34580,6 +34580,104 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T16:18:02.665869+00:00'
+    done_at: '2026-05-12T16:27:04.745064+00:00'
+    evidence: "## Retest Report\n\nheadline: PASS\nverdict: OPEN\nstep_intent: retest_green\n\
+      expected_result: green\nobserved_result: green\nfailure_alignment: B2 and B4\
+      \ blocker-class obligations are closed by inspected runtime surface, contract\
+      \ metadata, behavioral tests, and focused runtime probes.\nproduct_implementation_files_modified:\
+      \ false\n\n### refs Read Confirmation (MANDATORY)\n- docs/tasca-mcp-interface-v0.1.md\
+      \ — read. Key passages: table.create input requires `created_by`, `title`, `host_ids`,\
+      \ `metadata`, `policy`, `board`, `dedup_id` at lines 229-241; response includes\
+      \ `table_id`, `invite_code`, `web_url`, `status`, `version`, `creator_id`, `host_ids`\
+      \ at lines 244-254. Defaults section names recommended defaults at lines 26-36.\n\
+      - src/tasca/shell/mcp/server.py — read. Key passages: `table_create` runtime\
+      \ signature accepts `title`, `question`, `context`, `creator_patron_id`, `created_by`,\
+      \ `host_ids`, `metadata`, `policy`, `board`, `dedup_id` at lines 275-286 and\
+      \ forwards them to `ep.table_create` at lines 293-304. `table_say` defaults\
+      \ `mentions=None` and `reply_to_sequence=None` at lines 380-389.\n- src/tasca/shell/mcp/tool_contracts.py\
+      \ — read. Key passages: `table_create` ParameterContract metadata covers all\
+      \ spec and legacy fields at lines 107-136; `table_say` ParameterContracts default\
+      \ `mentions` and `reply_to_sequence` to `None` at lines 229-241; `parameter_field`\
+      \ builds runtime annotations from centralized contracts at lines 431-439.\n\
+      - src/tasca/shell/services/operations/table_creation.py — read. Key passages:\
+      \ operation accepts `title`, `created_by`, `host_ids`, `metadata`, `policy`,\
+      \ `board` at lines 59-72; resolves `title or question` and creator alias at\
+      \ lines 106-135; returns default `host_ids`, `metadata`, `policy`, `board`,\
+      \ `invite_code`, and `web_url` at lines 140-149.\n\n## Decision Fields\nheadline:\
+      \ PASS\nverdict: OPEN\nblockers: []\nproof_gap_status: PROVEN\nblocking_status:\
+      \ NON_BLOCKING_WITH_PROOF\ngate_open_allowed: true\norchestrator_action_hint:\
+      \ PROCEED\n\n## Behavioral Proof Register\n| requirement_ref | behavior_claim\
+      \ | runtime_proof_expected | evidence_ref | status | closure_path | gate_decision_basis\
+      \ |\n| --- | --- | --- | --- | --- | --- | --- |\n| B2 table_create public runtime\
+      \ surface | Server accepts documented v0.1 fields plus legacy aliases. | Runtime\
+      \ signature and protocol tests prove acceptance. | `server.py:275-286`; `tests/integration/test_mcp.py:411-438`;\
+      \ focused pytest 15 passed. | PROVEN | None required. | Public runtime surface\
+      \ includes `title`, `created_by`, `host_ids`, `metadata`, `policy`, `board`,\
+      \ `dedup_id`. |\n| B2 table_create contract metadata | Tool contracts expose\
+      \ ParameterContracts consistent with documented MCP input surface. | Metadata\
+      \ contains all spec fields and tests compare runtime defaults. | `tool_contracts.py:107-136`;\
+      \ `tests/unit/mcp/test_tool_contracts.py:85-137`. | PROVEN | None required.\
+      \ | Contract and runtime surfaces match. |\n| B2 defaults/forwarding for host_ids\
+      \ metadata policy board | Runtime forwards fields and operation defaults omitted\
+      \ values. | Unit/integration tests plus runtime probe prove forwarding/defaulting.\
+      \ | `entrypoints.py:306-348`; `table_creation.py:140-149`; runtime probe showed\
+      \ default host_ids `['patron-default-proof']`, metadata `{}`, policy `{'mode':\
+      \ None, 'params': {}, 'custom': {}}`, board `{}`. | PROVEN | None required.\
+      \ | Defaults and response-shape fields are materially proven. |\n| B4 table_say\
+      \ mentions default | `mentions` defaults to `None` in ParameterContract and\
+      \ runtime signature. | Runtime/default inspection proves `mentions is None`.\
+      \ | Inspection output: `table_say_mentions_is_none True`; `server.py:387`; `tool_contracts.py:230-235`.\
+      \ | PROVEN | None required. | Default is now correct and test-covered. |\n|\
+      \ B4 table_say reply_to_sequence default | `reply_to_sequence` defaults to `None`\
+      \ in ParameterContract and runtime signature. | Runtime/default inspection proves\
+      \ `reply_to_sequence is None`. | Inspection output: `table_say_reply_to_sequence_is_none\
+      \ True`; `server.py:388`; `tool_contracts.py:236-241`. | PROVEN | None required.\
+      \ | Default is now correct and test-covered. |\n| B4 all optional/defaulted\
+      \ MCP parameters regression coverage | Test loops over every ToolContract parameter\
+      \ and compares required/default status to server signature. | Regression test\
+      \ must cover all optional/defaulted parameters, not just observed failures.\
+      \ | `tests/unit/mcp/test_tool_contracts.py:107-137`; focused pytest 15 passed.\
+      \ | PROVEN | None required. | Exhaustive contract-vs-runtime default comparison\
+      \ closes B4. |\n\n## Verification\n- Commands/inspections run:\n  - `pwd &&\
+      \ git status --short --branch && git log --oneline -5` — exit code 0.\n  - `.venv/bin/python\
+      \ -m pytest tests/unit/mcp/test_tool_contracts.py tests/unit/mcp/test_mcp_server.py::TestTableCreate\
+      \ tests/integration/test_mcp.py::test_mcp_table_create_accepts_documented_spec_fields\
+      \ tests/integration/test_mcp.py::test_mcp_tools_list_table_create_schema_exposes_spec_fields\
+      \ -q` — exit code 0; result: 15 passed.\n  - `.venv/bin/python - <<'PY' ...\
+      \ inspect signatures/contracts ... PY` — exit code 0; proved `table_say_mentions_is_none\
+      \ True`, `table_say_reply_to_sequence_is_none True`, and `table_create_params\
+      \ ['title', 'question', 'context', 'creator_patron_id', 'created_by', 'host_ids',\
+      \ 'metadata', 'policy', 'board', 'dedup_id']`.\n  - `.venv/bin/invar guard`\
+      \ — exit code 0; status passed, errors 0, warnings 0.\n  - `.venv/bin/python\
+      \ - <<'PY' ... table_create runtime dedup/default probe ... PY` — exit code\
+      \ 0; proved dedup returns original table, invite/web shape, host_ids/metadata/policy/board\
+      \ defaults.\n- Key evidence refs:\n  - Runtime signature/forwarding: `src/tasca/shell/mcp/server.py:275-304`.\n\
+      \  - Operation semantics: `src/tasca/shell/services/operations/table_creation.py:106-149`.\n\
+      \  - Entrypoint idempotency/response shape: `src/tasca/shell/mcp/entrypoints.py:291-359`.\n\
+      \  - Contract metadata: `src/tasca/shell/mcp/tool_contracts.py:107-136`, `:208-250`.\n\
+      \  - Regression coverage: `tests/unit/mcp/test_tool_contracts.py:85-137`, `tests/unit/mcp/test_mcp_server.py:211-252`,\
+      \ `tests/integration/test_mcp.py:411-467`.\n- Runtime proof notes:\n  - Dedup\
+      \ probe: `dedup_same_table_id True`, `dedup_preserves_original_title True`.\n\
+      \  - Response-shape probe: `invite_code_equals_table_id True`, `web_url_shape\
+      \ /tables/witty-horse-leaps`.\n  - Defaults probe: `default_host_ids ['patron-default-proof']`,\
+      \ `default_metadata {}`, `default_policy {'mode': None, 'params': {}, 'custom':\
+      \ {}}`, `default_board {}`.\n\n## Files changed\n- Commit hash(es): none — read-only\
+      \ verification; no auditor-created product implementation changes to commit.\n\
+      - Files changed: none by this gate reviewer.\n- Worktree note: `git status`\
+      \ reported an existing `uv.lock` modification (`tasca` version `0.1.28` -> `0.1.29`).\
+      \ Auditor did not create, stage, revert, or commit it because this gate was\
+      \ read-only.\n\n## Gaps/Notes\n- Any NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING\
+      \ items: none.\n- Any explicit non-intersection evidence: not needed; all B2/B4\
+      \ blocker obligations are directly proven.\n\n## Programmatic Handoff\n```json\n\
+      {\n  \"status\": \"PASS\",\n  \"verdict\": \"OPEN\",\n  \"headline\": \"PASS\"\
+      ,\n  \"proof_gap_status\": \"PROVEN\",\n  \"blocking_status\": \"NON_BLOCKING_WITH_PROOF\"\
+      ,\n  \"gate_open_allowed\": true,\n  \"orchestrator_action_hint\": \"PROCEED\"\
+      ,\n  \"blockers\": [],\n  \"verification\": {\n    \"pytest_focused\": \"exit\
+      \ 0; 15 passed\",\n    \"invar_guard\": \"exit 0; passed; errors=0; warnings=0\"\
+      ,\n    \"runtime_inspection\": \"exit 0; mentions and reply_to_sequence defaults\
+      \ are None; table_create has all expected params\",\n    \"runtime_probe\":\
+      \ \"exit 0; table_create dedup/default/invite/web behavior proven\"\n  },\n\
+      \  \"product_implementation_files_modified\": false\n}\n```"
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

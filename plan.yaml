@@ -34794,7 +34794,7 @@ phases:
       \  \"product_implementation_files_modified\": false\n}\n```"
   - id: fix-foundation-gate-blockers
     name: Fix all dup_foundation gate blockers
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior\npriority: HIGH\nsymbolic_testing: false\n\nBatched remediation\
       \ for the failed dup_foundation.gate review. Fix ALL blocker families below\
@@ -34900,6 +34900,73 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-12T16:43:13.143378+00:00'
+    done_at: '2026-05-12T16:56:47.551759+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nFor each inspected target:\n\
+      - `src/tasca/shell/services/operations/table_control.py` — `execute_table_control`\
+      \ owns action normalization, canonical `Reason:` audit formatting, transition\
+      \ validation, and atomic storage call.\n- `src/tasca/shell/services/operations/table_creation.py`\
+      \ — `create_discussion_table` owns ID generation, timestamps, defaults, persistence.\n\
+      - `src/tasca/shell/services/operations/batch_delete.py` — `delete_tables_batch`\
+      \ owns fetch, validation, cascade delete disposition.\n- `src/tasca/shell/services/operations/table_export.py`\
+      \ — `export_table` owns export fetch/format dispatch.\n- `src/tasca/shell/services/operations/patron_registration.py`\
+      \ — `register_patron` owns shared registration/idempotency.\n- `src/tasca/shell/mcp/entrypoints.py`\
+      \ — MCP already consumes shared owners for patron register, table create, batch\
+      \ delete, export, and control.\n- `src/tasca/shell/api/routes/tables.py` — REST\
+      \ create and batch-delete bypassed shared owners; fixed.\n- `src/tasca/shell/api/routes/tables_control.py`\
+      \ — REST control required undocumented `speaker_name`, hand-built audit content,\
+      \ and called `atomic_control_table` directly; fixed.\n- `src/tasca/core/export_service.py`\
+      \ — canonical markdown metadata is bullet-list form (`- table_id`, `- status`,\
+      \ `- hosts`) not old table row form.\n- `tests/unit/test_dup_guardrails_control_red.py`\
+      \ — control guardrails required documented REST payload and REST/MCP canonical\
+      \ audit convergence.\n- `tests/unit/test_cli_export.py` — CLI markdown assertion\
+      \ expected obsolete metadata table row; updated to canonical metadata coverage.\n\
+      - `tests/unit/test_usercustomize.py` — expected `tasca.shell.invar_runtime_policy`\
+      \ import and `usercustomize` forwarding.\n\n## Batched Gate Blocker Fix Evidence\n\
+      \n### Blockers Fixed\n| Blocker | Files changed | Fix summary | Focused proof\
+      \ |\n| --- | --- | --- | --- |\n| B1 full regression | route/startup/test files\
+      \ | Resolved the 5 observed failures. | `24 passed`; full `1103 passed` |\n\
+      | B2 REST shared ops seam | `tables.py`, `tables_control.py` | REST control/create/batch-delete\
+      \ now call shared operation owners. | Focused + full pytest passed |\n| B3 REST\
+      \ control payload/audit | `tables_control.py`, guardrail test | `speaker_name`\
+      \ defaults to `Admin`; `dedup_id` accepted; audit content comes from `execute_table_control`.\
+      \ | `test_dup_guardrails_control_red.py` passed |\n| B4 REST create/delete owners\
+      \ | `tables.py` | Create uses `create_discussion_table`; batch-delete uses `delete_tables_batch`;\
+      \ HTTP errors mapped from typed operation result. | Full route regression passed\
+      \ |\n| B5 CLI markdown export | `test_cli_export.py` | Test now asserts canonical\
+      \ markdown metadata bullets without weakening transcript/content coverage. |\
+      \ `test_cli_export.py` passed |\n| B6 startup policy wiring | `src/tasca/shell/invar_runtime_policy.py`,\
+      \ `usercustomize.py` | Restored import path and startup forwarding hook. | `test_usercustomize.py`\
+      \ passed |\n| B7 uv.lock hygiene | none committed | `uv.lock` drift remained\
+      \ unstaged/uncommitted (`0.1.28` -> `0.1.29`) in worker worktree, matching task\
+      \ warning; no code depends on it. | worker `git status --short` showed only\
+      \ `M uv.lock` after commit |\n\n### Wiring Proof\n- REST control owner: `control_table_endpoint`\
+      \ calls `execute_table_control`.\n- REST table-create owner: `create_table_endpoint`\
+      \ calls `create_discussion_table`.\n- REST batch-delete owner: `batch_delete_tables_endpoint`\
+      \ calls `delete_tables_batch`.\n- Any unresolved non-intersection disposition:\
+      \ Only uncommitted `uv.lock` drift remained in worker worktree; it was hygiene-only,\
+      \ not staged/committed, and does not intersect test/runtime changes.\n\n###\
+      \ CLI / Startup Proof\n- CLI markdown export proof: `tests/unit/test_cli_export.py`\
+      \ passed with canonical `- table_id`, `- status`, `- hosts`, transcript and\
+      \ content assertions.\n- Startup policy import proof: `tests/unit/test_usercustomize.py`\
+      \ passed; `usercustomize` forwards `sys.argv`.\n\n### Required Commands\n- Worker\
+      \ focused tests:\n  ```text\n  .venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py\
+      \ tests/unit/test_cli_export.py tests/unit/test_usercustomize.py -q\n  24 passed\
+      \ in 0.75s\n  ```\n- Worker full regression:\n  ```text\n  .venv/bin/python\
+      \ -m pytest -q\n  1103 passed in 11.20s\n  ```\n- Worker invar guard:\n  ```text\n\
+      \  .venv/bin/invar guard\n  status=passed, errors=0, warnings=0\n  ```\n\n###\
+      \ Mainline Final-State Verification After Squash Merge\n- Focused tests:\n \
+      \ ```text\n  uv run pytest tests/unit/test_dup_guardrails_control_red.py tests/unit/test_cli_export.py\
+      \ tests/unit/test_usercustomize.py -q\n  24 passed in 0.70s\n  ```\n- Full regression:\n\
+      \  ```text\n  uv run pytest -q\n  1103 passed in 8.91s\n  ```\n- Invar guard:\n\
+      \  ```text\n  uv run invar guard\n  status=passed; errors=0; warnings=0\n  ```\n\
+      \n### Files changed and commits\n- Worker commit hash: `1ae698a fix foundation\
+      \ gate blockers`\n- Mainline squash commit: `daaf242 [vectl] step-fix-foundation-gate-blockers\
+      \ completed`\n- Files changed:\n  - `src/tasca/shell/api/routes/tables.py`\n\
+      \  - `src/tasca/shell/api/routes/tables_control.py`\n  - `src/tasca/shell/invar_runtime_policy.py`\n\
+      \  - `usercustomize.py`\n  - `tests/unit/test_cli_export.py`\n  - `tests/unit/test_dup_guardrails_control_red.py`\n\
+      - Spec link: Step `fix-foundation-gate-blockers` / phase `dup_foundation`.\n\
+      - Gaps/Notes: No gate-intersecting code blocker remains; unowned lockfile drift\
+      \ was not committed."
   - id: retest-foundation-gate-blockers
     name: Retest dup_foundation gate blocker closure
     status: pending

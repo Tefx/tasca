@@ -49,7 +49,6 @@ class TableExportOperationResult:
         return self.status == "ok"
 
 
-# @invar:allow dead_export: shared operation is introduced for future REST/MCP adapter rewiring
 # @shell_complexity: 5 branches for format validation + table fetch + saying fetch + limit + format dispatch
 def export_table(
     conn: sqlite3.Connection,

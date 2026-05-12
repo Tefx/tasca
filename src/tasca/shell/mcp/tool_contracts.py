@@ -11,6 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+from pydantic import Field
+from pydantic.fields import FieldInfo
+
 
 @dataclass(frozen=True, slots=True)
 class ParameterContract:
@@ -55,6 +58,12 @@ RECOMMENDED_DEFAULTS: Final[dict[str, int]] = {
     "table.wait.wait_ms": 10000,
     "seat.heartbeat.ttl_ms": 60000,
     "saying.content.max_bytes": 65536,
+}
+
+SPEC_PARAMETER_DEFAULTS: Final[dict[str, object]] = {
+    "table_say.saying_type": "text",
+    "seat_heartbeat.state": "running",
+    "seat_heartbeat.ttl_ms": RECOMMENDED_DEFAULTS["seat.heartbeat.ttl_ms"],
 }
 
 ERROR_RESPONSE_SHAPE: Final[dict[str, object]] = {
@@ -211,18 +220,18 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
                 False,
                 None,
             ),
-            P("saying_type", "Saying type: 'text' (default), 'control', or 'system'", False, None),
+            P("saying_type", "Saying type: 'text' (default), 'control', or 'system'", False, SPEC_PARAMETER_DEFAULTS["table_say.saying_type"]),
             P(
                 "mentions",
                 "List of mention targets: patron UUIDs, aliases, display names, or 'all'. Error if a handle matches multiple patrons",
                 False,
-                None,
+                SPEC_PARAMETER_DEFAULTS["seat_heartbeat.state"],
             ),
             P(
                 "reply_to_sequence",
                 "Sequence number of the saying being replied to (informational in v0.1)",
                 False,
-                None,
+                SPEC_PARAMETER_DEFAULTS["seat_heartbeat.ttl_ms"],
             ),
             P(
                 "dedup_id",
@@ -338,13 +347,13 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
                 "state",
                 "Seat state: 'running' (active), 'idle' (paused), or 'done' (finished, signals departure)",
                 False,
-                None,
+                SPEC_PARAMETER_DEFAULTS["seat_heartbeat.state"],
             ),
             P(
                 "ttl_ms",
                 "Time-to-live in ms before the seat expires (default 60000 = 60s)",
                 False,
-                None,
+                SPEC_PARAMETER_DEFAULTS["seat_heartbeat.ttl_ms"],
             ),
             P("dedup_id", "Idempotency key", False, None),
             P("seat_id", "Legacy: seat UUID for direct reference; prefer patron_id", False, None),
@@ -395,3 +404,30 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
 TOOL_CONTRACTS_BY_NAME: Final[dict[str, ToolContract]] = {
     contract.tool_name: contract for contract in TOOL_CONTRACTS
 }
+
+
+# @invar:allow shell_result: Declarative MCP metadata lookup for runtime annotations, not an I/O boundary.
+def parameter_contract(tool_name: str, parameter_name: str) -> ParameterContract:
+    """Return the authoritative ParameterContract for runtime registration.
+
+    >>> parameter_contract("table_say", "saying_type").default
+    'text'
+    >>> parameter_contract("seat_heartbeat", "ttl_ms").default
+    60000
+    """
+    contract = TOOL_CONTRACTS_BY_NAME[tool_name]
+    for parameter in contract.parameters:
+        if parameter.name == parameter_name:
+            return parameter
+    raise KeyError(f"Unknown MCP parameter: {tool_name}.{parameter_name}")
+
+
+# @invar:allow shell_result: Declarative MCP metadata adapter returns Pydantic FieldInfo for FastMCP.
+def parameter_field(tool_name: str, parameter_name: str) -> FieldInfo:
+    """Build a Pydantic Field from centralized MCP contract metadata.
+
+    >>> parameter_field("table_create", "question").description
+    'Discussion topic or question for the table'
+    """
+    parameter = parameter_contract(tool_name, parameter_name)
+    return Field(description=parameter.description)

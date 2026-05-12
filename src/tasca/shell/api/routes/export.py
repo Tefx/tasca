@@ -12,7 +12,6 @@ Shell Layer Contract:
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
@@ -22,13 +21,10 @@ if TYPE_CHECKING:
 else:
     from tasca.shell.api.fastapi_compat import Response
 
-from returns.result import Failure
+from returns.result import Success
 
-from tasca.core.domain.table import TableId
-from tasca.core.export_service import generate_jsonl, generate_markdown
 from tasca.shell.api.deps import get_db
-from tasca.shell.storage.saying_repo import list_all_sayings_by_table
-from tasca.shell.storage.table_repo import TableNotFoundError, get_table
+from tasca.shell.services.operations.table_export import export_table
 
 if TYPE_CHECKING:
     pass
@@ -74,63 +70,24 @@ def _build_export_response(
     )
 
 
-# @shell_complexity: 4 branches for table lookup + sayings fetch + size check + error paths
-# @invar:allow shell_result: _fetch_table_and_sayings helper raises HTTPException directly (no Result needed)
-def _fetch_table_and_sayings(
+# @invar:allow shell_result: HTTP adapter maps shared Result failures to HTTPException.
+def _run_export_or_raise(
     conn: sqlite3.Connection,
     table_id: str,
-) -> tuple:
-    """Fetch table and all sayings from database for export.
-
-    Export fetches ALL sayings without count truncation.
-    Memory safety is provided by max-bytes limit in the repository.
-
-    Args:
-        conn: Database connection.
-        table_id: UUID of the table.
-
-    Returns:
-        Tuple of (table, sayings).
-
-    Raises:
-        HTTPException: 404 if table not found.
-        HTTPException: 413 if table too large to export.
-        HTTPException: 500 if database operation fails.
-    """
-    # Get table
-    table_result = get_table(conn, TableId(table_id))
-    if isinstance(table_result, Failure):
-        error = table_result.failure()
-        if isinstance(error, TableNotFoundError):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Table not found: {table_id}",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get table: {error}",
-        )
-
-    table = table_result.unwrap()
-
-    # Get ALL sayings for export (no count truncation)
-    sayings_result = list_all_sayings_by_table(conn, table_id)
-    if isinstance(sayings_result, Failure):
-        error_msg = str(sayings_result.failure())
-        # Check if it's a size exceeded error
-        if "Export size exceeded" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=error_msg,
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get sayings: {error_msg}",
-        )
-
-    sayings = sayings_result.unwrap()
-
-    return table, sayings
+    format: str,
+) -> str:
+    """Run shared export operation and map typed failures to HTTP errors."""
+    result = export_table(conn, table_id, format)
+    if isinstance(result, Success):
+        content = result.unwrap().content
+        assert content is not None
+        return content
+    failure = result.failure()
+    if failure.status == "not_found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=failure.error)
+    if failure.status == "limit_exceeded":
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=failure.error)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=failure.error)
 
 
 # =============================================================================
@@ -164,9 +121,7 @@ async def export_jsonl_endpoint(
         HTTPException: 404 if table not found.
         HTTPException: 500 if database operation fails.
     """
-    table, sayings = _fetch_table_and_sayings(conn, table_id)
-    exported_at = datetime.now(timezone.utc).isoformat()
-    content = generate_jsonl(table, sayings, exported_at)
+    content = _run_export_or_raise(conn, table_id, "jsonl")
     return _build_export_response(content, f"{table_id}.jsonl", download)
 
 
@@ -197,6 +152,5 @@ async def export_markdown_endpoint(
         HTTPException: 404 if table not found.
         HTTPException: 500 if database operation fails.
     """
-    table, sayings = _fetch_table_and_sayings(conn, table_id)
-    content = generate_markdown(table, sayings)
+    content = _run_export_or_raise(conn, table_id, "markdown")
     return _build_export_response(content, f"{table_id}.md", download)

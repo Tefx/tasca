@@ -14,13 +14,13 @@ Design Decisions:
 """
 
 from datetime import datetime
+from typing import Any
 
 import deal
 from pydantic import BaseModel
 
 from tasca.core.domain.saying import Saying, SpeakerKind
 from tasca.core.domain.table import Table
-
 
 # =============================================================================
 # JSONL Export Types (re-exported from domain for export format)
@@ -212,19 +212,24 @@ def _fmt_dt(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d %H:%M") + " UTC"
 
 
-@deal.pre(lambda table, sayings: table is not None and sayings is not None)
+@deal.pre(
+    lambda table, sayings, board=None: (
+        table is not None and sayings is not None and (board is None or isinstance(board, dict))
+    )
+)
 @deal.post(lambda result: isinstance(result, str))
 @deal.post(lambda result: len(result) > 0)
-@deal.ensure(lambda table, sayings, result: table.question in result)
-@deal.ensure(lambda table, sayings, result: str(table.id) in result)
-def generate_markdown(table: Table, sayings: list[Saying]) -> str:
+@deal.ensure(lambda *args, result, **kwargs: (args[0] if args else kwargs["table"]).question in result)
+@deal.ensure(lambda *args, result, **kwargs: str((args[0] if args else kwargs["table"]).id) in result)
+def generate_markdown(table: Table, sayings: list[Saying], board: dict[str, Any] | None = None) -> str:
     """Generate Markdown export string for a table and its sayings.
 
     Markdown format:
         - Title header with question
-        - Metadata table (table_id, status, version, timestamps)
+        - Metadata block (table_id, status, version, timestamps)
         - Context section (if present)
-        - Transcript section with sayings as headed blocks (speaker name, kind badge, timestamp)
+        - Board section in stable order (agenda, summary, decision_draft, then others)
+        - Transcript section with stable ``[seq=...] timestamp (speaker): content`` lines
 
     Note:
         Saying content is NOT truncated. Full content is preserved.
@@ -232,6 +237,7 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
     Args:
         table: The table to export (required, non-null).
         sayings: List of sayings for this table (may be empty, ordered by sequence).
+        board: Optional board snapshot. Missing board exports as an empty section.
 
     Returns:
         Markdown string with table metadata and transcript.
@@ -253,7 +259,9 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
         >>> result = generate_markdown(t, [])
         >>> "# What is AI?" in result
         True
-        >>> "`t-001`" in result
+        >>> "- table_id: t-001" in result
+        True
+        >>> "## Board" in result
         True
         >>> "_No sayings yet._" in result
         True
@@ -269,7 +277,7 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
         >>> result2 = generate_markdown(t, [s1])
         >>> "Full content preserved without truncation." in result2
         True
-        >>> "**#0 Alice**" in result2
+        >>> "- [seq=0] 2024-01-01T12:00:00+00:00 (human:Alice): Full content preserved without truncation." in result2
         True
 
         >>> s2 = Saying(
@@ -282,10 +290,12 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
         ...     created_at=datetime(2024, 1, 1, 12, 5, tzinfo=timezone.utc),
         ... )
         >>> result3 = generate_markdown(t, [s1, s2])
-        >>> "[AI]" in result3
+        >>> "(agent:Bot): Agent reply." in result3
         True
         >>> "[pinned]" in result3
         True
+        >>> generate_markdown(t, [], {"z": "last", "agenda": "first"}).split("## Board")[1].splitlines()[2]
+        '### agenda'
     """
     lines: list[str] = []
 
@@ -293,13 +303,13 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
     lines.append(f"# {table.question}")
     lines.append("")
 
-    # Metadata (headerless table for compact key-value display)
-    lines.append("| | |")
-    lines.append("|---|---|")
-    lines.append(f"| **Table** | `{table.id}` |")
-    lines.append(f"| **Status** | {table.status.value} |")
-    lines.append(f"| **Created** | {_fmt_dt(table.created_at)} |")
-    lines.append(f"| **Updated** | {_fmt_dt(table.updated_at)} |")
+    # Metadata block follows the technical design/search-export template.
+    lines.append(f"- table_id: {table.id}")
+    lines.append(f"- status: {table.status.value}")
+    lines.append(f"- creator: {table.creator_patron_id or ''}")
+    lines.append("- hosts: ")
+    lines.append(f"- created_at: {table.created_at.isoformat()}")
+    lines.append("- tags/space: ")
     lines.append("")
 
     # Context section (blockquote to signal "background/framing")
@@ -311,6 +321,21 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
             lines.append(f"> {ctx_line}" if ctx_line.strip() else ">")
         lines.append("")
 
+    # Board section (stable order: agenda, summary, decision_draft, then others)
+    lines.append("## Board")
+    lines.append("")
+    board_snapshot = board if board is not None else {}
+    ordered_keys = [key for key in ("agenda", "summary", "decision_draft") if key in board_snapshot]
+    ordered_keys.extend(sorted(key for key in board_snapshot if key not in set(ordered_keys)))
+    if not ordered_keys:
+        lines.append("_No board entries._")
+        lines.append("")
+    else:
+        for key in ordered_keys:
+            lines.append(f"### {key}")
+            lines.append(str(board_snapshot[key]))
+            lines.append("")
+
     # Transcript section
     lines.append("## Transcript")
     lines.append("")
@@ -318,34 +343,16 @@ def generate_markdown(table: Table, sayings: list[Saying]) -> str:
     if not sayings:
         lines.append("_No sayings yet._")
     else:
-        last_date: str | None = None
-
-        for i, saying in enumerate(sayings):
-            current_date = saying.created_at.strftime("%Y-%m-%d")
-
-            # Date-change separator (replaces --- for that transition)
-            if last_date is not None and current_date != last_date:
-                display_date = saying.created_at.strftime("%b %-d, %Y")
-                lines.append(f"_{display_date}_")
-                lines.append("")
-            elif i > 0:
-                # Horizontal rule between sayings (same day)
-                lines.append("---")
-                lines.append("")
-
-            last_date = current_date
-
-            # Speaker line: **#seq Name** [AI] -- HH:MM [pinned]
+        for saying in sayings:
             seq = saying.sequence
             name = saying.speaker.name
-            ai_tag = " [AI]" if saying.speaker.kind != SpeakerKind.HUMAN else ""
-            time_str = saying.created_at.strftime("%H:%M")
+            speaker_label = (
+                "human" if saying.speaker.kind == SpeakerKind.HUMAN else f"agent:{name}"
+            )
+            if saying.speaker.kind == SpeakerKind.HUMAN and name:
+                speaker_label = f"human:{name}"
+            time_str = saying.created_at.isoformat()
             pin_tag = " [pinned]" if saying.pinned else ""
-
-            lines.append(f"**#{seq} {name}**{ai_tag} -- {time_str}{pin_tag}")
-
-            # Full content - NO truncation
-            lines.append(saying.content)
-            lines.append("")
+            lines.append(f"- [seq={seq}] {time_str} ({speaker_label}): {saying.content}{pin_tag}")
 
     return "\n".join(lines)

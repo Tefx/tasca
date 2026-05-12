@@ -46,7 +46,6 @@ class BatchDeleteOperationResult:
         return self.status == "deleted"
 
 
-# @invar:allow dead_export: shared operation is introduced for future REST/MCP adapter rewiring
 # @shell_complexity: 5 branches for input bounds + per-ID fetch + validation + delete + error disposition
 def delete_tables_batch(
     conn: sqlite3.Connection,

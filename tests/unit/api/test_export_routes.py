@@ -291,15 +291,17 @@ class TestExportMarkdown:
         assert response.status_code == 200
 
         md = response.text
-        # Check header and metadata table
+        # Check header and metadata block
         assert "# What is the best approach?" in md
-        assert f"| **Table** | `{table.id}` |" in md
-        assert "| **Status** | open |" in md
+        assert f"- table_id: {table.id}" in md
+        assert "- status: open" in md
         # Context rendered as blockquote
         assert "## Context" in md
         assert "> Consider performance" in md
 
         # Check sections
+        assert "## Board" in md
+        assert "_No board entries._" in md
         assert "## Transcript" in md
         assert "_No sayings yet._" in md
 
@@ -315,13 +317,11 @@ class TestExportMarkdown:
         assert response.status_code == 200
 
         md = response.text
-        # Check transcript entries — speaker lines with sequence numbers
-        assert "**#0 Alice**" in md
-        assert "**#1 Bob**" in md
+        # Check transcript entries — stable technical-design lines with sequence numbers
+        assert "- [seq=0]" in md and "(human:Alice): First message here" in md
+        assert "- [seq=1]" in md and "(human:Bob): Second message here" in md
         assert "First message here" in md
         assert "Second message here" in md
-        # Horizontal rule between sayings
-        assert "---" in md
 
     def test_export_markdown_preserves_mermaid_as_code_fence(
         self, client: TestClient, test_db: sqlite3.Connection
@@ -365,12 +365,10 @@ class TestExportMarkdown:
         assert response.status_code == 200
 
         md = response.text
-        # Agent gets [AI] tag, human does not
-        assert "**#0 AgentA** [AI]" in md
-        assert "**#1 Alice**" in md
-        # Human has no [AI] tag
+        assert "(agent:AgentA): Agent says" in md
+        assert "(human:Alice): Human says" in md
         alice_line = [line for line in md.split("\n") if "Alice" in line][0]
-        assert "[AI]" not in alice_line
+        assert "agent:" not in alice_line
 
     def test_export_markdown_long_content_not_truncated(
         self, client: TestClient, test_db: sqlite3.Connection
@@ -442,7 +440,7 @@ class TestExportMarkdown:
         assert response.status_code == 200
 
         md = response.text
-        assert "| **Status** | paused |" in md
+        assert "- status: paused" in md
 
 
 # =============================================================================
@@ -462,7 +460,7 @@ class TestExportCoreDelegation:
         table = create_test_table(test_db, "table-1", "Test Question?")
         create_test_saying(test_db, table.id, "Test message", speaker_name="Speaker")
 
-        with patch("tasca.shell.api.routes.export.generate_jsonl") as mock_generate:
+        with patch("tasca.shell.services.operations.table_export.generate_jsonl") as mock_generate:
             mock_generate.return_value = "mocked-jsonl-output"
 
             response = client.get(f"/tables/{table.id}/export/jsonl")
@@ -490,7 +488,7 @@ class TestExportCoreDelegation:
         table = create_test_table(test_db, "table-1", "Test Question?")
         create_test_saying(test_db, table.id, "Test message", speaker_name="Speaker")
 
-        with patch("tasca.shell.api.routes.export.generate_markdown") as mock_generate:
+        with patch("tasca.shell.services.operations.table_export.generate_markdown") as mock_generate:
             mock_generate.return_value = "mocked-markdown-output"
 
             response = client.get(f"/tables/{table.id}/export/markdown")
@@ -514,7 +512,7 @@ class TestExportCoreDelegation:
 
         table = create_test_table(test_db, "table-1", "Empty Table?")
 
-        with patch("tasca.shell.api.routes.export.generate_jsonl") as mock_generate:
+        with patch("tasca.shell.services.operations.table_export.generate_jsonl") as mock_generate:
             mock_generate.return_value = "header-and-table-only"
 
             client.get(f"/tables/{table.id}/export/jsonl")
@@ -537,7 +535,7 @@ class TestExportCoreDelegation:
         create_test_saying(test_db, table.id, "Second", speaker_name="B")
         create_test_saying(test_db, table.id, "Third", speaker_name="C")
 
-        with patch("tasca.shell.api.routes.export.generate_markdown") as mock_generate:
+        with patch("tasca.shell.services.operations.table_export.generate_markdown") as mock_generate:
             mock_generate.return_value = "mocked"
 
             client.get(f"/tables/{table.id}/export/markdown")

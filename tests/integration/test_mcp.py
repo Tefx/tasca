@@ -90,7 +90,7 @@ def _extract_tool_result_lenient(response: dict) -> dict:
 
 
 def make_call_tool(
-    session: "MCPSession",
+    session: MCPSession,
     request_counter: list[int],
     extract_fn: Callable[[dict], dict],
 ) -> Callable[[str, dict], dict]:
@@ -270,7 +270,7 @@ def test_mcp_initialize(mcp_test_client) -> None:
         assert "serverInfo" in result
 
 
-def test_mcp_list_tools(mcp_session: "MCPSession") -> None:
+def test_mcp_list_tools(mcp_session: MCPSession) -> None:
     """Test MCP tools/list request.
 
     Scenario: MCP Tool Discovery
@@ -323,7 +323,7 @@ def test_mcp_list_tools(mcp_session: "MCPSession") -> None:
 # =============================================================================
 
 
-def test_mcp_patron_register(mcp_session: "MCPSession") -> None:
+def test_mcp_patron_register(mcp_session: MCPSession) -> None:
     """Test patron_register tool.
 
     Scenario: MCP Patron Registration
@@ -351,7 +351,7 @@ def test_mcp_patron_register(mcp_session: "MCPSession") -> None:
     assert "result" in data
 
 
-def test_mcp_patron_get(mcp_session: "MCPSession") -> None:
+def test_mcp_patron_get(mcp_session: MCPSession) -> None:
     """Test patron_get tool.
 
     Scenario: MCP Patron Retrieval
@@ -381,7 +381,7 @@ def test_mcp_patron_get(mcp_session: "MCPSession") -> None:
 # =============================================================================
 
 
-def test_mcp_table_create(mcp_session: "MCPSession") -> None:
+def test_mcp_table_create(mcp_session: MCPSession) -> None:
     """Test table_create tool.
 
     Scenario: MCP Table Creation
@@ -408,7 +408,7 @@ def test_mcp_table_create(mcp_session: "MCPSession") -> None:
     assert "result" in data
 
 
-def test_mcp_table_join(mcp_session: "MCPSession") -> None:
+def test_mcp_table_join(mcp_session: MCPSession) -> None:
     """Test table_join tool.
 
     Scenario: MCP Table Join
@@ -436,7 +436,7 @@ def test_mcp_table_join(mcp_session: "MCPSession") -> None:
     assert "result" in data
 
 
-def test_mcp_table_get(mcp_session: "MCPSession") -> None:
+def test_mcp_table_get(mcp_session: MCPSession) -> None:
     """Test table_get tool.
 
     Scenario: MCP Table Retrieval
@@ -461,7 +461,7 @@ def test_mcp_table_get(mcp_session: "MCPSession") -> None:
     assert "result" in data
 
 
-def test_mcp_table_say(mcp_session: "MCPSession") -> None:
+def test_mcp_table_say(mcp_session: MCPSession) -> None:
     """Test table_say tool.
 
     Scenario: MCP Table Saying
@@ -490,7 +490,7 @@ def test_mcp_table_say(mcp_session: "MCPSession") -> None:
     assert "result" in data
 
 
-def test_mcp_table_listen(mcp_session: "MCPSession") -> None:
+def test_mcp_table_listen(mcp_session: MCPSession) -> None:
     """Test table_listen tool.
 
     Scenario: MCP Table Listening
@@ -520,7 +520,7 @@ def test_mcp_table_listen(mcp_session: "MCPSession") -> None:
 # =============================================================================
 
 
-def test_mcp_seat_heartbeat(mcp_session: "MCPSession") -> None:
+def test_mcp_seat_heartbeat(mcp_session: MCPSession) -> None:
     """Test seat_heartbeat tool.
 
     Scenario: MCP Seat Presence Update
@@ -548,7 +548,7 @@ def test_mcp_seat_heartbeat(mcp_session: "MCPSession") -> None:
     assert "result" in data
 
 
-def test_mcp_seat_list(mcp_session: "MCPSession") -> None:
+def test_mcp_seat_list(mcp_session: MCPSession) -> None:
     """Test seat_list tool.
 
     Scenario: MCP Seat Listing
@@ -649,7 +649,7 @@ async def test_mcp_stdio_tool_call() -> None:
 # =============================================================================
 
 
-def test_mcp_full_cycle_patron_flow(mcp_session: "MCPSession") -> None:
+def test_mcp_full_cycle_patron_flow(mcp_session: MCPSession) -> None:
     """Test full patron flow: register → create table → join → say → listen.
 
     This integration test exercises the complete patron lifecycle:
@@ -750,7 +750,7 @@ def test_mcp_full_cycle_patron_flow(mcp_session: "MCPSession") -> None:
     assert any(s["id"] == seat_id for s in seats), "Our seat should appear in seat_list"
 
 
-def test_mcp_full_cycle_multiple_patrons(mcp_session: "MCPSession") -> None:
+def test_mcp_full_cycle_multiple_patrons(mcp_session: MCPSession) -> None:
     """Test multi-patron flow: register multiple patrons, join, say, listen.
 
     This integration test exercises:
@@ -837,7 +837,7 @@ def test_mcp_full_cycle_multiple_patrons(mcp_session: "MCPSession") -> None:
 # =============================================================================
 
 
-def test_mcp_error_table_closed(mcp_session: "MCPSession") -> None:
+def test_mcp_error_table_closed(mcp_session: MCPSession) -> None:
     """Test TableClosed error - post to closed table is rejected.
 
     Per spec v0.1 Section 1.1:
@@ -906,7 +906,7 @@ def test_mcp_error_table_closed(mcp_session: "MCPSession") -> None:
     assert listen_result.get("ok"), f"table_listen should work on closed table: {listen_result}"
 
 
-def test_mcp_error_dedup_collision(mcp_session: "MCPSession") -> None:
+def test_mcp_error_dedup_collision(mcp_session: MCPSession) -> None:
     """Test dedup_id collision returns same response (idempotency).
 
     Per spec v0.1 Section 3:
@@ -974,7 +974,7 @@ def test_mcp_error_dedup_collision(mcp_session: "MCPSession") -> None:
     )
 
 
-def test_mcp_error_paused_table(mcp_session: "MCPSession") -> None:
+def test_mcp_error_paused_table(mcp_session: MCPSession) -> None:
     """Test PAUSED table behavior per spec v0.1 Section 1.1.
 
     Per spec:
@@ -1052,7 +1052,85 @@ def test_mcp_error_paused_table(mcp_session: "MCPSession") -> None:
     assert say_result.get("ok"), f"table_say should work after resume: {say_result}"
 
 
-def test_mcp_error_version_conflict(mcp_session: "MCPSession") -> None:
+def test_mcp_table_control_reports_racing_version_conflict_before_invalid_transition(
+    mcp_session: MCPSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MCP runtime preserves stale-version precedence during racing control.
+
+    The shared operation reads OPEN, validates pause as locally valid, then a
+    racing mutation changes the row to PAUSED/version 5 before the atomic write.
+    The transport-facing result must be VERSION_CONFLICT, not a reclassified
+    invalid transition against the new PAUSED state.
+    """
+    import sqlite3
+    from datetime import datetime
+
+    from returns.result import Result
+
+    import tasca.shell.services.operations.table_control as operation_module
+    from tasca.core.domain.saying import Saying, Speaker
+    from tasca.core.domain.table import Table, TableStatus
+    from tasca.shell.storage.control_repo import ControlError
+
+    request_counter = [1]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_lenient)
+
+    patron_result = call_tool("patron_register", {"name": "RaceControlAgent", "kind": "agent"})
+    assert patron_result.get("ok"), f"patron_register failed: {patron_result}"
+    patron_id = patron_result["data"]["id"]
+
+    table_result = call_tool("table_create", {"question": "Race control test"})
+    assert table_result.get("ok"), f"table_create failed: {table_result}"
+    table_id = table_result["data"]["id"]
+
+    original_atomic = operation_module.atomic_control_table
+
+    def racing_update_then_atomic(
+        conn: sqlite3.Connection,
+        table_id: str,
+        speaker: Speaker,
+        control_content: str,
+        new_status: TableStatus,
+        current_table: Table,
+        now: datetime,
+    ) -> Result[tuple[Saying, Table], ControlError]:
+        conn.execute(
+            "UPDATE tables SET version = ?, status = ? WHERE id = ?",
+            (5, TableStatus.PAUSED.value, table_id),
+        )
+        conn.commit()
+        return original_atomic(
+            conn=conn,
+            table_id=table_id,
+            speaker=speaker,
+            control_content=control_content,
+            new_status=new_status,
+            current_table=current_table,
+            now=now,
+        )
+
+    monkeypatch.setattr(operation_module, "atomic_control_table", racing_update_then_atomic)
+
+    race_result = call_tool(
+        "table_control",
+        {
+            "table_id": table_id,
+            "action": "pause",
+            "speaker_name": "RaceControlAgent",
+            "patron_id": patron_id,
+        },
+    )
+
+    assert not race_result.get("ok"), race_result
+    assert race_result["error"]["code"] == "VERSION_CONFLICT"
+    assert race_result["error"]["details"]["expected_version"] == 1
+    assert race_result["error"]["details"]["actual_version"] == 5
+    listen_result = call_tool("table_listen", {"table_id": table_id, "since_sequence": -1})
+    assert listen_result.get("ok")
+    assert listen_result["data"]["sayings"] == []
+
+
+def test_mcp_error_version_conflict(mcp_session: MCPSession) -> None:
     """Test VersionConflict error for optimistic concurrency.
 
     Per spec v0.1 Section 5.2:
@@ -1116,7 +1194,7 @@ def test_mcp_error_version_conflict(mcp_session: "MCPSession") -> None:
     )
 
 
-def test_mcp_error_invalid_request(mcp_session: "MCPSession") -> None:
+def test_mcp_error_invalid_request(mcp_session: MCPSession) -> None:
     """Test invalid requests return appropriate error codes.
 
     Per spec Section 1.3:
@@ -1173,7 +1251,7 @@ def test_mcp_error_invalid_request(mcp_session: "MCPSession") -> None:
 # =============================================================================
 
 
-def test_mcp_batch_delete_full_cycle(mcp_session: "MCPSession") -> None:
+def test_mcp_batch_delete_full_cycle(mcp_session: MCPSession) -> None:
     """Test full batch delete cycle: create tables → close → batch delete.
 
     Scenario: Full Batch Delete Lifecycle
@@ -1224,7 +1302,7 @@ def test_mcp_batch_delete_full_cycle(mcp_session: "MCPSession") -> None:
     assert get2.get("ok") is False, "Deleted table should not be found"
 
 
-def test_mcp_batch_delete_rejects_open(mcp_session: "MCPSession") -> None:
+def test_mcp_batch_delete_rejects_open(mcp_session: MCPSession) -> None:
     """Test batch delete rejects open (non-closed) tables.
 
     Scenario: Batch Delete Precondition Failure
@@ -1252,7 +1330,7 @@ def test_mcp_batch_delete_rejects_open(mcp_session: "MCPSession") -> None:
     assert get_result.get("ok") is True, "Open table should still exist"
 
 
-def test_mcp_table_list_status_filter(mcp_session: "MCPSession") -> None:
+def test_mcp_table_list_status_filter(mcp_session: MCPSession) -> None:
     """Test table_list with different status filters.
 
     Scenario: Table List Status Filtering

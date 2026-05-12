@@ -14,9 +14,7 @@ from returns.result import Failure, Success
 from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.seat import Seat, SeatId, SeatState
-from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
-from tasca.core.export_service import generate_jsonl, generate_markdown
-from tasca.core.services.batch_delete_service import MAX_BATCH_SIZE, validate_batch_delete_request
+from tasca.core.domain.table import TableId, Version
 from tasca.core.services.limits_service import LimitError, LimitsConfig, settings_to_limits_config
 from tasca.core.services.mention_service import (
     PatronMatch,
@@ -26,12 +24,10 @@ from tasca.core.services.mention_service import (
 from tasca.core.services.seat_service import (
     DEFAULT_SEAT_TTL_SECONDS,
     calculate_expiry_time,
-    filter_active_seats,
 )
 from tasca.core.table_state_machine import (
     can_join,
     can_say,
-    is_terminal,
 )
 from tasca.shell.logging import (
     get_logger,
@@ -81,9 +77,6 @@ from tasca.shell.mcp.entrypoint_logic import (
     silence_next_action as _silence_next_action,
 )
 from tasca.shell.mcp.entrypoint_logic import (
-    validate_control_action as _validate_control_action,
-)
-from tasca.shell.mcp.entrypoint_logic import (
     validate_speaker_constraints as _validate_speaker_constraints,
 )
 from tasca.shell.mcp.entrypoint_session_tools import (
@@ -100,7 +93,23 @@ from tasca.shell.mcp.entrypoint_session_tools import (
 )
 from tasca.shell.mcp.responses import error_response, success_response
 from tasca.shell.services.limited_saying_service import append_saying_with_limits
-from tasca.shell.services.table_id_generator import generate_table_id
+from tasca.shell.services.operations.batch_delete import delete_tables_batch
+from tasca.shell.services.operations.patron_registration import (
+    PatronCreateError,
+    PatronIdempotencyError,
+    PatronLookupError,
+)
+from tasca.shell.services.operations.patron_registration import (
+    register_patron as register_patron_operation,
+)
+from tasca.shell.services.operations.table_control import (
+    TableControlErrorCode,
+    execute_table_control,
+)
+from tasca.shell.services.operations.table_creation import (
+    create_discussion_table,
+)
+from tasca.shell.services.operations.table_export import export_table
 from tasca.shell.storage.idempotency_repo import check_idempotency_key, store_idempotency_key
 from tasca.shell.storage.patron_repo import (
     PatronNotFoundError,
@@ -113,7 +122,6 @@ from tasca.shell.storage.saying_repo import (
     append_saying,
     get_recent_sayings,
     get_table_max_sequence,
-    list_all_sayings_by_table,
     list_sayings_by_table,
 )
 from tasca.shell.storage.seat_repo import (
@@ -122,8 +130,6 @@ from tasca.shell.storage.seat_repo import (
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     VersionConflictError,
-    batch_delete_tables,
-    create_table,
     get_table,
     list_tables,
     list_tables_with_seat_counts,
@@ -199,73 +205,27 @@ def patron_register(
         )
 
     conn = next(get_mcp_db())
-
-    # Resource key for idempotency scope (patron registration uses name as scope)
-    resource_key = f"patron:{resolved_name}"
-
-    # Check idempotency key if provided
-    if dedup_id is not None:
-        idempotency_result = check_idempotency_key(conn, resource_key, "patron_register", dedup_id)
-        if isinstance(idempotency_result, Failure):
-            error = idempotency_result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
-
-        cached_response = idempotency_result.unwrap()
-        if cached_response is not None:
-            # Log dedup hit
-            log_dedup_hit(logger, "patron_register", resource_key, dedup_id)
-            # Return cached response (return_existing semantics)
-            return success_response(cached_response["data"])
-
-    # Check for existing patron by name (dedup)
-    existing_result = find_patron_by_name(conn, resolved_name)
-
-    if isinstance(existing_result, Failure):
-        error = existing_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to check for existing patron: {error}")
-
-    existing = existing_result.unwrap()
-    if existing is not None:
-        # Return existing patron (return_existing semantics)
-        response_data = _build_patron_response_data(existing, is_new=False)
-        # Store in idempotency cache if dedup_id provided
-        if dedup_id is not None:
-            store_idempotency_key(
-                conn, resource_key, "patron_register", dedup_id, {"data": response_data}
-            )
-        return success_response(response_data)
-
-    # Create new patron
     now = datetime.now(UTC)
-    new_patron_id = PatronId(patron_id) if patron_id else PatronId(str(uuid.uuid4()))
-
-    patron = Patron(
-        id=new_patron_id,
-        name=resolved_name,
+    result = register_patron_operation(
+        conn,
+        resolved_name,
         kind=kind,
         alias=alias,
         meta=meta,
-        created_at=now,
+        patron_id=patron_id,
+        dedup_id=dedup_id,
+        now=now,
     )
-
-    result = create_patron(conn, patron)
-
     if isinstance(result, Failure):
         error = result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to create patron: {error}")
+        if isinstance(error, PatronIdempotencyError | PatronLookupError | PatronCreateError):
+            return error_response("DATABASE_ERROR", str(error))
+        return error_response("DATABASE_ERROR", f"Failed to register patron: {error}")
 
-    created = result.unwrap()
-    response_data = _build_patron_response_data(created, is_new=True)
-    # Store in idempotency cache if dedup_id provided
-    if dedup_id is not None:
-        store_idempotency_key(
-            conn,
-            resource_key,
-            "patron_register",
-            dedup_id,
-            {"data": response_data},
-            now=now,
-        )
+    outcome = result.unwrap()
+    if dedup_id is not None and not outcome.is_new:
+        log_dedup_hit(logger, "patron_register", "patron_register", dedup_id)
+    response_data = _build_patron_response_data(outcome.patron, is_new=outcome.is_new)
     return success_response(response_data)
 
 
@@ -336,45 +296,42 @@ def table_create(
             return success_response(cached_response["data"])
 
     now = datetime.now(UTC)
-    table_id_result = generate_table_id(conn)
-
-    if isinstance(table_id_result, Failure):
-        error = table_id_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to generate table ID: {error}")
-
-    table_id = table_id_result.unwrap()
-
-    table = Table(
-        id=table_id,
-        question=question,
+    result = create_discussion_table(
+        conn,
+        question,
         context=context,
-        status=TableStatus.OPEN,
-        version=Version(1),
-        created_at=now,
-        updated_at=now,
         creator_patron_id=creator_patron_id,
+        now=now,
     )
-
-    result = create_table(conn, table)
-
     if isinstance(result, Failure):
         error = result.failure()
         return error_response("DATABASE_ERROR", f"Failed to create table: {error}")
 
-    created = result.unwrap()
+    outcome = result.unwrap()
+    created = outcome.table
 
     # Log table creation
     log_table_create(logger, created.id, "mcp:client")
 
     response_data = {
         "id": created.id,
+        "table_id": created.id,
         "question": created.question,
+        "title": created.question,
         "context": created.context,
         "status": created.status.value,
         "version": created.version,
         "created_at": created.created_at.isoformat(),
         "updated_at": created.updated_at.isoformat(),
         "creator_patron_id": created.creator_patron_id,
+        "creator_id": created.creator_patron_id,
+        "created_by": created.creator_patron_id,
+        "host_ids": outcome.host_ids,
+        "metadata": outcome.metadata,
+        "policy": outcome.policy,
+        "board": outcome.board,
+        "invite_code": outcome.invite_code,
+        "web_url": outcome.web_url,
     }
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
@@ -609,42 +566,32 @@ def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> d
 # @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_delete_batch(ids: list[str]) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
-    if not ids or len(ids) > MAX_BATCH_SIZE:
-        return error_response(
-            "INVALID_REQUEST",
-            f"ids must contain 1 to {MAX_BATCH_SIZE} table IDs.",
-            {"count": len(ids), "max": MAX_BATCH_SIZE},
-        )
-
     conn = next(get_mcp_db())
-
-    # Fetch all requested tables for validation
-    tables_for_validation = []
-    for tid in ids:
-        result = get_table(conn, TableId(tid))
-        if isinstance(result, Success):
-            tables_for_validation.append(result.unwrap())
-
-    # Validate: all must exist and be closed
-    validation = validate_batch_delete_request(tables_for_validation, ids)
-
-    if not validation.is_valid:
+    result = delete_tables_batch(conn, ids)
+    if isinstance(result, Failure):
+        failure = result.failure()
+        if failure.status == "invalid_request":
+            return error_response(
+                "INVALID_REQUEST",
+                failure.error or f"ids must contain 1 to {failure.max_batch_size} table IDs.",
+                {"count": len(ids), "max": failure.max_batch_size},
+            )
+        if failure.status == "precondition_failed":
+            return error_response(
+                "BATCH_PRECONDITION_FAILED",
+                "One or more tables cannot be deleted.",
+                {
+                    "details": [
+                        {"id": r.table_id, "reason": r.reason} for r in failure.rejections
+                    ],
+                },
+            )
         return error_response(
-            "BATCH_PRECONDITION_FAILED",
-            "One or more tables cannot be deleted.",
-            {
-                "details": [{"id": r.table_id, "reason": r.reason} for r in validation.rejections],
-            },
+            "DATABASE_ERROR",
+            failure.error or "Failed to batch delete tables.",
         )
 
-    # Execute cascade delete
-    delete_result = batch_delete_tables(conn, validation.valid_ids)
-
-    if isinstance(delete_result, Failure):
-        error = delete_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to batch delete tables: {error}")
-
-    deleted_ids = delete_result.unwrap()
+    deleted_ids = result.unwrap().deleted_ids
 
     log_batch_table_delete(logger, deleted_ids, "mcp")
 
@@ -662,51 +609,27 @@ def table_export(
     format: str = "markdown",
 ) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
-    # Validate format early - return INVALID_REQUEST envelope instead of raising ValidationError
-    if format not in VALID_EXPORT_FORMATS:
-        return error_response(
-            "INVALID_REQUEST",
-            f"Unknown format: {format}. Supported formats: markdown, jsonl",
-            {"format": format, "supported": list(VALID_EXPORT_FORMATS)},
-        )
-
     conn = next(get_mcp_db())
-
-    # Verify table exists and fetch it
-    table_result = get_table(conn, TableId(table_id))
-    if isinstance(table_result, Failure):
-        error = table_result.failure()
-        if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
-
-    table = table_result.unwrap()
-
-    # Fetch ALL sayings for export (no count truncation)
-    sayings_result = list_all_sayings_by_table(conn, table_id)
-    if isinstance(sayings_result, Failure):
-        error_msg = str(sayings_result.failure())
-        # Check if it's a size exceeded error
-        if "Export size exceeded" in error_msg:
+    result = export_table(conn, table_id, format, exported_at=datetime.now(UTC).isoformat())
+    if isinstance(result, Failure):
+        error = result.failure()
+        if error.status == "invalid_format":
             return error_response(
-                "LIMIT_EXCEEDED",
-                error_msg,
-                {"table_id": table_id},
+                "INVALID_REQUEST",
+                error.error or f"Unknown format: {format}. Supported formats: markdown, jsonl",
+                {"format": format, "supported": list(VALID_EXPORT_FORMATS)},
             )
-        return error_response("DATABASE_ERROR", f"Failed to list sayings: {error_msg}")
+        if error.status == "not_found":
+            return error_response("NOT_FOUND", error.error or f"Table not found: {table_id}")
+        if error.status == "limit_exceeded":
+            return error_response("LIMIT_EXCEEDED", error.error or "Export size exceeded", {"table_id": table_id})
+        return error_response("DATABASE_ERROR", error.error or "Failed to export table")
 
-    sayings = sayings_result.unwrap()
-
-    # Generate export content based on format (format already validated above)
-    if format == "jsonl":
-        exported_at = datetime.now(UTC).isoformat()
-        content = generate_jsonl(table, sayings, exported_at)
-    else:  # markdown (default, already validated)
-        content = generate_markdown(table, sayings)
+    export_result = result.unwrap()
 
     return success_response(
         {
-            "content": content,
+            "content": export_result.content,
             "format": format,
             "table_id": table_id,
         }
@@ -1113,66 +1036,25 @@ def table_control(
             log_dedup_hit(logger, "table_control", resource_key, dedup_id)
             return success_response(cached_response["data"])
 
-    # Get current table
-    table_result = get_table(conn, TableId(table_id))
-    if isinstance(table_result, Failure):
-        error = table_result.failure()
-        if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
-
-    current_table = table_result.unwrap()
-
-    # Check if table is already closed (terminal state)
-    if is_terminal(current_table.status):
-        return error_response(
-            "OPERATION_NOT_ALLOWED",
-            "Cannot perform control action on closed table. Closed is a terminal state.",
-            {"table_status": current_table.status.value},
-        )
-
-    # Validate and compute new status
-    new_status, validation_error = _validate_control_action(action, current_table.status)
-    if validation_error is not None:
-        return validation_error
-    assert new_status is not None  # Guaranteed by no validation error
-
-    # Create speaker and append CONTROL saying
     speaker = _create_control_speaker(speaker_name, patron_id)
-    control_saying, saying_error = _append_control_saying(conn, table_id, action, reason, speaker)
-    if saying_error is not None:
-        return saying_error
-    assert control_saying is not None  # Guaranteed by no saying_error
-
-    # Update table status
     now = datetime.now(UTC)
-    table_update = TableUpdate(
-        question=current_table.question,
-        context=current_table.context,
-        status=new_status,
-    )
-
-    update_result = update_table(
-        conn=conn,
-        table_id=TableId(table_id),
-        update=table_update,
-        expected_version=current_table.version,
-        now=now,
-    )
-    if isinstance(update_result, Failure):
-        error = update_result.failure()
-        if isinstance(error, VersionConflictError):
+    control_result = execute_table_control(conn, table_id, action, speaker, reason, now)
+    if isinstance(control_result, Failure):
+        error = control_result.failure()
+        if error.code == TableControlErrorCode.TABLE_NOT_FOUND:
+            return error_response("NOT_FOUND", error.message)
+        if error.code == TableControlErrorCode.VERSION_CONFLICT:
             return error_response(
                 "VERSION_CONFLICT",
-                "Table version conflict during control operation",
-                {
-                    "expected_version": error.expected_version,
-                    "actual_version": error.current_version,
-                },
+                error.message,
+                {"expected_version": error.expected_version, "actual_version": error.actual_version},
             )
-        return error_response("DATABASE_ERROR", f"Failed to update table status: {error}")
+        if error.code in {TableControlErrorCode.INVALID_ACTION, TableControlErrorCode.INVALID_TRANSITION}:
+            return error_response("OPERATION_NOT_ALLOWED", error.message, {"table_status": error.current_status.value if error.current_status else None})
+        return error_response("DATABASE_ERROR", error.message)
 
-    response_data = _build_control_response(new_status, control_saying.sequence)
+    outcome = control_result.unwrap()
+    response_data = _build_control_response(outcome.table.status, outcome.control_saying.sequence)
 
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:

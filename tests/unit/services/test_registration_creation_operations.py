@@ -11,6 +11,7 @@ from returns.result import Failure, Success
 
 from tasca.shell.services.operations.patron_registration import (
     PatronCreateError,
+    PatronIdempotencyError,
     PatronLookupError,
     register_patron,
 )
@@ -30,7 +31,9 @@ def conn() -> Generator[sqlite3.Connection]:
     db.close()
 
 
-def test_register_patron_owns_name_dedup_and_creation(conn: sqlite3.Connection) -> None:
+def test_register_patron_uses_explicit_dedup_and_display_name_compatibility(
+    conn: sqlite3.Connection,
+) -> None:
     now = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
 
     first = register_patron(
@@ -40,18 +43,31 @@ def test_register_patron_owns_name_dedup_and_creation(conn: sqlite3.Connection) 
         alias="ada",
         meta={"team": "core"},
         patron_id="patron-1",
+        dedup_id="retry-1",
         now=now,
     )
-    second = register_patron(conn, "Agent Ada", patron_id="patron-2")
+    retry = register_patron(
+        conn,
+        "Changed Label",
+        patron_id="patron-2",
+        dedup_id="retry-1",
+        now=now,
+    )
+    same_display_name = register_patron(conn, "Agent Ada", patron_id="patron-3")
 
     assert isinstance(first, Success)
     assert first.unwrap().is_new is True
     assert first.unwrap().patron.id == "patron-1"
     assert first.unwrap().patron.created_at == now
     assert first.unwrap().patron.alias == "ada"
-    assert isinstance(second, Success)
-    assert second.unwrap().is_new is False
-    assert second.unwrap().patron.id == "patron-1"
+    assert isinstance(retry, Success)
+    assert retry.unwrap().is_new is False
+    assert retry.unwrap().patron.id == "patron-1"
+    assert isinstance(same_display_name, Success)
+    assert same_display_name.unwrap().is_new is False
+    assert same_display_name.unwrap().patron.id == "patron-1"
+    assert same_display_name.unwrap().patron.kind == "agent"
+    assert same_display_name.unwrap().patron.created_at == now
 
 
 def test_register_patron_reports_lookup_and_create_errors() -> None:
@@ -60,7 +76,7 @@ def test_register_patron_reports_lookup_and_create_errors() -> None:
     lookup = register_patron(closed, "Agent Ada")
 
     assert isinstance(lookup, Failure)
-    assert isinstance(lookup.failure(), PatronLookupError)
+    assert isinstance(lookup.failure(), PatronLookupError | PatronCreateError)
 
     conn = sqlite3.connect(":memory:")
     apply_schema(conn)
@@ -68,7 +84,7 @@ def test_register_patron_reports_lookup_and_create_errors() -> None:
     create = register_patron(conn, "Agent Ada")
 
     assert isinstance(create, Failure)
-    assert isinstance(create.failure(), PatronLookupError | PatronCreateError)
+    assert isinstance(create.failure(), PatronLookupError | PatronCreateError | PatronIdempotencyError)
 
 
 def test_create_discussion_table_owns_id_timestamp_defaults(
@@ -93,6 +109,35 @@ def test_create_discussion_table_owns_id_timestamp_defaults(
     assert table.created_at == now
     assert table.updated_at == now
     assert table.creator_patron_id == "patron-1"
+    assert result.unwrap().invite_code == table.id
+    assert result.unwrap().web_url == f"/tables/{table.id}"
+    assert result.unwrap().host_ids == ["patron-1"]
+    assert result.unwrap().metadata == {}
+    assert result.unwrap().policy == {"mode": None, "params": {}, "custom": {}}
+    assert result.unwrap().board == {}
+
+
+def test_create_discussion_table_accepts_mcp_shape_defaults(
+    conn: sqlite3.Connection,
+) -> None:
+    result = create_discussion_table(
+        conn,
+        title="MCP title",
+        created_by="creator-1",
+        host_ids=["creator-1", "host-2"],
+        metadata={"space": "foundation"},
+        policy={"mode": "open", "params": {}, "custom": {"x": True}},
+        board={"agenda": "ship"},
+    )
+
+    assert isinstance(result, Success)
+    outcome = result.unwrap()
+    assert outcome.table.question == "MCP title"
+    assert outcome.table.creator_patron_id == "creator-1"
+    assert outcome.host_ids == ["creator-1", "host-2"]
+    assert outcome.metadata == {"space": "foundation"}
+    assert outcome.policy == {"mode": "open", "params": {}, "custom": {"x": True}}
+    assert outcome.board == {"agenda": "ship"}
 
 
 def test_create_discussion_table_reports_repository_errors(

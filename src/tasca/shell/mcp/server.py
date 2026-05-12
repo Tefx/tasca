@@ -22,15 +22,8 @@ Escape Hatch Convention (shell_result):
 
 from __future__ import annotations
 
-import asyncio
-import deal
 import json
-import time
-import uuid
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any, Literal
-
-from pydantic import Field
 
 # FastMCP is a required runtime dependency. We use conditional imports to allow
 # static analysis and doctest collection in environments where it's not installed.
@@ -55,112 +48,22 @@ else:
         ToolResult = None  # type: ignore[misc,assignment]
 
 from mcp.types import TextContent
-from returns.result import Failure, Success
+from returns.result import Failure
 
 from tasca.config import settings
-from tasca.core.domain.patron import Patron, PatronId
-from tasca.core.domain.saying import Speaker, SpeakerKind
-from tasca.core.domain.seat import (
-    SPEC_STATE_TO_INTERNAL,
-    Seat,
-    SeatId,
-    SeatState,
-)
-from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
-from tasca.core.export_service import generate_jsonl, generate_markdown
-from tasca.core.services.limits_service import (
-    LimitError,
-    LimitsConfig,
-    settings_to_limits_config,
-)
-from tasca.core.services.mention_service import (
-    PatronMatch,
-    has_ambiguous_mentions,
-    resolve_mentions,
-)
-from tasca.core.services.seat_service import (
-    DEFAULT_SEAT_TTL_SECONDS,
-    calculate_expiry_time,
-    filter_active_seats,
-)
-from tasca.core.table_state_machine import (
-    can_join,
-    can_say,
-    can_transition_to_closed,
-    can_transition_to_open,
-    can_transition_to_paused,
-    is_terminal,
-    transition_to_closed,
-    transition_to_open,
-    transition_to_paused,
-)
 from tasca.shell.logging import (
     get_logger,
-    log_batch_table_delete,
-    log_dedup_hit,
-    log_say,
-    log_table_create,
 )
-from tasca.shell.mcp.database import close_mcp_db, get_mcp_db
+from tasca.shell.mcp.database import close_mcp_db
 from tasca.shell.mcp.proxy import (
-    ProxyConfigError,
-    SessionInitError,
     forward_jsonrpc_request,
     get_upstream_config,
-    switch_to_local,
-    switch_to_remote,
 )
 
 # Tools that must always run locally (never forwarded to upstream)
 LOCAL_ONLY_TOOLS: frozenset[str] = frozenset({"connect", "connection_status"})
-from tasca.shell.mcp.responses import error_response, success_response
-from tasca.shell.services.limited_saying_service import (
-    append_saying_with_limits,
-)
-from tasca.shell.services.table_id_generator import (
-    generate_table_id,
-)
-from tasca.shell.storage.idempotency_repo import (
-    check_idempotency_key,
-    store_idempotency_key,
-)
-from tasca.shell.storage.patron_repo import (
-    PatronNotFoundError,
-    create_patron,
-    find_patron_by_name,
-    get_patron,
-    list_patrons,
-)
-from tasca.shell.storage.saying_repo import (
-    append_saying,
-    get_recent_sayings,
-    get_table_max_sequence,
-    list_all_sayings_by_table,
-    list_sayings_by_table,
-)
-from tasca.shell.storage.seat_repo import (
-    SeatNotFoundError,
-    create_seat,
-    find_seats_by_table,
-    heartbeat_seat_by_patron,
-)
-from tasca.shell.storage.seat_repo import (
-    heartbeat_seat as repo_heartbeat_seat,
-)
-from tasca.core.services.batch_delete_service import (
-    MAX_BATCH_SIZE,
-    validate_batch_delete_request,
-)
-from tasca.shell.storage.table_repo import (
-    TableNotFoundError,
-    VersionConflictError,
-    batch_delete_tables,
-    create_table,
-    get_table,
-    list_tables,
-    list_tables_with_seat_counts,
-    update_table,
-)
+from tasca.shell.mcp.responses import error_response  # noqa: E402
+from tasca.shell.mcp.tool_contracts import SPEC_PARAMETER_DEFAULTS, parameter_field  # noqa: E402
 
 # Transport types for MCP server
 TransportType = Literal["stdio", "http", "sse", "streamable-http"]
@@ -328,7 +231,7 @@ else:
 # Logger for structured logging
 logger = get_logger(__name__)
 
-from tasca.shell.mcp import entrypoints as ep
+from tasca.shell.mcp import entrypoints as ep  # noqa: E402
 
 DEFAULT_HISTORY_LIMIT = ep.DEFAULT_HISTORY_LIMIT
 DEFAULT_HISTORY_MAX_BYTES = ep.DEFAULT_HISTORY_MAX_BYTES
@@ -338,13 +241,13 @@ VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def patron_register(
-    display_name: Annotated[str, Field(description="Agent or human display name shown in sayings")] = None,
-    alias: Annotated[str, Field(description="Optional short handle for mentions (e.g. '@arch')")] = None,
-    meta: Annotated[dict[str, Any], Field(description="Arbitrary JSON metadata attached to the patron")] = None,
-    patron_id: Annotated[str, Field(description="UUID for the patron; auto-generated if omitted")] = None,
-    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL); reuse to avoid duplicate registration")] = None,
-    name: Annotated[str, Field(description="Deprecated alias for display_name; use display_name instead")] = None,
-    kind: Annotated[Literal["agent", "human"], Field(description="Patron type: 'agent' (default) or 'human'")] = "agent",
+    display_name: Annotated[str, parameter_field("patron_register", "display_name")] = None,
+    alias: Annotated[str, parameter_field("patron_register", "alias")] = None,
+    meta: Annotated[dict[str, Any], parameter_field("patron_register", "meta")] = None,
+    patron_id: Annotated[str, parameter_field("patron_register", "patron_id")] = None,
+    dedup_id: Annotated[str, parameter_field("patron_register", "dedup_id")] = None,
+    name: Annotated[str, parameter_field("patron_register", "name")] = None,
+    kind: Annotated[Literal["agent", "human"], parameter_field("patron_register", "kind")] = "agent",
 ) -> dict[str, Any]:
     """Register a new agent or human patron with a stable identity.
 
@@ -357,7 +260,7 @@ def patron_register(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def patron_get(
-    patron_id: Annotated[str, Field(description="UUID of the patron to retrieve")],
+    patron_id: Annotated[str, parameter_field("patron_get", "patron_id")],
 ) -> dict[str, Any]:
     """Retrieve patron details by ID.
 
@@ -370,10 +273,10 @@ def patron_get(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_create(
-    question: Annotated[str, Field(description="Discussion topic or question for the table")],
-    context: Annotated[str, Field(description="Optional background context to frame the discussion")] = None,
-    creator_patron_id: Annotated[str, Field(description="Patron UUID of the table creator; omit if not registered yet")] = None,
-    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL); reuse to avoid creating duplicate tables")] = None,
+    question: Annotated[str, parameter_field("table_create", "question")],
+    context: Annotated[str, parameter_field("table_create", "context")] = None,
+    creator_patron_id: Annotated[str, parameter_field("table_create", "creator_patron_id")] = None,
+    dedup_id: Annotated[str, parameter_field("table_create", "dedup_id")] = None,
 ) -> dict[str, Any]:
     """Create a new discussion table.
 
@@ -387,11 +290,11 @@ def table_create(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_join(
-    table_id: Annotated[str, Field(description="UUID of the table to join (provide this OR invite_code)")] = None,
-    patron_id: Annotated[str, Field(description="UUID of the joining patron; auto-registers if omitted")] = None,
-    invite_code: Annotated[str, Field(description="Short invite code (alternative to table_id)")] = None,
-    history_limit: Annotated[int, Field(description="Max number of recent sayings to return (default 10)")] = DEFAULT_HISTORY_LIMIT,
-    history_max_bytes: Annotated[int, Field(description="Max total bytes of history to return (default 65536 = 64 KiB)")] = DEFAULT_HISTORY_MAX_BYTES,
+    table_id: Annotated[str, parameter_field("table_join", "table_id")] = None,
+    patron_id: Annotated[str, parameter_field("table_join", "patron_id")] = None,
+    invite_code: Annotated[str, parameter_field("table_join", "invite_code")] = None,
+    history_limit: Annotated[int, parameter_field("table_join", "history_limit")] = DEFAULT_HISTORY_LIMIT,
+    history_max_bytes: Annotated[int, parameter_field("table_join", "history_max_bytes")] = DEFAULT_HISTORY_MAX_BYTES,
 ) -> dict[str, Any]:
     """Join an existing table and get initial history.
 
@@ -407,7 +310,7 @@ def table_join(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_get(
-    table_id: Annotated[str, Field(description="UUID of the table to retrieve")],
+    table_id: Annotated[str, parameter_field("table_get", "table_id")],
 ) -> dict[str, Any]:
     """Get current table state including status, version, and metadata.
 
@@ -419,7 +322,7 @@ def table_get(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_list(
-    status: Annotated[Literal["open", "closed", "paused", "all"], Field(description="Filter tables by status; 'all' returns every table regardless of status")] = "open",
+    status: Annotated[Literal["open", "closed", "paused", "all"], parameter_field("table_list", "status")] = "open",
 ) -> dict[str, Any]:
     """List tables with optional status filter.
 
@@ -431,7 +334,7 @@ def table_list(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_delete_batch(
-    ids: Annotated[list[str], Field(description="List of table UUIDs to delete (max 100)")],
+    ids: Annotated[list[str], parameter_field("table_delete_batch", "ids")],
 ) -> dict[str, Any]:
     """Batch-delete multiple tables.
 
@@ -444,8 +347,8 @@ def table_delete_batch(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_export(
-    table_id: Annotated[str, Field(description="UUID of the table to export")],
-    format: Annotated[Literal["markdown", "jsonl"], Field(description="Export format: 'markdown' (human-readable) or 'jsonl' (machine-readable)")] = "markdown",
+    table_id: Annotated[str, parameter_field("table_export", "table_id")],
+    format: Annotated[Literal["markdown", "jsonl"], parameter_field("table_export", "format")] = "markdown",
 ) -> dict[str, Any]:
     """Export the full discussion from a table.
 
@@ -458,15 +361,15 @@ def table_export(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_say(
-    table_id: Annotated[str, Field(description="UUID of the table to post to")],
-    content: Annotated[str, Field(description="Message body (max 65536 bytes)")],
-    speaker_kind: Annotated[Literal["agent", "human"], Field(description="Speaker type: 'agent' (default) or 'human'")] = "agent",
-    patron_id: Annotated[str, Field(description="Patron UUID; required for agents. If omitted with speaker_kind='agent', auto-registers using speaker_name")] = None,
-    speaker_name: Annotated[str, Field(description="Display name for the speaker; used for auto-registration if patron_id is omitted")] = None,
-    saying_type: Annotated[Literal["text", "control", "system"], Field(description="Saying type: 'text' (default), 'control', or 'system'")] = None,
-    mentions: Annotated[list[str], Field(description="List of mention targets: patron UUIDs, aliases, display names, or 'all'. Error if a handle matches multiple patrons")] = None,
-    reply_to_sequence: Annotated[int, Field(description="Sequence number of the saying being replied to (informational in v0.1)")] = None,
-    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL); reuse on retry to avoid duplicate sayings")] = None,
+    table_id: Annotated[str, parameter_field("table_say", "table_id")],
+    content: Annotated[str, parameter_field("table_say", "content")],
+    speaker_kind: Annotated[Literal["agent", "human"], parameter_field("table_say", "speaker_kind")] = "agent",
+    patron_id: Annotated[str, parameter_field("table_say", "patron_id")] = None,
+    speaker_name: Annotated[str, parameter_field("table_say", "speaker_name")] = None,
+    saying_type: Annotated[Literal["text", "control", "system"], parameter_field("table_say", "saying_type")] = SPEC_PARAMETER_DEFAULTS["table_say.saying_type"],
+    mentions: Annotated[list[str], parameter_field("table_say", "mentions")] = None,
+    reply_to_sequence: Annotated[int, parameter_field("table_say", "reply_to_sequence")] = None,
+    dedup_id: Annotated[str, parameter_field("table_say", "dedup_id")] = None,
 ) -> dict[str, Any]:
     """Append a message (saying) to a table.
 
@@ -495,9 +398,9 @@ def table_say(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_listen(
-    table_id: Annotated[str, Field(description="UUID of the table to read from")],
-    since_sequence: Annotated[int, Field(description="Exclusive lower bound: returns sayings with sequence > this value. Use -1 to get all, or next_sequence from a previous call")] = -1,
-    limit: Annotated[int, Field(description="Max number of sayings to return (default 50)")] = 50,
+    table_id: Annotated[str, parameter_field("table_listen", "table_id")],
+    since_sequence: Annotated[int, parameter_field("table_listen", "since_sequence")] = -1,
+    limit: Annotated[int, parameter_field("table_listen", "limit")] = 50,
 ) -> dict[str, Any]:
     """Get recent sayings from a table (non-blocking).
 
@@ -512,12 +415,12 @@ def table_listen(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_control(
-    table_id: Annotated[str, Field(description="UUID of the table to control")],
-    action: Annotated[Literal["pause", "resume", "close"], Field(description="State transition: 'pause' (open→paused), 'resume' (paused→open), 'close' (open|paused→closed, terminal)")],
-    speaker_name: Annotated[str, Field(description="Display name of the actor performing the action")],
-    patron_id: Annotated[str, Field(description="Patron UUID of the actor (optional)")] = None,
-    reason: Annotated[str, Field(description="Optional human-readable reason for the action")] = None,
-    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL)")] = None,
+    table_id: Annotated[str, parameter_field("table_control", "table_id")],
+    action: Annotated[Literal["pause", "resume", "close"], parameter_field("table_control", "action")],
+    speaker_name: Annotated[str, parameter_field("table_control", "speaker_name")],
+    patron_id: Annotated[str, parameter_field("table_control", "patron_id")] = None,
+    reason: Annotated[str, parameter_field("table_control", "reason")] = None,
+    dedup_id: Annotated[str, parameter_field("table_control", "dedup_id")] = None,
 ) -> dict[str, Any]:
     """Pause, resume, or close a table.
 
@@ -533,12 +436,12 @@ def table_control(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_update(
-    table_id: Annotated[str, Field(description="UUID of the table to update")],
-    expected_version: Annotated[int, Field(description="Current table version for optimistic concurrency; get from table_get or table_join")],
-    patch: Annotated[dict[str, Any], Field(description="Fields to update. Allowed keys: 'host_ids' (list[str]), 'metadata' (dict), 'policy' (dict), 'board' (dict)")],
-    speaker_name: Annotated[str, Field(description="Display name of the actor performing the update")],
-    patron_id: Annotated[str, Field(description="Patron UUID of the actor (optional)")] = None,
-    dedup_id: Annotated[str, Field(description="Idempotency key (24h TTL)")] = None,
+    table_id: Annotated[str, parameter_field("table_update", "table_id")],
+    expected_version: Annotated[int, parameter_field("table_update", "expected_version")],
+    patch: Annotated[dict[str, Any], parameter_field("table_update", "patch")],
+    speaker_name: Annotated[str, parameter_field("table_update", "speaker_name")],
+    patron_id: Annotated[str, parameter_field("table_update", "patron_id")] = None,
+    dedup_id: Annotated[str, parameter_field("table_update", "dedup_id")] = None,
 ) -> dict[str, Any]:
     """Update table metadata using optimistic concurrency.
 
@@ -554,11 +457,11 @@ def table_update(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def table_wait(
-    table_id: Annotated[str, Field(description="UUID of the table to wait on")],
-    since_sequence: Annotated[int, Field(description="Exclusive lower bound: blocks until sayings with sequence > this value appear. Use next_sequence from previous call")] = -1,
-    wait_ms: Annotated[int, Field(description="Max time to block in milliseconds (default 10000; server may cap lower)")] = 10000,
-    limit: Annotated[int, Field(description="Max number of sayings to return per poll (default 50)")] = 50,
-    include_table: Annotated[bool, Field(description="If true, include full table snapshot (status, version, board, policy) in response")] = False,
+    table_id: Annotated[str, parameter_field("table_wait", "table_id")],
+    since_sequence: Annotated[int, parameter_field("table_wait", "since_sequence")] = -1,
+    wait_ms: Annotated[int, parameter_field("table_wait", "wait_ms")] = 10000,
+    limit: Annotated[int, parameter_field("table_wait", "limit")] = 50,
+    include_table: Annotated[bool, parameter_field("table_wait", "include_table")] = False,
 ) -> dict[str, Any]:
     """Long-poll for new sayings (blocks up to wait_ms).
 
@@ -574,12 +477,12 @@ def table_wait(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def seat_heartbeat(
-    table_id: Annotated[str, Field(description="UUID of the table")],
-    patron_id: Annotated[str, Field(description="Patron UUID (required unless seat_id is provided)")] = None,
-    state: Annotated[Literal["running", "idle", "done"], Field(description="Seat state: 'running' (active), 'idle' (paused), or 'done' (finished, signals departure)")] = None,
-    ttl_ms: Annotated[int, Field(description="Time-to-live in ms before the seat expires (default 60000 = 60s)")] = None,
-    dedup_id: Annotated[str, Field(description="Idempotency key")] = None,
-    seat_id: Annotated[str, Field(description="Legacy: seat UUID for direct reference; prefer patron_id")] = None,
+    table_id: Annotated[str, parameter_field("seat_heartbeat", "table_id")],
+    patron_id: Annotated[str, parameter_field("seat_heartbeat", "patron_id")] = None,
+    state: Annotated[Literal["running", "idle", "done"], parameter_field("seat_heartbeat", "state")] = SPEC_PARAMETER_DEFAULTS["seat_heartbeat.state"],
+    ttl_ms: Annotated[int, parameter_field("seat_heartbeat", "ttl_ms")] = SPEC_PARAMETER_DEFAULTS["seat_heartbeat.ttl_ms"],
+    dedup_id: Annotated[str, parameter_field("seat_heartbeat", "dedup_id")] = None,
+    seat_id: Annotated[str, parameter_field("seat_heartbeat", "seat_id")] = None,
 ) -> dict[str, Any]:
     """Maintain seat presence at a table (TTL-based keepalive).
 
@@ -594,8 +497,8 @@ def seat_heartbeat(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 def seat_list(
-    table_id: Annotated[str, Field(description="UUID of the table")],
-    active_only: Annotated[bool, Field(description="If true (default), filter out expired/departed seats")] = True,
+    table_id: Annotated[str, parameter_field("seat_list", "table_id")],
+    active_only: Annotated[bool, parameter_field("seat_list", "active_only")] = True,
 ) -> dict[str, Any]:
     """List seats at a table to see who is present.
 
@@ -607,8 +510,8 @@ def seat_list(
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @mcp.tool
 async def connect(
-    url: Annotated[str, Field(description="Remote server URL to connect to; omit to switch back to local mode")] = None,
-    token: Annotated[str, Field(description="MCP session token for authenticating with the remote server")] = None,
+    url: Annotated[str, parameter_field("connect", "url")] = None,
+    token: Annotated[str, parameter_field("connect", "token")] = None,
 ) -> dict[str, Any]:
     """Switch between local and remote MCP mode.
 

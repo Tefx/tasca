@@ -8,8 +8,10 @@ from tasca.shell.mcp.tool_contracts import (
     ERROR_SHAPE_SPEC_ANCHOR,
     RECOMMENDED_DEFAULTS,
     SPEC_DOC,
+    SPEC_PARAMETER_DEFAULTS,
     TOOL_CONTRACTS,
     TOOL_CONTRACTS_BY_NAME,
+    parameter_field,
 )
 
 EXPECTED_SERVER_TOOLS = {
@@ -57,6 +59,30 @@ def test_tool_contracts_centralize_known_defaults() -> None:
     }
     assert table_join_defaults["history_limit"] == 10
     assert table_join_defaults["history_max_bytes"] == 65536
+
+
+def test_parameter_contract_defaults_match_spec_defaults() -> None:
+    table_say_defaults = {
+        parameter.name: parameter.default for parameter in TOOL_CONTRACTS_BY_NAME["table_say"].parameters
+    }
+    heartbeat_defaults = {
+        parameter.name: parameter.default
+        for parameter in TOOL_CONTRACTS_BY_NAME["seat_heartbeat"].parameters
+    }
+
+    assert SPEC_PARAMETER_DEFAULTS["table_say.saying_type"] == "text"
+    assert table_say_defaults["saying_type"] == "text"
+    assert SPEC_PARAMETER_DEFAULTS["seat_heartbeat.ttl_ms"] == 60000
+    assert heartbeat_defaults["ttl_ms"] == 60000
+    assert heartbeat_defaults["state"] == "running"
+
+
+def test_runtime_field_metadata_is_built_from_tool_contracts() -> None:
+    field = parameter_field("seat_heartbeat", "ttl_ms")
+
+    assert field.description == (
+        "Time-to-live in ms before the seat expires (default 60000 = 60s)"
+    )
 
 
 def test_tool_contracts_centralize_parameter_documentation_and_anchors() -> None:

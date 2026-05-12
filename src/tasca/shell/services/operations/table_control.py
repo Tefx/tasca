@@ -172,7 +172,6 @@ def _storage_error(
 
 
 # @shell_complexity: This is the shared application transaction boundary adapter for table.control.
-# @invar:allow dead_export: Shared operation is intentionally introduced before transport adoption.
 def execute_table_control(
     conn: sqlite3.Connection,
     table_id: str,

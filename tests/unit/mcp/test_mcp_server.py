@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from collections.abc import Generator
 from datetime import UTC, datetime
-from typing import Any, Generator
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from returns.result import Success
 
-from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
 from tasca.shell.mcp.server import (
     patron_get,
@@ -37,14 +36,13 @@ from tasca.shell.mcp.server import (
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.table_repo import create_table, update_table
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
 
 
 @pytest.fixture
-def test_db() -> Generator[sqlite3.Connection, None, None]:
+def test_db() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with full schema."""
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     apply_schema(conn)
@@ -53,11 +51,12 @@ def test_db() -> Generator[sqlite3.Connection, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def override_db(test_db: sqlite3.Connection) -> Generator[None, None, None]:
+def override_db(test_db: sqlite3.Connection) -> Generator[None]:
     """Override the MCP database connection to use test database."""
-    from tasca.shell.mcp import database
     import importlib
+
     import tasca.shell.mcp.server as server
+    from tasca.shell.mcp import database
 
     original_connection = database._mcp_db_connection
 
@@ -248,8 +247,8 @@ class TestTableList:
     def test_list_tables_returns_open_tables(self) -> None:
         """List tables returns only open tables with seat counts."""
         # Create some tables
-        result1 = table_create(question="First table")
-        result2 = table_create(question="Second table")
+        table_create(question="First table")
+        table_create(question="Second table")
 
         # List open tables
         result = table_list(status="open")
@@ -377,7 +376,6 @@ class TestTableList:
     ) -> None:
         """Active count excludes seats with expired heartbeats."""
         from tasca.core.domain.seat import Seat, SeatId, SeatState
-        from tasca.core.services.seat_service import DEFAULT_SEAT_TTL_SECONDS
         from tasca.shell.storage.seat_repo import create_seat
 
         # Create patron and table
@@ -913,7 +911,8 @@ class TestTableExport:
         # Verify markdown structure
         content = data["content"]
         assert "# What is the meaning of life?" in content
-        assert "| **Status** | open |" in content
+        assert "- status: open" in content
+        assert "## Board" in content
         assert "_No sayings yet._" in content
 
     def test_export_markdown_with_sayings(self) -> None:
@@ -931,9 +930,9 @@ class TestTableExport:
         assert result["ok"] is True
         content = result["data"]["content"]
 
-        # Verify content includes sayings with speaker lines
-        assert "**#0 Alice** [AI]" in content
-        assert "**#1 Bob** [AI]" in content
+        # Verify content includes technical-design transcript lines.
+        assert "- [seq=0]" in content and "(agent:Alice): First point" in content
+        assert "- [seq=1]" in content and "(agent:Bob): Second point" in content
         assert "First point" in content
         assert "Second point" in content
 
@@ -1595,7 +1594,7 @@ class TestNotImplementedErrorCodes:
         # This test documents the gap
 
         table_result = table_create(question="Test table")
-        table_id = table_result["data"]["id"]
+        table_result["data"]["id"]
 
         # Empty content would be a validation error once implemented
         # Currently, empty content is accepted
@@ -1796,7 +1795,6 @@ class TestLimitsEnforcementTableSay:
         """Content length limit is enforced on table_say."""
         # Patch settings directly to set the limit
         from tasca import config
-        from tasca.core.services.limits_service import LimitsConfig
 
         monkeypatch.setattr(
             config,
@@ -1805,8 +1803,9 @@ class TestLimitsEnforcementTableSay:
         )
 
         # Reload the server module to pick up the new settings
-        from tasca.shell.mcp import server
         import importlib
+
+        from tasca.shell.mcp import server
 
         importlib.reload(server)
 
@@ -1828,8 +1827,9 @@ class TestLimitsEnforcementTableSay:
         self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """History count limit is enforced on table_say."""
-        from tasca import config
         import importlib
+
+        from tasca import config
         from tasca.shell.mcp import server
 
         # Set a small history limit
@@ -1874,8 +1874,9 @@ class TestLimitsEnforcementTableSay:
         self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Mentions limit is enforced on table_say."""
-        from tasca import config
         import importlib
+
+        from tasca import config
         from tasca.shell.mcp import server
 
         # Set a small mentions limit
@@ -1904,8 +1905,9 @@ class TestLimitsEnforcementTableSay:
         self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """table_say succeeds when all limits are respected."""
-        from tasca import config
         import importlib
+
+        from tasca import config
         from tasca.shell.mcp import server
 
         # Set limits
@@ -1934,8 +1936,9 @@ class TestLimitsEnforcementTableSay:
         self, table_with_patron: dict[str, str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Bytes limit is enforced on table_say."""
-        from tasca import config
         import importlib
+
+        from tasca import config
         from tasca.shell.mcp import server
 
         # Set a very small bytes limit (100 bytes)
@@ -2164,12 +2167,12 @@ class TestConnect:
     @pytest.mark.asyncio
     async def test_connect_switches_to_remote_mode(self) -> None:
         """connect(url=...) switches to remote mode and returns status."""
-        from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import (
             _config,
             get_upstream_config,
             switch_to_local,
         )
+        from tasca.shell.mcp.server import connect
 
         try:
             # Mock session init to avoid real HTTP call
@@ -2177,7 +2180,6 @@ class TestConnect:
             # so we patch it in the proxy module where it's defined.
             # The mocked function must also update the global _config.
             async def mock_switch_to_remote_with_session(url: str, token: str | None = None):
-                from tasca.shell.mcp.proxy import UpstreamConfig
 
                 # Update the actual global _config (same object returned)
                 _config.url = url
@@ -2209,17 +2211,16 @@ class TestConnect:
     @pytest.mark.asyncio
     async def test_connect_switches_to_remote_without_token(self) -> None:
         """connect(url=...) without token switches to remote mode."""
-        from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import (
             _config,
             get_upstream_config,
             switch_to_local,
         )
+        from tasca.shell.mcp.server import connect
 
         try:
             # Mock session init to avoid real HTTP call
             async def mock_switch_to_remote_with_session(url: str, token: str | None = None):
-                from tasca.shell.mcp.proxy import UpstreamConfig
 
                 # Update the actual global _config (same object returned)
                 _config.url = url
@@ -2248,8 +2249,8 @@ class TestConnect:
     @pytest.mark.asyncio
     async def test_connect_switches_to_local_mode(self) -> None:
         """connect() or connect(url=None) switches to local mode."""
+        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local, switch_to_remote
         from tasca.shell.mcp.server import connect
-        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
 
         try:
             # First switch to remote
@@ -2275,8 +2276,8 @@ class TestConnect:
     @pytest.mark.asyncio
     async def test_connect_url_none_switches_to_local(self) -> None:
         """connect(url=None) explicitly switches to local mode."""
+        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_local, switch_to_remote
         from tasca.shell.mcp.server import connect
-        from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
 
         try:
             # First switch to remote
@@ -2297,8 +2298,8 @@ class TestConnect:
     @pytest.mark.asyncio
     async def test_connect_returns_current_config_status(self) -> None:
         """connect returns the current config status after switching."""
-        from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import switch_to_local
+        from tasca.shell.mcp.server import connect
 
         try:
             # Switch to local
@@ -2317,8 +2318,8 @@ class TestConnect:
     @pytest.mark.asyncio
     async def test_connect_idempotent_local_mode(self) -> None:
         """Multiple connect() calls return local mode consistently."""
-        from tasca.shell.mcp.server import connect
         from tasca.shell.mcp.proxy import switch_to_local
+        from tasca.shell.mcp.server import connect
 
         try:
             result1 = await connect()
@@ -2341,8 +2342,8 @@ class TestConnectionStatus:
 
     def test_connection_status_local_mode(self) -> None:
         """connection_status returns local mode and healthy when in local mode."""
-        from tasca.shell.mcp.server import connection_status
         from tasca.shell.mcp.proxy import switch_to_local
+        from tasca.shell.mcp.server import connection_status
 
         try:
             # Ensure we're in local mode
@@ -2359,8 +2360,8 @@ class TestConnectionStatus:
 
     def test_connection_status_remote_mode(self) -> None:
         """connection_status returns remote mode and url when in remote mode."""
+        from tasca.shell.mcp.proxy import switch_to_local, switch_to_remote
         from tasca.shell.mcp.server import connection_status
-        from tasca.shell.mcp.proxy import switch_to_remote, switch_to_local
 
         try:
             # Switch to remote mode
@@ -2378,8 +2379,8 @@ class TestConnectionStatus:
 
     def test_connection_status_remote_mode_no_token(self) -> None:
         """connection_status works in remote mode without token."""
+        from tasca.shell.mcp.proxy import switch_to_local, switch_to_remote
         from tasca.shell.mcp.server import connection_status
-        from tasca.shell.mcp.proxy import switch_to_remote, switch_to_local
 
         try:
             # Switch to remote mode without token
@@ -2397,8 +2398,8 @@ class TestConnectionStatus:
 
     def test_connection_status_no_token_in_response(self) -> None:
         """connection_status does NOT return token (unlike connect)."""
+        from tasca.shell.mcp.proxy import switch_to_local, switch_to_remote
         from tasca.shell.mcp.server import connection_status
-        from tasca.shell.mcp.proxy import switch_to_remote, switch_to_local
 
         try:
             # Switch to remote mode with token
@@ -2418,8 +2419,8 @@ class TestConnectionStatus:
 
     def test_connection_status_response_shape(self) -> None:
         """connection_status returns correct response envelope shape."""
-        from tasca.shell.mcp.server import connection_status
         from tasca.shell.mcp.proxy import switch_to_local
+        from tasca.shell.mcp.server import connection_status
 
         try:
             switch_to_local()
@@ -2443,8 +2444,8 @@ class TestConnectionStatus:
     @pytest.mark.asyncio
     async def test_connection_status_after_disconnect(self) -> None:
         """connection_status returns local mode after switching from remote to local."""
-        from tasca.shell.mcp.server import connection_status, connect
-        from tasca.shell.mcp.proxy import switch_to_remote, switch_to_local
+        from tasca.shell.mcp.proxy import switch_to_local, switch_to_remote
+        from tasca.shell.mcp.server import connect, connection_status
 
         try:
             # Start in remote mode

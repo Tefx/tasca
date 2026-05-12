@@ -34429,3 +34429,112 @@ phases:
     depends_on:
     - web_mermaid_stream_fix.wire-renderer
     agent: spec-verifier
+  - id: web_mermaid_stream_fix.gate
+    name: Gate Mermaid stream rendering fix
+    status: pending
+    description: 'step_type: gate
+
+      verification_scope: phase-check
+
+      agent: gate-reviewer
+
+      review_depth: THOROUGH
+
+      review_depth_rationale:
+
+      - Phase touches user-visible Markdown/output rendering in the discussion stream.
+
+      - Mermaid security controls have historical drift risk because the renderer
+      can exist without being wired into Stream.
+
+      - Phase includes integration-tagged frontend rendering work and native UI audit
+      evidence.
+
+
+      As an INDEPENDENT REVIEWER, assess whether the `web_mermaid_stream_fix` phase
+      meets the quality bar for proceeding to finalization.
+
+
+      Review criteria:
+
+      1. Defect reproduction: the original Mermaid stream rendering gap was captured
+      as expected-red before the fix.
+
+      2. Implementation completeness: `saying.content` Mermaid fences route through
+      the existing `MermaidRenderer`, not a new unsafe rendering path.
+
+      3. Security preservation: raw HTML remains disabled; init directives are stripped;
+      SVG sanitizer remains in the path; no new unsanitized SVG injection path exists.
+
+      4. Visual correctness: UI audit evidence proves visible Mermaid diagram rendering
+      and no stream layout breakage.
+
+      5. Regression coverage: ordinary code fences, inline code, invalid Mermaid fallback,
+      and existing security tests are green.
+
+      6. Spec conformance: no DIVERGES/PARTIAL/NEEDS_TEST item remains without explicit
+      remediation or non-intersection disposition.
+
+
+      Gate Preview focus:
+
+      - Reject if evidence only proves the renderer module works but not the Stream
+      source-to-sink path.
+
+      - Reject if screenshots/DOM artifacts are missing for the user-visible diagram.
+
+      - Reject if any blocker-class behavioral obligation is UNPROVEN without closure
+      path.'
+    verification: '- phase-check protecting `finalization.verify-full-plan` and `finalization.gate`
+
+      - All phase steps completed with specific, verifiable evidence.
+
+      - Gate decision basis maps each Mermaid/Markdown/SVG requirement to evidence
+      refs and unresolved statuses.
+
+      - Gate blocks on missing visible rendering evidence, missing security-boundary
+      evidence, or unresolved DIVERGES/PARTIAL/NEEDS_TEST items.
+
+      - Final recommendation is OPEN only when blocker-class behavioral obligations
+      are PROVEN or have explicit non-intersection evidence.'
+    evidence_template: "## Gate Review Report\n\n**Reviewer**: gate-reviewer (independent\
+      \ of phase implementation)\n**Phase**: web_mermaid_stream_fix\n**Timestamp**:\
+      \ <ISO 8601>\n\n### refs Read Confirmation (MANDATORY)\nFor each ref in this\
+      \ step:\n- docs/tasca-web-uiux-v0.1.md — key passage or \"NOT READ: <reason>\"\
+      \n- docs/adr-001-mermaid-rendering.md — key passage or \"NOT READ: <reason>\"\
+      \n- docs/adr-002-mermaid-svg-sanitization.md — key passage or \"NOT READ: <reason>\"\
+      \n- docs/tasca-technical-design-v0.1.md — key passage or \"NOT READ: <reason>\"\
+      \n- web/src/components/Stream.tsx — key passage or \"NOT READ: <reason>\"\n\
+      - web/src/rendering/mermaid.tsx — key passage or \"NOT READ: <reason>\"\n- web/src/rendering/svg-sanitizer.ts\
+      \ — key passage or \"NOT READ: <reason>\"\n\nIf no refs were provided, state:\
+      \ \"No refs for this step.\"\n\n### Execution Review\n| Step ID | Status | Evidence\
+      \ Quality | Concerns |\n| --- | --- | --- | --- |\n| web_mermaid_stream_fix.reproduce-red\
+      \ | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | <notes> |\n| web_mermaid_stream_fix.wire-renderer\
+      \ | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | <notes> |\n| web_mermaid_stream_fix.green-retest\
+      \ | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | <notes> |\n| web_mermaid_stream_fix.uiux-audit\
+      \ | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | <notes> |\n| web_mermaid_stream_fix.spec-conformance\
+      \ | ✅/⚠️/❌ | excellent/adequate/insufficient/missing | <notes> |\n\n### Gate\
+      \ Decision Basis\n| requirement_ref | artifact/evidence refs reviewed | unresolved\
+      \ status | blocks remaining gates? | final basis |\n| --- | --- | --- | ---\
+      \ | --- |\n| Mermaid fenced code in saying.content renders visibly | <refs>\
+      \ | PROVEN/NEEDS_TEST/UNPROVEN | YES/NO + why | <basis> |\n| Raw HTML remains\
+      \ disabled | <refs> | PROVEN/NEEDS_TEST/UNPROVEN | YES/NO + why | <basis> |\n\
+      | Mermaid init directives stripped | <refs> | PROVEN/NEEDS_TEST/UNPROVEN | YES/NO\
+      \ + why | <basis> |\n| SVG output sanitized per ADR-002 | <refs> | PROVEN/NEEDS_TEST/UNPROVEN\
+      \ | YES/NO + why | <basis> |\n| Export behavior unchanged | <refs> | PROVEN/NEEDS_TEST/UNPROVEN\
+      \ | YES/NO + why | <basis> |\n\n### Issues Identified\n| Severity | Description\
+      \ | Related Step | Blocking? |\n| --- | --- | --- | --- |\n| blocker | <issue\
+      \ or none> | <step_id> | YES/NO |\n| should_fix | <issue or none> | <step_id>\
+      \ | YES/NO |\n\n### Phase Assessment\n- All steps completed: ✅/❌\n- Evidence\
+      \ quality acceptable: ✅/❌\n- Visible UI rendering artifact present: ✅/❌\n- Security\
+      \ boundary preserved: ✅/❌\n- Blocking issues resolved: ✅/❌\n- Tech debt documented:\
+      \ ✅/❌\n\n### Gate Decision\n- [ ] OPEN: Phase passes gate, proceed to finalization\n\
+      - [ ] BLOCKED: Issues must be resolved before proceeding\n  - Blocking issues:\
+      \ <list>\n  - Required actions: <what needs to happen>\n"
+    depends_on:
+    - web_mermaid_stream_fix.reproduce-red
+    - web_mermaid_stream_fix.wire-renderer
+    - web_mermaid_stream_fix.green-retest
+    - web_mermaid_stream_fix.uiux-audit
+    - web_mermaid_stream_fix.spec-conformance
+    agent: gate-reviewer

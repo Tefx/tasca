@@ -34959,7 +34959,7 @@ phases:
       --quiet HEAD~1 -- src web/src` passed.'
   - id: web_mermaid_stream_fix.spec-conformance
     name: Spec conformance for Mermaid stream rendering
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -35093,6 +35093,162 @@ phases:
     agent: spec-verifier
     claimed_by: spec-verifier
     claimed_at: '2026-05-12T10:05:35.787646+00:00'
+    done_at: '2026-05-12T12:56:51.300222+00:00'
+    evidence: '## Spec Conformance Report
+
+      **Phase**: web_mermaid_stream_fix
+
+      **Spec source**: docs/tasca-web-uiux-v0.1.md, ADR-001, ADR-002, docs/tasca-technical-design-v0.1.md
+
+
+      ## refs Read Confirmation
+
+      - docs/tasca-web-uiux-v0.1.md — Requires Markdown rendering in saying `content`,
+      including Mermaid fenced code blocks, raw HTML disabled, init directives stripped/forbidden,
+      and Mermaid SVG sanitization.
+
+      - docs/adr-001-mermaid-rendering.md — Requires client-side Mermaid rendering,
+      sanitized SVG, exact safe Mermaid pin, raw HTML disabled, and exports keeping
+      Mermaid as code blocks.
+
+      - docs/adr-002-mermaid-svg-sanitization.md — Defines strict allowlist policy,
+      hard-forbidden tags/attrs, internal-only URL/reference rules, and browser-side
+      sanitization before DOM insertion.
+
+      - docs/tasca-technical-design-v0.1.md — Reiterates raw HTML disabled, client-side
+      Mermaid, init stripping, ADR-002 sanitization, and JSONL/Markdown export shape.
+
+      - web/src/components/Stream.tsx — Detects Mermaid code fences and routes to
+      MermaidRenderer; renders saying.content via ReactMarkdown and remarkGfm.
+
+      - web/src/rendering/mermaid.tsx — Initializes Mermaid strict, strips init directives,
+      renders, then sanitizes SVG.
+
+      - web/src/rendering/svg-sanitizer.ts — Current sanitizer allowlists and URL/ref
+      checks reviewed.
+
+      - web/src/components/Stream.test.tsx — Stream Mermaid/raw HTML regression tests
+      reviewed.
+
+      - web/src/rendering/markdown.security.test.tsx — Markdown raw HTML escaping
+      coverage reviewed.
+
+      - evidence/web_mermaid_stream_fix-green-retest.md — Focused tests/build passed
+      and behavioral proof exists for Stream rendering.
+
+      - evidence/web_mermaid_stream_fix-uiux-audit.md — Rendered artifacts prove valid
+      Mermaid, normal code, invalid Mermaid fallback, and raw HTML escaping.
+
+
+      ## Requirements Register / Findings
+
+      - R1 Mermaid fenced blocks render as diagrams in `saying.content`: CONFORMS.
+
+      - R2 Raw HTML disabled by default: CONFORMS.
+
+      - R3 Mermaid init directives stripped/forbidden: CONFORMS for canonical lowercase
+      directives and Stream path.
+
+      - R4 strict ADR-002 SVG allowlist: DIVERGES.
+
+      - R5 only ADR-listed SVG tags/attrs allowed: DIVERGES.
+
+      - R6 hard forbids: PARTIAL because `use`/xlink handling remains policy-sensitive.
+
+      - R7 URL/reference handling internal-only: DIVERGES.
+
+      - R8 DOM insertion approach: PARTIAL; must be remediated or explicitly dispositioned.
+
+      - R9 Mermaid pinned to 11.10.x: CONFORMS.
+
+      - R10 exports keep Mermaid as code blocks/no SVG: NEEDS_TEST.
+
+      - R11 regression corpus exists but lacks strict allowlist/internal-reference
+      cases: PARTIAL.
+
+
+      ## Detected Issues Batched
+
+      DETECTED_ISSUES_BATCHED: true
+
+      CREATED_BATCHED_FIX_STEP: web_mermaid_stream_fix.fix-spec-conformance-blockers
+
+      CREATED_RETEST_STEP: web_mermaid_stream_fix.retest-spec-conformance-blockers
+
+
+      Blockers transferred to remediation ownership:
+
+      - B1: SVG sanitizer is not ADR-002 strict allowlist-first. It allows non-ADR
+      elements/attrs such as `use`, `symbol`, `title`, `desc`, `textpath`, and many
+      attributes beyond ADR-002. `use` is explicitly forbidden by default in ADR-002
+      unless separately reviewed and strictly constrained.
+
+      - B2: URL/reference policy is weaker than ADR-002. Relative URLs, `file:`, `mailto:`,
+      and `url(...)` values are not comprehensively constrained to internal fragments.
+      ADR-002 allows internal fragments only (`#id`, `url(#id)`) and rejects javascript/data/file/http(s)/relative
+      URLs.
+
+      - B3: Export behavior has no Mermaid-specific runtime proof. Static code suggests
+      raw content preservation, but no JSONL/Markdown export tests assert a Mermaid
+      fenced block remains a code block and no `<svg` is embedded.
+
+      - R8: Must be remediated or explicitly dispositioned by retest with non-intersection/spec-staleness
+      rationale.
+
+
+      ## Behavioral Proof Register
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      | --- | --- | --- | --- | --- | --- | --- |
+
+      | R1 | Stream saying.content Mermaid fence renders as diagram | React render
+      test and UI artifact | Stream tests; green retest; UI audit | PROVEN | none
+      | Supports gate after remaining blockers close |
+
+      | R2 | Raw HTML remains escaped | Runtime Markdown/Stream tests | markdown.security.test.tsx;
+      Stream tests | PROVEN | none | Supports gate after remaining blockers close
+      |
+
+      | R3 | Init directives stripped in Stream path | Runtime Stream test + mermaid
+      security tests | Stream/mermaid tests | PROVEN | none | Supports gate after
+      remaining blockers close |
+
+      | R4-R7 | Rendered SVG obeys ADR-002 strict allowlist and URL policy | Sanitizer
+      strict negative tests | Static review found divergences | BLOCKING | web_mermaid_stream_fix.fix-spec-conformance-blockers
+      then retest | Blocks phase gate until closed |
+
+      | R10 | Exports preserve Mermaid code fences/no SVG | JSONL/Markdown export
+      runtime tests | Static review only | NEEDS_TEST | web_mermaid_stream_fix.fix-spec-conformance-blockers
+      then retest | Blocks phase gate until proof exists |
+
+
+      ## Closure Signals
+
+      verdict: FAIL_WITH_REMEDIATION_OWNED
+
+      blockers: [B1, B2, B3]
+
+      gate_open_allowed: false
+
+      orchestrator_action_hint: COMPLETE_AFTER_REMEDIATION_OWNERSHIP_CREATED
+
+
+      ## Verification
+
+      - Files changed by spec verifier: none.
+
+      - Commands run by spec verifier: static review of required refs and existing
+      runtime evidence; no product code, plan state, artifact, or commit changes.
+
+      - Planner remediation: vectl-planner added `web_mermaid_stream_fix.fix-spec-conformance-blockers`,
+      `web_mermaid_stream_fix.retest-spec-conformance-blockers`, and updated `web_mermaid_stream_fix.gate`
+      dependency.
+
+      - Gaps/Notes: This failed verification is intentionally closed as a discovery/ownership
+      step only because all blocker-class findings now have explicit same-phase remediation
+      and retest ownership before the phase gate.'
   - id: web_mermaid_stream_fix.gate
     name: Gate Mermaid stream rendering fix
     status: pending

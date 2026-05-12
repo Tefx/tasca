@@ -33196,7 +33196,7 @@ phases:
       - Gaps/Notes: Static review artifact only; no product code modified.'
   - id: fix-mid-gate-ruff-import-order
     name: Fix mid-gate ruff import-order blocker
-    status: pending
+    status: claimed
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior\npriority: HIGH\n\nBatched remediation ownership for failed\
       \ gate `dup_foundation.mid-gate`.\n\n## Blocker to Fix (ALL of these, not just\
@@ -33292,6 +33292,8 @@ phases:
     depends_on:
     - dup_foundation.mid-gate
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-12T13:57:47.439117+00:00'
   - id: retest-mid-gate
     name: Retest mid-gate after ruff import-order fix
     status: pending

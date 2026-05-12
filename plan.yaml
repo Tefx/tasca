@@ -32616,8 +32616,7 @@ phases:
     - dup_foundation.delete-export-ops
     - retest-mid-gate
     - dup_foundation.mcp-tool-contracts-source
-    - dup_foundation.wiring-audit
-    - dup_foundation.spec-conformance
+    - retest-foundation-conformance-wiring
     agent: gate-reviewer-tacit
   - id: dup_guardrails.gate
     name: Gate duplicate-abstraction guardrails

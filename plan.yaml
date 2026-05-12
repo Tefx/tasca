@@ -33231,6 +33231,64 @@ phases:
     depends_on:
     - dup_foundation.mid-gate
     agent: python-senior
+  - id: retest-mid-gate
+    name: Retest mid-gate after ruff import-order fix
+    status: pending
+    description: "step_type: test\nstep_intent: retest_green\nexpected_result: green\n\
+      verification_scope: phase-check\nagent: gate-reviewer\npriority: HIGH\n\nRetest/gate\
+      \ step for `dup_foundation.mid-gate` after the batched ruff import-order remediation.\n\
+      \nAs an INDEPENDENT REVIEWER (`gate-reviewer`), reassess only the failed mid-gate\
+      \ blocker family and the boundary findings needed to safely reopen progression.\n\
+      \nRequired closure fields in evidence:\n- `verdict: PASS`\n- `blockers: []`\n\
+      - `gate_open_allowed: true`\n\n## Required checks\n1. Re-run the exact scoped\
+      \ ruff command that failed in `dup_foundation.mid-gate`:\n   `./.venv/bin/python\
+      \ -m ruff check src/tasca/shell/services/operations src/tasca/shell/storage/control_repo.py\
+      \ src/tasca/shell/storage/saying_repo.py tests/unit/services/test_registration_creation_operations.py\
+      \ tests/unit/services/operations/test_table_control.py tests/unit/api/test_export_routes.py\
+      \ tests/unit/storage/test_batch_delete_repo.py`\n2. Re-run the mid-gate boundary\
+      \ checks:\n   - shared operations do not import HTTPException, FastAPI request/response\
+      \ types, MCP envelopes, or transport-only caller state\n   - shared operation\
+      \ ownership remains stable before MCP tool-contract source-of-truth work proceeds\n\
+      \   - targeted runtime tests that were green remain green\n3. Confirm the fix\
+      \ was import-order/lint-only and did not alter operation behavior.\n\nFinding\
+      \ a new blocker is a successful retest outcome, but it must keep `gate_open_allowed:\
+      \ false` and name the blocker precisely. Progression may reopen only with the\
+      \ required PASS closure fields above."
+    verification: '- phase-check protecting dup_foundation.mcp-tool-contracts-source,
+      dup_foundation.wiring-audit, dup_foundation.spec-conformance, and dup_foundation.gate.
+
+      - Exact scoped ruff command exits 0.
+
+      - Mid-gate boundary checks show no HTTPException/FastAPI/MCP envelope runtime
+      dependency in shared operations.
+
+      - Targeted runtime tests that previously passed remain green.
+
+      - Evidence includes closure fields: `verdict: PASS`, `blockers: []`, `gate_open_allowed:
+      true`.'
+    evidence_template: "## refs Read Confirmation (MANDATORY)\n\nFor each ref in this\
+      \ step:\n- src/tasca/shell/services/operations/__init__.py — key passage or\
+      \ \"NOT READ: <reason>\"\n\nIf no refs were provided, state: \"No refs for this\
+      \ step.\"\n\n## Mid-Gate Retest Report\n\n**Reviewer**: gate-reviewer (independent\
+      \ of fix agent python-senior)\n**Scope**: `dup_foundation.mid-gate` B1 ruff\
+      \ import-order blocker plus boundary recheck\n\n### Ruff Recheck\n**Command**:\n\
+      ```\n./.venv/bin/python -m ruff check src/tasca/shell/services/operations src/tasca/shell/storage/control_repo.py\
+      \ src/tasca/shell/storage/saying_repo.py tests/unit/services/test_registration_creation_operations.py\
+      \ tests/unit/services/operations/test_table_control.py tests/unit/api/test_export_routes.py\
+      \ tests/unit/storage/test_batch_delete_repo.py\n```\n**Output**:\n```\n<paste\
+      \ output showing exit 0>\n```\n\n### Boundary Recheck\n- Transport-leakage scan\
+      \ command(s):\n  ```\n  <paste commands/output>\n  ```\n- HTTPException/FastAPI/MCP\
+      \ envelope dependency in shared operations: NONE | FOUND <details>\n- Shared\
+      \ operation ownership stability: PASS | FAIL <details>\n\n### Targeted Runtime\
+      \ Tests\n```\n<paste exact command(s) and output; expected green based on prior\
+      \ 52 passed evidence>\n```\n\n### Closure Fields (MANDATORY)\n```yaml\nverdict:\
+      \ PASS\nblockers: []\ngate_open_allowed: true\n```\n\nIf any blocker remains,\
+      \ replace the closure fields with `verdict: FAIL`, list blockers, and set `gate_open_allowed:\
+      \ false`.\n\n### Headline\n- [ ] PASS: B1 closed and boundary checks remain\
+      \ green\n- [ ] FAIL: blocker-class issue remains"
+    depends_on:
+    - fix-mid-gate-ruff-import-order
+    agent: gate-reviewer
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

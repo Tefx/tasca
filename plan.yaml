@@ -33133,6 +33133,104 @@ phases:
       - Product code modified: none.
 
       - Gaps/Notes: Static review artifact only; no product code modified.'
+  - id: fix-mid-gate-ruff-import-order
+    name: Fix mid-gate ruff import-order blocker
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      agent: python-senior\npriority: HIGH\n\nBatched remediation ownership for failed\
+      \ gate `dup_foundation.mid-gate`.\n\n## Blocker to Fix (ALL of these, not just\
+      \ the first)\n\n### B1: Ruff import ordering blocker\n- Gate: `dup_foundation.mid-gate`\n\
+      - Failure verdict: semantic FAIL / BLOCKED\n- Error fingerprint: `I001 import\
+      \ block unsorted`\n- Location: `src/tasca/shell/services/operations/__init__.py:7`\n\
+      - Exact failed command:\n  `./.venv/bin/python -m ruff check src/tasca/shell/services/operations\
+      \ src/tasca/shell/storage/control_repo.py src/tasca/shell/storage/saying_repo.py\
+      \ tests/unit/services/test_registration_creation_operations.py tests/unit/services/operations/test_table_control.py\
+      \ tests/unit/api/test_export_routes.py tests/unit/storage/test_batch_delete_repo.py`\n\
+      \n## Scope boundary\nFix ONLY import ordering / lint formatting in `src/tasca/shell/services/operations/__init__.py`.\n\
+      Do NOT change shared operation behavior, public symbols, runtime boundaries,\
+      \ storage semantics, REST/MCP behavior, or tests except if strictly required\
+      \ to keep import-order tooling deterministic.\n\n## Gate context preserved\n\
+      - Targeted runtime tests were already green: 52 passed.\n- Static boundary inspection\
+      \ found low transport-leakage risk and no HTTPException/FastAPI/MCP envelope\
+      \ runtime dependency in shared operations.\n- The purpose of this fix is to\
+      \ remove the lint blocker without perturbing those green behavioral/boundary\
+      \ findings.\n\n## Root Cause vs Symptom\n- Root cause: import block ordering\
+      \ in the operations package initializer is not ruff/isort compliant.\n- Symptom:\
+      \ scoped ruff command exits 1 with `I001 import block unsorted` at `src/tasca/shell/services/operations/__init__.py:7`.\n\
+      - Why this fix is not surface-level: completion requires rerunning the exact\
+      \ failing scoped ruff command and the targeted tests that were green, proving\
+      \ the import-order-only change closes the blocker without behavior drift.\n\n\
+      ## Completion Criteria (stub exclusion)\nThis is an IMPLEMENTATION step. Stub-only\
+      \ completion is NOT acceptable, but the authorized code change is lint-only\
+      \ import ordering. No new stubs, behavior, or abstractions may be introduced."
+    verification: '- local-check protecting dup_foundation.retest-mid-gate and dup_foundation.gate:
+      rerun the exact scoped ruff command and confirm exit 0.
+
+      - Regression preservation: rerun the targeted runtime tests that were green
+      under `dup_foundation.mid-gate` and confirm the same test family remains green
+      (52 passed or equivalent if collection changes are explained).
+
+      - Scope proof: evidence shows only import ordering / lint formatting changed
+      in `src/tasca/shell/services/operations/__init__.py`; no operation behavior
+      changed.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - src/tasca/shell/services/operations/__init__.py — key passage or "NOT READ:
+      <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Fix Evidence
+
+
+      **Exact scoped ruff command executed**:
+
+      ```
+
+      ./.venv/bin/python -m ruff check src/tasca/shell/services/operations src/tasca/shell/storage/control_repo.py
+      src/tasca/shell/storage/saying_repo.py tests/unit/services/test_registration_creation_operations.py
+      tests/unit/services/operations/test_table_control.py tests/unit/api/test_export_routes.py
+      tests/unit/storage/test_batch_delete_repo.py
+
+      ```
+
+
+      **Ruff output**:
+
+      ```
+
+      <paste output showing exit 0>
+
+      ```
+
+
+      **Targeted runtime tests rerun**:
+
+      ```
+
+      <paste exact command(s) and output showing targeted tests remain green>
+
+      ```
+
+
+      **Scope proof**:
+
+      - Files changed: <list>
+
+      - Behavior changes: NONE (required)
+
+      - Import-order/lint-only explanation: <brief note>
+
+
+      **Headline**: PASS | FAIL'
+    depends_on:
+    - dup_foundation.mid-gate
+    agent: python-senior
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

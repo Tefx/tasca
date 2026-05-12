@@ -15,14 +15,6 @@ from tasca.core.domain.patron import Patron
 from tasca.core.domain.seat import Seat
 from tasca.core.domain.table import Table, TableStatus, TableUpdate
 from tasca.core.services.limits_service import LimitError
-from tasca.core.table_state_machine import (
-    can_transition_to_closed,
-    can_transition_to_open,
-    can_transition_to_paused,
-    transition_to_closed,
-    transition_to_open,
-    transition_to_paused,
-)
 from tasca.shell.mcp.responses import error_response
 
 EXIT_EMPTY_WAITS_THRESHOLD = 30
@@ -149,40 +141,6 @@ def validate_speaker_constraints(
             {"speaker_kind": speaker_kind, "patron_id": patron_id},
         )
     return None
-
-
-@deal.pre(lambda action, current_status: action is not None and current_status is not None)
-@deal.post(lambda result: len(result) == 2)
-# @invar:allow entry_point_too_thick: Transition matrix plus error shaping must stay explicit
-#   to preserve protocol-compatible OPERATION_NOT_ALLOWED messages.
-def validate_control_action(
-    action: str,
-    current_status: TableStatus,
-) -> tuple[TableStatus | None, dict[str, Any] | None]:
-    """Validate table control transition and derive next status."""
-    transitions = {
-        "pause": (
-            can_transition_to_paused,
-            transition_to_paused,
-            "Only OPEN tables can be paused.",
-        ),
-        "resume": (
-            can_transition_to_open,
-            transition_to_open,
-            "Only PAUSED tables can be resumed.",
-        ),
-        "close": (can_transition_to_closed, transition_to_closed, ""),
-    }
-    if action not in transitions:
-        return None, error_response("INVALID_ACTION", f"Unknown action: {action}")
-    can_transition, transition_fn, suffix = transitions[action]
-    if not can_transition(current_status):
-        reason = f" Cannot {action} table with status '{current_status.value}'."
-        message = reason[1:] if not suffix else f"{reason[1:]} {suffix}"
-        return None, error_response(
-            "OPERATION_NOT_ALLOWED", message, {"table_status": current_status.value}
-        )
-    return transition_fn(current_status), None
 
 
 @deal.pre(lambda new_status, control_sequence: control_sequence >= 0)

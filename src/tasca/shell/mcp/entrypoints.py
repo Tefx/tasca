@@ -119,7 +119,6 @@ from tasca.shell.storage.patron_repo import (
     list_patrons,
 )
 from tasca.shell.storage.saying_repo import (
-    append_saying,
     get_recent_sayings,
     get_table_max_sequence,
     list_sayings_by_table,
@@ -1004,24 +1003,7 @@ def _create_control_speaker(speaker_name: str, patron_id: str | None) -> Speaker
     )
 
 
-# @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
-def _append_control_saying(
-    conn: Any, table_id: str, action: str, reason: str | None, speaker: Speaker
-) -> tuple[Any | None, dict[str, Any] | None]:
-    """Implementation detail for MCP tool behavior."""
-    control_content = f"**CONTROL: {action.upper()}**"
-    if reason:
-        control_content += f"\n\nReason: {reason}"
-
-    saying_result = append_saying(conn, table_id, speaker, control_content)
-    if isinstance(saying_result, Failure):
-        error = saying_result.failure()
-        return None, error_response("DATABASE_ERROR", f"Failed to append control saying: {error}")
-
-    return saying_result.unwrap(), None
-
-
-# @shell_complexity: table lookup + state machine validation + status update + error paths
+# @shell_complexity: idempotency + shared atomic control dispatch + MCP error/envelope shaping
 # @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_control(
     table_id: str,
@@ -1062,7 +1044,9 @@ def table_control(
                 error.message,
                 {"expected_version": error.expected_version, "actual_version": error.actual_version},
             )
-        if error.code in {TableControlErrorCode.INVALID_ACTION, TableControlErrorCode.INVALID_TRANSITION}:
+        if error.code == TableControlErrorCode.INVALID_ACTION:
+            return error_response("INVALID_ACTION", error.message)
+        if error.code == TableControlErrorCode.INVALID_TRANSITION:
             return error_response("OPERATION_NOT_ALLOWED", error.message, {"table_status": error.current_status.value if error.current_status else None})
         return error_response("DATABASE_ERROR", error.message)
 

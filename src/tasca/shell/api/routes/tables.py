@@ -423,9 +423,7 @@ async def batch_delete_tables_endpoint(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "error": "BATCH_PRECONDITION_FAILED",
-                    "details": [
-                        {"id": r.table_id, "reason": r.reason} for r in failure.rejections
-                    ],
+                    "details": failure.rejection_details,
                 },
             )
         raise HTTPException(

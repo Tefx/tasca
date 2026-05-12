@@ -45,6 +45,11 @@ class BatchDeleteOperationResult:
         """Return whether the operation deleted all requested tables."""
         return self.status == "deleted"
 
+    @property
+    def rejection_details(self) -> list[dict[str, str]]:
+        """Return transport-neutral rejection details derived from core validation."""
+        return [{"id": rejection.table_id, "reason": rejection.reason} for rejection in self.rejections]
+
 
 # @shell_complexity: 5 branches for input bounds + per-ID fetch + validation + delete + error disposition
 def delete_tables_batch(

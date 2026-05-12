@@ -7,21 +7,21 @@ Endpoints for patron registration and management.
 from __future__ import annotations
 
 import sqlite3
-import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from returns.result import Failure, Success
+from returns.result import Failure
 
 from tasca.core.domain.patron import Patron, PatronCreate, PatronId
 from tasca.shell.api.deps import get_db
-from tasca.shell.storage.patron_repo import (
-    PatronNotFoundError,
-    create_patron,
-    find_patron_by_name,
-    get_patron,
+from tasca.shell.services.operations.patron_registration import (
+    PatronCreateError,
+    PatronIdempotencyError,
+    PatronLookupError,
+    register_patron,
 )
+from tasca.shell.storage.patron_repo import PatronNotFoundError, get_patron
 
 router = APIRouter()
 
@@ -46,6 +46,39 @@ class PatronRegisterResponse(BaseModel):
 # =============================================================================
 
 
+# @invar:allow shell_result: FastAPI response model adapter, not reusable domain logic.
+# @shell_orchestration: HTTP response shaping for shared patron registration outcome.
+def _registration_outcome_to_response(outcome: object) -> PatronRegisterResponse:
+    """Render a shared patron registration outcome as the REST response model."""
+    patron = outcome.patron
+    return PatronRegisterResponse(
+        id=patron.id,
+        name=patron.name,
+        kind=patron.kind,
+        created_at=patron.created_at,
+        is_new=outcome.is_new,
+    )
+
+
+# @shell_orchestration: HTTP-layer mapping from shared operation failures to FastAPI exceptions.
+def _raise_registration_error(error: object) -> None:
+    """Map shared patron registration failures onto legacy REST error details."""
+    if isinstance(error, PatronLookupError):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to check for existing patron: {error.cause}",
+        )
+    if isinstance(error, (PatronCreateError, PatronIdempotencyError)):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create patron: {error.cause}",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Failed to create patron: {error}",
+    )
+
+
 # @invar:allow entry_point_too_thick: patrons.py register_patron_endpoint POST route with docstrings, type hints, and error handling
 @router.post("", response_model=PatronRegisterResponse, status_code=status.HTTP_200_OK)
 async def register_patron_endpoint(
@@ -67,55 +100,16 @@ async def register_patron_endpoint(
     Raises:
         HTTPException: 500 if database operation fails.
     """
-    # Check for existing patron by name (dedup)
-    existing_result = find_patron_by_name(conn, data.display_name)
-
-    if isinstance(existing_result, Failure):
-        error = existing_result.failure()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to check for existing patron: {error}",
-        )
-
-    existing = existing_result.unwrap()
-    if existing is not None:
-        # Return existing patron (return_existing semantics)
-        return PatronRegisterResponse(
-            id=existing.id,
-            name=existing.name,
-            kind=existing.kind,
-            created_at=existing.created_at,
-            is_new=False,
-        )
-
-    # Create new patron
-    now = datetime.now(UTC)
-    patron_id = PatronId(str(uuid.uuid4()))
-
-    patron = Patron(
-        id=patron_id,
-        name=data.display_name,
+    result = register_patron(
+        conn,
+        data.display_name,
         kind=data.kind,
-        created_at=now,
+        alias=data.alias,
+        meta=data.meta,
     )
-
-    result = create_patron(conn, patron)
-
     if isinstance(result, Failure):
-        error = result.failure()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create patron: {error}",
-        )
-
-    created = result.unwrap()
-    return PatronRegisterResponse(
-        id=created.id,
-        name=created.name,
-        kind=created.kind,
-        created_at=created.created_at,
-        is_new=True,
-    )
+        _raise_registration_error(result.failure())
+    return _registration_outcome_to_response(result.unwrap())
 
 
 # =============================================================================

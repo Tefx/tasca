@@ -24,7 +24,7 @@ else:
 from returns.result import Success
 
 from tasca.shell.api.deps import get_db
-from tasca.shell.services.operations.table_export import export_table
+from tasca.shell.services.operations.table_export import TableExportOperationResult, export_table
 
 if TYPE_CHECKING:
     pass
@@ -71,17 +71,16 @@ def _build_export_response(
 
 
 # @invar:allow shell_result: HTTP adapter maps shared Result failures to HTTPException.
+# @shell_orchestration: HTTP-layer mapping from shared export outcomes to FastAPI exceptions.
 def _run_export_or_raise(
     conn: sqlite3.Connection,
     table_id: str,
     format: str,
-) -> str:
+) -> TableExportOperationResult:
     """Run shared export operation and map typed failures to HTTP errors."""
     result = export_table(conn, table_id, format)
     if isinstance(result, Success):
-        content = result.unwrap().content
-        assert content is not None
-        return content
+        return result.unwrap()
     failure = result.failure()
     if failure.status == "not_found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=failure.error)
@@ -121,8 +120,10 @@ async def export_jsonl_endpoint(
         HTTPException: 404 if table not found.
         HTTPException: 500 if database operation fails.
     """
-    content = _run_export_or_raise(conn, table_id, "jsonl")
-    return _build_export_response(content, f"{table_id}.jsonl", download)
+    export = _run_export_or_raise(conn, table_id, "jsonl")
+    assert export.content is not None
+    assert export.filename is not None
+    return _build_export_response(export.content, export.filename, download)
 
 
 # @invar:allow entry_point_too_thick: export.py endpoints - JSONL/markdown export with docstrings, type hints, and error handling
@@ -152,5 +153,7 @@ async def export_markdown_endpoint(
         HTTPException: 404 if table not found.
         HTTPException: 500 if database operation fails.
     """
-    content = _run_export_or_raise(conn, table_id, "markdown")
-    return _build_export_response(content, f"{table_id}.md", download)
+    export = _run_export_or_raise(conn, table_id, "markdown")
+    assert export.content is not None
+    assert export.filename is not None
+    return _build_export_response(export.content, export.filename, download)

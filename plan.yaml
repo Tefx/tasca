@@ -36884,7 +36884,7 @@ phases:
       \ gate may proceed."
   - id: batched-spec-conformance-remediation
     name: Batched remediation for spec-conformance blockers B1-B9
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       verification_scope: local-check
@@ -37157,6 +37157,8 @@ phases:
     depends_on:
     - dup_adoption.spec-conformance
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-12T19:07:48.550191+00:00'
   - id: spec-conformance-retest-b1-b9
     name: Retest spec conformance for B1-B9 remediation
     status: pending

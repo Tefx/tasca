@@ -35322,7 +35322,7 @@ phases:
     claimed_at: '2026-05-12T17:15:26.403383+00:00'
   - id: dup_adoption.mcp-shared-ops-adoption
     name: Adopt shared operations in MCP entrypoints
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
       \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/error-response-shape\n\
@@ -35389,6 +35389,44 @@ phases:
     agent: python-refactor-master-tacit
     claimed_by: python-refactor-master-tacit
     claimed_at: '2026-05-12T17:15:12.836621+00:00'
+    done_at: '2026-05-12T17:28:17.680401+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nRead cited MCP spec anchors\
+      \ in `docs/tasca-mcp-interface-v0.1.md` and harness refs `tests/unit/mcp/test_mcp_server.py`,\
+      \ `tests/integration/test_mcp.py`.\n\n## MCP Adoption Evidence\n- Commit hash(es):\n\
+      \  - Worker commit: `3625f7ea4b6877fe4d8a547fcd8af68a608d9c26`\n  - Mainline\
+      \ squash commit: `ed0a4ec [vectl] step-dup_adoption.mcp-shared-ops-adoption\
+      \ completed`\n- Files changed:\n  - `src/tasca/shell/mcp/entrypoints.py`\n \
+      \ - `src/tasca/shell/mcp/entrypoint_logic.py`\n- Entrypoints rewired:\n  - `table_control`\
+      \ now has no local append-control-saying split path; stale `_append_control_saying`\
+      \ helper and `append_saying` import were removed.\n  - Removed unused MCP-local\
+      \ `validate_control_action` transition matrix from `entrypoint_logic.py`.\n\
+      - Shared operations/services called:\n  - `table_control` continues to call\
+      \ `tasca.shell.services.operations.table_control.execute_table_control`, which\
+      \ delegates to `atomic_control_table`.\n- Remaining MCP-local envelope/dedup\
+      \ logic:\n  - `check_idempotency_key` / `store_idempotency_key` remain in `entrypoints.py`.\n\
+      \  - `success_response` / `error_response` envelope assembly remains in `entrypoints.py`.\n\
+      \  - `_build_control_response` keeps MCP-local `_next_action` generation.\n\
+      \  - `table_say` limit mapping and dedup-hit next-action behavior remain local.\n\
+      \n## Failure-Path Proof\n- Control now uses atomic shared operation:\n  - Verified\
+      \ no `_append_control_saying`, `append_saying(`, or `validate_control_action`\
+      \ split control path remains under `src/tasca/shell/mcp`.\n  - `tests/unit/test_dup_guardrails_control_red.py::test_mcp_control_rolls_back_control_saying_when_status_update_fails`\
+      \ passed.\n- Limit error mapping:\n  - `tests/unit/mcp/test_mcp_server.py::TestLimitsEnforcementTableSay::*`\
+      \ passed in focused run.\n  - `_limit_error_to_response` remains MCP-local.\n\
+      - Dedup-hit path still local:\n  - `_check_say_idempotency` remains in `entrypoints.py`\
+      \ and preserves dedup `_next_action` mutation.\n  - `table_control` / `table_create`\
+      \ idempotency cache checks remain in `entrypoints.py`.\n\n## Verification\n\
+      - Worker baseline:\n  ```text\n  .venv/bin/python -m pytest tests/unit/mcp/test_mcp_server.py\
+      \ tests/integration/test_mcp.py\n  144 passed in 6.82s\n  ```\n- Worker post-change:\n\
+      \  ```text\n  .venv/bin/python -m pytest tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py\
+      \ tests/unit/test_dup_guardrails_control_red.py\n  148 passed in 4.72s\n  ```\n\
+      - Worker invar guard: status passed, errors 0, warnings 22, doctest passed.\n\
+      - Mainline final-state verification after squash merge:\n  ```text\n  uv run\
+      \ pytest tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py tests/unit/test_dup_guardrails_control_red.py\
+      \ -q\n  148 passed in 4.43s\n  ```\n  ```text\n  uv run invar guard\n  status\
+      \ passed; errors 0; warnings 22\n  ```\n- Gaps/Notes:\n  - Invar warnings are\
+      \ pre-existing shell_pure_logic style warnings on MCP shell files; no errors.\n\
+      \  - No vectl CLI/MCP tools used by worker.\n  - Worktree-local `uv.lock` drift\
+      \ was reverted before worker commit."
   - id: dup_adoption.mid-gate
     name: Mid-gate transport adoption boundary review
     status: pending

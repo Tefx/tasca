@@ -33572,6 +33572,262 @@ phases:
 
       - uv.lock transient metadata diff in verifier worktree was restored by verifier;
       final verifier worktree clean.'
+  - id: fix-foundation-conformance-wiring
+    name: Fix foundation conformance and wiring blockers
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      agent: python-senior-tacit
+
+      priority: HIGH
+
+      remediation_consolidation: aggregated_parallel_failures
+
+      source_failed_steps:
+
+      - dup_foundation.spec-conformance
+
+      - dup_foundation.wiring-audit
+
+
+      Comprehensive batched fix for ALL blocker families reported by the concurrent
+      phase-check failures. This step intentionally aggregates spec-conformance and
+      wiring-audit blockers into one remediation owner so the foundation cannot pass
+      with only one side repaired.
+
+
+      ## Blockers to Fix (ALL of these, not just the first)
+
+
+      ### B1 / idempotency and patron identity
+
+      - patron.register dedup semantics diverge from the MCP spec.
+
+      - Shared operation currently omits or mishandles dedup_id.
+
+      - display_name-based dedup may collapse distinct patrons.
+
+      Required outcome: either fix shared patron registration to use spec-aligned
+      dedup/idempotency semantics, or explicitly split transport idempotency from
+      display_name identity with documented, spec-aligned ownership and regression
+      coverage.
+
+
+      ### B2 / table.create shape and defaults
+
+      - table.create shared operation is partial relative to MCP shape.
+
+      - Missing or excluded surfaces include created_by, title, host_ids, metadata,
+      policy, board, dedup_id, invite_code, and web_url where relevant.
+
+      Required outcome: cover the authoritative table.create shape/defaults in the
+      foundation, or provide explicit non-intersection proof if a specific transport-only
+      surface is deferred to an already-gated adoption step. Deferred items must name
+      the downstream owner and prove they do not block this foundation gate.
+
+
+      ### B3 / Markdown export format
+
+      - Markdown export diverges from the technical design template.
+
+      - Spec requires stable ordered export lines like `[seq=...] timestamp (speaker):
+      content` plus a board section; implementation emits a different format and omits
+      board.
+
+      Required outcome: align shared export formatting with the technical design OR
+      create an explicit spec-correction owner if the design is stale. Do not silently
+      pass a stale-design assumption.
+
+
+      ### B4 / MCP ParameterContract defaults
+
+      - Centralized constants exist but ParameterContract defaults do not consistently
+      match spec defaults.
+
+      - Known examples: seat.heartbeat ttl_ms and table.say saying_type.
+
+      Required outcome: make the MCP ParameterContract metadata match the centralized
+      spec defaults and add focused regression coverage for all changed/defaulted
+      parameters.
+
+
+      ### R3 / stale-version and concurrent control proof
+
+      - control stale-version precedence / concurrent control race is NEEDS_TEST.
+
+      Required outcome: add a transport/runtime test or equivalent integration proof
+      that exercises stale version precedence under concurrent or racing control operations.
+      The test must verify the resolved gate decision basis, not only local unit behavior.
+
+
+      ### W-B1 / production orphan shared operations
+
+      - Shared operations are production-orphaned/test-only.
+
+      - Runtime adapters still call storage/core directly.
+
+      - New Result/outcome/error types are not used by non-test production callers.
+
+      Required outcome: wire non-test production callers to the shared operations/outcomes
+      OR explicitly reclassify adoption to an already-gated downstream adoption step
+      with non-intersection proof for this foundation gate. A foundation-gate pass
+      is not allowed while blocker-class dead exports remain masked as intended adoption.
+
+
+      ### W-B2 / tool_contracts runtime consumption
+
+      - MCP tool_contracts metadata is not consumed by server/runtime.
+
+      - server.py and entrypoints.py still manually declare duplicate Field descriptions/defaults.
+
+      Required outcome: make runtime/server consumption use the tool_contracts source
+      of truth now OR move adoption behind an explicit dependency-gated downstream
+      owner with proof that the foundation gate no longer treats this as dead/orphaned
+      source-of-truth work.
+
+
+      ### W-B3 / dead_export hatch density
+
+      - Five dead_export hatches in shared operations mask orphan wiring.
+
+      Required outcome: remove dead_export hatches made unnecessary by production
+      adoption, or document each remaining hatch with a non-test production owner
+      and a non-intersection rationale accepted by the retest step. Hatches must not
+      hide a current gate blocker.
+
+
+      ### Batch-delete spec ambiguity note
+
+      - Batch-delete authoritative spec coverage is ambiguous.
+
+      Required outcome: do not let ambiguity cause a silent pass. Either add explicit
+      spec clarification/verification ownership or record non-intersection evidence
+      showing the ambiguity does not affect the current blocker closure or downstream
+      gates.
+
+
+      ## Runtime / entrypoint preservation
+
+      This phase affects deployability-bearing REST/MCP surfaces. Module-boundary
+      fixes must not narrow runtime behavior. If a surface is deferred to dup_adoption,
+      the fix evidence must name the exact adoption step and prove current foundation
+      progression is gated by dup_foundation.retest-foundation-conformance-wiring.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION remediation step. Stub-only completion is NOT acceptable.
+      Each deliverable MUST contain substantive logic, tests, or explicit disposition
+      evidence that closes the listed blocker family. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
+
+
+      ## Root Cause vs Symptom
+
+      Evidence must distinguish root causes from symptoms for each blocker family
+      and explain why the fix closes the blocker family rather than only the observed
+      line-level symptom.'
+    verification: '- local-check: ALL B1/B2/B3/B4/R3/W-B1/W-B2/W-B3 blocker families
+      are fixed or have explicit, spec-aligned non-intersection/deferred-owner evidence
+
+      - main path: shared operations are consumed by non-test production code where
+      foundation ownership requires runtime adoption
+
+      - failure path: stale-version/concurrent control runtime test or equivalent
+      integration proof exists and documents precedence
+
+      - spec path: Markdown export, table.create shape/defaults, patron dedup/idempotency,
+      and ParameterContract defaults match authoritative specs or have explicit spec-correction
+      ownership
+
+      - wiring path: tool_contracts/shared operation outcomes are no longer production-orphaned
+      unless deferred behind explicit dependency-gated adoption ownership
+
+      - hatch path: every dead_export hatch in the affected shared operations is removed
+      or justified with non-intersection evidence accepted by the retest step'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Aggregated Blocker Closure Report
+
+
+      **Source failed steps**:
+
+      - dup_foundation.spec-conformance
+
+      - dup_foundation.wiring-audit
+
+
+      | Family | Status | Files changed | Root cause | Closure proof | Deferred owner
+      / non-intersection proof |
+
+      | --- | --- | --- | --- | --- | --- |
+
+      | B1 patron.register dedup/idempotency | CLOSED/DEFERRED | | | | |
+
+      | B2 table.create shape/defaults | CLOSED/DEFERRED | | | | |
+
+      | B3 Markdown export format/board order | CLOSED/SPEC_CORRECTION | | | | |
+
+      | B4 MCP ParameterContract defaults | CLOSED | | | | |
+
+      | R3 stale-version/concurrent control runtime proof | CLOSED | | | | |
+
+      | W-B1 shared ops production adoption | CLOSED/DEFERRED | | | | |
+
+      | W-B2 tool_contracts runtime consumption | CLOSED/DEFERRED | | | | |
+
+      | W-B3 dead_export hatch density | CLOSED/JUSTIFIED | | | | |
+
+      | Batch-delete spec ambiguity | CLARIFIED/NON_INTERSECTING | | | | |
+
+
+      ## Required Proof Artifacts
+
+      - Dedup/idempotency semantics: exact rule, authoritative spec citation, and
+      tests/proof.
+
+      - Table create shape/defaults: field-by-field disposition for created_by/title/host_ids/metadata/policy/board/dedup_id/invite_code/web_url.
+
+      - Markdown export: before/after example showing `[seq=...] timestamp (speaker):
+      content`, board section, and stable order OR spec-correction owner.
+
+      - ParameterContract defaults: list of every changed default and matching centralized
+      constant/spec default.
+
+      - Stale-version/concurrent control: exact runtime/integration command or test
+      plus observed result.
+
+      - Wiring adoption: production caller evidence for shared operations/tool_contracts
+      OR exact downstream gated owner and non-intersection proof.
+
+      - dead_export hatches: grep/list before and after, with rationale for any remaining
+      hatch.
+
+
+      ## Headline
+
+      - [ ] READY_FOR_RETEST: all blocker families have closure or explicit non-intersection/deferred-owner
+      proof
+
+      - [ ] BLOCKED: unresolved blocker-class debt remains'
+    depends_on:
+    - dup_foundation.table-control-operation
+    - dup_foundation.create-register-ops
+    - dup_foundation.delete-export-ops
+    - retest-mid-gate
+    - dup_foundation.mcp-tool-contracts-source
+    agent: python-senior-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

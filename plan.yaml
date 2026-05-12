@@ -31690,7 +31690,7 @@ phases:
     claimed_at: '2026-05-12T13:05:44.029737+00:00'
   - id: dup_foundation.create-register-ops
     name: Extract shared patron-registration and table-creation operations
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior-tacit\n\nAnchors:\n- spec_refs:\n  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/patron-identity\n\
       \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables\n\
@@ -31764,6 +31764,82 @@ phases:
     agent: python-senior-tacit
     claimed_by: python-senior-tacit
     claimed_at: '2026-05-12T13:05:32.597416+00:00'
+    done_at: '2026-05-12T13:31:28.117737+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - docs/tasca-http-api-v0.1.md#.../patron-identity — maps POST /api/v1/patrons
+      to tasca.patron.register.
+
+      - docs/tasca-http-api-v0.1.md#.../tables — maps POST /api/v1/tables to tasca.table.create;
+      admin required.
+
+      - docs/tasca-mcp-interface-v0.1.md#.../tasca-patron-register — patron register
+      input/output contract reviewed.
+
+      - docs/tasca-mcp-interface-v0.1.md#.../tasca-table-create — table create input/output
+      contract reviewed.
+
+      - docs/tasca-technical-design-v0.1.md#.../dedup-key-canonicalization — transport
+      idempotency kept outside shared create/register ops.
+
+
+      ## Operation Extraction Evidence
+
+      - New owner modules: src/tasca/shell/services/operations/patron_registration.py
+      and table_creation.py.
+
+      - Patron op owns display-name dedup lookup, return-existing outcome, optional
+      supplied patron_id selection, UUID fallback, timestamping, Patron construction,
+      and create_patron persistence.
+
+      - Table op owns generate_table_id, timestamping, OPEN status, Version(1), Table
+      construction, creator_patron_id persistence, and create_table persistence.
+
+      - Transport-local HTTPException/MCP envelopes/auth/logging/idempotency cache
+      remain outside.
+
+
+      ## Error Surface
+
+      - Typed outcomes/errors: PatronRegistrationOutcome/Error, PatronLookupError,
+      PatronCreateError, TableCreationOutcome/Error, TableIdSelectionError, TableCreateError;
+      repository/id causes preserved via cause.
+
+
+      ## Scope Guardrail
+
+      - Transport files changed: NONE.
+
+
+      ## Files changed
+
+      - src/tasca/shell/services/operations/__init__.py
+
+      - src/tasca/shell/services/operations/patron_registration.py
+
+      - src/tasca/shell/services/operations/table_creation.py
+
+      - tests/unit/services/test_registration_creation_operations.py
+
+
+      ## Verification
+
+      Worktree: pytest 157 passed; ruff passed; invar guard --changed passed; commit
+      87bbaaa27157b9a2bcf90606d7164b5e796b16ff.
+
+      Mainline final-state gate after squash merge: `uv run pytest tests/unit/api/test_tables_routes.py
+      tests/unit/mcp/test_mcp_server.py tests/unit/services/test_registration_creation_operations.py`
+      => 157 passed; `uv run ruff check src/tasca/shell/services/operations tests/unit/services/test_registration_creation_operations.py`
+      => all checks passed; `uv run invar guard --changed` => passed, 0 errors/warnings,
+      doctest passed.
+
+      Mainline commit: 5a4de0b [vectl] step-dup_foundation.create-register-ops completed.
+
+
+      ## Gaps/Notes
+
+      - dead_export escape hatches are intentional because transport rewiring is deferred
+      to adoption steps.'
   - id: dup_foundation.delete-export-ops
     name: Extract shared batch-delete and export operations
     status: claimed

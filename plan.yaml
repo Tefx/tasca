@@ -37098,6 +37098,213 @@ phases:
     depends_on:
     - dup_adoption.spec-conformance
     agent: python-senior
+  - id: spec-conformance-retest-b1-b9
+    name: Retest spec conformance for B1-B9 remediation
+    status: pending
+    description: 'step_type: test
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: phase-check
+
+      agent: spec-verifier-tacit
+
+      independence_level: L1
+
+      refs:
+
+      - docs/tasca-mcp-interface-v0.1.md
+
+      - docs/tasca-http-api-v0.1.md
+
+      - docs/tasca-technical-design-v0.1.md
+
+      - docs/foundation-conformance-wiring-dispositions.md
+
+      - dup_adoption.spec-conformance evidence
+
+      - batched-spec-conformance-remediation evidence
+
+
+      As an INDEPENDENT SPEC-CONFORMANCE VERIFIER, rerun adversarial spec conformance
+      for every blocker from dup_adoption.spec-conformance after the batched remediation.
+
+
+      This retest is a gate-protecting phase-check. It protects dup_adoption.gate
+      and finalization by proving that blocker-class transport/spec drift is closed
+      or explicitly non-intersecting.
+
+
+      Required closure fields in evidence:
+
+      - verdict: PASS | FAIL
+
+      - blockers: [] or list of remaining blocker IDs with severity and gate intersection
+
+      - gate_open_allowed: true | false
+
+
+      Rerun and classify every B1-B9 item:
+
+      - B1_auth_error_envelope
+
+      - B2_standard_error_envelope
+
+      - B3_rest_dedup_missing
+
+      - B4_rest_patron_shape
+
+      - B5_rest_table_create_shape
+
+      - B6_mcp_control_update_permissions
+
+      - B7_table_say_agent_patron_required
+
+      - B8_table_say_limit_and_mention_order
+
+      - B9_batch_delete_response_contract
+
+
+      Also resolve the NEEDS_TEST items from the failed verifier. Each must be PROVEN,
+      or explicitly classified non-blocking with gate-intersection evidence:
+
+      - dedup return-existing behavior
+
+      - control atomic append/status behavior
+
+      - closed-control dedup precedence
+
+      - closed/paused table.say behavior
+
+      - export order/control events
+
+
+      Behavioral proof register required for every blocker and NEEDS_TEST item:
+
+      - requirement_ref
+
+      - behavior_claim
+
+      - runtime_proof_expected
+
+      - evidence_ref
+
+      - status: PROVEN | DIVERGES | NEEDS_TEST | UNPROVEN | NON_INTERSECTING
+
+      - closure_path
+
+      - gate_decision_basis
+
+
+      Finding remaining issues is a successful verification outcome, but this step
+      may only report gate_open_allowed: true when all blocker-class items are PROVEN
+      or have explicit non-intersection evidence.'
+    verification: '- Evidence includes required top-level closure fields: verdict,
+      blockers, gate_open_allowed.
+
+      - Every B1-B9 item has a PASS/FAIL/non-intersection disposition with spec refs,
+      implementation refs, and runtime/test proof.
+
+      - Every NEEDS_TEST item from the failed verifier is PROVEN or explicitly classified
+      non-blocking with gate-intersection evidence.
+
+      - The retest confirms no persisted saying is created for over-limit or ambiguous-mention
+      table_say failures.
+
+      - The retest confirms unauthorized table_control/table_update cannot append
+      control sayings or mutate status/version.
+
+      - The retest confirms REST and MCP error envelopes include code, message, and
+      details where the spec requires them.
+
+      - The retest confirms gate_open_allowed is false if any blocker-class item remains
+      DIVERGES, NEEDS_TEST, UNPROVEN, or UNCERTAIN_BLOCKING.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Spec-Conformance Retest Closure
+
+
+      verdict: PASS|FAIL
+
+      blockers: []
+
+      gate_open_allowed: true|false
+
+
+      ## B1-B9 Closure Matrix
+
+      | ID | Requirement ref | Behavior claim | Runtime proof expected | Evidence
+      ref | Status | Closure path | Gate decision basis |
+
+      | --- | --- | --- | --- | --- | --- | --- | --- |
+
+      | B1_auth_error_envelope |  |  |  |  |  |  |  |
+
+      | B2_standard_error_envelope |  |  |  |  |  |  |  |
+
+      | B3_rest_dedup_missing |  |  |  |  |  |  |  |
+
+      | B4_rest_patron_shape |  |  |  |  |  |  |  |
+
+      | B5_rest_table_create_shape |  |  |  |  |  |  |  |
+
+      | B6_mcp_control_update_permissions |  |  |  |  |  |  |  |
+
+      | B7_table_say_agent_patron_required |  |  |  |  |  |  |  |
+
+      | B8_table_say_limit_and_mention_order |  |  |  |  |  |  |  |
+
+      | B9_batch_delete_response_contract |  |  |  |  |  |  |  |
+
+
+      ## NEEDS_TEST Closure Matrix
+
+      | Item | Requirement ref | Behavior claim | Runtime proof expected | Evidence
+      ref | Status | Closure path | Gate decision basis |
+
+      | --- | --- | --- | --- | --- | --- | --- | --- |
+
+      | dedup return-existing |  |  |  |  |  |  |  |
+
+      | control atomic append/status |  |  |  |  |  |  |  |
+
+      | closed-control dedup precedence |  |  |  |  |  |  |  |
+
+      | closed/paused table.say |  |  |  |  |  |  |  |
+
+      | export order/control events |  |  |  |  |  |  |  |
+
+
+      ## Commands / Runtime Proof
+
+      ```
+
+      <paste exact commands and outputs, not summaries only>
+
+      ```
+
+
+      ## Gate Decision Basis
+
+      - Unresolved statuses: <none or list>
+
+      - Why unresolved items block / do not intersect remaining gates: <required>
+
+      - Final recommendation: OPEN | BLOCK'
+    depends_on:
+    - batched-spec-conformance-remediation
+    agent: spec-verifier-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

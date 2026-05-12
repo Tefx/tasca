@@ -37640,7 +37640,7 @@ phases:
       commit.'
   - id: resolve-rest-limit-envelope-guardrail
     name: Resolve REST limit error envelope guardrail blocker
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       blocker_id: B-GATE-001
@@ -37790,6 +37790,8 @@ phases:
     depends_on:
     - dup_adoption.gate
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-12T20:07:33.906660+00:00'
   - id: retest-rest-limit-envelope-guardrail-closure
     name: Retest and close B-GATE-001 REST limit envelope guardrail
     status: pending

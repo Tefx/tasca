@@ -1,0 +1,107 @@
+# REST/MCP Parity Preservation Register
+
+step_id: `dup_guardrails.parity-contract-capture`  
+agent: `spec-verifier-tacit`  
+date: 2026-05-12
+
+## refs Read Confirmation
+
+- `docs/tasca-http-api-v0.1.md` — HTTP is a JSON REST/long-poll binding over MCP tools; patron/table/control/saying/export endpoint mapping is explicit at lines 46-99, with admin requirements at lines 21-28 and human saying constraints at lines 69-73.
+- `docs/tasca-mcp-interface-v0.1.md` — MCP invariants require append-only sayings, idempotent writes, capped waits, and closed terminal state at lines 17-24; idempotency scope/return-existing at lines 165-178; patron/table/control/say tool contracts at lines 197-255 and 352-437.
+- `docs/tasca-technical-design-v0.1.md` — atomic operation boundaries require `table.say`, `table.control`, and `table.update` to be all-or-nothing at lines 102-120; public contract consolidation mandates shared error envelope/auth/human speaker semantics at lines 122-199; export contracts at lines 245-287.
+- `src/tasca/shell/api/routes/patrons.py` — REST patron registration owner currently returns `id/name/kind/created_at/is_new` via `PatronRegisterResponse` at lines 34-42 and deduplicates by `display_name` at lines 70-89, not by MCP-style `dedup_id`.
+- `src/tasca/shell/api/routes/tables.py` — REST table owner creates admin-required tables at lines 100-158, full-replace update at lines 237-339, single delete at lines 347-387, and batch-delete all-or-nothing closed-table route at lines 395-459.
+- `src/tasca/shell/api/routes/export.py` — REST export owner fetches table + all sayings at lines 79-133, delegates formatting to core `generate_jsonl`/`generate_markdown` at lines 167-202, and keeps HTTP download/content-type shaping local in `_build_export_response` at lines 46-74.
+- `src/tasca/shell/api/routes/tables_control.py` — REST control owner validates transition at lines 106-151 and delegates atomic append+status update to `atomic_control_table` at lines 161-172; response shape is `table_status` + `control_saying_sequence` at lines 58-63.
+- `src/tasca/shell/api/routes/sayings.py` — REST sayings owner enforces admin human posting at route dependency lines 240-245, validates closed-state via `_validate_can_say` at lines 162-179, checks limits before append at lines 181-231 and 275-277, and returns REST-local `Saying`/list/wait shapes at lines 240-315 and 409-513.
+- `src/tasca/shell/mcp/entrypoints.py` — MCP business entrypoint owner implements patron registration compatibility/idempotency at lines 180-269, table create at lines 310-389, batch delete at lines 608-651, export at lines 658-713, saying limits via `append_saying_with_limits` at lines 944-981, and non-atomic MCP control append/update split at lines 1090-1188.
+- `src/tasca/shell/mcp/server.py` — MCP tool-schema owner registers FastMCP tools with Annotated fields at lines 338-571; `table_delete_batch`, `table_export`, `table_say`, `table_control`, and `table_wait` schema surfaces are at lines 431-571.
+- `src/tasca/shell/mcp/entrypoint_logic.py` — MCP payload-shaping owner centralizes spec + compatibility fields for patron response at lines 64-79, table/saying formatting at lines 82-113, speaker constraints at lines 131-151, control response `_next_action` at lines 188-204, and `table_say` compatibility fields at lines 263-310.
+- `tests/unit/api/test_tables_routes.py` — REST expectations cover admin auth for create/update/delete/control at lines 115-123, 229-235, 446-450, 744-750; batch-delete closed-only/all-or-nothing at lines 492-575; control creates audit saying + updates status at lines 769-805; storage-level atomic-control conflict at lines 947-1016.
+- `tests/unit/api/test_export_routes.py` — REST export expectations require JSONL header/table/sayings order at lines 118-166, markdown transcript/content behavior at lines 251-397, and route delegation to core formatting functions at lines 405-504.
+- `tests/unit/mcp/test_mcp_server.py` — MCP expectations bind compatibility/spec fields for patron register at lines 88-153, batch-delete all-or-nothing at lines 467-535, export envelopes and invalid-format error at lines 884-1073, and error envelope shape at lines 1225-1274.
+- `tests/integration/test_mcp.py` — MCP integration verifies tool discovery at lines 273-319, full patron/table/say/listen flow with mention result fields at lines 652-750, closed-table rejection/read allowance at lines 840-907, dedup return-existing for `table_say` at lines 909-975, and batch-delete full-cycle/reject-open at lines 1176-1252.
+
+## Requirements Register
+
+| ID | Requirement | Type | Source | Verification method | Disposition |
+|---|---|---|---|---|---|
+| R1 | HTTP endpoints are thin bindings over MCP tool semantics. | interface | `docs/tasca-http-api-v0.1.md:46-49` | Static route/tool comparison | PARTIAL: shared semantics exist, but response shapes intentionally diverge. |
+| R2 | HTTP admin-required create/say/update/control must validate bearer token. | behavior | `docs/tasca-http-api-v0.1.md:21-28`; tech design `140-153` | Static route deps + tests | PRESERVE as REST-local auth boundary. |
+| R3 | Writes accept idempotency and return original success response on dedup hit. | behavior | `docs/tasca-mcp-interface-v0.1.md:165-178`; tech design `158-178` | Static inspection + tests | MCP binding; REST parity is not universal today. Must not assume REST fields. |
+| R4 | `table.control` appends CONTROL saying and updates status; atomicity is required by technical design. | behavior/side_effect | MCP spec `352-355`; tech design `102-120` | Static inspection + tests | REST conforms structurally via `atomic_control_table`; MCP has blocker-class drift (split append/update). |
+| R5 | Closed table rejects say/update/control except idempotent dedup hit; reads continue. | behavior | MCP spec `87-100`; tech design `69-77` | Static inspection + integration tests | Shared semantic to preserve; error codes/HTTP statuses are transport-local. |
+| R6 | Saying content max/default limits must be server-side enforced. | behavior | MCP spec `26-36`; server docstrings | Static inspection + tests gap | Shared semantic; ownership differs (`sayings.py` route helper vs MCP `append_saying_with_limits`). |
+| R7 | JSONL export includes header, table snapshot, ordered sayings including control events. | behavior/schema | tech design `245-275` | Static inspection + tests | Shared core formatting; REST/MCP response wrapping is local. |
+| R8 | Markdown export includes metadata, board section, transcript lines/order. | behavior/schema | tech design `277-287` | Static inspection + tests | Shared core formatting; current tests assert implementation-specific markdown speaker format. |
+| R9 | MCP tool schema is the public MCP contract surface. | interface/schema | `src/tasca/shell/mcp/server.py:338-571` | Static inspection + integration tool-list tests | Preserve in `server.py`; business logic may move, schema must remain stable unless spec changes. |
+
+## Behavioral Proof Ledger
+
+| Behavior | Required runtime proof | Available evidence | Missing proof | Proof status |
+|---|---|---|---|---|
+| REST control atomic append+status update | Failure/concurrency test proves no partial audit/status change. | REST route delegates to `atomic_control_table` (`tables_control.py:161-172`); storage conflict unit test (`test_tables_routes.py:947-1016`). | No explicit simulated mid-transaction append-success/update-fail rollback test in required refs. | NEEDS_TEST for rollback; PROVEN for delegation/conflict typing. |
+| MCP control atomic append+status update | Same all-or-nothing proof for MCP path. | MCP appends via `_append_control_saying` then separately calls `update_table` (`entrypoints.py:1140-1161`). | No atomic transaction wrapper; if update fails after append, audit/status can diverge. | UNPROVEN / blocker-class drift. |
+| Saying limit enforcement parity | Tests for REST and MCP limit failures at content/count/bytes boundaries. | REST checks `_check_limits_before_append` (`sayings.py:181-231`); MCP uses `append_saying_with_limits` (`entrypoints.py:944-981`). | Required refs did not show explicit limit tests; ownership differs. | NEEDS_TEST, non-product-code blocker for remediation planning. |
+| Export formatting parity | REST and MCP both invoke core `generate_jsonl`/`generate_markdown` and tests assert ordering/content. | REST `export.py:167-202`; MCP `entrypoints.py:700-705`; REST tests `test_export_routes.py:118-166,405-504`; MCP tests `test_mcp_server.py:884-1073`. | No direct cross-transport byte-for-byte parity test. | PROVEN for shared core use; NEEDS_TEST for exact parity. |
+| MCP tool schema ownership | Tool list/schema discovery stays anchored in `server.py`. | `server.py:338-571`; integration tool list expected set `test_mcp.py:273-319`. | No schema snapshot/golden test for field metadata/backcompat. | PROVEN for current registration; NEEDS_TEST for schema drift guard. |
+
+## Preservation Register
+
+| Operation | Spec ref | Current REST owner | Current MCP owner | Shared semantic to preserve | Transport-local shaping to keep local | Backward-compat binding vs cleanup candidates | Disposition |
+|---|---|---|---|---|---|---|---|
+| Patron registration | HTTP `docs/tasca-http-api-v0.1.md:52-56`; MCP `docs/tasca-mcp-interface-v0.1.md:197-213`; idempotency `165-178` | `src/tasca/shell/api/routes/patrons.py:34-118` | `src/tasca/shell/mcp/server.py:338-354`; `entrypoints.py:180-269`; `entrypoint_logic.py:64-79` | Stable patron identity; return-existing behavior; display name/alias/meta mapping. | REST currently returns `id/name/kind/created_at/is_new`; MCP returns envelope with spec fields plus compatibility fields. REST errors use HTTP exceptions; MCP uses `{ok,data/error}`. | Binding: MCP accepts deprecated `name` and returns `id/name/kind/created_at/is_new` per tests `test_mcp_server.py:88-153`. Cleanup candidate: REST name-dedup without `dedup_id` is drift from MCP idempotency. | Preserve compatibility fields in MCP; do not force REST to adopt MCP envelope during structural remediation. |
+| Table creation | HTTP `docs/tasca-http-api-v0.1.md:57-65`; MCP `docs/tasca-mcp-interface-v0.1.md:229-255`; admin `docs/tasca-http-api-v0.1.md:21-28` | `src/tasca/shell/api/routes/tables.py:100-158` | `src/tasca/shell/mcp/server.py:370-384`; `entrypoints.py:310-389` | Create open table, version 1, generated ID, optional context/creator, idempotent return-existing where supported. | REST is admin-required and returns `Table` model directly; MCP is tool-call envelope and adds compatibility `id/question/context` fields rather than spec `table_id/title`. | Binding: current MCP `id/question/context` response is tested (`test_mcp_server.py:189-210`, integration `test_mcp.py:676-688`). Cleanup candidate: mismatch from spec `table_id/invite_code/web_url/title/creator_id/host_ids`. | Preserve current field surface until a compatibility migration plan exists. |
+| Batch delete | MCP tool surfaced in server instructions/tool list; not in v0.1 HTTP anchor but current public behavior. | `src/tasca/shell/api/routes/tables.py:390-459` | `src/tasca/shell/mcp/server.py:431-441`; `entrypoints.py:608-651` | Closed-only precondition, max batch size, all-or-nothing cascade delete. | REST route is admin-required and HTTP 409 detail shape; MCP returns `{ok:false,error:{code:BATCH_PRECONDITION_FAILED,details:{details:[...]}}}`. | Binding: REST `deleted_ids` and MCP `deleted_ids` are tested; cleanup candidate: MCP server docstring says `deleted_count`/`failed` at `server.py:436-439` but implementation/tests use `deleted_ids`. | Treat closed-only/all-or-nothing as shared; keep response wrapping/status local; flag docstring/schema mismatch before refactor. |
+| Export | HTTP `docs/tasca-http-api-v0.1.md:95-99`; tech design JSONL/markdown `245-287` | `src/tasca/shell/api/routes/export.py:79-202` | `src/tasca/shell/mcp/server.py:444-455`; `entrypoints.py:658-713` | Fetch table + all sayings; no count truncation; delegate to core `generate_jsonl`/`generate_markdown`; ordered transcript/JSONL. | REST returns raw text `Response` with optional `download` header/content-type (`export.py:46-74`). MCP returns `{content,format,table_id}` inside success envelope. | Binding: REST download headers tested `test_export_routes.py:215-234,366-385`; MCP `content/format/table_id` exactly tested `test_mcp_server.py:1054-1073`. Cleanup candidate: MCP lacks suggested filename despite server docstring `server.py:450-452`. | Preserve shared core formatting; keep REST download shaping and MCP envelope local. |
+| Control | HTTP `docs/tasca-http-api-v0.1.md:63-65`; MCP `docs/tasca-mcp-interface-v0.1.md:352-370`; tech design atomicity `102-120` | `src/tasca/shell/api/routes/tables_control.py:50-191` | `src/tasca/shell/mcp/server.py:512-530`; `entrypoints.py:1054-1188`; `entrypoint_logic.py:154-204` | State machine open→paused, paused→open, open/paused→closed; closed terminal; append CONTROL audit saying and update status; response includes `table_status` + `control_saying_sequence`. | REST body includes `speaker_name` and uses admin-human speaker; no dedup_id field in request model despite HTTP spec body. MCP supports `patron_id`, `dedup_id`, and `_next_action`. Error codes/statuses differ. | Binding: REST `TableControlResponse` fields; MCP `_next_action` is compatibility/guidance field in `build_control_response`. Cleanup candidate: REST missing `dedup_id`; MCP non-atomic implementation. | Blocker-class drift: MCP must not be preserved as-is for atomicity; REST transport-local admin/speaker shaping must remain local. |
+| Saying-limit enforcement | MCP defaults/limits `docs/tasca-mcp-interface-v0.1.md:26-36`; human saying HTTP constraints `docs/tasca-http-api-v0.1.md:67-73`; technical mention limit `214-218` | `src/tasca/shell/api/routes/sayings.py:56-315` | `src/tasca/shell/mcp/server.py:458-492`; `entrypoints.py:879-981`; `entrypoint_logic.py:49-61,263-310` | Reject closed table; allow paused (soft); enforce content/count/bytes limits before append; return mention resolution fields for MCP `table_say`. | REST human endpoint requires admin and models `speaker_name/content/patron_id`, returning full `Saying`; MCP supports `speaker_kind`, `mentions`, `reply_to_sequence`, `dedup_id`, and returns `saying_id/sequence/mentions_*` plus compatibility fields. | Binding: MCP `mentions_*` fields are integration-tested (`test_mcp.py:695-712`); compatibility `id/table_id/speaker/content/pinned/_next_action` in `build_say_response`. Cleanup candidate: MCP ignores optional `saying_type`/`reply_to_sequence` except debug metadata (`entrypoint_logic.py:299-310`). | Preserve shared limit/state semantics; keep MCP guidance/mention fields and REST human auth local. Add parity tests before moving limit ownership. |
+
+## Blocker-Class Drift
+
+- **Atomic control semantics:** REST uses `atomic_control_table` (`src/tasca/shell/api/routes/tables_control.py:161-172`) and has storage conflict coverage (`tests/unit/api/test_tables_routes.py:947-1016`). MCP appends control saying then updates status separately (`src/tasca/shell/mcp/entrypoints.py:1140-1161`), contradicting technical design atomicity (`docs/tasca-technical-design-v0.1.md:102-120`). Downstream remediation must unify control semantics behind an atomic service/repo boundary; do not preserve MCP split-write behavior as contract.
+- **Limits enforcement ownership:** REST owns pre-append route checks (`src/tasca/shell/api/routes/sayings.py:181-231,275-277`); MCP owns limit enforcement in `append_saying_with_limits` (`src/tasca/shell/mcp/entrypoints.py:944-981`). Shared semantic is enforcement, not current duplicated placement. Required refs did not show explicit limit tests; add a cross-transport limit test before deleting either path.
+- **Export orchestration ownership:** Both transports fetch table/all sayings and delegate to core formatting (`src/tasca/shell/api/routes/export.py:167-202`; `src/tasca/shell/mcp/entrypoints.py:675-705`). Shared ownership belongs in core formatting + repository fetch contract; REST `_build_export_response` headers/content-type (`export.py:46-74`) and MCP `{content,format,table_id}` envelope (`entrypoints.py:707-713`) must remain transport-local.
+- **MCP tool-schema ownership:** `src/tasca/shell/mcp/server.py:338-571` is the public MCP schema surface. `entrypoints.py` and `entrypoint_logic.py` may be refactored, but FastMCP tool names, parameters, defaults, and compatibility fields are binding until a spec/version migration is approved. Integration tool discovery (`tests/integration/test_mcp.py:273-319`) is a minimal guard only; add schema snapshot tests for field-level drift.
+
+## Authority Notes
+
+- **Backward-compatible fields that are binding:**
+  - MCP patron `name` input alias and output `id/name/kind/created_at/is_new` (`entrypoints.py:188-190`; `entrypoint_logic.py:68-79`; tests `test_mcp_server.py:88-153`).
+  - MCP table create/list/get `id/question/context/status/version/created_at/updated_at` shape (`entrypoints.py:369-378,535-545`; tests `test_mcp_server.py:189-235`).
+  - MCP table_join `initial_sayings`/`has_more` compatibility shape (`entrypoints.py:506-518`; tests `test_mcp_server.py:582-687`) even though spec names `initial`/`has_more_history`.
+  - MCP `table_say` compatibility fields `id/table_id/speaker/content/pinned/_next_action` plus spec fields `saying_id/sequence/mentions_*` (`entrypoint_logic.py:263-296`; integration `test_mcp.py:695-712`).
+  - REST export `download=true` attachment behavior and text/plain vs octet-stream media shaping (`export.py:46-74`; tests `test_export_routes.py:215-234,366-385`).
+- **Fields that are cleanup candidates:**
+  - MCP `table_delete_batch` docstring promises `deleted_count`/`failed` (`server.py:436-439`), while implementation/tests return `deleted_ids` (`entrypoints.py:647-651`; tests `test_mcp_server.py:481-489`).
+  - MCP table_create response omits spec `table_id/invite_code/web_url/creator_id/host_ids` and uses `id/question/context` (`docs/tasca-mcp-interface-v0.1.md:244-255`; `entrypoints.py:369-378`). Treat as compatibility drift, not accidental deletion target.
+  - REST patron registration lacks spec/MCP `dedup_id`, `alias`, `meta`, and `patron_id` fields (`patrons.py:34-118`) while MCP supports them (`entrypoints.py:180-269`).
+  - REST control request omits `dedup_id` despite HTTP spec body including it (`docs/tasca-http-api-v0.1.md:63-65`; `tables_control.py:50-56`).
+  - MCP `table_say` accepts but ignores `saying_type` and `reply_to_sequence` except debug metadata (`entrypoints.py:893-899`; `entrypoint_logic.py:299-310`).
+- **Remaining ambiguities:**
+  - HTTP spec says most endpoints are thin wrappers over MCP tools (`docs/tasca-http-api-v0.1.md:46-49`) but current REST API predates several MCP v0.1 fields and uses direct Pydantic/domain responses. Refactor must not infer identical response envelopes.
+  - Technical design requires error envelope for HTTP + MCP (`docs/tasca-technical-design-v0.1.md:126-136`), while current REST route errors are mostly FastAPI `detail` payloads. This is broader than the preservation-scope guardrail; record as existing drift.
+  - Control idempotency scope for MCP uses `resource_key = control:{table_id}` plus tool name and `dedup_id` (`entrypoints.py:1101-1107`), omitting speaker key from the canonical spec scope (`docs/tasca-mcp-interface-v0.1.md:169-177`).
+
+## Evidence Table
+
+| Claim | Evidence |
+|---|---|
+| REST and MCP export share core formatting but local response wrapping. | REST `src/tasca/shell/api/routes/export.py:167-202`; MCP `src/tasca/shell/mcp/entrypoints.py:700-713`; tests `tests/unit/api/test_export_routes.py:405-504`, `tests/unit/mcp/test_mcp_server.py:884-1073`. |
+| REST control is designed atomic; MCP control is not in required refs. | REST `src/tasca/shell/api/routes/tables_control.py:161-172`; MCP `src/tasca/shell/mcp/entrypoints.py:1140-1161`; spec `docs/tasca-technical-design-v0.1.md:102-120`. |
+| Batch delete all-or-nothing closed-only is shared. | REST `src/tasca/shell/api/routes/tables.py:402-445`; MCP `src/tasca/shell/mcp/entrypoints.py:608-651`; tests `tests/unit/api/test_tables_routes.py:502-575`, `tests/unit/mcp/test_mcp_server.py:467-535`, `tests/integration/test_mcp.py:1176-1252`. |
+| MCP schema surface must remain in server.py. | Tool decorators and signatures `src/tasca/shell/mcp/server.py:338-571`; discovery test `tests/integration/test_mcp.py:273-319`. |
+
+## Coverage Summary
+
+- Targeted operations classified: patron registration, table creation, batch delete, export, control, saying-limit enforcement.
+- Shared semantics separated from REST-local/MCP-local shaping for each operation.
+- Behavioral/runtime obligations classified for control atomicity, limits enforcement, export formatting, and MCP tool-schema ownership.
+- Blocker-class obligations include exact implementation anchors.
+
+## Recommended Next Actions
+
+1. Before structural remediation, extract an atomic control service used by both REST and MCP; add failure-injection rollback tests.
+2. Add cross-transport limit enforcement tests that prove identical limit decisions but preserve local error/envelope shapes.
+3. Add MCP schema snapshot/golden tests for tool names, parameters, defaults, and binding compatibility fields.
+4. Treat REST/MCP response envelope drift as explicit migration work, not cleanup incidental to dedup guardrail remediation.

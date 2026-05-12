@@ -34575,7 +34575,7 @@ phases:
       \ untracked .artifacts/dev-timeline/plan.yaml.lock dirt."
   - id: web_mermaid_stream_fix.green-retest
     name: Green retest for Mermaid stream rendering
-    status: claimed
+    status: done
     description: 'step_type: test
 
       step_intent: retest_green
@@ -34650,6 +34650,54 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-05-12T10:05:28.532457+00:00'
+    done_at: '2026-05-12T12:44:15.636040+00:00'
+    evidence: "## Verification Report\n**Tester**: integration-verifier (independent\
+      \ of implementation)\n**Scope**: Mermaid fenced code rendering in Web UI discussion\
+      \ stream\n**Independence Level**: L1\n**Timestamp**: 2026-05-12T10:11:17Z\n\n\
+      ### refs Read Confirmation\n- web/src/components/Stream.test.tsx — Read focused\
+      \ Stream tests covering Mermaid diagram render, init stripping, normal fenced\
+      \ code, inline code, invalid Mermaid fallback, and raw HTML escaping.\n- web/src/components/Stream.tsx\
+      \ — Read Stream rendering path using ReactMarkdown overrides and MermaidRenderer.\n\
+      - web/src/rendering/mermaid.security.test.ts — Read Mermaid security suite covering\
+      \ init directive stripping and sanitizer availability.\n- web/src/rendering/svg-sanitizer.security.test.ts\
+      \ — Read sanitizer corpus covering forbidden tags/attrs and safe SVG preservation.\n\
+      - web/src/rendering/markdown.security.test.tsx — Read raw HTML and javascript\
+      \ protocol security tests.\n- web/package.json — Read scripts/dependencies:\
+      \ `npm test`, `npm run build`, Mermaid pinned to 11.10.1.\n\n### Test Execution\n\
+      - Commands executed:\n  ```bash\n  npm test -- src/components/Stream.test.tsx\n\
+      \  npm test -- src/rendering/mermaid.security.test.ts src/rendering/svg-sanitizer.security.test.ts\
+      \ src/rendering/markdown.security.test.tsx\n  npm run build\n  ```\n- Output\
+      \ summary:\n  ```text\n  Worker: Stream focused Vitest exit 0; 8 tests passed.\
+      \ Rendering security focused Vitest exit 0; 83 tests passed. Frontend build/typecheck\
+      \ exit 0.\n  Mainline final-state verification after merge: Stream focused Vitest\
+      \ exit 0; 8 tests passed. Rendering security focused Vitest exit 0; 83 tests\
+      \ passed. Frontend build/typecheck exit 0; Vite chunk-size warning only.\n \
+      \ ```\n\n### Behavioral Proof Register\n| requirement_ref | behavior_claim |\
+      \ runtime_proof_expected | evidence_ref | status | closure_path | gate_decision_basis\
+      \ |\n| --- | --- | --- | --- | --- | --- | --- |\n| stream-mermaid-fence | Mermaid\
+      \ fenced code in Stream saying content renders as diagram, not ordinary code\
+      \ | Focused Vitest renders Stream and asserts Mermaid diagram DOM | `npm test\
+      \ -- src/components/Stream.test.tsx`: 8 passed | PROVEN | None | Real React/jsdom\
+      \ Stream render path exercised |\n| stream-mermaid-svg-sanitized | Mermaid Stream\
+      \ output is sanitized SVG without script/onload | Focused Stream Vitest waits\
+      \ for SVG and checks dangerous nodes absent | `npm test -- src/components/Stream.test.tsx`:\
+      \ 8 passed | PROVEN | None | Runtime DOM assertions passed |\n| adjacent-security\
+      \ | Mermaid, SVG sanitizer, and Markdown security behavior did not regress |\
+      \ Focused security suites pass | Security Vitest command: 83 passed | PROVEN\
+      \ | None | Security regression corpora executed |\n| frontend-build | Frontend\
+      \ typecheck/build path remains green | `npm run build` completes | `tsc && vite\
+      \ build`: exit 0 | PROVEN | None | TypeScript and Vite production build completed\
+      \ |\n\n### Issues Found\n| Severity | Description | Location | Reproduction\
+      \ |\n| --- | --- | --- | --- |\n| Low | Vite emitted existing chunk-size warning\
+      \ for chunks larger than 500 kB; non-blocking for this scope. | Build output\
+      \ | `npm run build` |\n| Info | Invalid Mermaid fallback test logs expected\
+      \ `UnknownDiagramError`; suite passes. | `Stream.test.tsx` negative-path test\
+      \ | `npm test -- src/components/Stream.test.tsx` |\n\n### Closure Signals\n\
+      verdict: PASS\nblockers: []\norchestrator_action_hint: COMPLETE\n\n### Artifact\
+      \ and Commit\n- Worker artifact: evidence/web_mermaid_stream_fix-green-retest.md\n\
+      - Worker commit: 24a5448c6d9b366064aaefdc15631a53c1562a6c\n- Mainline squash\
+      \ commit: 26ac3ec\n\n### Files changed\n- evidence/web_mermaid_stream_fix-green-retest.md\n\
+      \n### Product code modified\n- none"
   - id: web_mermaid_stream_fix.uiux-audit
     name: Native UI audit for Mermaid discussion diagrams
     status: claimed

@@ -36265,6 +36265,7 @@ phases:
     - dup_adoption.transport-conformance
     - dup_adoption.liveness-probe
     - dup_adoption.spec-conformance
+    - spec-conformance-retest-b1-b9
     agent: gate-reviewer-tacit
   - id: dup_adoption.transport-say-append-shared-operation-fix
     name: transport-say-append-shared-operation-fix

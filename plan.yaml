@@ -32372,7 +32372,7 @@ phases:
       adoption consumes tool_contracts.py.'
   - id: dup_foundation.wiring-audit
     name: Wiring completeness audit for shared operation foundation
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -32453,6 +32453,8 @@ phases:
     - retest-mid-gate
     - dup_foundation.mcp-tool-contracts-source
     agent: wiring-auditor
+    claimed_by: wiring-auditor
+    claimed_at: '2026-05-12T14:34:01.130275+00:00'
   - id: dup_foundation.spec-conformance
     name: Verify shared foundation against HTTP/MCP specs
     status: claimed

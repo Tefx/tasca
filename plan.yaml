@@ -34168,3 +34168,130 @@ phases:
     depends_on:
     - web_mermaid_stream_fix.wire-renderer
     agent: integration-verifier
+  - id: web_mermaid_stream_fix.uiux-audit
+    name: Native UI audit for Mermaid discussion diagrams
+    status: pending
+    description: 'step_type: verification
+
+      verification_scope: phase-check
+
+      agent: uiux-auditor
+
+
+      As an INDEPENDENT native multimodal UI/UX auditor, verify that the discussion
+      interface visibly renders Mermaid diagrams in the stream after `web_mermaid_stream_fix.wire-renderer`.
+
+
+      Required rendered states/artifacts:
+
+      1. A saying containing a valid Mermaid fenced code block renders as a visible
+      diagram, not as raw code.
+
+      2. A normal fenced code block still renders as code.
+
+      3. An invalid Mermaid diagram shows a graceful fallback/error state inside the
+      saying without breaking the stream.
+
+      4. A diagram with wider content remains contained by the log block on a narrow
+      viewport.
+
+      5. Raw HTML in adjacent Markdown remains escaped/not executed.
+
+
+      Evidence MUST include screenshots, DOM snapshots, test-renderer output, or equivalent
+      visual/spatial artifacts for the required states. Standard unit tests alone
+      are insufficient for this step.'
+    verification: '- phase-check protecting `web_mermaid_stream_fix.gate`
+
+      - Visual/spatial evidence shows a Mermaid diagram rendered in the discussion
+      stream.
+
+      - Evidence shows ordinary code blocks and invalid Mermaid fallback still render
+      correctly.
+
+      - Evidence covers at least one narrow viewport or constrained stream width to
+      prove no layout breakage.
+
+      - Audit output includes a parseable PASS / PASS_WITH_DEBT / FAIL headline.'
+    evidence_template: '## Native Multimodal UI/UX Audit Report
+
+
+      **Auditor**: uiux-auditor (independent of implementation)
+
+      **Scope**: Web UI discussion stream Mermaid diagram rendering
+
+      **Timestamp**: <ISO 8601>
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - docs/tasca-web-uiux-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-001-mermaid-rendering.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-002-mermaid-svg-sanitization.md — key passage or "NOT READ: <reason>"
+
+      - web/src/components/Stream.tsx — key passage or "NOT READ: <reason>"
+
+      - web/src/styles/table/stream.css — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/mermaid.tsx — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ### Rendered Artifacts
+
+      | State | Artifact ref | Verdict | Notes |
+
+      | --- | --- | --- | --- |
+
+      | valid Mermaid saying | <screenshot/DOM snapshot> | PASS/FAIL | <notes> |
+
+      | normal fenced code | <screenshot/DOM snapshot> | PASS/FAIL | <notes> |
+
+      | invalid Mermaid fallback | <screenshot/DOM snapshot> | PASS/FAIL | <notes>
+      |
+
+      | narrow viewport / wide diagram | <screenshot/DOM snapshot> | PASS/FAIL | <notes>
+      |
+
+      | raw HTML escaped | <screenshot/DOM snapshot> | PASS/FAIL | <notes> |
+
+
+      ### Behavioral Proof Register
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      | --- | --- | --- | --- | --- | --- | --- |
+
+      | docs/tasca-web-uiux-v0.1.md Markdown rendering MVP | Discussion stream renders
+      Mermaid fenced code as a visible diagram | screenshot/DOM artifact | <ref> |
+      PROVEN/NEEDS_TEST/UNPROVEN | <path> | <basis> |
+
+
+      ### Issues Identified
+
+      | Severity | Description | Evidence | Blocking? |
+
+      | --- | --- | --- | --- |
+
+      | blocker | <issue or none> | <artifact> | YES/NO |
+
+
+      ### Headline
+
+      - [ ] PASS
+
+      - [ ] PASS_WITH_DEBT
+
+      - [ ] FAIL
+
+      '
+    depends_on:
+    - web_mermaid_stream_fix.wire-renderer
+    agent: uiux-auditor

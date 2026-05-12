@@ -15,13 +15,6 @@ from tasca.shell.services.operations.patron_registration import (
     PatronRegistrationOutcome,
     register_patron,
 )
-from tasca.shell.services.operations.table_creation import (
-    TableCreateError,
-    TableCreationError,
-    TableCreationOutcome,
-    TableIdSelectionError,
-    create_discussion_table,
-)
 from tasca.shell.services.operations.table_control import (
     TableControlAction,
     TableControlErrorCode,
@@ -30,6 +23,13 @@ from tasca.shell.services.operations.table_control import (
     build_control_content,
     execute_table_control,
     normalize_control_action,
+)
+from tasca.shell.services.operations.table_creation import (
+    TableCreateError,
+    TableCreationError,
+    TableCreationOutcome,
+    TableIdSelectionError,
+    create_discussion_table,
 )
 from tasca.shell.services.operations.table_export import (
     TableExportOperationResult,

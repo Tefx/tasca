@@ -102,10 +102,16 @@ def test_mcp_control_rolls_back_control_saying_when_status_update_fails(
     _insert_table(conn, "mcp-atomicity-table")
     monkeypatch.setattr(database, "_mcp_db_connection", conn)
 
-    def fail_update_table(*args: object, **kwargs: object) -> Failure[RuntimeError]:
-        return Failure(RuntimeError("forced status update failure"))
-
-    monkeypatch.setattr(entrypoints, "update_table", fail_update_table)
+    conn.execute(
+        """
+        CREATE TRIGGER force_control_status_update_failure
+        BEFORE UPDATE ON tables
+        WHEN OLD.id = 'mcp-atomicity-table'
+        BEGIN
+            SELECT RAISE(ABORT, 'forced status update failure');
+        END
+        """
+    )
 
     result = entrypoints.table_control(
         table_id="mcp-atomicity-table",

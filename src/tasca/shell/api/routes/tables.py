@@ -12,15 +12,14 @@ from datetime import UTC, datetime
 
 from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from returns.result import Failure, Success
+from returns.result import Failure
 
-from tasca.core.domain.table import Table, TableCreate, TableId, TableStatus, TableUpdate, Version
+from tasca.core.domain.table import Table, TableCreate, TableId, TableUpdate, Version
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
 from tasca.shell.api.routes import tables_control
 from tasca.core.services.batch_delete_service import (
     MAX_BATCH_SIZE,
-    validate_batch_delete_request,
 )
 from tasca.shell.logging import (
     get_logger,
@@ -29,15 +28,15 @@ from tasca.shell.logging import (
     log_table_delete,
     log_table_update,
 )
-from tasca.shell.services.table_id_generator import (
-    TableIdGenerationError,
-    generate_table_id,
+from tasca.shell.services.operations.batch_delete import delete_tables_batch
+from tasca.shell.services.operations.table_creation import (
+    TableCreateError,
+    TableIdSelectionError,
+    create_discussion_table,
 )
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     VersionConflictError,
-    batch_delete_tables,
-    create_table,
     delete_table,
     get_table,
     list_tables,
@@ -119,38 +118,26 @@ async def create_table_endpoint(
     Raises:
         HTTPException: 500 if database operation fails.
     """
-    now = datetime.now(UTC)
-    table_id_result = generate_table_id(conn)
-
-    if isinstance(table_id_result, Failure):
-        error = table_id_result.failure()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate table ID: {error}",
-        )
-
-    table_id = table_id_result.unwrap()
-
-    table = Table(
-        id=table_id,
-        question=data.question,
-        context=data.context,
-        status=TableStatus.OPEN,
-        version=Version(1),
-        created_at=now,
-        updated_at=now,
-    )
-
-    result = create_table(conn, table)
+    result = create_discussion_table(conn, data.question, context=data.context, now=datetime.now(UTC))
 
     if isinstance(result, Failure):
         error = result.failure()
+        if isinstance(error, TableIdSelectionError):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to generate table ID: {error.cause}",
+            )
+        if isinstance(error, TableCreateError):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create table: {error.cause}",
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create table: {error}",
         )
 
-    table = result.unwrap()
+    table = result.unwrap().table
 
     # Log table creation
     log_table_create(logger, table.id, "rest:admin")
@@ -422,36 +409,31 @@ async def batch_delete_tables_endpoint(
         HTTPException: 422 if ids list is empty or exceeds limit.
         HTTPException: 500 if database operation fails.
     """
-    # Fetch all requested tables for validation
-    tables_for_validation = []
-    for tid in data.ids:
-        result = get_table(conn, TableId(tid))
-        if isinstance(result, Success):
-            tables_for_validation.append(result.unwrap())
-
-    # Validate all IDs: must exist and be closed
-    validation = validate_batch_delete_request(tables_for_validation, data.ids)
-
-    if not validation.is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": "BATCH_PRECONDITION_FAILED",
-                "details": [{"id": r.table_id, "reason": r.reason} for r in validation.rejections],
-            },
-        )
-
-    # Execute cascade delete
-    delete_result = batch_delete_tables(conn, validation.valid_ids)
+    delete_result = delete_tables_batch(conn, data.ids)
 
     if isinstance(delete_result, Failure):
-        error = delete_result.failure()
+        failure = delete_result.failure()
+        if failure.status == "invalid_request":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=failure.error or f"ids must contain 1 to {failure.max_batch_size} table IDs.",
+            )
+        if failure.status == "precondition_failed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "BATCH_PRECONDITION_FAILED",
+                    "details": [
+                        {"id": r.table_id, "reason": r.reason} for r in failure.rejections
+                    ],
+                },
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to batch delete tables: {error}",
+            detail=f"Failed to batch delete tables: {failure.error}",
         )
 
-    deleted_ids = delete_result.unwrap()
+    deleted_ids = delete_result.unwrap().deleted_ids
 
     # Log batch deletion
     log_batch_table_delete(logger, deleted_ids, "rest:admin")

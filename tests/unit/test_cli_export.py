@@ -145,8 +145,9 @@ class TestExportMarkdownStdout:
         output = stdout.getvalue()
         # Check markdown format
         assert "# What is the best approach?" in output
-        assert f"| **Table** | `{table.id}` |" in output
-        assert "| **Status** | open |" in output
+        assert f"- table_id: {table.id}" in output
+        assert "- status: open" in output
+        assert "- hosts: " in output
         assert "## Transcript" in output
         # Check sayings are included
         assert "Alice" in output

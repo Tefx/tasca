@@ -19,24 +19,11 @@ from pydantic import BaseModel, Field
 from returns.result import Failure
 
 from tasca.core.domain.saying import Speaker, SpeakerKind
-from tasca.core.domain.table import TableId
-from tasca.core.table_state_machine import (
-    can_transition_to_closed,
-    can_transition_to_open,
-    can_transition_to_paused,
-    transition_to_closed,
-    transition_to_open,
-    transition_to_paused,
-)
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
-from tasca.shell.storage.control_repo import (
-    ControlVersionConflictError,
-    atomic_control_table,
-)
-from tasca.shell.storage.table_repo import (
-    TableNotFoundError,
-    get_table,
+from tasca.shell.services.operations.table_control import (
+    TableControlErrorCode,
+    execute_table_control,
 )
 
 router = APIRouter()
@@ -51,8 +38,9 @@ class TableControlRequest(BaseModel):
     """Request model for table control operations."""
 
     action: str = Field(..., description="Control action: pause, resume, or close")
-    speaker_name: str = Field(..., description="Name of the speaker performing the action")
+    speaker_name: str = Field("Admin", description="Name of the speaker performing the action")
     reason: str | None = Field(None, description="Optional reason for the action")
+    dedup_id: str | None = Field(None, description="Optional idempotency key accepted for HTTP API compatibility")
 
 
 class TableControlResponse(BaseModel):
@@ -103,89 +91,48 @@ async def control_table_endpoint(
         HTTPException: 409 if state transition is invalid.
         HTTPException: 500 if database operation fails.
     """
-    # Validate action
-    if data.action not in ("pause", "resume", "close"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid action: {data.action}. Must be 'pause', 'resume', or 'close'.",
-        )
+    # Create speaker for CONTROL saying (human speaker, no patron_id)
+    speaker = Speaker(kind=SpeakerKind.HUMAN, name=data.speaker_name)
+    now = datetime.now(UTC)
+    result = execute_table_control(conn, table_id, data.action, speaker, data.reason, now)
 
-    # Fetch current table
-    current_result = get_table(conn, TableId(table_id))
-
-    if isinstance(current_result, Failure):
-        error = current_result.failure()
-        if isinstance(error, TableNotFoundError):
+    if isinstance(result, Failure):
+        error = result.failure()
+        if error.code == TableControlErrorCode.INVALID_ACTION:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid action: {data.action}. Must be 'pause', 'resume', or 'close'.",
+            )
+        if error.code == TableControlErrorCode.TABLE_NOT_FOUND:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Table not found: {table_id}",
             )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get table: {error}",
-        )
-
-    current_table = current_result.unwrap()
-
-    # Validate state transition using state machine
-    if data.action == "pause":
-        if not can_transition_to_paused(current_table.status):
+        if error.code == TableControlErrorCode.INVALID_TRANSITION:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot pause table in {current_table.status.value} state",
+                detail=error.message,
             )
-        new_status = transition_to_paused(current_table.status)
-    elif data.action == "resume":
-        if not can_transition_to_open(current_table.status):
+        if error.code == TableControlErrorCode.VERSION_CONFLICT:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot resume table in {current_table.status.value} state",
-            )
-        new_status = transition_to_open(current_table.status)
-    else:  # action == "close"
-        if not can_transition_to_closed(current_table.status):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Cannot close table in {current_table.status.value} state",
-            )
-        new_status = transition_to_closed(current_table.status)
-
-    # Build CONTROL saying content
-    control_content = f"**CONTROL: {data.action.upper()}**"
-    if data.reason:
-        control_content += f"\n\n{data.reason}"
-
-    # Create speaker for CONTROL saying (human speaker, no patron_id)
-    speaker = Speaker(kind=SpeakerKind.HUMAN, name=data.speaker_name)
-
-    # Atomically append CONTROL saying and update table status
-    # This ensures the audit trail and state remain consistent even on failure
-    now = datetime.now(UTC)
-    result = atomic_control_table(
-        conn=conn,
-        table_id=table_id,
-        speaker=speaker,
-        control_content=control_content,
-        new_status=new_status,
-        current_table=current_table,
-        now=now,
-    )
-
-    if isinstance(result, Failure):
-        error = result.failure()
-        if isinstance(error, ControlVersionConflictError):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=error.to_json(),
+                detail={
+                    "error": "version_conflict",
+                    "table_id": table_id,
+                    "expected_version": error.expected_version,
+                    "actual_version": error.actual_version,
+                    "actual_status": error.current_status.value if error.current_status else None,
+                    "message": error.message,
+                },
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to execute control operation: {error}",
+            detail=f"Failed to execute control operation: {error.message}",
         )
 
-    saying, updated_table = result.unwrap()
+    outcome = result.unwrap()
 
     return TableControlResponse(
-        table_status=updated_table.status.value,
-        control_saying_sequence=saying.sequence,
+        table_status=outcome.table.status.value,
+        control_saying_sequence=outcome.control_saying.sequence,
     )

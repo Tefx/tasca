@@ -34662,7 +34662,7 @@ phases:
     agent: uiux-auditor
   - id: web_mermaid_stream_fix.spec-conformance
     name: Spec conformance for Mermaid stream rendering
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -34794,6 +34794,8 @@ phases:
     depends_on:
     - web_mermaid_stream_fix.wire-renderer
     agent: spec-verifier
+    claimed_by: spec-verifier
+    claimed_at: '2026-05-12T10:05:35.787646+00:00'
   - id: web_mermaid_stream_fix.gate
     name: Gate Mermaid stream rendering fix
     status: pending

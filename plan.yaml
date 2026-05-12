@@ -36823,6 +36823,281 @@ phases:
       \ hash(es): none/read-only auditor pass.\n- Files changed by auditor: none.\n\
       \n## Action Summary\nIndependent retest completed for `dup_adoption.mid-gate/B1`;\
       \ gate may proceed."
+  - id: batched-spec-conformance-remediation
+    name: Batched remediation for spec-conformance blockers B1-B9
+    status: pending
+    description: 'step_type: implementation
+
+      verification_scope: local-check
+
+      agent: python-senior
+
+      refs:
+
+      - docs/tasca-mcp-interface-v0.1.md
+
+      - docs/tasca-http-api-v0.1.md
+
+      - docs/tasca-technical-design-v0.1.md
+
+      - docs/foundation-conformance-wiring-dispositions.md
+
+      - src/tasca/shell/api/routes/tables.py
+
+      - src/tasca/shell/api/routes/tables_control.py
+
+      - src/tasca/shell/api/routes/patrons.py
+
+      - src/tasca/shell/api/routes/sayings.py
+
+      - src/tasca/shell/api/routes/export.py
+
+      - src/tasca/shell/api/auth.py
+
+      - src/tasca/shell/mcp/entrypoints.py
+
+      - src/tasca/shell/mcp/responses.py
+
+      - src/tasca/shell/mcp/tool_contracts.py
+
+      - src/tasca/shell/services/operations/table_creation.py
+
+      - src/tasca/shell/services/operations/patron_registration.py
+
+      - src/tasca/shell/services/operations/table_control.py
+
+      - src/tasca/shell/services/operations/batch_delete.py
+
+      - tests/integration/test_api.py
+
+      - tests/integration/test_mcp.py
+
+      - tests/unit/mcp/test_mcp_server.py
+
+
+      Batched remediation for every blocker-class finding from dup_adoption.spec-conformance.
+      Keep this as ONE remediation path: fix all B1-B9 together because the failures
+      share the same root surface family: REST/MCP public contract drift after shared-operation
+      adoption. Do not split into serial fix chains.
+
+
+      why_previous_gate_missed_it: Earlier phase evidence emphasized liveness, shared-operation
+      adoption, and transport smoke/conformance, but did not require adversarial spec-shape
+      comparison for every REST and MCP response/error surface, nor did it force permission/atomicity
+      proofs before gate eligibility.
+
+      why_previous_fix_failed: The prior completed transport-say-append-shared-operation-fix/retest
+      narrowed table_say append ordering, but the broad verifier found remaining spec
+      drift across error envelopes, REST/MCP response schemas, MCP permission enforcement,
+      dedup semantics, and batch delete response shape.
+
+      reversal_risk: High. A narrow patch can make one endpoint/tool conform while
+      reintroducing duplicated adapter-specific shaping, persisting a saying before
+      mention ambiguity/limit validation, weakening admin/host authorization, or breaking
+      already-green liveness/transport-conformance evidence. Preserve shared-operation
+      ownership and prove both REST and MCP behavior.
+
+
+      Failure fingerprints to close or explicitly disposition with gate-intersection
+      evidence:
+
+      - B1_auth_error_envelope: REST admin-required endpoints validate bearer, but
+      missing/invalid token uses FastAPI detail instead of standard {error:{code,message,details}}
+      envelope.
+
+      - B2_standard_error_envelope: REST generally raises HTTPException(detail=...);
+      MCP error helper omits details when empty and wraps with ok:false; phase/final
+      gates require no blocker-class error-envelope drift.
+
+      - B3_rest_dedup_missing: REST write surfaces for patron/table create do not
+      accept dedup although write tools/spec discuss dedup return-existing semantics.
+
+      - B4_rest_patron_shape: REST patron response uses id/name/kind/created_at/is_new
+      rather than spec/MCP patron_id/display_name/alias/server_ts shape.
+
+      - B5_rest_table_create_shape: REST table create accepts only question/context
+      and returns core Table, not MCP/spec fields title, created_by, host_ids, invite_code,
+      etc.
+
+      - B6_mcp_control_update_permissions: MCP table_control/table_update lack creator/host/admin
+      authorization check despite normative permission requirement.
+
+      - B7_table_say_agent_patron_required: MCP table_say auto-registers missing agent
+      patron_id despite spec requiring agent patron_id.
+
+      - B8_table_say_limit_and_mention_order: documented 65536 content max is not
+      default-enforced; ambiguous mentions may be resolved after append, allowing
+      persisted saying before error.
+
+      - B9_batch_delete_response_contract: MCP batch-delete description/runtime contract
+      says deleted_count plus failed array, but implementation returns only deleted_ids.
+
+
+      Required execution shape:
+
+      1. Close all B1-B9 in a coordinated pass or write an explicit spec disposition
+      for items marked disposition-eligible (B3, B4, B5, B7, B9) with non-intersection
+      evidence for dup_adoption.gate and finalization gates.
+
+      2. Preserve deployability-bearing REST and MCP runtime entrypoints; do not replace
+      runtime behavior with handler-only or stub-only completion.
+
+      3. Keep response-shaping, authorization, dedup, mention resolution, and limits
+      semantics consistent across REST/MCP adapters and shared operation modules.
+
+      4. Add/update focused regressions for main path and highest-risk failure paths
+      for each blocker family.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs. Private stub classes (_Runtime*, _Stub*,
+      _Placeholder*) do not satisfy this requirement.
+
+
+      ## Hardened acceptance checklist
+
+      - Main path: REST patron/table create and MCP tools return spec-shaped responses
+      where required.
+
+      - Failure path: auth/token errors, general REST errors, MCP errors, ambiguous
+      mentions, content limit rejection, permission denial, and batch-delete partial/failed
+      cases prove standard envelopes and atomic no-append/no-mutation behavior.
+
+      - State semantics: dedup return-existing behavior is preserved where accepted;
+      explicit dispositions must identify why a surface is not required and why remaining
+      gates do not intersect it.
+
+      - Permissions: creator/host/human-admin authorization for control/update is
+      checked before append/status mutation.
+
+      - Ordering: table_say validates content length and mention ambiguity before
+      any persisted saying.
+
+      - Backward compatibility: any legacy response fields retained must not replace
+      the canonical spec/MCP fields and must be documented as compatibility-only.
+
+
+      ## Gate Preview (what the gate WILL reject)
+
+      1. Fixing only one endpoint/tool while sibling REST/MCP surfaces keep divergent
+      shapes.
+
+      2. Error envelopes without code, message, and details, or MCP wrappers that
+      hide the canonical error object.
+
+      3. Permission checks that occur after state mutation or control saying append.
+
+      4. table_say paths where ambiguous mention or over-limit content can persist
+      a saying before error.
+
+      5. Claiming B3/B4/B5/B7/B9 out of scope without explicit non-intersection evidence
+      for dup_adoption.gate and finalization.'
+    verification: '- Main path: focused REST and MCP tests prove canonical response
+      shapes for patron create/get, table create/control/update/say, and batch delete.
+
+      - Failure path: focused tests prove standard error envelopes for auth, generic
+      REST errors, MCP errors, permission denial, content limit, ambiguous mention,
+      and batch-delete failed items.
+
+      - Atomicity proof: ambiguous mention and over-limit table_say cases leave no
+      newly persisted saying; unauthorized control/update leaves no control saying/status/version
+      mutation.
+
+      - Dedup/spec-disposition proof: every B3/B4/B5/B7/B9 item is either implemented
+      with return-existing/schema proof or has explicit non-intersection evidence
+      against dup_adoption.gate and finalization gates.
+
+      - Regression evidence names the exact tests added/updated and shows no previously-green
+      transport conformance/liveness behavior regressed.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Batched Remediation Evidence
+
+
+      **Changed blocker set**: B1_auth_error_envelope, B2_standard_error_envelope,
+      B3_rest_dedup_missing, B4_rest_patron_shape, B5_rest_table_create_shape, B6_mcp_control_update_permissions,
+      B7_table_say_agent_patron_required, B8_table_say_limit_and_mention_order, B9_batch_delete_response_contract
+
+
+      **why_previous_gate_missed_it**:
+
+      <paste explanation tied to evidence>
+
+
+      **why_previous_fix_failed**:
+
+      <paste explanation tied to prior transport-say fix/retest or state why not applicable>
+
+
+      **reversal_risk**:
+
+      <paste risk assessment and mitigations>
+
+
+      ## Per-Blocker Closure Table
+
+      | Blocker | Action: fixed/spec-disposition | Files changed | Tests/proofs |
+      Gate-intersection disposition |
+
+      | --- | --- | --- | --- | --- |
+
+      | B1 |  |  |  |  |
+
+      | B2 |  |  |  |  |
+
+      | B3 |  |  |  |  |
+
+      | B4 |  |  |  |  |
+
+      | B5 |  |  |  |  |
+
+      | B6 |  |  |  |  |
+
+      | B7 |  |  |  |  |
+
+      | B8 |  |  |  |  |
+
+      | B9 |  |  |  |  |
+
+
+      ## Commands / Tests Executed
+
+      ```
+
+      <paste exact commands and output summaries>
+
+      ```
+
+
+      ## Atomicity / Non-Mutation Proof
+
+      - table_say over-limit: <evidence>
+
+      - table_say ambiguous mention: <evidence>
+
+      - unauthorized table_control/table_update: <evidence>
+
+
+      ## Residuals
+
+      - Remaining blocker-class items: <none or explicit owner>
+
+      - Non-blocking debt with non-intersection evidence: <list or none>'
+    depends_on:
+    - dup_adoption.spec-conformance
+    agent: python-senior
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

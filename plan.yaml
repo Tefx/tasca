@@ -38568,6 +38568,314 @@ phases:
     - finalization.deep-contract-strength
     - finalization.deep-black-box-verification
     agent: gate-reviewer-tacit
+  - id: fix-full-plan-blockers
+    name: Remediate full-plan verifier blockers in one batch
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      agent: python-senior
+
+      priority: HIGH
+
+      remediation_scope: batched_fix
+
+      broad_verifier_source: finalization.verify-full-plan
+
+
+      Fix ALL downstream-blocking issues reported by `finalization.verify-full-plan`
+      in one batched remediation pass. Do not split this into serial fix chains.
+
+
+      ## Blockers to Fix (ALL of these, not just the first)
+
+
+      ### B1_static_full_repo — authoritative static/type blockers
+
+      Disposition: fix_now/batched_fix; downstream-blocker.
+
+      Required failed command family:
+
+      - `.venv/bin/python -m ruff check .`
+
+      - `.venv/bin/python -m mypy src/tasca`
+
+
+      Observed scope:
+
+      - Ruff: 277 errors, 248 fixable.
+
+      - Mypy: 171 errors in 26 files.
+
+
+      Remediation requirements:
+
+      - Treat both commands as authoritative because the broad verifier required them.
+
+      - Apply minimal safe changes that reduce/close ruff and mypy blockers without
+      broad behavior rewrites.
+
+      - Prefer mechanical ruff auto-fixable cleanup where safe, then targeted manual
+      cleanup for remaining violations.
+
+      - For mypy, address true typing/None/return-shape problems at their source;
+      do not silence with blanket ignores unless a local ignore includes a precise
+      reason and non-intersection proof.
+
+      - If any reported item is proven non-intersecting with finalization gates, record
+      explicit non-intersection evidence; default is fix, not defer.
+
+
+      ### B2_full_pytest_api_failures — REST API error envelope/status drift
+
+      Disposition: fix_now/batched_fix; downstream-blocker.
+
+      Failed command family: full pytest reported `6 failed, 1113 passed`.
+
+      Failures to own in this single batch:
+
+      - `tests/unit/api/test_patrons_routes.py::TestRegisterPatron::test_register_patron_missing_display_name`
+      expected 422, observed 400.
+
+      - `tests/unit/api/test_patrons_routes.py::TestGetPatron::test_get_patron_not_found`
+      expected string detail, observed dict-shaped detail.
+
+      - `tests/unit/api/test_sayings_routes.py::TestAppendSaying::test_append_saying_table_not_found`
+      expected string detail, observed dict-shaped detail.
+
+      - `tests/unit/api/test_sayings_routes.py::TestAppendSaying::test_append_saying_maps_shared_operation_error`
+      expected plain string detail, observed structured envelope with `PermissionDenied`
+      and details.
+
+      - `tests/unit/api/test_sayings_routes.py::TestStateGuards::test_say_on_closed_table_rejected`
+      expected string detail, observed dict-shaped detail.
+
+      - `tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_missing_question`
+      expected 422, observed 400.
+
+
+      Root-cause work required:
+
+      - Reconcile standardized REST error envelope/status expectations across stale
+      unit tests versus product behavior.
+
+      - Determine the authoritative behavior from the shared REST error mapping/product
+      implementation and update stale tests OR adjust product code only if implementation
+      contradicts the authoritative API contract.
+
+      - Preserve the standardized structured error envelope when it is the intended
+      shared-operation contract.
+
+      - Preserve validation/status semantics consistently across patron/table/saying
+      routes.
+
+      - Do not create per-route special cases that reintroduce transport-local duplicated
+      error behavior.
+
+
+      ### B3_targeted_transport_api_failures — targeted transport/shared-operation
+      failures
+
+      Disposition: fix_now/batched_fix; downstream-blocker.
+
+      Failed targeted transport/shared-operation pytest: `4 failed, 219 passed`.
+
+      Own all REST API error envelope/status expectation failures in the targeted
+      suite, not just the six full-pytest examples above.
+
+
+      Remediation requirements:
+
+      - Search sibling REST tests for stale plain-string `detail` expectations and
+      stale 422-vs-400 expectations around the standardized envelope.
+
+      - Ensure shared-operation error mapping remains centralized and consistent across
+      affected route tests.
+
+      - Add or update focused regression assertions proving the standardized envelope/status
+      behavior is intentional.
+
+
+      ### S1_frontend_dependency_hydration/audit — should_fix disposition
+
+      Disposition: should_fix; does not replace blocker remediation.
+
+      Observed: `web/node_modules` absent in isolated worktree; `npm ci` required;
+      `npm audit` reported 18 vulnerabilities (11 moderate, 7 high). Web Mermaid/security/build
+      itself passed after hydration.
+
+
+      Required disposition:
+
+      - Document dependency hydration as an environment/setup requirement for isolated
+      worktrees and finalization retest evidence.
+
+      - Run or require `npm ci` before frontend finalization commands in the retest
+      path.
+
+      - Record npm audit vulnerability summary and either remediate lockfile/package
+      issues when safe or produce explicit deferred-debt disposition with severity,
+      package scope, and why it does not block the current finalization gate.
+
+      - Do not mark this as closed merely because frontend build/typecheck passed
+      after hydration.
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause: finalization is now enforcing repo-wide static/type/test contracts
+      and standardized REST error-envelope semantics that stale tests and accumulated
+      type/lint debt did not satisfy.
+
+      - Symptoms: ruff/mypy failures, REST unit/targeted tests expecting legacy plain-string
+      detail or legacy status codes, and isolated frontend dependency hydration/audit
+      gaps.
+
+      - Why this fix is not surface-level: the batch must align the authoritative
+      error contract, close authoritative static/type command families, and disposition
+      frontend audit/dependency setup before downstream doc/deep-review/gate steps
+      are allowed to run.
+
+
+      ## Gate Preview (what downstream finalization WILL reject)
+
+      1. Any remaining ruff or mypy failures under the exact command family.
+
+      2. Any REST API test updated to fit implementation without an explicit authoritative
+      error-envelope/status rationale.
+
+      3. Any route-local error special-case that bypasses shared standardized error
+      mapping.
+
+      4. Any frontend evidence that omits dependency hydration or npm audit disposition.
+
+      5. Any unresolved blocker described only as pre-existing/out-of-scope without
+      non-intersection proof.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION remediation step. Stub-only completion is NOT acceptable.
+      Each deliverable MUST contain substantive changes or explicit evidence-backed
+      disposition that closes the verifier blocker. Remaining blocker-class debt MUST
+      have a downstream closure path and may not be hidden as pre-existing debt.
+
+
+      ## Salvage semantics
+
+      This is a closure step, not a reduction-only slice. It owns the full B1/B2/B3
+      blocker family reported by `finalization.verify-full-plan`. If the authoritative
+      broad commands still fail, evidence must identify the remaining blocker fingerprint
+      and why it could not be closed in this batch; downstream finalization must remain
+      blocked until retest closes it.'
+    verification: '- B1: `.venv/bin/python -m ruff check .` and `.venv/bin/python
+      -m mypy src/tasca` are green, or every remaining item has explicit authoritative
+      non-intersection evidence accepted by the retest.
+
+      - B2/B3: full pytest and targeted transport/shared-operation API pytest no longer
+      fail on stale REST error envelope/status expectations.
+
+      - REST error behavior is reconciled at the shared standardized envelope/status
+      contract, not by route-local special casing.
+
+      - S1: frontend dependency hydration is documented in evidence, and npm audit
+      vulnerabilities are remediated when safe or explicitly dispositioned with non-blocking
+      rationale.
+
+      - Evidence includes blocker_fingerprint, root_cause_hypothesis, commands run,
+      actual outputs or failure excerpts, and residual blocker list if any.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Batched Full-Plan Remediation Evidence
+
+
+      **Source verifier**: finalization.verify-full-plan
+
+      **Remediation type**: closure step
+
+
+      ### Blocker Register
+
+      | Blocker | Disposition | Command/Test | Result | Residual Risk |
+
+      | --- | --- | --- | --- | --- |
+
+      | B1_static_full_repo | fix_now/batched_fix | `.venv/bin/python -m ruff check
+      . && .venv/bin/python -m mypy src/tasca` | <PASS/FAIL> | <none or details> |
+
+      | B2_full_pytest_api_failures | fix_now/batched_fix | <full pytest command>
+      | <PASS/FAIL> | <none or details> |
+
+      | B3_targeted_transport_api_failures | fix_now/batched_fix | <targeted command>
+      | <PASS/FAIL> | <none or details> |
+
+      | S1_frontend_dependency_hydration/audit | should_fix/disposition | `npm ci`
+      / audit command | <PASS/DEFERRED> | <none or details> |
+
+
+      ### Root Cause vs Symptom
+
+      - blocker_fingerprint: <stable failure families closed>
+
+      - root_cause_hypothesis: <why the failures occurred>
+
+      - symptom_summary: <observed command/test failures>
+
+      - why_fix_closes_family: <why sibling failures are covered, not only listed
+      examples>
+
+
+      ### REST Error Envelope/Status Reconciliation
+
+      - authoritative_behavior_source: <implementation/spec/test source>
+
+      - stale_expectations_updated: <list>
+
+      - product_behavior_changed_if_any: <list and rationale>
+
+      - shared_mapping_preserved: YES/NO with evidence
+
+
+      ### Static/Type Closure
+
+      - ruff_before_after: <summary>
+
+      - mypy_before_after: <summary>
+
+      - remaining_ignores_or_debt: <none or explicit non-intersection>
+
+
+      ### Frontend Dependency/Audit Disposition
+
+      - hydration_command: <exact command>
+
+      - audit_summary: <moderate/high counts and package scope>
+
+      - action_taken_or_deferred: <what changed or why deferred>
+
+      - finalization_gate_intersection: <blocks/does not block with rationale>
+
+
+      ### Residuals
+
+      - blockers_remaining: []
+
+      - non_blocking_debt: []
+
+      '
+    depends_on:
+    - finalization.verify-full-plan
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

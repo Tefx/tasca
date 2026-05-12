@@ -35505,7 +35505,7 @@ phases:
       \ was reverted before worker commit."
   - id: dup_adoption.mid-gate
     name: Mid-gate transport adoption boundary review
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -35564,6 +35564,84 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T17:32:09.556182+00:00'
+    done_at: '2026-05-12T17:44:05.845232+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Mid-Gate Review\n| Surface | Shared owner used? | Transport leakage? | Notes\
+      \ |\n| --- | --- | --- | --- |\n| REST patrons | yes | no blocker found | `src/tasca/shell/api/routes/patrons.py:103-112`\
+      \ delegates registration to `register_patron`; response/error shaping remains\
+      \ REST-local at lines 51-79. |\n| MCP patrons | yes | no blocker found | `src/tasca/shell/mcp/entrypoints.py:206-228`\
+      \ delegates to `register_patron_operation`; MCP envelope shaping remains local.\
+      \ |\n| REST export | yes | no blocker found | `src/tasca/shell/api/routes/export.py:75-89`\
+      \ delegates to shared `export_table`; HTTP response assembly remains local at\
+      \ lines 42-70. |\n| MCP export | yes | no blocker found | `src/tasca/shell/mcp/entrypoints.py:619-648`\
+      \ delegates to `export_table`; MCP response envelope remains local. |\n| REST\
+      \ batch delete | yes | no blocker found | `src/tasca/shell/api/routes/tables.py:412-439`\
+      \ delegates to `delete_tables_batch`; HTTP status/detail mapping remains local.\
+      \ |\n| MCP batch delete | yes | no blocker found | `src/tasca/shell/mcp/entrypoints.py:579-610`\
+      \ delegates to `delete_tables_batch`; MCP envelope remains local. |\n| REST/MCP\
+      \ saying append | partial only | no transport leakage into shared service found,\
+      \ but blocker duplication remains in transports | Shared owner `append_saying_with_limits`\
+      \ owns limits+append only (`src/tasca/shell/services/limited_saying_service.py:69-90`).\
+      \ REST still owns table lookup/state validation/speaker assembly (`src/tasca/shell/api/routes/sayings.py:129-175`,\
+      \ `237-256`); MCP independently owns table lookup/state validation/speaker resolution/append\
+      \ error mapping (`src/tasca/shell/mcp/entrypoints.py:836-887`). |\n\n## Wiring\
+      \ Audit Results\n| Check | Result | Evidence | Notes |\n| --- | --- | --- |\
+      \ --- |\n| W1 changed surface inventory | PASS | Changed files included REST\
+      \ export/patrons/sayings/tables, MCP entrypoint_logic/entrypoints, and batch_delete\
+      \ operation. | CLI files not changed. |\n| W2 REST shared-operation adoption\
+      \ | PARTIAL | Patrons/export/batch-delete delegate to shared ops; saying append\
+      \ delegates limits+append via `append_saying_with_limits` at `sayings.py:255-256`.\
+      \ | REST still owns table lookup/state/speaker orchestration for saying append.\
+      \ |\n| W3 MCP shared-operation adoption | PARTIAL | Patrons/export/batch-delete\
+      \ delegate to shared ops; `table_say` calls `append_saying_with_limits` at `entrypoints.py:879-887`.\
+      \ | MCP still owns table lookup/state/speaker/idempotency orchestration. |\n\
+      | W4 transport-local shaping remains local | PASS | REST HTTP exceptions/responses\
+      \ and MCP envelopes remain local. | No blocker transport concern was found inside\
+      \ `batch_delete.py`, `patron_registration.py`, or `table_export.py`. |\n| W5\
+      \ duplicate orchestration detection | FAIL | REST saying path: `sayings.py:129-175`,\
+      \ `237-256`; MCP saying path: `entrypoints.py:836-887`; shared service only\
+      \ handles limits+append: `limited_saying_service.py:69-90`. | Blocker under\
+      \ task instruction: block if either transport still owns duplicated business\
+      \ orchestration. |\n| W6 runtime/entrypoint seam preservation | PASS | Smoke\
+      \ imports succeeded: `REST app import ok FastAPI`; `MCP server import ok FastMCP`.\
+      \ | No silent entrypoint narrowing detected. |\n| W7 contract/test coverage\
+      \ | PASS for implemented shared ops, FAIL for gate duplication | 111 targeted\
+      \ tests passed; 40 integration tests passed; invar guard passed. | Tests prove\
+      \ current behavior, but do not remove blocker duplication. |\n| W8 regression/static\
+      \ sanity | PASS | `invar_guard` status passed; `git diff --check` exited 0.\
+      \ | — |\n\n## Escape Hatch Audit\n- `@invar:allow` annotations exist in reviewed/touched\
+      \ files.\n- `entry_point_too_thick` / `shell_result` escape hatches overlap\
+      \ with the blocker area in REST/MCP saying orchestration.\n- `invar_guard` passed,\
+      \ but guard passing does not close the duplicate orchestration blocker.\n\n\
+      ## Smoke / Liveness Evidence\n- Commands/probes:\n  - Targeted adopted-surface\
+      \ tests → exit 0, 111 passed.\n  - `tests/integration/test_api.py tests/integration/test_mcp.py`\
+      \ → exit 0, 40 passed.\n  - Health/auth liveness tests → exit 0, 2 passed.\n\
+      \  - REST/MCP import smoke → exit 0, printed `REST app import ok FastAPI` and\
+      \ `MCP server import ok FastMCP`.\n  - `invar_guard` → passed.\n- Fixture-vs-real\
+      \ distinction:\n  - REST integration tests are in-process ASGI transport, not\
+      \ external server.\n  - MCP integration tests use MCP test harness/TestClient\
+      \ and project fixtures; not deployed external service proof.\n  - Unit API route\
+      \ tests use FastAPI `TestClient` with in-memory SQLite and dependency overrides.\n\
+      \  - MCP unit tests call entrypoint functions directly with fixture-controlled\
+      \ state.\n\n## CLI Surface Preservation\n- CLI touched? no\n- Evidence/non-intersection:\
+      \ changed code files do not include CLI implementation or CLI tests.\n\n## Decision\n\
+      headline: FAIL\nverdict: FAIL\nblockers:\n  - B1: REST/MCP saying append still\
+      \ duplicates business orchestration across transports. REST owns table lookup/state/speaker\
+      \ orchestration in `src/tasca/shell/api/routes/sayings.py:129-175`, `237-256`;\
+      \ MCP independently owns table lookup/state/speaker/append error mapping in\
+      \ `src/tasca/shell/mcp/entrypoints.py:836-887`; shared `limited_saying_service.py:69-90`\
+      \ owns only limits+append.\nproof_gap_status: BLOCKING\nblocking_status: OPEN\n\
+      gate_open_allowed: false\norchestrator_action_hint: DO_NOT_COMPLETE\n\n## Verification\n\
+      - Commands/inspections run:\n  - targeted adopted-surface tests: 111 passed\n\
+      \  - API/MCP integration tests: 40 passed\n  - health/auth liveness tests: 2\
+      \ passed\n  - REST/MCP import smoke: passed\n  - invar_guard: passed\n- Files\
+      \ changed: none by auditor; pre-existing dirty `uv.lock` drift observed.\n-\
+      \ Commit hash(es): none — read-only gate verification.\n- Gaps/Notes: Gate failed\
+      \ on architecture/wiring evidence despite passing tests.\n\n## Remediation Ownership\
+      \ Created\n- Planner added implementation fix `dup_adoption.transport-say-append-shared-operation-fix`\
+      \ depending on this mid-gate.\n- Planner added independent retest `dup_adoption.transport-say-append-shared-operation-retest`\
+      \ depending on the fix.\n- Planner wired downstream dup_adoption progression\
+      \ steps to depend on the new retest."
   - id: dup_adoption.server-tool-contract-adoption
     name: Adopt tool-contract source in MCP server runtime
     status: pending

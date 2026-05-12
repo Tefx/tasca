@@ -35644,7 +35644,7 @@ phases:
       \ steps to depend on the new retest."
   - id: dup_adoption.server-tool-contract-adoption
     name: Adopt tool-contract source in MCP server runtime
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
       \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools\n\
@@ -35702,6 +35702,86 @@ phases:
     agent: python-refactor-master-tacit
     claimed_by: python-refactor-master-tacit
     claimed_at: '2026-05-12T18:39:38.543591+00:00'
+    done_at: '2026-05-12T18:45:52.153441+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+
+      - docs/tasca-mcp-interface-v0.1.md#5-tools — read; key passages: tool names
+      use the `tasca.*` namespace; table_join defaults are 10/65536; table_say default
+      speaker_kind is agent; table_listen/table_wait limit default is 50; seat_heartbeat
+      ttl_ms default is 60000.
+
+      - docs/tasca-mcp-interface-v0.1.md#recommended-defaults-v0-1 — read; key passage:
+      recommended defaults list `table.join.history_limit: 10`, `table.join.history_max_bytes:
+      65536`, `table.listen`/`table.wait limit: 50`, `seat.heartbeat.ttl_ms: 60000`,
+      `saying.content max bytes: 65536`.
+
+      - src/tasca/shell/mcp/server.py — read; key passage: `_contract_tool`, `parameter_field`,
+      and `parameter_default` are used for MCP runtime registration and parameter
+      defaults.
+
+      - src/tasca/shell/mcp/tool_contracts.py — read; key passage: centralized `TOOL_CONTRACTS`,
+      `parameter_default`, `parameter_field`, and contract lookup helpers own tool
+      docs/defaults.
+
+      - tests/unit/mcp/test_mcp_server.py — read; key passage: `test_mcp_runtime_registration_uses_centralized_tool_contracts`
+      asserts discovered tools match centralized contracts.
+
+      - tests/integration/test_mcp.py — read; key passage: MCP protocol/tool discovery
+      tests exercise runnable tool surface.
+
+      - authoritative_interface — NONE PINNED.
+
+
+      ## Runtime Wiring Evidence
+
+      - Registration path changed: `server.py` registers tools via `_contract_tool(tool_name)`,
+      which loads `tool_contract(tool_name)` and passes centralized `name`/`description`
+      into `mcp.tool(...)`.
+
+      - Contract source consumed: function annotations/defaults use `parameter_field(...)`
+      and `parameter_default(...)` from `tool_contracts.py`.
+
+      - Duplicate literals removed: runtime registration no longer hand-maintains
+      tool descriptions/defaults in `server.py`; tests assert against `TOOL_CONTRACTS`
+      instead of stale local literals.
+
+
+      ## Runnable Surface Proof
+
+      - MCP server registration remains executable: worktree smoke imported `tasca.shell.mcp.server`,
+      awaited `server.mcp.list_tools()`, verified 17 registered tools, and confirmed
+      `table_wait.limit=50` comes from `parameter_default`.
+
+      - Tool discovery path after wiring: `server.mcp.list_tools()` exposes schemas
+      whose names/descriptions/defaults match `TOOL_CONTRACTS`.
+
+
+      ## Implementation Evidence
+
+      - Commit hash(es): `cd57ec028b98ae78c0c1ed89751809c88e021678` (`mcp: wire server
+      tools to centralized contracts`) was already present on the isolated branch
+      at dispatch start; no additional worktree commit was necessary.
+
+      - Files changed: `src/tasca/shell/mcp/server.py`, `src/tasca/shell/mcp/tool_contracts.py`,
+      `tests/unit/mcp/test_mcp_server.py`.
+
+      - Worktree verification: `invar_guard(changed=true)` passed; `.venv/bin/python
+      -m pytest tests/unit/mcp/test_mcp_server.py::test_mcp_runtime_registration_uses_centralized_tool_contracts
+      tests/integration/test_mcp.py -k "tools_list or runtime_registration"` passed
+      with 2 passed, 30 deselected; isolated branch clean.
+
+      - Mainline verification barrier: squash merge produced no staged delta (branch
+      changes already present in main); `.venv/bin/python -m pytest tests/unit/mcp/test_mcp_server.py::test_mcp_runtime_registration_uses_centralized_tool_contracts
+      tests/integration/test_mcp.py -k "tools_list or runtime_registration"` passed
+      with 2 passed, 30 deselected; `.venv/bin/invar guard --changed` passed with
+      0 findings.
+
+      - Spec link: `docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools`
+      and recommended defaults section.
+
+      - Gaps/Notes: No additional scope expanded; no plan or orchestrator state modified
+      by the execution agent.'
   - id: dup_adoption.transport-conformance
     name: Verify REST/MCP consumer-boundary conformance
     status: pending

@@ -31842,7 +31842,7 @@ phases:
       to adoption steps.'
   - id: dup_foundation.delete-export-ops
     name: Extract shared batch-delete and export operations
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
       \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables\n\
@@ -31922,6 +31922,94 @@ phases:
     agent: python-senior-tacit
     claimed_by: python-senior-tacit
     claimed_at: '2026-05-12T13:05:38.947826+00:00'
+    done_at: '2026-05-12T13:36:15.025694+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - docs/tasca-http-api-v0.1.md#.../3-endpoints/tables — tables endpoints reviewed.
+
+      - docs/tasca-http-api-v0.1.md#.../3-endpoints/export — JSONL/Markdown export
+      endpoints reviewed.
+
+      - docs/tasca-mcp-interface-v0.1.md#.../tasca-table-create — MCP table tool envelope
+      style reviewed.
+
+      - docs/tasca-technical-design-v0.1.md#.../7-1-jsonl-export-must — JSONL contract
+      reviewed.
+
+      - docs/tasca-technical-design-v0.1.md#.../7-2-markdown-export-must — Markdown
+      export contract reviewed.
+
+
+      ## Operation Extraction Evidence
+
+      - New owner modules: src/tasca/shell/services/operations/batch_delete.py and
+      table_export.py.
+
+      - Export operation owns table fetch, sayings fetch, format validation, size-limit
+      disposition, and JSONL/Markdown selection; pure formatting remains in core/export_service.
+
+      - Batch-delete operation owns per-id fetch, core validation invocation, all-or-nothing
+      cascade call, and typed operation outcome.
+
+
+      ## Failure-Path Proof
+
+      - Typed statuses include batch delete deleted/invalid_request/precondition_failed/database_error
+      and export ok/invalid_format/not_found/limit_exceeded/database_error.
+
+      - Added typed SayingExportSizeExceededError so limit mapping no longer depends
+      on string parsing.
+
+
+      ## Integration Evidence
+
+      - Expected REST/MCP callers can map shared typed results without re-fetching
+      business state; route/tool rewiring intentionally deferred.
+
+
+      ## Files changed
+
+      - src/tasca/shell/services/__init__.py
+
+      - src/tasca/shell/services/operations/__init__.py
+
+      - src/tasca/shell/services/operations/batch_delete.py
+
+      - src/tasca/shell/services/operations/table_export.py
+
+      - src/tasca/shell/storage/saying_repo.py
+
+      - tests/unit/api/test_export_routes.py
+
+      - tests/unit/storage/test_batch_delete_repo.py
+
+
+      ## Merge conflict handling
+
+      - Squash merge conflicted in src/tasca/shell/services/operations/__init__.py
+      with prior create/register exports.
+
+      - conflict-resolver preserved both export sets (register/create plus batch_delete/table_export)
+      and left merge staged; no commit by resolver.
+
+
+      ## Verification
+
+      Worktree: pytest 149 passed; ruff passed; invar guard --changed passed with
+      2 pre-existing dead_export warnings; commit d280eca.
+
+      Mainline final-state gate after resolver: `uv run pytest tests/unit/api/test_export_routes.py
+      tests/unit/storage/test_batch_delete_repo.py tests/unit/mcp/test_mcp_server.py`
+      => 149 passed; `uv run ruff check ...` => all checks passed; `uv run invar guard
+      --changed` => passed, 0 errors, 2 warnings in saying_repo dead_export, doctest
+      passed.
+
+      Mainline commit: 623769f [vectl] step-dup_foundation.delete-export-ops completed.
+
+
+      ## Gaps/Notes
+
+      - REST/MCP adapter rewiring not done per out-of-scope guardrail.'
   - id: dup_foundation.mid-gate
     name: Mid-gate shared-operation boundary review
     status: pending

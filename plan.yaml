@@ -38178,7 +38178,7 @@ phases:
 
       '
     depends_on:
-    - finalization.verify-full-plan
+    - retest-full-plan-blockers
     agent: doc-reviewer-tacit
   - id: finalization.deep-wiring-audit
     name: Deep wiring audit after consolidation

@@ -35784,7 +35784,7 @@ phases:
       by the execution agent.'
   - id: dup_adoption.transport-conformance
     name: Verify REST/MCP consumer-boundary conformance
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -35889,6 +35889,8 @@ phases:
     - dup_adoption.transport-say-append-shared-operation-retest
     - dup_adoption.server-tool-contract-adoption
     agent: integration-verifier-tacit
+    claimed_by: integration-verifier-tacit
+    claimed_at: '2026-05-12T18:46:38.908282+00:00'
   - id: dup_adoption.liveness-probe
     name: Liveness probe for REST and MCP runtime surfaces
     status: claimed

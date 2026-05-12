@@ -33807,3 +33807,102 @@ phases:
   depends_on:
   - ux_a11y
   - security_fix3
+  steps:
+  - id: reproduce-red
+    name: Reproduce Mermaid stream rendering gap
+    status: pending
+    description: "step_type: test\nstep_intent: test_define_red\nexpected_result:\
+      \ red\nagent: integration-verifier\n\nDefine a focused regression test that\
+      \ exposes the current discussion-stream Mermaid rendering gap before product\
+      \ code changes.\n\nScope:\n- Add or update frontend test coverage for `Stream`\
+      \ rendering of saying.content that contains a fenced `mermaid` code block.\n\
+      - The test fixture MUST use the documented external Markdown format exactly:\n\
+      \n```markdown\n```mermaid\nflowchart TD\n  A --> B\n```\n```\n\nExpected pre-fix\
+      \ behavior:\n- The test should fail or clearly expose that the stream renders\
+      \ the Mermaid fence as ordinary code rather than a Mermaid diagram.\n\nBoundaries:\n\
+      - Do NOT modify product implementation files in this step.\n- Modified files\
+      \ are limited to frontend tests and minimal test fixtures/helpers.\n- Do NOT\
+      \ weaken existing Markdown/SVG/Mermaid security tests.\n\nDownstream owner:\n\
+      - `web_mermaid_stream_fix.wire-renderer` owns the implementation that should\
+      \ turn this expected-red test green."
+    verification: '- local-check protecting `web_mermaid_stream_fix.gate`
+
+      - Focused frontend test exists for a saying.content Mermaid fenced code block.
+
+      - Evidence states the observed pre-fix gap as `expected_result: red` and identifies
+      the downstream implementation step.
+
+      - Product implementation files are not modified by this step.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - docs/tasca-web-uiux-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-001-mermaid-rendering.md — key passage or "NOT READ: <reason>"
+
+      - docs/tasca-technical-design-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - web/src/components/Stream.tsx — key passage or "NOT READ: <reason>"
+
+      - web/src/components/Stream.test.tsx — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/mermaid.tsx — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Expected-Red Test Definition Evidence
+
+
+      **Test file(s) changed**:
+
+      ```
+
+      <paths>
+
+      ```
+
+
+      **Product files modified**: <none required; list if any and explain why this
+      remains test-only>
+
+
+      **Spec-derived fixture**:
+
+      ```markdown
+
+      <paste the exact mermaid fenced block fixture>
+
+      ```
+
+
+      **Command executed**:
+
+      ```
+
+      <paste focused frontend test command>
+
+      ```
+
+
+      **Observed pre-fix result**:
+
+      ```
+
+      <paste failing output or explicit exposed gap>
+
+      ```
+
+
+      **Exposed gaps**:
+
+      - <gap 1>
+
+
+      **Downstream implementation owner**: web_mermaid_stream_fix.wire-renderer
+
+      '
+    agent: integration-verifier

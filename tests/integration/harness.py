@@ -147,7 +147,6 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
 
     import httpx
     from fastapi import FastAPI
@@ -205,7 +204,7 @@ class RESTHarness:
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "RESTHarness":
+    async def __aenter__(self) -> RESTHarness:
         """Enter async context and create HTTP client."""
         import httpx
 
@@ -222,7 +221,7 @@ class RESTHarness:
             self._client = None
 
     @property
-    def client(self) -> "httpx.AsyncClient":
+    def client(self) -> httpx.AsyncClient:
         """Get the HTTP client.
 
         Raises:
@@ -242,7 +241,7 @@ class RESTHarness:
     # API v1 prefix for all REST endpoints
     API_V1_PREFIX = "/api/v1"
 
-    async def health_check(self) -> "httpx.Response":
+    async def health_check(self) -> httpx.Response:
         """Check server health.
 
         Returns:
@@ -250,7 +249,7 @@ class RESTHarness:
         """
         return await self.client.get(f"{self.API_V1_PREFIX}/health")
 
-    async def readiness_check(self) -> "httpx.Response":
+    async def readiness_check(self) -> httpx.Response:
         """Check server readiness.
 
         Returns:
@@ -262,7 +261,7 @@ class RESTHarness:
     # Table Endpoints
     # =========================================================================
 
-    async def create_table(self, data: dict, admin_token: str | None = None) -> "httpx.Response":
+    async def create_table(self, data: dict, admin_token: str | None = None) -> httpx.Response:
         """Create a new table.
 
         Args:
@@ -277,7 +276,7 @@ class RESTHarness:
             headers["Authorization"] = f"Bearer {admin_token}"
         return await self.client.post(f"{self.API_V1_PREFIX}/tables", json=data, headers=headers)
 
-    async def get_table(self, table_id: str) -> "httpx.Response":
+    async def get_table(self, table_id: str) -> httpx.Response:
         """Get a table by ID.
 
         Args:
@@ -288,7 +287,7 @@ class RESTHarness:
         """
         return await self.client.get(f"{self.API_V1_PREFIX}/tables/{table_id}")
 
-    async def list_tables(self) -> "httpx.Response":
+    async def list_tables(self) -> httpx.Response:
         """List all tables.
 
         Returns:
@@ -296,7 +295,7 @@ class RESTHarness:
         """
         return await self.client.get(f"{self.API_V1_PREFIX}/tables")
 
-    async def delete_table(self, table_id: str, admin_token: str | None = None) -> "httpx.Response":
+    async def delete_table(self, table_id: str, admin_token: str | None = None) -> httpx.Response:
         """Delete a table by ID.
 
         Args:
@@ -664,7 +663,7 @@ class MCPHTTPHarness(MCPHarnessBase):
         self.admin_token = admin_token
         self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "MCPHTTPHarness":
+    async def __aenter__(self) -> MCPHTTPHarness:
         """Enter async context and create HTTP client."""
         import httpx
 
@@ -689,7 +688,7 @@ class MCPHTTPHarness(MCPHarnessBase):
             self._client = None
 
     @property
-    def client(self) -> "httpx.AsyncClient":
+    def client(self) -> httpx.AsyncClient:
         """Get the HTTP client.
 
         Raises:
@@ -755,7 +754,7 @@ class MCPASGIHarness(MCPHarnessBase):
 
     def __init__(
         self,
-        app: "FastAPI",
+        app: FastAPI,
         timeout: float = REQUEST_TIMEOUT,
         admin_token: str | None = None,
     ) -> None:
@@ -769,9 +768,9 @@ class MCPASGIHarness(MCPHarnessBase):
         super().__init__(timeout=timeout)
         self.app = app
         self.admin_token = admin_token
-        self._client: "httpx.AsyncClient | None" = None
+        self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "MCPASGIHarness":
+    async def __aenter__(self) -> MCPASGIHarness:
         """Enter async context and create HTTP client with ASGI transport."""
         import httpx
 
@@ -800,7 +799,7 @@ class MCPASGIHarness(MCPHarnessBase):
             self._client = None
 
     @property
-    def client(self) -> "httpx.AsyncClient":
+    def client(self) -> httpx.AsyncClient:
         """Get the HTTP client.
 
         Raises:
@@ -873,7 +872,7 @@ class MCPSTDIOHarness(MCPHarnessBase):
         self._reader_task: asyncio.Task | None = None
         self._response_queue: asyncio.Queue = asyncio.Queue()
 
-    async def __aenter__(self) -> "MCPSTDIOHarness":
+    async def __aenter__(self) -> MCPSTDIOHarness:
         """Enter async context and start tasca-mcp process."""
         # Wrap subprocess creation in timeout to prevent indefinite hangs
         try:
@@ -888,7 +887,7 @@ class MCPSTDIOHarness(MCPHarnessBase):
                 ),
                 timeout=self.startup_timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError(f"Process startup timed out after {self.startup_timeout}s") from None
         # Start background reader task
         self._reader_task = asyncio.create_task(self._read_responses())
@@ -908,7 +907,7 @@ class MCPSTDIOHarness(MCPHarnessBase):
             self._process.terminate()
             try:
                 await asyncio.wait_for(self._process.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._process.kill()
                 await self._process.wait()
             self._process = None
@@ -977,8 +976,8 @@ class MCPSTDIOHarness(MCPHarnessBase):
                 # Put back if not for us
                 await self._response_queue.put(response)
                 await asyncio.sleep(0.01)
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"No response received for request {request_id}")
+        except TimeoutError as err:
+            raise TimeoutError(f"No response received for request {request_id}") from err
 
 
 # =============================================================================

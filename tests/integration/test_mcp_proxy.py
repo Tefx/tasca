@@ -53,7 +53,7 @@ def _extract_tool_result(response: dict) -> dict:
 
 
 def _call_tool(
-    client: "TestClient", headers: dict, tool_name: str, arguments: dict, request_id: int
+    client: TestClient, headers: dict, tool_name: str, arguments: dict, request_id: int
 ) -> dict:
     """Helper to call MCP tool and extract result."""
     response = client.post(

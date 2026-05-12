@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from returns.result import Failure, Result, Success
 
-from tasca.core.domain.patron import Patron, PatronCreate, PatronId
-
+from tasca.core.domain.patron import Patron, PatronId
 
 # =============================================================================
 # Error Types
@@ -50,7 +49,7 @@ class PatronDatabaseError(PatronError):
 
 # @invar:allow shell_result: Private helper - pure data transformation, not a shell operation
 # @shell_orchestration: Helper for row-to-domain mapping, used internally by repo functions
-def _row_to_patron(row: tuple) -> Patron:
+def _row_to_patron(row: tuple[Any, ...]) -> Patron:
     """Convert a database row to a Patron object.
 
     Args:
@@ -61,23 +60,23 @@ def _row_to_patron(row: tuple) -> Patron:
     """
     # Handle both old schema (4 columns) and new schema (6 columns)
     if len(row) >= 6:
-        alias_val = row[3]  # type: ignore[misc]
-        meta_str = row[4]  # type: ignore[misc]
+        alias_val = row[3]
+        meta_str = row[4]
         meta_val: dict[str, Any] | None = json.loads(meta_str) if meta_str else None
-        created_at_val = row[5]  # type: ignore[misc]
+        created_at_val = row[5]
     else:
         # Legacy schema without alias/meta columns
         alias_val = None
         meta_val = None
-        created_at_val = row[3]  # type: ignore[misc]
+        created_at_val = row[3]
 
     return Patron(
-        id=PatronId(row[0]),  # type: ignore[misc]
-        name=row[1],  # type: ignore[misc]
-        kind=row[2],  # type: ignore[misc]
+        id=PatronId(row[0]),
+        name=row[1],
+        kind=row[2],
         alias=alias_val,
         meta=meta_val,
-        created_at=datetime.fromisoformat(created_at_val),  # type: ignore[misc]
+        created_at=datetime.fromisoformat(created_at_val),
     )
 
 

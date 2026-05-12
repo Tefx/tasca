@@ -9,7 +9,7 @@ Tests cover:
 5. Collision handling simulation
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 import pytest
 
@@ -17,16 +17,15 @@ from tasca.core.human_readable_ids import (
     ADJECTIVES,
     NOUNS,
     VERBS,
-    pick_random_word,
+    calculate_total_combinations,
     format_human_readable_id,
     generate_human_readable_id,
+    get_unique_word_count,
     is_human_readable_id,
     is_valid_word,
     parse_human_readable_id,
-    calculate_total_combinations,
-    get_unique_word_count,
+    pick_random_word,
 )
-
 
 # =============================================================================
 # Test Fixtures
@@ -256,8 +255,11 @@ class TestGenerateHumanReadableId:
 
     def test_different_random_choices_give_different_ids(self) -> None:
         """Different random_choice functions should give different IDs."""
-        first_picker = lambda lst: lst[0]
-        last_picker = lambda lst: lst[-1]
+        def first_picker(lst: list[str]) -> str:
+            return lst[0]
+
+        def last_picker(lst: list[str]) -> str:
+            return lst[-1]
 
         id1 = generate_human_readable_id(first_picker)
         id2 = generate_human_readable_id(last_picker)

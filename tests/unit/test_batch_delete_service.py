@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+import deal
 import pytest
 
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
@@ -11,7 +12,6 @@ from tasca.core.services.batch_delete_service import (
     BatchDeleteValidation,
     validate_batch_delete_request,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -120,11 +120,11 @@ class TestBatchSizeBoundary:
     def test_exceeds_max_batch_size(self):
         tables = [_make_table(f"t{i}") for i in range(MAX_BATCH_SIZE + 1)]
         ids = [f"t{i}" for i in range(MAX_BATCH_SIZE + 1)]
-        with pytest.raises(Exception):  # deal.PreContractError
+        with pytest.raises(deal.PreContractError):
             validate_batch_delete_request(tables, ids)
 
     def test_empty_list_rejected_by_contract(self):
-        with pytest.raises(Exception):  # deal.PreContractError
+        with pytest.raises(deal.PreContractError):
             validate_batch_delete_request([], [])
 
     def test_single_id_minimum(self):

@@ -16,9 +16,7 @@ from __future__ import annotations
 
 import argparse
 import io
-import json
 import sqlite3
-import sys
 import tempfile
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -29,13 +27,13 @@ import httpx
 import pytest
 
 from tasca.cli import (
+    cmd_new,
     create_table_directly,
     create_table_via_mcp,
     create_table_via_rest,
     get_lan_ip,
     is_server_running,
     main,
-    cmd_new,
     print_startup_banner,
 )
 
@@ -49,7 +47,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def mock_stdout() -> Generator[io.StringIO, None, None]:
+def mock_stdout() -> Generator[io.StringIO]:
     """Capture stdout for testing CLI output."""
     stdout = io.StringIO()
     with redirect_stdout(stdout):
@@ -57,7 +55,7 @@ def mock_stdout() -> Generator[io.StringIO, None, None]:
 
 
 @pytest.fixture
-def mock_stderr() -> Generator[io.StringIO, None, None]:
+def mock_stderr() -> Generator[io.StringIO]:
     """Capture stderr for testing CLI output."""
     stderr = io.StringIO()
     with redirect_stderr(stderr):
@@ -65,7 +63,7 @@ def mock_stderr() -> Generator[io.StringIO, None, None]:
 
 
 @pytest.fixture
-def temp_db() -> Generator[Path, None, None]:
+def temp_db() -> Generator[Path]:
     """Create a temporary database file."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield Path(tmpdir) / "test.db"

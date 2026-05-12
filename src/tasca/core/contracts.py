@@ -7,7 +7,6 @@ implementations must satisfy. No concrete implementations here.
 
 from typing import Protocol
 
-
 # Placeholder protocols - will be expanded as services are implemented
 
 

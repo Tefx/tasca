@@ -26,6 +26,7 @@ from tasca.shell.services.limited_saying_service import (
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.patron_repo import create_patron
 from tasca.shell.storage.table_repo import create_table
+from tests.unit.api.error_assertions import assert_detail_error
 
 # =============================================================================
 # Test Fixtures
@@ -175,7 +176,7 @@ class TestAppendSaying:
             },
         )
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+        assert_detail_error(response, code="TableNotFound", message_contains="Table not found")
 
     def test_append_saying_missing_speaker_name(
         self, admin_client: TestClient, test_table: str
@@ -257,8 +258,11 @@ class TestAppendSaying:
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"] == (
-            "Cannot add saying to table with status 'closed'. Table must be OPEN or PAUSED."
+        assert_detail_error(
+            response,
+            code="PermissionDenied",
+            message_contains="Cannot add saying to table with status 'closed'. Table must be OPEN or PAUSED.",
+            details={"table_status": "closed"},
         )
         assert calls == [
             {
@@ -655,8 +659,12 @@ class TestStateGuards:
         )
 
         assert response.status_code == 403
-        detail = response.json()["detail"]
-        assert "closed" in detail.lower()
+        assert_detail_error(
+            response,
+            code="PermissionDenied",
+            message_contains="closed",
+            details={"table_status": "closed"},
+        )
 
     def test_say_on_paused_table_allowed(self, admin_client: TestClient, paused_table: str) -> None:
         """Saying on PAUSED table should succeed (soft pause allows sayings)."""

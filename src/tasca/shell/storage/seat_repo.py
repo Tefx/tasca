@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime
+from typing import Any
 
 from returns.result import Failure, Result, Success
 
 from tasca.core.domain.seat import Seat, SeatId, SeatState
 from tasca.core.services.seat_service import filter_active_seats, is_seat_expired
-
 
 # =============================================================================
 # Error Types
@@ -49,7 +49,7 @@ class SeatDatabaseError(SeatError):
 
 # @invar:allow shell_result: seat_repo.py - private helper converts DB row to domain object, not Result
 # @shell_orchestration: Helper for row-to-domain mapping, used internally by repo functions
-def _row_to_seat(row: tuple) -> Seat:
+def _row_to_seat(row: tuple[Any, ...]) -> Seat:
     """Convert a database row to a Seat object."""
     return Seat(
         id=SeatId(row[0]),

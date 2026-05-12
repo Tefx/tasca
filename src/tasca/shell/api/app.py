@@ -6,8 +6,9 @@ The app serves both REST API routes and MCP server endpoints.
 """
 
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 # FastAPI is a required runtime dependency for the API server. We use conditional
 # imports to allow static analysis and doctest collection in environments where
@@ -30,20 +31,24 @@ else:
         CORSMiddleware = None  # type: ignore[misc,assignment]
         StaticFiles = None  # type: ignore[misc,assignment]
 
-# Starlette is also needed by FastAPI - handle conditionally
-try:
+if TYPE_CHECKING:
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.responses import FileResponse, JSONResponse
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
-except ImportError:
-    BaseHTTPMiddleware = object  # type: ignore[misc,assignment]
-    FileResponse = None  # type: ignore[misc,assignment]
-    JSONResponse = None  # type: ignore[misc,assignment]
-    ASGIApp = None  # type: ignore[misc,assignment]
-    Message = None  # type: ignore[misc,assignment]
-    Receive = None  # type: ignore[misc,assignment]
-    Scope = None  # type: ignore[misc,assignment]
-    Send = None  # type: ignore[misc,assignment]
+else:
+    try:
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.responses import FileResponse, JSONResponse
+        from starlette.types import ASGIApp, Message, Receive, Scope, Send
+    except ImportError:
+        BaseHTTPMiddleware = object  # type: ignore[misc,assignment]
+        FileResponse = None  # type: ignore[misc,assignment]
+        JSONResponse = None  # type: ignore[misc,assignment]
+        ASGIApp = None
+        Message = None
+        Receive = None
+        Scope = None
+        Send = None
 
 from tasca.config import settings
 from tasca.shell.api.auth import validate_bearer_token
@@ -255,6 +260,7 @@ def create_app() -> FastAPI:
     app.mount("/mcp", mcp_app_with_auth)
 
     from fastapi.exceptions import RequestValidationError
+
     from tasca.shell.api.errors import exception_detail_to_envelope
 
     @app.exception_handler(HTTPException)

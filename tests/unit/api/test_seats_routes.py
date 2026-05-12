@@ -7,8 +7,8 @@ Uses FastAPI TestClient with an in-memory SQLite database.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
-from typing import Generator
 
 import pytest
 from fastapi import FastAPI
@@ -19,9 +19,8 @@ from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.core.services.seat_service import DEFAULT_SEAT_TTL_SECONDS
 from tasca.shell.api.routes.seats import router
 from tasca.shell.storage.database import apply_schema
-from tasca.shell.storage.seat_repo import create_seat, create_seats_table
+from tasca.shell.storage.seat_repo import create_seat
 from tasca.shell.storage.table_repo import create_table
-
 
 # =============================================================================
 # Test Fixtures
@@ -29,7 +28,7 @@ from tasca.shell.storage.table_repo import create_table
 
 
 @pytest.fixture
-def test_db() -> Generator[sqlite3.Connection, None, None]:
+def test_db() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with seats schema."""
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     apply_schema(conn)
@@ -43,7 +42,7 @@ def app(test_db: sqlite3.Connection) -> FastAPI:
     app = FastAPI()
 
     # Override the get_db dependency to use test database
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
+    def get_test_db() -> Generator[sqlite3.Connection]:
         yield test_db
 
     from tasca.shell.api.deps import get_db
@@ -115,7 +114,7 @@ class TestHeartbeatSeat:
         # Setup
         create_test_table(test_db, "table-1")
         now = datetime.now(UTC)
-        seat = create_test_seat(
+        create_test_seat(
             test_db,
             seat_id="seat-1",
             table_id="table-1",
@@ -159,7 +158,7 @@ class TestHeartbeatSeat:
         # Setup
         create_test_table(test_db, "table-1")
         old_time = datetime.now(UTC) - timedelta(minutes=5)
-        seat = create_test_seat(
+        create_test_seat(
             test_db,
             seat_id="seat-1",
             table_id="table-1",
@@ -193,7 +192,7 @@ class TestHeartbeatSeat:
         # Setup - create seat with old heartbeat (expired)
         create_test_table(test_db, "table-1")
         expired_time = datetime.now(UTC) - timedelta(hours=1)  # 1 hour ago
-        seat = create_test_seat(
+        create_test_seat(
             test_db,
             seat_id="seat-1",
             table_id="table-1",
@@ -241,7 +240,6 @@ class TestListSeats:
         """List seats returns active seats."""
         # Setup
         create_test_table(test_db, "table-1")
-        now = datetime.now(UTC)
         create_test_seat(test_db, seat_id="seat-1", table_id="table-1", patron_id="patron-1")
         create_test_seat(test_db, seat_id="seat-2", table_id="table-1", patron_id="patron-2")
 

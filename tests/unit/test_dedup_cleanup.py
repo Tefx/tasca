@@ -8,15 +8,13 @@ Verification Criteria:
 """
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 import pytest
-from returns.result import Failure, Success
+from returns.result import Success
 
 from tasca.core.services.dedup_cleanup_service import (
-    DEFAULT_CLEANUP_BATCH_SIZE,
     DEFAULT_DEDUP_TTL_SECONDS,
-    DEFAULT_OPPORTUNISTIC_CLEANUP_PROBABILITY,
     calculate_batches_for_cleanup,
     calculate_dedup_cutoff_time,
     format_cutoff_for_sql,
@@ -29,11 +27,8 @@ from tasca.shell.storage.dedup_repo import (
     check_duplicate_with_expiry,
     cleanup_expired_dedup_entries,
     opportunistic_cleanup,
-    store_dedup,
-    store_or_get_existing,
     store_or_get_existing_with_expiry,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -59,26 +54,26 @@ class TestIsDedupEntryExpired:
 
     def test_not_expired_within_ttl(self) -> None:
         """Entry is not expired when within TTL."""
-        first_seen = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        now = datetime(2024, 1, 1, 12, 0, 30, tzinfo=timezone.utc)  # 30 seconds later
+        first_seen = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        now = datetime(2024, 1, 1, 12, 0, 30, tzinfo=UTC)  # 30 seconds later
         assert is_dedup_entry_expired(first_seen, 60, now) is False
 
     def test_not_expired_at_exact_ttl(self) -> None:
         """Entry is not expired exactly at TTL boundary (still within TTL)."""
-        first_seen = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        now = datetime(2024, 1, 1, 12, 1, 0, tzinfo=timezone.utc)  # exactly 60 seconds
+        first_seen = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        now = datetime(2024, 1, 1, 12, 1, 0, tzinfo=UTC)  # exactly 60 seconds
         assert is_dedup_entry_expired(first_seen, 60, now) is False
 
     def test_expired_after_ttl(self) -> None:
         """Entry is expired after TTL has passed."""
-        first_seen = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        now = datetime(2024, 1, 1, 12, 1, 1, tzinfo=timezone.utc)  # 61 seconds later
+        first_seen = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        now = datetime(2024, 1, 1, 12, 1, 1, tzinfo=UTC)  # 61 seconds later
         assert is_dedup_entry_expired(first_seen, 60, now) is True
 
     def test_expired_with_24h_ttl(self) -> None:
         """Entry with 24h TTL expires after 25 hours."""
-        first_seen = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        now = datetime(2024, 1, 2, 13, 0, 0, tzinfo=timezone.utc)  # 25 hours later
+        first_seen = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        now = datetime(2024, 1, 2, 13, 0, 0, tzinfo=UTC)  # 25 hours later
         assert is_dedup_entry_expired(first_seen, DEFAULT_DEDUP_TTL_SECONDS, now) is True
 
 
@@ -87,15 +82,15 @@ class TestCalculateDedupCutoffTime:
 
     def test_cutoff_24_hours_ago(self) -> None:
         """Cutoff is 24 hours in the past for 24h TTL."""
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
         cutoff = calculate_dedup_cutoff_time(now, 86400)
-        assert cutoff == datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        assert cutoff == datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     def test_cutoff_1_hour_ago(self) -> None:
         """Cutoff is 1 hour in the past for 1h TTL."""
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
         cutoff = calculate_dedup_cutoff_time(now, 3600)
-        assert cutoff == datetime(2024, 1, 2, 11, 0, 0, tzinfo=timezone.utc)
+        assert cutoff == datetime(2024, 1, 2, 11, 0, 0, tzinfo=UTC)
 
 
 class TestFormatCutoffForSql:
@@ -103,7 +98,7 @@ class TestFormatCutoffForSql:
 
     def test_formats_to_iso(self) -> None:
         """Formats datetime to ISO string for SQL comparison."""
-        cutoff = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        cutoff = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
         result = format_cutoff_for_sql(cutoff)
         assert result == "2024-01-15T10:30:00+00:00"
 
@@ -167,7 +162,7 @@ class TestExpiredEntryBehavesAsMiss:
         # Create an entry with first_seen_at in the past
         content_hash = "a" * 64
         content_preview = "Test content..."
-        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         past_time_str = past_time.isoformat()
 
         # Insert directly with past timestamp
@@ -186,7 +181,7 @@ class TestExpiredEntryBehavesAsMiss:
         assert check_result.unwrap() is not None
 
         # Now check with expiry (using 1 hour TTL, entry is 24+ hours old)
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
         expiry_result = check_duplicate_with_expiry(
             memory_db, content_hash, ttl_seconds=3600, now=now
         )
@@ -205,14 +200,12 @@ class TestExpiredEntryBehavesAsMiss:
     ) -> None:
         """store_or_get_existing_with_expiry creates new record for expired entry."""
         content = "Test content for expiry"
-        content_hash_expected = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"  # hash of empty string is wrong, compute actual
-
         from tasca.core.services.dedup_service import compute_content_hash
 
         content_hash = compute_content_hash(content)
 
         # Create an expired entry
-        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         past_time_str = past_time.isoformat()
         memory_db.execute(
             """
@@ -224,7 +217,7 @@ class TestExpiredEntryBehavesAsMiss:
         memory_db.commit()
 
         # Now store with expiry - should create new record (expired treated as miss)
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
         result = store_or_get_existing_with_expiry(
             memory_db, content, ttl_seconds=3600, now=now, enable_opportunistic_cleanup=False
         )
@@ -254,7 +247,7 @@ class TestBoundedCleanup:
     def test_cleanup_respects_batch_size(self, memory_db: sqlite3.Connection) -> None:
         """Cleanup deletes at most batch_size entries per call."""
         # Create 250 expired entries
-        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         past_time_str = past_time.isoformat()
 
         for i in range(250):
@@ -273,7 +266,7 @@ class TestBoundedCleanup:
         assert count_before == 250
 
         # Run cleanup with batch_size=100
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)  # 24 hours later
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)  # 24 hours later
         result = cleanup_expired_dedup_entries(memory_db, ttl_seconds=3600, now=now, batch_size=100)
 
         # VERIFICATION: Cleanup deletes at most batch_size
@@ -288,7 +281,7 @@ class TestBoundedCleanup:
     def test_cleanup_can_be_called_multiple_times(self, memory_db: sqlite3.Connection) -> None:
         """Multiple cleanup calls eventually delete all expired entries."""
         # Create 250 expired entries
-        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         past_time_str = past_time.isoformat()
 
         for i in range(250):
@@ -302,7 +295,7 @@ class TestBoundedCleanup:
             )
         memory_db.commit()
 
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
 
         # First cleanup
         result1 = cleanup_expired_dedup_entries(
@@ -362,7 +355,7 @@ class TestOpportunisticCleanup:
     ) -> None:
         """store_or_get_existing_with_expiry can trigger opportunistic cleanup."""
         # Create an expired entry
-        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         past_time_str = past_time.isoformat()
         memory_db.execute(
             """
@@ -374,7 +367,7 @@ class TestOpportunisticCleanup:
         memory_db.commit()
 
         # Store new content with cleanup enabled (probability=1.0 triggers always)
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
         result = store_or_get_existing_with_expiry(
             memory_db,
             "New content",
@@ -394,7 +387,7 @@ class TestOpportunisticCleanup:
     def test_opportunistic_cleanup_disabled(self, memory_db: sqlite3.Connection) -> None:
         """store_or_get_existing_with_expiry can disable opportunistic cleanup."""
         # Create an expired entry
-        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         past_time_str = past_time.isoformat()
         memory_db.execute(
             """
@@ -406,7 +399,7 @@ class TestOpportunisticCleanup:
         memory_db.commit()
 
         # Store new content with cleanup disabled
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
         result = store_or_get_existing_with_expiry(
             memory_db,
             "New content",
@@ -437,7 +430,7 @@ class TestDedupLifecycleIntegration:
     def test_full_lifecycle_expired_as_miss(self, memory_db: sqlite3.Connection) -> None:
         """Full lifecycle: store -> expire -> behaves as miss."""
         # 1. Store new content
-        now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         result1 = store_or_get_existing_with_expiry(
             memory_db, "My content", ttl_seconds=3600, now=now, enable_opportunistic_cleanup=False
         )
@@ -455,7 +448,7 @@ class TestDedupLifecycleIntegration:
         assert record2.first_seen_at == record1.first_seen_at
 
         # 3. After TTL expires: behaves as miss (creates new record)
-        now_expired = datetime(2024, 1, 1, 14, 0, 0, tzinfo=timezone.utc)  # 2 hours later
+        now_expired = datetime(2024, 1, 1, 14, 0, 0, tzinfo=UTC)  # 2 hours later
         result3 = store_or_get_existing_with_expiry(
             memory_db,
             "My content",
@@ -471,7 +464,7 @@ class TestDedupLifecycleIntegration:
     def test_periodic_cleanup_removes_expired_entries(self, memory_db: sqlite3.Connection) -> None:
         """Periodic cleanup removes all expired entries."""
         # Create 50 expired entries
-        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        past_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         past_time_str = past_time.isoformat()
 
         for i in range(50):
@@ -485,7 +478,7 @@ class TestDedupLifecycleIntegration:
             )
 
         # Create 10 fresh entries
-        fresh_time = datetime(2024, 1, 2, 11, 0, 0, tzinfo=timezone.utc)
+        fresh_time = datetime(2024, 1, 2, 11, 0, 0, tzinfo=UTC)
         fresh_time_str = fresh_time.isoformat()
 
         for i in range(100, 110):
@@ -504,7 +497,7 @@ class TestDedupLifecycleIntegration:
         assert count_before == 60  # 50 expired + 10 fresh
 
         # Run periodic cleanup with large batch size
-        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)  # 24 hours later
+        now = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)  # 24 hours later
         result = cleanup_expired_dedup_entries(
             memory_db, ttl_seconds=3600, now=now, batch_size=1000
         )

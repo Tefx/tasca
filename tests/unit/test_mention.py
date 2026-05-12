@@ -15,7 +15,6 @@ import pytest
 from tasca.core.domain.patron import PatronId
 from tasca.core.services.mention_service import (
     AmbiguousMention,
-    MentionsResult,
     PatronMatch,
     ResolvedMention,
     UnresolvedMention,

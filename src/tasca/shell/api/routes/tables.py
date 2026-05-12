@@ -10,18 +10,18 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 
-from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from returns.result import Failure
 
 from tasca.core.domain.table import Table, TableId, TableUpdate, Version
-from tasca.shell.api.auth import verify_admin_token
-from tasca.shell.api.deps import get_db
-from tasca.shell.api.errors import raise_http_error
-from tasca.shell.api.routes import tables_control
 from tasca.core.services.batch_delete_service import (
     MAX_BATCH_SIZE,
 )
+from tasca.shell.api.auth import verify_admin_token
+from tasca.shell.api.deps import get_db
+from tasca.shell.api.errors import raise_http_error
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
+from tasca.shell.api.routes import tables_control
 from tasca.shell.logging import (
     get_logger,
     log_batch_table_delete,

@@ -2,6 +2,7 @@
 Unit tests for Table domain types and state machine.
 """
 
+import deal
 import pytest
 
 from tasca.core.domain.table import Table, TableCreate, TableId, TableStatus
@@ -53,12 +54,12 @@ class TestTransitionToPaused:
 
     def test_paused_to_paused_raises(self) -> None:
         """PAUSED tables cannot be paused again."""
-        with pytest.raises(Exception):  # PreconditionError
+        with pytest.raises(deal.PreContractError):
             transition_to_paused(TableStatus.PAUSED)
 
     def test_closed_to_paused_raises(self) -> None:
         """CLOSED tables cannot be paused."""
-        with pytest.raises(Exception):  # PreconditionError
+        with pytest.raises(deal.PreContractError):
             transition_to_paused(TableStatus.CLOSED)
 
 
@@ -71,12 +72,12 @@ class TestTransitionToOpen:
 
     def test_open_to_open_raises(self) -> None:
         """OPEN tables cannot be resumed."""
-        with pytest.raises(Exception):  # PreconditionError
+        with pytest.raises(deal.PreContractError):
             transition_to_open(TableStatus.OPEN)
 
     def test_closed_to_open_raises(self) -> None:
         """CLOSED tables cannot be resumed."""
-        with pytest.raises(Exception):  # PreconditionError
+        with pytest.raises(deal.PreContractError):
             transition_to_open(TableStatus.CLOSED)
 
 
@@ -93,7 +94,7 @@ class TestTransitionToClosed:
 
     def test_closed_to_closed_raises(self) -> None:
         """CLOSED tables cannot be closed again."""
-        with pytest.raises(Exception):  # PreconditionError
+        with pytest.raises(deal.PreContractError):
             transition_to_closed(TableStatus.CLOSED)
 
 

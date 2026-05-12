@@ -14,26 +14,32 @@ All functions are pure (no I/O) with @pre/@post contracts and doctests.
 
 import re
 from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any, cast
 
 import deal
 
 # Hypothesis optional - for property-based testing
 try:
-    from hypothesis import strategies as st
-    from hypothesis.strategies import SearchStrategy, register_type_strategy
+    from hypothesis import strategies as imported_hypothesis_strategies
+    from hypothesis.strategies import SearchStrategy as ImportedSearchStrategy
+    from hypothesis.strategies import register_type_strategy as imported_register_type_strategy
 
+    hypothesis_strategies: Any = imported_hypothesis_strategies
+    SearchStrategy: Any = ImportedSearchStrategy
+    register_hypothesis_type_strategy: Any = imported_register_type_strategy
     _HYPOTHESIS_AVAILABLE = True
 except ImportError:
-    st = SearchStrategy = register_type_strategy = None  # type: ignore[assignment]
+    hypothesis_strategies = None
+    SearchStrategy = None
+    register_hypothesis_type_strategy = None
     _HYPOTHESIS_AVAILABLE = False
 
 if TYPE_CHECKING:
     from tasca.config import Settings
 
 
-class LimitKind(str, Enum):
+class LimitKind(StrEnum):
     """Type of limit that was exceeded."""
 
     HISTORY = "history"  # Max sayings per table
@@ -90,16 +96,21 @@ def _register_hypothesis_strategies() -> None:
     """Register custom Hypothesis strategies for this module's types."""
     if not _HYPOTHESIS_AVAILABLE:
         return
+    if hypothesis_strategies is None or SearchStrategy is None or register_hypothesis_type_strategy is None:
+        return
 
     # Strategy for valid LimitsConfig: positive integers for limits, non-negative for mentions
-    limits_config_strategy: SearchStrategy[LimitsConfig] = st.builds(  # type: ignore[truthy-function]
-        LimitsConfig,
-        max_sayings_per_table=st.one_of(st.none(), st.integers(min_value=1)),  # type: ignore[truthy-function]
-        max_content_length=st.one_of(st.none(), st.integers(min_value=1)),  # type: ignore[truthy-function]
-        max_bytes_per_table=st.one_of(st.none(), st.integers(min_value=1)),  # type: ignore[truthy-function]
-        max_mentions_per_saying=st.one_of(st.none(), st.integers(min_value=0)),  # type: ignore[truthy-function]
+    limits_config_strategy = cast(
+        SearchStrategy[LimitsConfig],
+        hypothesis_strategies.builds(
+            LimitsConfig,
+            max_sayings_per_table=hypothesis_strategies.one_of(hypothesis_strategies.none(), hypothesis_strategies.integers(min_value=1)),
+            max_content_length=hypothesis_strategies.one_of(hypothesis_strategies.none(), hypothesis_strategies.integers(min_value=1)),
+            max_bytes_per_table=hypothesis_strategies.one_of(hypothesis_strategies.none(), hypothesis_strategies.integers(min_value=1)),
+            max_mentions_per_saying=hypothesis_strategies.one_of(hypothesis_strategies.none(), hypothesis_strategies.integers(min_value=0)),
+        ),
     )
-    register_type_strategy(LimitsConfig, limits_config_strategy)  # type: ignore[truthy-function]
+    register_hypothesis_type_strategy(LimitsConfig, limits_config_strategy)
 
 
 _register_hypothesis_strategies()

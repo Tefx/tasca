@@ -17,8 +17,6 @@ import json
 import uuid
 from typing import TYPE_CHECKING
 
-import pytest
-
 from tests.integration.conftest import TEST_ADMIN_TOKEN
 
 if TYPE_CHECKING:
@@ -51,7 +49,7 @@ class TestIntegrationCreateTableViaRest:
 
     def test_create_table_via_rest_asgi(
         self,
-        mcp_test_client: "TestClient",
+        mcp_test_client: TestClient,
     ) -> None:
         """Create table via REST API using in-process ASGI.
 
@@ -133,7 +131,7 @@ class TestIntegrationCreateTableViaRest:
 
     def test_create_table_via_rest_with_dedup(
         self,
-        mcp_test_client: "TestClient",
+        mcp_test_client: TestClient,
     ) -> None:
         """Create table with dedup_id for idempotency.
 
@@ -234,7 +232,7 @@ class TestIntegrationCreateTableViaMCP:
 
     def test_mcp_table_create_via_asgi(
         self,
-        mcp_test_client: "TestClient",
+        mcp_test_client: TestClient,
     ) -> None:
         """Test MCP table_create tool via ASGI in-process.
 
@@ -320,7 +318,7 @@ class TestIntegrationCreateTableViaMCP:
 
     def test_mcp_table_create_with_context(
         self,
-        mcp_test_client: "TestClient",
+        mcp_test_client: TestClient,
     ) -> None:
         """Test MCP table_create with optional context."""
         # Initialize session
@@ -382,7 +380,7 @@ class TestIntegrationCreateTableViaMCP:
 
     def test_mcp_table_create_minimal(
         self,
-        mcp_test_client: "TestClient",
+        mcp_test_client: TestClient,
     ) -> None:
         """Test MCP table_create with only required question field."""
         # Initialize session

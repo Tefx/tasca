@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
 
 from tasca.shell.api.fastapi_compat import HTTPException, status
 
@@ -19,7 +19,7 @@ def raise_http_error(
     code: str,
     message: str,
     details: dict[str, Any] | None = None,
-) -> None:
+) -> NoReturn:
     """Raise an HTTPException whose detail is already standard-shaped."""
     raise HTTPException(status_code=http_status, detail=error_envelope(code, message, details))
 

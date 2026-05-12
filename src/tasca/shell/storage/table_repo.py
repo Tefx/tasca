@@ -8,9 +8,10 @@ Shell layer - handles I/O (database operations) and returns Result[T, E].
 
 from __future__ import annotations
 
-import sqlite3
 import json
+import sqlite3
 from datetime import datetime
+from typing import Any
 
 from returns.result import Failure, Result, Success
 
@@ -19,7 +20,6 @@ from tasca.core.services.table_service import (
     VersionMismatchError,
     prepare_versioned_update,
 )
-
 
 # =============================================================================
 # Error Types
@@ -67,7 +67,7 @@ class VersionConflictError(TableError):
             f"expected version {expected_version}, but current is {current_version}"
         )
 
-    def to_json(self) -> dict:
+    def to_json(self) -> dict[str, Any]:
         """Convert error to JSON for API responses.
 
         Returns:
@@ -100,7 +100,7 @@ class TableDatabaseError(TableError):
 
 # @invar:allow shell_result: Private helper - pure data transformation, not a shell operation
 # @shell_orchestration: Helper for row-to-domain mapping, used internally by repo functions
-def _row_to_table(row: tuple) -> Table:
+def _row_to_table(row: tuple[Any, ...]) -> Table:
     """Convert a database row to a Table object."""
     return Table(
         id=TableId(row[0]),
@@ -316,7 +316,7 @@ def list_tables_with_seat_counts(
     conn: sqlite3.Connection,
     ttl_seconds: int,
     now: datetime,
-) -> Result[list[dict], TableError]:
+) -> Result[list[dict[str, Any]], TableError]:
     """List all open tables with active seat counts.
 
     Queries all tables with status='open' and joins seats to compute
@@ -396,7 +396,7 @@ def list_tables_with_seat_counts(
         )
         rows = cursor.fetchall()
 
-        result_tables: list[dict] = [
+        result_tables: list[dict[str, Any]] = [
             {
                 "id": row[0],
                 "question": row[1],

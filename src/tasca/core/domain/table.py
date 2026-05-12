@@ -5,13 +5,13 @@ This module defines the core Table types and related enums.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import NewType
 
 from pydantic import BaseModel, Field
 
 
-class TableStatus(str, Enum):
+class TableStatus(StrEnum):
     """Status of a discussion table.
 
     State transitions:

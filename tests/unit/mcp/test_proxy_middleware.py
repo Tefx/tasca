@@ -8,17 +8,14 @@ servers in remote mode while executing locally in local mode.
 from __future__ import annotations
 
 import json
-import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from returns.result import Success
 
 from tasca.shell.mcp.proxy import UpstreamConfig
 from tasca.shell.mcp.server import LOCAL_ONLY_TOOLS, ProxyMiddleware
-
 
 # =============================================================================
 # Test Fixtures
@@ -472,6 +469,7 @@ class TestProxyMiddlewareConfigError:
     ) -> None:
         """CONFIG_ERROR is returned when get_upstream_config fails."""
         from returns.result import Failure
+
         from tasca.shell.mcp.proxy import ProxyConfigError
 
         config_error = ProxyConfigError("Cannot read file: Permission denied")

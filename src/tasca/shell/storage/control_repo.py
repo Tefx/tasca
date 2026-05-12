@@ -14,6 +14,7 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from datetime import datetime
+from typing import Any
 
 from returns.result import Failure, Result, Success
 
@@ -56,7 +57,7 @@ class ControlVersionConflictError(ControlError):
             f"Version conflict for table {table_id}: expected {expected_version}, but was modified"
         )
 
-    def to_json(self) -> dict:
+    def to_json(self) -> dict[str, Any]:
         """Convert error to JSON for API responses.
 
         Returns:

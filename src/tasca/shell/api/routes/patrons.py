@@ -9,17 +9,18 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 
-from tasca.shell.api.fastapi_compat import APIRouter, Depends, status
 from pydantic import BaseModel
 from returns.result import Failure
 
 from tasca.core.domain.patron import PatronId
 from tasca.shell.api.deps import get_db
 from tasca.shell.api.errors import raise_http_error
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, status
 from tasca.shell.services.operations.patron_registration import (
     PatronCreateError,
     PatronIdempotencyError,
     PatronLookupError,
+    PatronRegistrationOutcome,
     register_patron,
 )
 from tasca.shell.storage.patron_repo import PatronNotFoundError, get_patron
@@ -66,7 +67,7 @@ class PatronRegisterRequest(BaseModel):
 
 # @invar:allow shell_result: FastAPI response model adapter, not reusable domain logic.
 # @shell_orchestration: HTTP response shaping for shared patron registration outcome.
-def _registration_outcome_to_response(outcome: object) -> PatronRegisterResponse:
+def _registration_outcome_to_response(outcome: PatronRegistrationOutcome) -> PatronRegisterResponse:
     """Render a shared patron registration outcome as the REST response model."""
     patron = outcome.patron
     return PatronRegisterResponse(

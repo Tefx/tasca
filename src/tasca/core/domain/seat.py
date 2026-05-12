@@ -5,13 +5,13 @@ This module defines the core Seat types for tracking presence at tables.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import NewType
 
 from pydantic import BaseModel
 
 
-class SeatState(str, Enum):
+class SeatState(StrEnum):
     """State of a seat at a table."""
 
     JOINED = "joined"

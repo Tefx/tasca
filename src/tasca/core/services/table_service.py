@@ -9,8 +9,7 @@ from datetime import datetime
 
 import deal
 
-from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
-
+from tasca.core.domain.table import Table, TableUpdate, Version
 
 # =============================================================================
 # Errors

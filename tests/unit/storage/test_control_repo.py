@@ -20,7 +20,6 @@ from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.core.schema import create_sayings_table_ddl, create_tables_table_ddl
 from tasca.shell.storage.control_repo import (
-    ControlIntegrityError,
     ControlVersionConflictError,
     atomic_control_table,
 )
@@ -28,7 +27,7 @@ from tasca.shell.storage.table_repo import create_table
 
 
 @pytest.fixture
-def db_conn() -> Generator[sqlite3.Connection, None, None]:
+def db_conn() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with schemas."""
     conn = sqlite3.connect(":memory:")
     conn.execute(create_tables_table_ddl())
@@ -352,8 +351,7 @@ class TestAtomicControlTable:
         # Get initial state
         cursor.execute("SELECT status, version FROM tables WHERE id = ?", ("table-1",))
         initial_row = cursor.fetchone()
-        initial_status = initial_row[0]
-        initial_version = initial_row[1]
+        assert initial_row is not None
 
         cursor.execute("SELECT COUNT(*) FROM sayings WHERE table_id = ?", ("table-1",))
         initial_saying_count = cursor.fetchone()[0]

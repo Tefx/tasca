@@ -11,16 +11,13 @@ import tempfile
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-from returns.result import Failure, Success
+from returns.result import Success
 
 from tasca.core.domain.patron import PatronId
 from tasca.core.domain.saying import (
-    Saying,
-    SayingId,
-    Speaker,
     SpeakerKind,
     human_speaker,
     patron_speaker,
@@ -42,7 +39,6 @@ from tasca.shell.storage.saying_repo import (
     get_table_max_sequence,
     list_sayings_by_table,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -253,11 +249,11 @@ class TestAppendSaying:
         """created_at is set to current time."""
         table_id = str(uuid.uuid4())
         speaker = patron_speaker("TestAgent", PatronId("patron-123"))
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
 
         result = append_saying(memory_db, table_id, speaker, "Test")
 
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         assert isinstance(result, Success)
         saying = result.unwrap()
         assert before <= saying.created_at <= after
@@ -479,7 +475,8 @@ class TestConcurrencyAtomicSequenceAllocation:
                 futures = [
                     executor.submit(append_sayings, thread_id) for thread_id in range(num_threads)
                 ]
-                thread_counts = [f.result() for f in as_completed(futures)]
+                for future in as_completed(futures):
+                    future.result()
 
             # Check for unexpected errors
             if errors:
@@ -691,7 +688,7 @@ class TestSchemaUniqueness:
                     None,
                     "Duplicate sequence",
                     0,
-                    datetime.now(timezone.utc).isoformat(),
+                    datetime.now(UTC).isoformat(),
                 ),
             )
 

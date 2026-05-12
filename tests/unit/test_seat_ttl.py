@@ -23,6 +23,7 @@ from tasca.core.services.seat_service import (
     seconds_until_expiry,
 )
 from tasca.shell.storage.seat_repo import (
+    SeatNotFoundError,
     count_active_seats,
     create_seat,
     create_seats_table,
@@ -33,10 +34,7 @@ from tasca.shell.storage.seat_repo import (
     gc_expired_seats,
     get_seat,
     heartbeat_seat,
-    SeatDatabaseError,
-    SeatNotFoundError,
 )
-
 
 # =============================================================================
 # Core TTL Logic Tests

@@ -11,11 +11,10 @@ Repository tests verify:
 import os
 import sqlite3
 import tempfile
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
-from returns.result import Failure, Success
+from returns.result import Success
 
 from tasca.core.services.dedup_service import (
     compute_content_hash,
@@ -28,7 +27,6 @@ from tasca.shell.storage.dedup_repo import (
     store_dedup,
     store_or_get_existing,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -399,8 +397,6 @@ class TestConcurrencyDedup:
             init_conn.close()
 
             results: list = []
-            lock = threading.Lock()
-
             def store_concurrently() -> tuple[bool, str]:
                 """Store content and return (is_new, hash)."""
                 thread_conn = sqlite3.connect(db_path)

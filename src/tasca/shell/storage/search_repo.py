@@ -14,7 +14,7 @@ Escape Hatch Convention (shell_result):
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
-from typing import NewType
+from typing import Any, NewType
 
 from returns.result import Failure, Result, Success
 
@@ -120,7 +120,7 @@ def search_sayings(
                 ORDER BY fts.rank
                 LIMIT ? OFFSET ?
             """
-            params: tuple = (query, table_id, limit, offset)
+            params: tuple[object, ...] = (query, table_id, limit, offset)
         else:
             sql = """
                 SELECT
@@ -178,7 +178,7 @@ def count_search_results(
                 JOIN sayings s ON fts.rowid = s.rowid
                 WHERE sayings_fts MATCH ? AND s.table_id = ?
             """
-            params: tuple = (query, table_id)
+            params: tuple[object, ...] = (query, table_id)
         else:
             sql = """
                 SELECT COUNT(*)
@@ -229,7 +229,7 @@ def rebuild_fts_index(conn: sqlite3.Connection) -> Result[int, SearchError]:
 
 # @invar:allow shell_result: search_repo.py - repo helper returns raw rows for search
 # @shell_orchestration: Private helper for DB row -> domain object conversion
-def _row_to_search_result(row: tuple) -> SearchResult:
+def _row_to_search_result(row: tuple[Any, ...]) -> SearchResult:
     """Convert a database row to a SearchResult.
 
     Args:
@@ -330,7 +330,7 @@ def _execute_like_query(
     conn: sqlite3.Connection,
     query_param: str,
     status: str | None,
-) -> list[tuple]:
+) -> list[tuple[Any, ...]]:
     """Execute LIKE SQL for question/context matching.
 
     Args:
@@ -366,7 +366,7 @@ def _execute_like_query(
 
 # @invar:allow shell_result: search_repo.py - repo helper computes match_type/snippet without extra I/O
 # @shell_orchestration: Row-shape normalization stays near SQL fallback path to preserve ordering semantics
-def _build_like_hit(row: tuple, query_param: str) -> TableSearchHit | None:
+def _build_like_hit(row: tuple[Any, ...], query_param: str) -> TableSearchHit | None:
     """Build LIKE-based hit if row still semantically matches the query.
 
     Args:
@@ -581,7 +581,7 @@ def count_table_search_results(
 
 # @invar:allow shell_result: search_repo.py - repo helper returns raw rows for search
 # @shell_orchestration: Private helper for DB row format conversion
-def _row_to_table_hit(row: tuple) -> TableSearchHit:
+def _row_to_table_hit(row: tuple[Any, ...]) -> TableSearchHit:
     """Convert a database row to a TableSearchHit.
 
     Args:

@@ -7,7 +7,7 @@ This module holds deterministic payload shaping and validation helpers so
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import deal
 
@@ -359,5 +359,5 @@ def silence_next_action(empty_waits: int, next_sequence: int) -> str:
 def compute_next_sequence(sayings: list[Any], since_sequence: int) -> int:
     """Compute pagination cursor from returned sayings."""
     if sayings:
-        return max(s.sequence for s in sayings)
+        return cast(int, max(s.sequence for s in sayings))
     return since_sequence

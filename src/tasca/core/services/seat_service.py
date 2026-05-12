@@ -9,8 +9,7 @@ from datetime import datetime, timedelta
 
 import deal
 
-from tasca.core.domain.seat import Seat, SeatId, SeatState
-
+from tasca.core.domain.seat import Seat, SeatState
 
 # =============================================================================
 # TTL Constants

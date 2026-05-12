@@ -23,7 +23,8 @@ Escape Hatch Convention (shell_result):
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, cast
 
 # FastMCP is a required runtime dependency. We use conditional imports to allow
 # static analysis and doctest collection in environments where it's not installed.
@@ -71,6 +72,7 @@ from tasca.shell.mcp.tool_contracts import (  # noqa: E402
 
 # Transport types for MCP server
 TransportType = Literal["stdio", "http", "sse", "streamable-http"]
+F = TypeVar("F", bound=Callable[..., Any])
 
 # MCP Agent Protocol Instructions (~1KB)
 # This text guides agents in proper table participation behavior.
@@ -205,22 +207,29 @@ if FastMCP is None:
     class _MockFastMCP:
         """Mock FastMCP for static analysis environments without fastmcp installed."""
 
-        def __init__(self, *, name: str, version: str, instructions: str):
+        def __init__(self, *, name: str, version: str, instructions: str) -> None:
             self.name = name
             self.version = version
             self.instructions = instructions
 
-        def tool(self, func):
+        def tool(self, func: F | None = None, **_kwargs: Any) -> Callable[[F], F] | F:
             """Mock decorator that returns the function unchanged."""
-            return func
+            if func is not None:
+                return func
 
-        def run(self, *, transport: str = "stdio"):
+            def decorator(wrapped: F) -> F:
+                return wrapped
+
+            return decorator
+
+        def run(self, *, transport: str = "stdio") -> None:
+            _ = transport
             raise RuntimeError("FastMCP is not installed. Install with: pip install fastmcp")
 
-        def add_middleware(self, middleware):
-            pass
+        def add_middleware(self, middleware: object) -> None:
+            _ = middleware
 
-    mcp = _MockFastMCP(
+    mcp: Any = _MockFastMCP(
         name="tasca",
         version="unknown",
         instructions="",
@@ -240,10 +249,13 @@ from tasca.shell.mcp import entrypoints as ep  # noqa: E402
 VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 
 
-def _contract_tool(tool_name: str):
+def _contract_tool(tool_name: str) -> Callable[[F], F]:
     """Register an MCP tool using centralized contract metadata."""
     contract = tool_contract(tool_name)
-    return mcp.tool(name=contract.tool_name, description=contract.description)
+    return cast(
+        Callable[[F], F],
+        mcp.tool(name=contract.tool_name, description=contract.description),
+    )
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
@@ -495,7 +507,7 @@ def table_update(
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_wait")
-def table_wait(
+async def table_wait(
     table_id: Annotated[str, parameter_field("table_wait", "table_id")],
     since_sequence: Annotated[
         int, parameter_field("table_wait", "since_sequence")
@@ -511,7 +523,7 @@ def table_wait(
     ] = parameter_default("table_wait", "include_table"),
 ) -> dict[str, Any]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table)
+    return await ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table)
 
 
 # @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
@@ -586,8 +598,8 @@ class ProxyMiddleware(Middleware):
 
     async def on_call_tool(
         self,
-        context: MiddlewareContext,  # type: ignore[type-arg]
-        call_next,  # type: ignore[no-untyped-def]
+        context: MiddlewareContext[Any],
+        call_next: Callable[[MiddlewareContext[Any]], Awaitable[ToolResult]],
     ) -> ToolResult:
         """Intercept tool calls and forward to upstream if in remote mode.
 
@@ -716,7 +728,7 @@ class ProxyMiddleware(Middleware):
                     content_blocks.append(block)  # type: ignore[arg-type]
             else:
                 # Already a content block object
-                content_blocks.append(block)  # type: ignore[arg-type]
+                content_blocks.append(block)
 
         # Extract structured_content if not provided
         # For tools with outputSchema, structuredContent should match the envelope format

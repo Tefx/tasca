@@ -21,7 +21,6 @@ from tasca.core.domain.table import TableId
 from tasca.core.human_readable_ids import generate_human_readable_id
 from tasca.shell.storage.table_repo import TableNotFoundError, get_table
 
-
 # Maximum retries before giving up on collision
 MAX_ID_RETRIES = 10
 

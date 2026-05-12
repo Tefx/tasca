@@ -18,10 +18,10 @@ import io
 import json
 import sqlite3
 import tempfile
-from contextlib import redirect_stdout, redirect_stderr
-from datetime import datetime, timezone
+from collections.abc import Generator
+from contextlib import redirect_stderr, redirect_stdout
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Generator
 from unittest.mock import patch
 
 import pytest
@@ -34,14 +34,13 @@ from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.saying_repo import append_saying
 from tasca.shell.storage.table_repo import create_table
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
 
 
 @pytest.fixture
-def test_db() -> Generator[sqlite3.Connection, None, None]:
+def test_db() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with tables schema."""
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     apply_schema(conn)
@@ -50,7 +49,7 @@ def test_db() -> Generator[sqlite3.Connection, None, None]:
 
 
 @pytest.fixture
-def temp_output_file() -> Generator[Path, None, None]:
+def temp_output_file() -> Generator[Path]:
     """Create a temporary file for output testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         yield Path(tmpdir) / "output.md"
@@ -69,7 +68,7 @@ def create_test_table(
     status: TableStatus = TableStatus.OPEN,
 ) -> Table:
     """Create a test table directly in the database."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     table = Table(
         id=TableId(table_id),
         question=question,

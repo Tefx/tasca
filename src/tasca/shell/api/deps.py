@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-def get_db() -> Generator[sqlite3.Connection, None, None]:
+def get_db() -> Generator[sqlite3.Connection]:
     """Get database connection as a FastAPI dependency.
 
     Uses connection-per-request pattern with explicit cleanup guarantee.

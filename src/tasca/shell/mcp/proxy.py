@@ -29,11 +29,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import httpx
-
 from returns.result import Failure, Result, Success
 
 from tasca.core.mcp_jsonrpc import (
     parse_sse_or_json as _parse_sse_or_json,
+)
+from tasca.core.mcp_jsonrpc import (
     validate_jsonrpc_response as _validate_jsonrpc_response,
 )
 from tasca.shell.mcp.responses import error_response

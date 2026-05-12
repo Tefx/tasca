@@ -10,7 +10,7 @@ Speaker Semantics:
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import NewType
 
 import deal
@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from tasca.core.domain.patron import PatronId
 
 
-class SpeakerKind(str, Enum):
+class SpeakerKind(StrEnum):
     """Kind of speaker in a discussion.
 
     The kind is derived from the patron_id:

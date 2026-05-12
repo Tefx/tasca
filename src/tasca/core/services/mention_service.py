@@ -20,7 +20,6 @@ This module is pure (no I/O) - patron data is passed as parameters.
 
 import re
 from dataclasses import dataclass
-from typing import NewType
 
 import deal
 

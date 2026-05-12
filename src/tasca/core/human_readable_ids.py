@@ -22,12 +22,11 @@ Usage in shell layer:
     )
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 import deal
 
 from tasca.core._word_lists import ADJECTIVES, NOUNS, VERBS
-
 
 # =============================================================================
 # Helper Functions

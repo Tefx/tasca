@@ -4,9 +4,10 @@ Application configuration using pydantic-settings.
 Environment variables can be used to override defaults.
 """
 
-import secrets
 import os
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+import secrets
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from pydantic import Field, model_validator

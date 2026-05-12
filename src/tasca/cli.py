@@ -22,9 +22,10 @@ import subprocess
 import sys
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
+from returns.result import Failure
 
 from tasca.config import settings
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
@@ -34,11 +35,12 @@ from tasca.shell.services.table_id_generator import generate_table_id
 from tasca.shell.skills_cli import cmd_skills_install, cmd_skills_list, cmd_skills_show
 from tasca.shell.storage.saying_repo import list_all_sayings_by_table
 from tasca.shell.storage.table_repo import (
-    create_table as repo_create_table,
-    get_table,
     TableNotFoundError,
+    get_table,
 )
-from returns.result import Failure, Success
+from tasca.shell.storage.table_repo import (
+    create_table as repo_create_table,
+)
 
 # Track if we started the server (for cleanup)
 _started_server_process: subprocess.Popen[str] | None = None
@@ -60,7 +62,7 @@ def get_lan_ip() -> str:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             # Connect to a public DNS server (doesn't send data)
             s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
+            return cast(str, s.getsockname()[0])
     except Exception:
         # Fallback to localhost if detection fails
         return "localhost"
@@ -376,7 +378,7 @@ def create_table_via_rest(
             response = client.post(url, json=payload, headers=headers)
     except httpx.ConnectError as e:
         print(f"Error: Cannot connect to Tasca server at {base_url}", file=sys.stderr)
-        print(f"Make sure the server is running: tasca", file=sys.stderr)
+        print("Make sure the server is running: tasca", file=sys.stderr)
         raise SystemExit(1) from e
     except httpx.TimeoutException as e:
         print(f"Error: Request timed out connecting to {base_url}", file=sys.stderr)
@@ -391,7 +393,7 @@ def create_table_via_rest(
         print(f"Error: API returned {response.status_code}: {detail}", file=sys.stderr)
         raise SystemExit(1)
 
-    return response.json()
+    return cast(dict[str, Any], response.json())
 
 
 # @invar:allow dead_export: Test-only helper, exercised by tests/unit/test_cli.py and tests/integration/test_cli.py
@@ -511,8 +513,8 @@ def create_table_via_mcp(
         if "content" in result:
             for content in result["content"]:
                 if content.get("type") == "text":
-                    return json.loads(content["text"])
-        return result
+                    return cast(dict[str, Any], json.loads(content["text"]))
+        return cast(dict[str, Any], result)
 
     except FileNotFoundError as e:
         print("Error: Cannot find tasca-mcp server", file=sys.stderr)
@@ -579,6 +581,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     # Step 3: Start HTTP server in foreground (blocking mode)
     # Per spec: "Start the FastAPI server (foreground, Ctrl+C to stop)"
     import uvicorn
+
     from tasca.shell.api.app import create_app
 
     # Set the admin token in settings for the server to use
@@ -834,7 +837,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "skills" and not hasattr(args, "func"):
         skills_parser.print_help()
         return 1
-    return args.func(args)
+    return cast(int, args.func(args))
 
 
 if __name__ == "__main__":

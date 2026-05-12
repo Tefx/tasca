@@ -14,13 +14,13 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 
-from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from returns.result import Failure
 
 from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, status
 from tasca.shell.services.operations.table_control import (
     TableControlErrorCode,
     execute_table_control,

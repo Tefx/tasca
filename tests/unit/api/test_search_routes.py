@@ -7,21 +7,19 @@ Uses FastAPI TestClient with an in-memory SQLite database.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
-from typing import Generator
+from collections.abc import Generator
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tasca.core.domain.patron import PatronId
-from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
+from tasca.core.domain.saying import Saying, Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.shell.api.routes.search import router
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.saying_repo import append_saying
 from tasca.shell.storage.table_repo import create_table
-
 
 # =============================================================================
 # Test Fixtures
@@ -29,7 +27,7 @@ from tasca.shell.storage.table_repo import create_table
 
 
 @pytest.fixture
-def test_db() -> Generator[sqlite3.Connection, None, None]:
+def test_db() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with tables schema."""
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     apply_schema(conn)
@@ -42,7 +40,7 @@ def app(test_db: sqlite3.Connection) -> FastAPI:
     """Create a FastAPI app with search router and test database."""
     app = FastAPI()
 
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
+    def get_test_db() -> Generator[sqlite3.Connection]:
         yield test_db
 
     from tasca.shell.api.deps import get_db
@@ -72,7 +70,7 @@ def create_test_table(
     status: TableStatus = TableStatus.OPEN,
 ) -> Table:
     """Create a test table directly in the database."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     table = Table(
         id=TableId(table_id),
         question=question,

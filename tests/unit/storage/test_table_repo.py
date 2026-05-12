@@ -9,7 +9,7 @@ import sqlite3
 from datetime import datetime, timedelta
 
 import pytest
-from returns.result import Failure, Success
+from returns.result import Success
 
 from tasca.core.domain.seat import Seat, SeatId, SeatState
 from tasca.core.domain.table import Table, TableId, TableStatus, Version

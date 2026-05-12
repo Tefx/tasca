@@ -7,7 +7,7 @@ Uses FastAPI TestClient with an in-memory SQLite database.
 from __future__ import annotations
 
 import sqlite3
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 from fastapi import FastAPI
@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from tasca.shell.api.routes.patrons import router
 from tasca.shell.storage.database import apply_schema
-
+from tests.unit.api.error_assertions import assert_detail_error
 
 # =============================================================================
 # Test Fixtures
@@ -23,7 +23,7 @@ from tasca.shell.storage.database import apply_schema
 
 
 @pytest.fixture
-def test_db() -> Generator[sqlite3.Connection, None, None]:
+def test_db() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with patrons schema."""
     # check_same_thread=False is needed for FastAPI TestClient which uses threads
     conn = sqlite3.connect(":memory:", check_same_thread=False)
@@ -38,7 +38,7 @@ def app(test_db: sqlite3.Connection) -> FastAPI:
     app = FastAPI()
 
     # Override the get_db dependency to use test database
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
+    def get_test_db() -> Generator[sqlite3.Connection]:
         yield test_db
 
     from tasca.shell.api.deps import get_db
@@ -145,12 +145,17 @@ class TestRegisterPatron:
         assert data2["is_new"] is True
 
     def test_register_patron_missing_display_name(self, client: TestClient) -> None:
-        """Register with missing display_name returns 422."""
+        """Register with missing display_name returns the standardized REST envelope."""
         response = client.post(
             "/patrons",
             json={"kind": "agent"},
         )
-        assert response.status_code == 422  # Validation error
+        assert response.status_code == 400
+        assert_detail_error(
+            response,
+            code="InvalidRequest",
+            message_contains="display_name (or name for backward compatibility) is required",
+        )
 
 
 # =============================================================================
@@ -165,7 +170,7 @@ class TestGetPatron:
         """Get non-existent patron returns 404."""
         response = client.get("/patrons/nonexistent-id")
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"].lower()
+        assert_detail_error(response, code="PatronNotFound", message_contains="Patron not found")
 
     def test_get_patron_exists(self, client: TestClient) -> None:
         """Get existing patron returns the patron."""

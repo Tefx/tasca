@@ -56,7 +56,7 @@ class ASGIRESTHarness:
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "ASGIRESTHarness":
+    async def __aenter__(self) -> ASGIRESTHarness:
         """Enter async context and create in-process ASGI client."""
         transport = httpx.ASGITransport(app=_fastapi_app)  # type: ignore[arg-type]
         self._client = httpx.AsyncClient(

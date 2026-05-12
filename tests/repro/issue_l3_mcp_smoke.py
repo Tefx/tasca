@@ -15,10 +15,8 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import time
-from pathlib import Path
 
 
 class MCPClient:
@@ -142,7 +140,7 @@ class MCPClient:
                                 try:
                                     data = json.loads(c["text"])
                                     print(f"Result: {json.dumps(data, indent=2)}")
-                                except:
+                                except Exception:
                                     print(f"Result: {c['text'][:500]}")
                     else:
                         print(f"Result: {json.dumps(result, indent=2)}")
@@ -400,7 +398,7 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
         )
 
         if result.get("ok"):
-            print(f"  ✓ Table closed")
+            print("  ✓ Table closed")
 
             # Try to say on closed table
             print("\n[2] TABLE_SAY (on closed table)")
@@ -423,7 +421,7 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
                 else:
                     print(f"  ⚠ Got other error: {error.get('code')}")
             else:
-                print(f"  ✗ Expected error, posting succeeded")
+                print("  ✗ Expected error, posting succeeded")
 
             # Listen should still work on closed table
             print("\n[3] TABLE_LISTEN (on closed table - should work)")
@@ -433,7 +431,7 @@ def test_table_closed(db_path: str, patron_id: str, table_id: str):
 
             listen_works = False
             if result.get("ok"):
-                print(f"  ✓ Listen works on closed table")
+                print("  ✓ Listen works on closed table")
                 listen_works = True
             else:
                 print(f"  ⚠ Listen failed on closed table: {result.get('error')}")
@@ -492,7 +490,7 @@ def test_wait_timeout(db_path: str, table_id: str):
             sayings = result["data"].get("sayings", [])
             print(f"  ✓ Wait returned after {elapsed:.1f}s with {len(sayings)} sayings")
             if len(sayings) == 0:
-                print(f"    (timeout behavior: empty result)")
+                print("    (timeout behavior: empty result)")
         else:
             print(f"  ⚠ Wait failed: {result.get('error')}")
 
@@ -548,7 +546,7 @@ def test_version_conflict(db_path: str, patron_id: str, table_id: str):
         if not result.get("ok"):
             error = result.get("error", {})
             if error.get("code") == "VersionConflict":
-                print(f"  ✓ Got VersionConflict error")
+                print("  ✓ Got VersionConflict error")
                 details = error.get("details", {})
                 print(
                     f"    expected: {details.get('expected_version')}, actual: {details.get('actual_version')}"
@@ -556,7 +554,7 @@ def test_version_conflict(db_path: str, patron_id: str, table_id: str):
             else:
                 print(f"  ⚠ Got other error: {error.get('code')}")
         else:
-            print(f"  ✗ Expected VersionConflict, update succeeded")
+            print("  ✗ Expected VersionConflict, update succeeded")
 
         return client
 
@@ -602,7 +600,7 @@ def test_ambiguous_mention(client: MCPClient, table_id: str, patron_id: str):
     if not result.get("ok"):
         error = result.get("error", {})
         if error.get("code") == "AmbiguousMention":
-            print(f"  ✓ Got AmbiguousMention error")
+            print("  ✓ Got AmbiguousMention error")
             candidates = error.get("details", {}).get("candidates", [])
             print(f"    Candidates: {[c.get('name', c) for c in candidates]}")
         else:
@@ -610,7 +608,7 @@ def test_ambiguous_mention(client: MCPClient, table_id: str, patron_id: str):
     else:
         # Mention might have resolved or been stored as unresolved
         saying = result.get("data", {})
-        print(f"  Post succeeded. Mentions:")
+        print("  Post succeeded. Mentions:")
         print(f"    Resolved: {saying.get('mentions_resolved', [])}")
         print(f"    Unresolved: {saying.get('mentions_unresolved', [])}")
 
@@ -697,7 +695,7 @@ def main():
         print("=" * 70)
 
         print(f"\nDatabase: {db_path}")
-        print(f"\nResults:")
+        print("\nResults:")
         for test_name, result in results.items():
             status = result or "N/A"
             icon = "✓" if result == "PASS" else ("⚠" if result == "PARTIAL" else "✗")

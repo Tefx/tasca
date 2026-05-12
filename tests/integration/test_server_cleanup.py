@@ -12,14 +12,11 @@ The tests use subprocess spawning to verify real-world cleanup behavior.
 
 from __future__ import annotations
 
-import os
 import signal
 import socket
 import subprocess
 import time
-from collections.abc import Generator
 from typing import TYPE_CHECKING
-from unittest.mock import patch
 
 import pytest
 
@@ -38,7 +35,7 @@ from tests.integration.conftest import (
 )
 
 if TYPE_CHECKING:
-    from pytest import MonkeyPatch
+    pass
 
 
 # =============================================================================
@@ -656,7 +653,7 @@ def assert_port_released(port: int, timeout: float = 2.0) -> None:
         AssertionError: If port remains occupied after timeout.
     """
     max_attempts = int(timeout / 0.1)
-    for attempt in range(max_attempts):
+    for _attempt in range(max_attempts):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.1)
         try:
@@ -806,7 +803,7 @@ while True:
         procs = []
         ports = []
 
-        for i in range(2):
+        for _i in range(2):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind(("127.0.0.1", 0))
                 port = s.getsockname()[1]

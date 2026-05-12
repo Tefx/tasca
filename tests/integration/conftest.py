@@ -100,6 +100,7 @@ import signal
 import subprocess
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
 import pytest
@@ -197,7 +198,7 @@ def fixture_admin_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def asgi_app() -> "FastAPI":
+def asgi_app() -> FastAPI:
     """Create a FastAPI app instance for ASGI testing.
 
     This fixture creates the application without starting a server,
@@ -216,7 +217,7 @@ def asgi_app() -> "FastAPI":
 
 
 @pytest.fixture
-def mcp_test_client() -> Generator["TestClient", None, None]:
+def mcp_test_client() -> Generator[TestClient]:
     """Create a test client for MCP HTTP testing with proper lifespan handling.
 
     Uses Starlette TestClient which properly handles FastMCP's Streamable HTTP
@@ -248,7 +249,7 @@ def mcp_test_client() -> Generator["TestClient", None, None]:
 
 
 @pytest_asyncio.fixture
-async def http_client(asgi_app: "FastAPI") -> AsyncGenerator:
+async def http_client(asgi_app: FastAPI) -> AsyncGenerator:
     """Async HTTP client for REST API testing.
 
     Uses httpx ASGI transport for in-process testing without requiring
@@ -288,7 +289,7 @@ async def http_client(asgi_app: "FastAPI") -> AsyncGenerator:
 
 
 @pytest_asyncio.fixture
-async def mcp_http_client(asgi_app: "FastAPI") -> AsyncGenerator:
+async def mcp_http_client(asgi_app: FastAPI) -> AsyncGenerator:
     """MCP client fixture - DEPRECATED: Use mcp_test_client instead.
 
     This fixture is kept for backward compatibility but does not work
@@ -331,13 +332,13 @@ class MCPSession(TypedDict):
         session_id: MCP session ID returned by the server, or None if absent.
     """
 
-    client: "TestClient"
+    client: TestClient
     headers: dict[str, str]
     session_id: str | None
 
 
 @pytest.fixture
-def mcp_session(mcp_test_client: "TestClient") -> Generator[MCPSession, None, None]:
+def mcp_session(mcp_test_client: TestClient) -> Generator[MCPSession]:
     """Provide an initialized MCP session for HTTP transport tests.
 
     Sends the MCP initialize request and extracts the session ID so that
@@ -405,9 +406,6 @@ UPSTREAM_TOKEN = "test-upstream-token"
 #
 # CRITICAL: Signal handlers are registered at MODULE LOAD (not in fixtures)
 # to ensure cleanup works even on early SIGINT/SIGTERM before tests start.
-
-from dataclasses import dataclass
-
 
 @dataclass
 class ProcessInfo:
@@ -483,7 +481,7 @@ def _emergency_cleanup() -> None:
     _cleanup_in_progress = True
 
     try:
-        for pid, info in list(_spawned_processes.items()):
+        for _pid, info in list(_spawned_processes.items()):
             if info.proc.poll() is None:  # Process still running
                 try:
                     _do_kill_process(info, timeout_kill=2.0)
@@ -554,7 +552,7 @@ def _server_lifecycle(
     port: int,
     timeout_terminate: float = 5.0,
     timeout_kill: float = 2.0,
-) -> Generator[subprocess.Popen, None, None]:
+) -> Generator[subprocess.Popen]:
     """Context manager for robust server process lifecycle.
 
     GUARANTEED CLEANUP via finally block - covers all exception paths:

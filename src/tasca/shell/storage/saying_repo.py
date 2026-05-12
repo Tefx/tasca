@@ -12,7 +12,7 @@ All database operations use Result[T, E] for error handling.
 import sqlite3
 import uuid
 from datetime import UTC, datetime
-from typing import NewType
+from typing import Any, NewType
 
 from returns.result import Failure, Result, Success
 
@@ -498,7 +498,7 @@ def get_table_content_bytes(conn: sqlite3.Connection, table_id: str) -> Result[i
 
 # @invar:allow shell_result: saying_repo.py - private helper converts DB row to domain object, not Result
 # @shell_orchestration: Helper for row-to-domain conversion within repository
-def _row_to_saying(row: tuple) -> Saying:
+def _row_to_saying(row: tuple[Any, ...]) -> Saying:
     """Convert a database row to a Saying domain object.
 
     Args:

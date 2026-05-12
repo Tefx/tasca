@@ -12,7 +12,7 @@ Shell Layer Contract:
 from __future__ import annotations
 
 import sqlite3
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 
@@ -80,7 +80,7 @@ def _run_export_or_raise(
     """Run shared export operation and map typed failures to HTTP errors."""
     result = export_table(conn, table_id, format)
     if isinstance(result, Success):
-        return result.unwrap()
+        return cast(TableExportOperationResult, result.unwrap())
     failure = result.failure()
     if failure.status == "not_found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=failure.error)

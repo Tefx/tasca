@@ -17,15 +17,14 @@ Test categories:
 import pytest
 
 from tasca.core.svg_sanitizer import (
+    SanitizationResult,
     is_allowed_attribute,
     is_allowed_element,
     is_event_handler_attribute,
     is_external_reference,
     sanitize_svg,
     sanitize_svg_content,
-    SanitizationResult,
 )
-
 
 # =============================================================================
 # Test Case Corpus - Attack Vectors
@@ -884,7 +883,7 @@ def test_corpus_summary() -> None:
         + len(EDGE_CASE_ATTACKS)
     )
 
-    print(f"\n=== TEST CORPUS SUMMARY ===")
+    print("\n=== TEST CORPUS SUMMARY ===")
     print(f"XSS Script Attacks: {len(XSS_SCRIPT_ATTACKS)}")
     print(f"XSS Event Handler Attacks: {len(XSS_EVENT_HANDLER_ATTACKS)}")
     print(f"XSS JavaScript URL Attacks: {len(XSS_JAVASCRIPT_URL_ATTACKS)}")

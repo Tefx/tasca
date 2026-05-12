@@ -14,7 +14,7 @@ from typing import Any
 
 from returns.result import Failure, Result, Success
 
-from tasca.core.domain.table import Table, TableStatus, Version
+from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.shell.services.table_id_generator import TableIdGenerationError, generate_table_id
 from tasca.shell.storage.table_repo import TableError, create_table
 
@@ -107,7 +107,7 @@ def create_discussion_table(
     if resolved_question is None:
         return Failure(TableCreateError(
             Table(
-                id="",
+                id=TableId(""),
                 question="",
                 context=context,
                 status=TableStatus.OPEN,

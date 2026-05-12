@@ -9,7 +9,7 @@ server registration. Runtime handlers and transport behavior remain in
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final, cast
 
 from pydantic import Field
 from pydantic.fields import FieldInfo
@@ -464,7 +464,7 @@ def tool_contract(tool_name: str) -> ToolContract:
 
 
 # @invar:allow shell_result: Declarative MCP metadata lookup for runtime defaults, not an I/O boundary.
-def parameter_default(tool_name: str, parameter_name: str) -> object | None:
+def parameter_default(tool_name: str, parameter_name: str) -> Any:
     """Return the runtime default from centralized MCP parameter metadata.
 
     >>> parameter_default("table_join", "history_limit")
@@ -483,4 +483,4 @@ def parameter_field(tool_name: str, parameter_name: str) -> FieldInfo:
     'MCP-spec table title; required unless legacy question is provided'
     """
     parameter = parameter_contract(tool_name, parameter_name)
-    return Field(description=parameter.description)
+    return cast(FieldInfo, Field(description=parameter.description))

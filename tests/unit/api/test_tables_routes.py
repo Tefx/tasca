@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from typing import Generator
+from collections.abc import Generator
 from unittest.mock import patch
 
 import pytest
@@ -17,15 +17,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from tasca.core.domain.table import TableId, TableStatus, Version
-from tasca.shell.api.routes.tables import DeleteResponse, router
+from tasca.shell.api.routes.tables import router
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.table_repo import (
-    TableNotFoundError,
-    VersionConflictError,
     create_table,
-    get_table,
 )
-
+from tests.unit.api.error_assertions import assert_detail_error
 
 # =============================================================================
 # Test Fixtures
@@ -33,7 +30,7 @@ from tasca.shell.storage.table_repo import (
 
 
 @pytest.fixture
-def test_db() -> Generator[sqlite3.Connection, None, None]:
+def test_db() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with tables schema."""
     # check_same_thread=False is needed for FastAPI TestClient which uses threads
     conn = sqlite3.connect(":memory:", check_same_thread=False)
@@ -48,7 +45,7 @@ def app(test_db: sqlite3.Connection) -> FastAPI:
     app = FastAPI()
 
     # Override the get_db dependency to use test database
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
+    def get_test_db() -> Generator[sqlite3.Connection]:
         yield test_db
 
     app.dependency_overrides["get_db"] = get_test_db
@@ -147,12 +144,17 @@ class TestCreateTable:
         assert data["context"] is None
 
     def test_create_table_missing_question(self, admin_client: TestClient) -> None:
-        """Create table with missing question returns 422."""
+        """Create table with missing title/question returns standardized REST error."""
         response = admin_client.post(
             "/tables",
             json={"context": "No question provided"},
         )
-        assert response.status_code == 422  # Validation error
+        assert response.status_code == 400
+        assert_detail_error(
+            response,
+            code="InvalidRequest",
+            message_contains="Either title or question is required",
+        )
 
 
 # =============================================================================

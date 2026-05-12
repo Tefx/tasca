@@ -12,28 +12,25 @@ Tests cover:
 
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from returns.result import Failure, Success
 
-from tasca.core.domain.patron import PatronId
-from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
+from tasca.core.domain.saying import Saying, SayingId, SpeakerKind
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.search_repo import (
-    SearchError,
     SearchResult,
     TableSearchHit,
+    _row_to_search_result,
+    _row_to_table_hit,
+    _truncate_snippet,
     count_search_results,
     count_table_search_results,
     rebuild_fts_index,
     search_sayings,
     search_tables,
-    _row_to_search_result,
-    _row_to_table_hit,
-    _truncate_snippet,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -55,7 +52,7 @@ def seed_data(memory_db: sqlite3.Connection) -> dict:
 
     Returns a dict with table_ids and saying_ids for reference.
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Create two tables
     table_1_id = str(uuid.uuid4())
@@ -578,7 +575,7 @@ class TestRowToSearchResult:
 
     def test_converts_row_correctly(self) -> None:
         """Row is converted to SearchResult correctly."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         row = (
             "saying-123",  # saying_id
             "table-456",  # table_id
@@ -607,7 +604,7 @@ class TestRowToSearchResult:
 
     def test_handles_null_snippet(self) -> None:
         """Null snippet falls back to content prefix."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         row = (
             "saying-123",
             "table-456",

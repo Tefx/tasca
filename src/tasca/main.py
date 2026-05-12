@@ -11,9 +11,9 @@ import sys
 
 import uvicorn
 
+from tasca.cli import get_lan_ip
 from tasca.config import settings
 from tasca.shell.api.app import create_app
-from tasca.cli import get_lan_ip
 
 # CLI subcommands that should be delegated to the CLI handler
 CLI_COMMANDS = {"new", "mcp", "version", "skills"}
@@ -76,7 +76,7 @@ def main() -> None:
     print(f"  Token:   {token}")
     print()
     print("  ── Paste to agent ──────────────────────────────────────────")
-    print(f'  Tasca MCP server is running.')
+    print('  Tasca MCP server is running.')
     print(f"  connect(url=\"http://{lan_ip}:{port}/mcp/\", token=\"{token}\")")
     print("  ────────────────────────────────────────────────────────────")
     print()

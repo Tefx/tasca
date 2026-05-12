@@ -9,7 +9,6 @@ from typing import Any, NewType
 
 from pydantic import BaseModel, Field
 
-
 PatronId = NewType("PatronId", str)
 
 

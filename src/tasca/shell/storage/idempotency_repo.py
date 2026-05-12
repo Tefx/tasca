@@ -11,7 +11,7 @@ All database operations use Result[T, E] for error handling.
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, NewType
 
 from pydantic import BaseModel
@@ -78,7 +78,7 @@ def check_idempotency_key(
         >>> conn.close()
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     try:
         cursor = conn.execute(
@@ -154,7 +154,7 @@ def store_idempotency_key(
         >>> conn.close()
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     from datetime import timedelta
 
@@ -214,7 +214,7 @@ def cleanup_expired_idempotency_keys(
         >>> conn.close()
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     try:
         cursor = conn.execute(

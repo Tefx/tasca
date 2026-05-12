@@ -9,12 +9,12 @@ from __future__ import annotations
 import sqlite3
 from typing import Annotated
 
-from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-from returns.result import Failure, Success
+from pydantic import BaseModel
+from returns.result import Failure
 
 from tasca.core.domain.table import TableStatus
 from tasca.shell.api.deps import get_db
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query
 from tasca.shell.storage.search_repo import count_table_search_results, search_tables
 
 router = APIRouter()

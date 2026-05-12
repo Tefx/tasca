@@ -14,7 +14,6 @@ from fastapi.testclient import TestClient
 from tasca.config import Settings
 from tasca.shell.api.app import CSPMiddleware
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================

@@ -567,13 +567,13 @@ def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> d
         return success_response({"tables": tables, "total": len(tables)})
 
     # For other statuses, use list_tables and filter
-    result = list_tables(conn)
+    table_result = list_tables(conn)
 
-    if isinstance(result, Failure):
-        error = result.failure()
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
         return error_response("DATABASE_ERROR", f"Failed to list tables: {error}")
 
-    all_tables = result.unwrap()
+    all_tables = table_result.unwrap()
 
     if status == "all":
         filtered = all_tables
@@ -678,7 +678,7 @@ def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | 
     if isinstance(existing_result, Success):
         existing_patron = existing_result.unwrap()
         if existing_patron is not None:
-            return existing_patron.id
+            return str(existing_patron.id)
     # Create new patron
     new_id = PatronId(str(uuid.uuid4()))
     now = datetime.now(UTC)
@@ -693,8 +693,8 @@ def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | 
     create_result = create_patron(conn, patron)
     if isinstance(create_result, Success):
         created = create_result.unwrap()
-        return created.id
-    return new_id  # Use the generated ID even if store failed
+        return str(created.id)
+    return str(new_id)  # Use the generated ID even if store failed
 
 
 # @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result

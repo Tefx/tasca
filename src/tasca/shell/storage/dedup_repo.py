@@ -13,7 +13,7 @@ All database operations use Result[T, E] for error handling.
 
 import random
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import NewType
 
 from pydantic import BaseModel
@@ -127,7 +127,7 @@ def store_dedup(
         >>> conn.close()
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     now_str = now.isoformat()
 
     try:
@@ -213,7 +213,7 @@ def store_or_get_existing(
     """
     # Compute hash and preview (pure function from core)
     content_hash, content_preview = compute_hash_and_preview(content)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     now_str = now.isoformat()
 
     try:
@@ -298,7 +298,7 @@ def check_duplicate_with_expiry(
         >>> conn.close()
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     try:
         cursor = conn.execute(
@@ -365,7 +365,7 @@ def cleanup_expired_dedup_entries(
         >>> conn.close()
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     cutoff = calculate_dedup_cutoff_time(now, ttl_seconds)
     cutoff_str = format_cutoff_for_sql(cutoff)
@@ -495,7 +495,7 @@ def store_or_get_existing_with_expiry(
         >>> conn.close()
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     # Opportunistic cleanup (ignore errors - not critical)
     if enable_opportunistic_cleanup:
@@ -532,7 +532,7 @@ def store_or_get_existing_with_expiry(
 
 # @invar:allow shell_result: Private helper converting DB row to domain object
 # @shell_orchestration: Helper for row-to-domain conversion within repository
-def _row_to_dedup_record(row: tuple) -> DedupRecord:
+def _row_to_dedup_record(row: tuple[str, str, str]) -> DedupRecord:
     """Convert a database row to a DedupRecord domain object.
 
     Args:

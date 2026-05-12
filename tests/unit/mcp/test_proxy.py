@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-
 from returns.result import Success
 
 from tasca.shell.mcp.proxy import (
@@ -228,7 +227,6 @@ class TestGlobalConfigFunctions:
 
     def test_switch_to_remote_modifies_global(self) -> None:
         """switch_to_remote modifies the global config."""
-        from tasca.shell.mcp import proxy as proxy_module
 
         try:
             switch_to_remote("http://api.example.com", "secret")
@@ -244,7 +242,6 @@ class TestGlobalConfigFunctions:
 
     def test_switch_to_local_modifies_global(self) -> None:
         """switch_to_local resets the global config."""
-        from tasca.shell.mcp import proxy as proxy_module
 
         try:
             switch_to_remote("http://api.example.com", "secret")

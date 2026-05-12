@@ -27,7 +27,6 @@ import os
 import subprocess
 import tempfile
 import uuid
-from typing import Any
 
 
 class MCPClient:
@@ -209,8 +208,8 @@ def test_table_closed_error(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ✗ FAIL: table_say succeeded on closed table")
-            print(f"    This violates spec - writes to closed tables MUST be rejected")
+            print("  ✗ FAIL: table_say succeeded on closed table")
+            print("    This violates spec - writes to closed tables MUST be rejected")
             return "FAIL"
 
         error = result.get("error", {})
@@ -223,7 +222,7 @@ def test_table_closed_error(db_path: str):
             print(f"    Message: {error_msg[:80]}")
         else:
             print(f"  ⚠ Got unexpected error code: {error_code}")
-            print(f"    Expected: OPERATION_NOT_ALLOWED or TableClosed")
+            print("    Expected: OPERATION_NOT_ALLOWED or TableClosed")
             print(f"    Message: {error_msg[:80]}")
             # Still pass if it's an error, just unexpected code
             if result.get("ok") is False:
@@ -233,9 +232,9 @@ def test_table_closed_error(db_path: str):
         print("\n[3] Verifying read operations on closed table")
         result = client.tool("table_get", {"table_id": table_id})
         if result.get("ok"):
-            print(f"  ✓ table_get works on closed table (expected)")
+            print("  ✓ table_get works on closed table (expected)")
         else:
-            print(f"  ✗ FAIL: table_get failed on closed table")
+            print("  ✗ FAIL: table_get failed on closed table")
             print(f"    Error: {result.get('error')}")
             return "FAIL"
 
@@ -244,9 +243,9 @@ def test_table_closed_error(db_path: str):
             {"table_id": table_id, "since_sequence": -1, "limit": 10},
         )
         if result.get("ok"):
-            print(f"  ✓ table_listen works on closed table (expected)")
+            print("  ✓ table_listen works on closed table (expected)")
         else:
-            print(f"  ✗ FAIL: table_listen failed on closed table")
+            print("  ✗ FAIL: table_listen failed on closed table")
             print(f"    Error: {result.get('error')}")
             return "FAIL"
 
@@ -263,10 +262,10 @@ def test_table_closed_error(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ⚠ Warning: table_control succeeded on closed table")
-            print(f"    Spec says closed is terminal - control should fail")
+            print("  ⚠ Warning: table_control succeeded on closed table")
+            print("    Spec says closed is terminal - control should fail")
         else:
-            print(f"  ✓ table_control rejected on closed table (expected)")
+            print("  ✓ table_control rejected on closed table (expected)")
 
         print("\n✓ PASS: TableClosed error path verified")
         return "PASS"
@@ -329,7 +328,7 @@ def test_dedup_id_collision(db_path: str):
         print(f"  ✓ First write: saying_id={first_saying_id[:8]}..., seq={first_sequence}")
 
         # Step 2: Second write with SAME dedup_id (idempotent)
-        print(f"\n[2] Second table_say with SAME dedup_id")
+        print("\n[2] Second table_say with SAME dedup_id")
         result = client.tool(
             "table_say",
             {
@@ -343,7 +342,7 @@ def test_dedup_id_collision(db_path: str):
 
         if not result.get("ok"):
             # Dedup might not be implemented - that's okay for v0.1
-            print(f"  ⚠ Second write returned error (dedup may not be implemented)")
+            print("  ⚠ Second write returned error (dedup may not be implemented)")
             print(f"    Error: {result.get('error')}")
             print("    (Treating as PASS - dedup is optional feature)")
             return "PARTIAL"
@@ -355,9 +354,9 @@ def test_dedup_id_collision(db_path: str):
         # Step 3: Verify idempotency
         print("\n[3] Verifying idempotency")
         if first_saying_id == second_saying_id and first_sequence == second_sequence:
-            print(f"  ✓ PASS: Idempotent - same saying_id and sequence")
+            print("  ✓ PASS: Idempotent - same saying_id and sequence")
         else:
-            print(f"  ⚠ Different results - dedup may not be enforcing idempotency")
+            print("  ⚠ Different results - dedup may not be enforcing idempotency")
             print(f"    First:  id={first_saying_id}, seq={first_sequence}")
             print(f"    Second: id={second_saying_id}, seq={second_sequence}")
             # This is a partial pass - dedup works but creates new saying
@@ -375,11 +374,11 @@ def test_dedup_id_collision(db_path: str):
             dedup_sayings = [s for s in sayings if "dedup" in s.get("content", "").lower()]
             print(f"  Found {len(sayings)} total sayings, {len(dedup_sayings)} with dedup keyword")
             if len(dedup_sayings) == 1:
-                print(f"  ✓ Only one saying created (dedup worked)")
+                print("  ✓ Only one saying created (dedup worked)")
             elif len(dedup_sayings) == 0:
-                print(f"  ⚠ No dedup sayings found (different content was posted)")
+                print("  ⚠ No dedup sayings found (different content was posted)")
             else:
-                print(f"  ⚠ Multiple dedup sayings - idempotency not enforced")
+                print("  ⚠ Multiple dedup sayings - idempotency not enforced")
 
         return "PASS" if first_saying_id == second_saying_id else "PARTIAL"
 
@@ -433,7 +432,7 @@ def test_content_limits_exceeded(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ⚠ Large content accepted - limits may not be enforced")
+            print("  ⚠ Large content accepted - limits may not be enforced")
             print(f"    Content size: {len(large_content)} bytes")
             print("    (Treating as PARTIAL - limits are server-configurable")
         else:
@@ -463,7 +462,7 @@ def test_content_limits_exceeded(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ✓ Normal content accepted")
+            print("  ✓ Normal content accepted")
         else:
             print(f"  ✗ Normal content rejected: {result.get('error')}")
             return "FAIL"
@@ -485,7 +484,7 @@ def test_content_limits_exceeded(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ⚠ Many mentions accepted - mention limits may not be set")
+            print("  ⚠ Many mentions accepted - mention limits may not be set")
             unresolved = result["data"].get("mentions_unresolved", [])
             print(f"    Unresolved mentions: {len(unresolved)}")
         else:
@@ -547,7 +546,7 @@ def test_invalid_request(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ⚠ Request succeeded without patron_id - validation may be lenient")
+            print("  ⚠ Request succeeded without patron_id - validation may be lenient")
         else:
             error = result.get("error", {})
             error_code = error.get("code") if isinstance(error, dict) else str(error)
@@ -568,7 +567,7 @@ def test_invalid_request(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ⚠ Request succeeded - human with patron_id allowed (lenient)")
+            print("  ⚠ Request succeeded - human with patron_id allowed (lenient)")
         else:
             error = result.get("error", {})
             error_code = error.get("code") if isinstance(error, dict) else str(error)
@@ -585,7 +584,7 @@ def test_invalid_request(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ⚠ Request succeeded without table identifier")
+            print("  ⚠ Request succeeded without table identifier")
         else:
             error = result.get("error", {})
             error_code = error.get("code") if isinstance(error, dict) else str(error)
@@ -683,14 +682,14 @@ def test_paused_table_behavior(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ✓ table_say succeeded while paused (soft enforcement allowed)")
-            print(f"    Spec v0.1: Server MAY accept table.say while paused")
+            print("  ✓ table_say succeeded while paused (soft enforcement allowed)")
+            print("    Spec v0.1: Server MAY accept table.say while paused")
         else:
             error = result.get("error", {})
             error_code = error.get("code") if isinstance(error, dict) else str(error)
             if error_code in ("OPERATION_NOT_ALLOWED", "InvalidState"):
                 print(f"  ✓ table_say rejected with: {error_code}")
-                print(f"    Server implements hard enforcement (optional in v0.1)")
+                print("    Server implements hard enforcement (optional in v0.1)")
             else:
                 print(f"  ⚠ table_say rejected with: {error_code}")
 
@@ -698,7 +697,7 @@ def test_paused_table_behavior(db_path: str):
         print("\n[4] Verifying read operations work while paused")
         result = client.tool("table_get", {"table_id": table_id})
         if result.get("ok"):
-            print(f"  ✓ table_get works while paused (expected)")
+            print("  ✓ table_get works while paused (expected)")
         else:
             print(f"  ✗ table_get failed while paused: {result.get('error')}")
             return "FAIL"
@@ -708,7 +707,7 @@ def test_paused_table_behavior(db_path: str):
             {"table_id": table_id, "since_sequence": -1, "limit": 10},
         )
         if result.get("ok"):
-            print(f"  ✓ table_listen works while paused (expected)")
+            print("  ✓ table_listen works while paused (expected)")
         else:
             print(f"  ✗ table_listen failed while paused: {result.get('error')}")
             return "FAIL"
@@ -746,7 +745,7 @@ def test_paused_table_behavior(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ✓ table_say succeeded after resume")
+            print("  ✓ table_say succeeded after resume")
         else:
             print(f"  ✗ table_say failed after resume: {result.get('error')}")
             return "FAIL"
@@ -843,8 +842,8 @@ def test_version_conflict(db_path: str):
         )
 
         if result.get("ok"):
-            print(f"  ✗ FAIL: Update with stale version succeeded")
-            print(f"    Optimistic concurrency not enforced!")
+            print("  ✗ FAIL: Update with stale version succeeded")
+            print("    Optimistic concurrency not enforced!")
             return "FAIL"
 
         error = result.get("error", {})

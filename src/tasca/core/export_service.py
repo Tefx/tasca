@@ -55,7 +55,7 @@ class TableExport(BaseModel):
     """
 
     type: str = "table"
-    table: dict
+    table: dict[str, Any]
 
 
 class SayingExport(BaseModel):
@@ -67,7 +67,7 @@ class SayingExport(BaseModel):
     """
 
     type: str = "saying"
-    saying: dict
+    saying: dict[str, Any]
 
 
 # =============================================================================

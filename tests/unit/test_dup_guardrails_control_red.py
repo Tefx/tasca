@@ -24,7 +24,6 @@ from tasca.shell.api.routes.tables import router as tables_router
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.table_repo import create_table
 
-
 # Exact documented HTTP control payload shape from docs/tasca-http-api-v0.1.md
 # section 3, Tables: body: {"action", "reason?", "dedup_id"}.  This fixture
 # intentionally has no convenience-only speaker_name field.
@@ -38,7 +37,7 @@ CANONICAL_CONTROL_CONTENT = "**CONTROL: CLOSE**\n\nReason: Completed"
 
 
 @pytest.fixture
-def conn() -> Generator[sqlite3.Connection, None, None]:
+def conn() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with the full schema."""
     db = sqlite3.connect(":memory:", check_same_thread=False)
     apply_schema(db)
@@ -67,7 +66,7 @@ def _tables_client(db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> T
     monkeypatch.setattr(settings, "admin_token", "test-admin-token")
     app = FastAPI()
 
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
+    def get_test_db() -> Generator[sqlite3.Connection]:
         yield db
 
     app.dependency_overrides[get_db] = get_test_db
@@ -83,7 +82,7 @@ def _sayings_client(db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(settings, "admin_token", "test-admin-token")
     app = FastAPI()
 
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
+    def get_test_db() -> Generator[sqlite3.Connection]:
         yield db
 
     app.dependency_overrides[get_db] = get_test_db
@@ -175,7 +174,7 @@ def test_rest_and_mcp_control_reason_format_converges_on_canonical_rule(
         "SELECT table_id, content FROM sayings WHERE table_id IN (?, ?) ORDER BY table_id",
         ("mcp-format-table", "rest-format-table"),
     ).fetchall()
-    contents = {table_id: content for table_id, content in rows}
+    contents = dict(rows)
 
     assert contents["rest-format-table"] == CANONICAL_CONTROL_CONTENT
     assert contents["mcp-format-table"] == CANONICAL_CONTROL_CONTENT

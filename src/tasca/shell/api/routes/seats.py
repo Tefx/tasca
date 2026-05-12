@@ -12,9 +12,8 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from returns.result import Failure, Success
+from returns.result import Failure
 
 from tasca.core.domain.seat import Seat, SeatId
 from tasca.core.services.seat_service import (
@@ -23,14 +22,17 @@ from tasca.core.services.seat_service import (
     filter_active_seats,
 )
 from tasca.shell.api.deps import get_db
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from tasca.shell.storage.seat_repo import (
     SeatNotFoundError,
     find_seats_by_table,
+)
+from tasca.shell.storage.seat_repo import (
     heartbeat_seat as repo_heartbeat_seat,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    pass
 
 router = APIRouter()
 

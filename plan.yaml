@@ -32575,11 +32575,20 @@ phases:
       A BLOCK decision here must name exactly which ownership seam is still unsafe.'
     verification: '- All foundation steps completed successfully
 
-      - Wiring audit passed or blocker issues were remediated in-phase
+      - Aggregated retest step retest-foundation-conformance-wiring is OPEN/PASS and
+      proves closure for both failed reports: dup_foundation.spec-conformance and
+      dup_foundation.wiring-audit
 
-      - Spec conformance has no unresolved blocker-class divergence
+      - No unresolved blocker-class divergence remains for patron.register dedup/idempotency,
+      table.create shape/defaults, Markdown export format, MCP ParameterContract defaults,
+      stale-version/concurrent control proof, shared-op runtime adoption, tool_contracts
+      runtime consumption, or dead_export hatch density
 
-      - Ready for dup_adoption'
+      - Batch-delete spec ambiguity has explicit clarification ownership or non-intersection
+      proof
+
+      - Ready for dup_adoption only after the aggregated retest provides a structured
+      gate decision basis'
     evidence_template: '## refs Read Confirmation (MANDATORY)
 
 

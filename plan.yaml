@@ -35893,7 +35893,7 @@ phases:
     claimed_at: '2026-05-12T18:46:38.908282+00:00'
   - id: dup_adoption.liveness-probe
     name: Liveness probe for REST and MCP runtime surfaces
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -35991,6 +35991,45 @@ phases:
     agent: blind-tester-tacit
     claimed_by: blind-tester-tacit
     claimed_at: '2026-05-12T18:46:29.344593+00:00'
+    done_at: '2026-05-12T19:00:45.172577+00:00'
+    evidence: "## Verification Report\n\n**Tester**: blind-tester-tacit\n**Scope**:\
+      \ REST + MCP liveness probe\n**Independence Level**: L2\n\n### refs Read Confirmation\
+      \ (MANDATORY)\nNo refs for this step.\n\n### Test Execution\n- Launch commands:\n\
+      \  - REST: `TASCA_DB_PATH=/tmp/tasca_liveness_rest_success_24078/rest.db TASCA_ADMIN_TOKEN=tk_liveness_rest\
+      \ TASCA_API_HOST=127.0.0.1 TASCA_API_PORT=8765 .venv/bin/tasca`\n  - MCP: `TASCA_DB_PATH=/tmp/tasca_liveness_mcp_success.db\
+      \ .venv/bin/tasca-mcp` via FastMCP stdio client\n- Invocation commands:\n  -\
+      \ REST port probe: `lsof -nP -iTCP:8765 -sTCP:LISTEN`\n  - REST requests: `POST\
+      \ /api/v1/patrons`, `POST /api/v1/tables`, `POST /api/v1/tables/{table_id}/sayings`,\
+      \ `POST /api/v1/tables/{table_id}/control`, `GET /api/v1/tables/{table_id}/export/markdown`\n\
+      \  - MCP tool calls: `list_tools`, `patron_register`, `table_create`, `table_say`,\
+      \ `table_control`, `table_export`\n- Actual output:\n```text\nREST port bound:\
+      \ Python process listening on 127.0.0.1:8765\nPOST /api/v1/patrons -> 200\n\
+      POST /api/v1/tables -> 200 active-lion-glides status=open\nPOST /api/v1/tables/active-lion-glides/sayings\
+      \ -> 201 sequence=0 content=\"hello through REST\"\nPOST /api/v1/tables/active-lion-glides/control\
+      \ -> 200 table_status=paused control_saying_sequence=1\nGET /api/v1/tables/active-lion-glides/export/markdown\
+      \ -> 200 transcript includes hello through REST and CONTROL: PAUSE\nMCP stdio\
+      \ started tasca server; list_tools included patron/table/control tools\npatron_register/table_create/table_say/table_control/table_export\
+      \ -> ok=true; export transcript includes hello through MCP stdio and CONTROL:\
+      \ PAUSE\n```\n\n### Verdict\n- REST runnable: PASS\n- MCP runnable: PASS\n-\
+      \ End-to-end entrypoint path reached: PASS\n\n### Closure Fields\n**Headline**:\
+      \ PASS\n**Blocking Status**: CLOSED\n**Proof-Gap Status**: NONE\n**Verdict**:\
+      \ PASS\n**Blockers**: []\n**Orchestrator Action Hint**: COMPLETE\n\nstep_intent:\
+      \ verification\nexpected_result: green\nobserved_result: REST server bound a\
+      \ real TCP port and accepted patron/table/saying/control/export requests; MCP\
+      \ stdio server started through its declared command, registered tools, and accepted\
+      \ patron/table/say/control/export calls.\nfailure_alignment: none\nverdict:\
+      \ PASS\nblockers: []\norchestrator_action_hint: COMPLETE\nproduct_implementation_files_modified:\
+      \ no\nCommit hash(es): none\nbehavioral_proof_register:\n  - behavior: REST\
+      \ server starts and binds declared transport\n    proof_status: PROVEN\n  -\
+      \ behavior: REST accepts documented operations\n    proof_status: PROVEN\n \
+      \ - behavior: MCP server starts through real registration path\n    proof_status:\
+      \ PROVEN\n  - behavior: MCP accepts documented operations\n    proof_status:\
+      \ PROVEN\n  - behavior: end-to-end entrypoint path after tool-contract adoption\n\
+      \    proof_status: PROVEN\ngate_open_allowed: true\nuncertainty_sources: []\n\
+      \n## Mainline Merge/Verification Barrier\n- Branch `vectl/step-dup_adoption.liveness-probe`\
+      \ was clean and verification-only.\n- `git merge --squash vectl/step-dup_adoption.liveness-probe`\
+      \ reported `Already up to date. (nothing to squash)`, so no product delta required\
+      \ a new mainline commit."
   - id: dup_adoption.spec-conformance
     name: Verify adopted transports against HTTP/MCP specs
     status: claimed

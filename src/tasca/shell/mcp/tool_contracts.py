@@ -236,7 +236,7 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
             P("speaker_kind", "Speaker type: 'agent' (default) or 'human'", False, "agent"),
             P(
                 "patron_id",
-                "Patron UUID; required for agents. If omitted with speaker_kind='agent', auto-registers using speaker_name",
+                "Patron UUID; required for agents; must be omitted/null for humans",
                 False,
                 None,
             ),

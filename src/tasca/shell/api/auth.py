@@ -79,7 +79,7 @@ def _get_bearer_scheme() -> "HTTPBearer":
     return HTTPBearer(
         scheme_name="bearerAuth",
         description="Admin Bearer token authentication",
-        auto_error=True,  # Returns 401 when no Bearer token is provided
+        auto_error=False,  # verify_admin_token shapes all auth failures consistently
     )
 
 
@@ -141,9 +141,11 @@ async def verify_admin_token(
     # Validate token using constant-time comparison (never log or print the token value)
     token = credentials.credentials if credentials else None
     if not validate_bearer_token(token, settings.admin_token):
+        from tasca.shell.api.errors import error_envelope
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing token",
+            detail=error_envelope("PermissionDenied", "Invalid or missing token"),
         )
 
     # Valid token - return None to allow request to proceed

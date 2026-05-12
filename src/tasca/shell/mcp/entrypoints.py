@@ -175,7 +175,38 @@ def _limits_config_from_settings() -> LimitsConfig:
     """Implementation detail for MCP tool behavior."""
     from tasca.config import settings as _settings  # Lazy import for test monkeypatching
 
-    return settings_to_limits_config(_settings)
+    config = settings_to_limits_config(_settings)
+    if config.max_content_length is None:
+        return LimitsConfig(
+            max_sayings_per_table=config.max_sayings_per_table,
+            max_content_length=65536,
+            max_bytes_per_table=config.max_bytes_per_table,
+            max_mentions_per_saying=config.max_mentions_per_saying,
+        )
+    return config
+
+
+# @invar:allow shell_result: MCP authorization preflight maps table state to protocol error envelopes.
+# @shell_orchestration: Permission preflight requires DB lookup before mutation in MCP adapter.
+# @shell_complexity: Auth, not-found, database, and denial branches are kept before mutation for atomicity.
+def _authorize_table_mutation(conn: Any, table_id: str, patron_id: str | None) -> dict[str, Any] | None:
+    """Allow table creator or human-admin (no patron_id) to control/update a table."""
+    if patron_id is None:
+        return None
+    table_result = get_table(conn, TableId(table_id))
+    if isinstance(table_result, Failure):
+        error = table_result.failure()
+        if isinstance(error, TableNotFoundError):
+            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+    table = table_result.unwrap()
+    if table.creator_patron_id == patron_id or patron_id in table.host_ids:
+        return None
+    return error_response(
+        "PERMISSION_DENIED",
+        "Actor is not authorized to control or update this table",
+        {"table_id": table_id, "patron_id": patron_id},
+    )
 
 
 # =============================================================================
@@ -502,17 +533,7 @@ def table_get(table_id: str) -> dict[str, Any]:
         return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
 
     table = result.unwrap()
-    return success_response(
-        {
-            "id": table.id,
-            "question": table.question,
-            "context": table.context,
-            "status": table.status.value,
-            "version": table.version,
-            "created_at": table.created_at.isoformat(),
-            "updated_at": table.updated_at.isoformat(),
-        }
-    )
+    return success_response(_build_table_dict(table))
 
 
 # Valid status filters for table_list
@@ -608,7 +629,7 @@ def table_delete_batch(ids: list[str]) -> dict[str, Any]:
 
     log_batch_table_delete(logger, deleted_ids, "mcp")
 
-    return success_response({"deleted_ids": deleted_ids})
+    return success_response({"deleted_count": len(deleted_ids), "failed": [], "deleted_ids": deleted_ids})
 
 
 # Valid export formats
@@ -677,6 +698,7 @@ def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | 
 
 
 # @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
+# @shell_complexity: Centralized adapter maps each shared table_say failure family to public MCP codes.
 def _table_say_error_to_mcp_response(error: TableSayError) -> dict[str, Any]:
     """Map shared table_say errors to the legacy MCP response envelope."""
     if error.kind == TableSayErrorKind.TABLE_NOT_FOUND:
@@ -688,10 +710,10 @@ def _table_say_error_to_mcp_response(error: TableSayError) -> dict[str, Any]:
             {"table_status": error.table_status},
         )
     if error.kind == TableSayErrorKind.INVALID_SPEAKER:
-        details: dict[str, Any] = {"speaker_kind": error.speaker_kind}
+        speaker_details: dict[str, Any] = {"speaker_kind": error.speaker_kind}
         if error.patron_id is not None:
-            details["patron_id"] = error.patron_id
-        return error_response("INVALID_REQUEST", error.message, details)
+            speaker_details["patron_id"] = error.patron_id
+        return error_response("INVALID_REQUEST", error.message, speaker_details)
     if error.kind == TableSayErrorKind.PATRON_NOT_FOUND:
         return error_response("NOT_FOUND", error.message)
     if error.kind == TableSayErrorKind.LIMIT_EXCEEDED and error.limit_error is not None:
@@ -803,11 +825,7 @@ def table_say(
             extra=table_say_compat_metadata,
         )
 
-    # Auto-register patron if agent calls table_say without patron_id.
     actual_speaker_kind = speaker_kind
-    if speaker_kind == "agent" and patron_id is None:
-        patron_id = _auto_register_patron_for_say(conn, speaker_name)
-
     validation_error = validate_table_say_speaker_constraints(actual_speaker_kind, patron_id)
     if validation_error is not None:
         return _table_say_error_to_mcp_response(validation_error)
@@ -823,6 +841,13 @@ def table_say(
     if should_return and cached_response is not None:
         return cached_response
 
+    # Resolve mentions before append so ambiguity cannot persist a saying.
+    mentions_all, mentions_resolved, mentions_unresolved, mentions_error = (
+        _resolve_mentions_for_say(conn, mentions)
+    )
+    if mentions_error is not None:
+        return mentions_error
+
     result = append_saying_operation(
         conn,
         table_id=table_id,
@@ -837,13 +862,6 @@ def table_say(
         return _table_say_error_to_mcp_response(result.failure())
 
     saying = result.unwrap().saying
-
-    # Resolve mentions if provided
-    mentions_all, mentions_resolved, mentions_unresolved, mentions_error = (
-        _resolve_mentions_for_say(conn, mentions)
-    )
-    if mentions_error is not None:
-        return mentions_error
 
     # Log saying append
     log_say(
@@ -965,6 +983,9 @@ def table_control(
 ) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
+    auth_error = _authorize_table_mutation(conn, table_id, patron_id)
+    if auth_error is not None:
+        return auth_error
 
     # Resource key for idempotency scope: {table_id, action}
     resource_key = f"control:{table_id}"
@@ -1030,6 +1051,9 @@ def table_update(
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
     table_update_actor_metadata = _build_table_update_actor_metadata(speaker_name, patron_id)
+    auth_error = _authorize_table_mutation(conn, table_id, patron_id)
+    if auth_error is not None:
+        return auth_error
 
     # Resource key for idempotency scope
     resource_key = f"update:{table_id}"

@@ -39,7 +39,7 @@ def error_response(
 
     Examples:
         >>> error_response("NOT_FOUND", "Item not found")
-        {'ok': False, 'error': {'code': 'NOT_FOUND', 'message': 'Item not found'}}
+        {'ok': False, 'error': {'code': 'NOT_FOUND', 'message': 'Item not found', 'details': {}}}
         >>> error_response("ERROR", "Failed", {"field": "name"})
         {'ok': False, 'error': {'code': 'ERROR', 'message': 'Failed', 'details': {'field': 'name'}}}
     """
@@ -48,10 +48,9 @@ def error_response(
         "error": {
             "code": code,
             "message": message,
+            "details": details if details is not None else {},
         },
     }
-    if details:
-        result["error"]["details"] = details
     return result
 
 

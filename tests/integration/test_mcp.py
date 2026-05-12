@@ -156,7 +156,8 @@ def test_mcp_auth_no_token_returns_401(mcp_test_client) -> None:
     )
 
     assert response.status_code == 401
-    assert response.json()["detail"] == "Missing or invalid Authorization header"
+    assert response.json()["error"]["code"] == "PermissionDenied"
+    assert response.json()["error"]["details"] == {}
 
 
 def test_mcp_auth_invalid_token_returns_401(mcp_test_client) -> None:
@@ -188,7 +189,8 @@ def test_mcp_auth_invalid_token_returns_401(mcp_test_client) -> None:
     )
 
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid or missing token"
+    assert response.json()["error"]["code"] == "PermissionDenied"
+    assert response.json()["error"]["details"] == {}
 
 
 def test_mcp_auth_valid_token_succeeds(mcp_test_client) -> None:
@@ -918,7 +920,11 @@ def test_mcp_error_table_closed(mcp_session: MCPSession) -> None:
 
     table_result = call_tool(
         "table_create",
-        {"question": "Table closed test", "context": "Testing table_control close"},
+        {
+            "question": "Table closed test",
+            "context": "Testing table_control close",
+            "created_by": patron_id,
+        },
     )
     assert table_result.get("ok"), f"table_create failed: {table_result}"
     table_id = table_result["data"]["id"]
@@ -1055,7 +1061,11 @@ def test_mcp_error_paused_table(mcp_session: MCPSession) -> None:
 
     table_result = call_tool(
         "table_create",
-        {"question": "Paused test table", "context": "Testing pause/resume"},
+        {
+            "question": "Paused test table",
+            "context": "Testing pause/resume",
+            "created_by": patron_id,
+        },
     )
     assert table_result.get("ok")
     table_id = table_result["data"]["id"]
@@ -1138,7 +1148,7 @@ def test_mcp_table_control_reports_racing_version_conflict_before_invalid_transi
     assert patron_result.get("ok"), f"patron_register failed: {patron_result}"
     patron_id = patron_result["data"]["id"]
 
-    table_result = call_tool("table_create", {"question": "Race control test"})
+    table_result = call_tool("table_create", {"question": "Race control test", "created_by": patron_id})
     assert table_result.get("ok"), f"table_create failed: {table_result}"
     table_id = table_result["data"]["id"]
 
@@ -1210,7 +1220,11 @@ def test_mcp_error_version_conflict(mcp_session: MCPSession) -> None:
 
     table_result = call_tool(
         "table_create",
-        {"question": "Version conflict test", "context": "Testing optimistic concurrency"},
+        {
+            "question": "Version conflict test",
+            "context": "Testing optimistic concurrency",
+            "created_by": patron_id,
+        },
     )
     assert table_result.get("ok")
     table_id = table_result["data"]["id"]
@@ -1348,6 +1362,8 @@ def test_mcp_batch_delete_full_cycle(mcp_session: MCPSession) -> None:
     # 3. Batch delete both
     delete_result = call_tool("table_delete_batch", {"ids": [t1_id, t2_id]})
     assert delete_result.get("ok") is True, f"batch delete failed: {delete_result}"
+    assert delete_result["data"]["deleted_count"] == 2
+    assert delete_result["data"]["failed"] == []
     assert set(delete_result["data"]["deleted_ids"]) == {t1_id, t2_id}
 
     # 4. Verify tables are gone

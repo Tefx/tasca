@@ -14,9 +14,10 @@ from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Qu
 from pydantic import BaseModel, Field
 from returns.result import Failure
 
-from tasca.core.domain.table import Table, TableCreate, TableId, TableUpdate, Version
+from tasca.core.domain.table import Table, TableId, TableUpdate, Version
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
+from tasca.shell.api.errors import raise_http_error
 from tasca.shell.api.routes import tables_control
 from tasca.core.services.batch_delete_service import (
     MAX_BATCH_SIZE,
@@ -34,6 +35,7 @@ from tasca.shell.services.operations.table_creation import (
     TableIdSelectionError,
     create_discussion_table,
 )
+from tasca.shell.storage.idempotency_repo import check_idempotency_key, store_idempotency_key
 from tasca.shell.storage.table_repo import (
     TableNotFoundError,
     VersionConflictError,
@@ -74,7 +76,46 @@ class BatchDeleteRequest(BaseModel):
 class BatchDeleteResponse(BaseModel):
     """Response model for successful batch delete."""
 
+    deleted_count: int
+    failed: list[dict[str, str]] = Field(default_factory=list)
     deleted_ids: list[str]
+
+
+class TableCreateRequest(BaseModel):
+    """REST request model matching table.create plus legacy aliases."""
+
+    title: str | None = None
+    question: str | None = None
+    context: str | None = None
+    created_by: str | None = None
+    creator_patron_id: str | None = None
+    host_ids: list[str] | None = None
+    metadata: dict[str, object] | None = None
+    policy: dict[str, object] | None = None
+    board: dict[str, object] | None = None
+    dedup_id: str | None = None
+
+
+class TableCreateResponse(BaseModel):
+    """REST response model with canonical and compatibility table fields."""
+
+    table_id: str
+    invite_code: str
+    web_url: str
+    status: str
+    version: int
+    creator_id: str | None = None
+    host_ids: list[str]
+    title: str
+    created_by: str | None = None
+    metadata: dict[str, object]
+    policy: dict[str, object]
+    board: dict[str, object]
+    id: str
+    question: str
+    context: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class BatchDeleteRejectionDetail(BaseModel):
@@ -97,12 +138,12 @@ class BatchDeleteErrorResponse(BaseModel):
 
 
 # @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
-@router.post("", response_model=Table, status_code=status.HTTP_200_OK)
+@router.post("", response_model=TableCreateResponse, status_code=status.HTTP_200_OK)
 async def create_table_endpoint(
-    data: TableCreate,
+    data: TableCreateRequest,
     _auth: None = Depends(verify_admin_token),
     conn: sqlite3.Connection = Depends(get_db),
-) -> Table:
+) -> TableCreateResponse:
     """Create a new discussion table.
 
     Requires admin authentication via Bearer token.
@@ -118,31 +159,89 @@ async def create_table_endpoint(
     Raises:
         HTTPException: 500 if database operation fails.
     """
-    result = create_discussion_table(conn, data.question, context=data.context, now=datetime.now(UTC))
+    if data.title is None and data.question is None:
+        raise_http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "InvalidRequest",
+            "Either title or question is required",
+        )
+    resource_key = "table_create"
+    now = datetime.now(UTC)
+    if data.dedup_id is not None:
+        idempotency_result = check_idempotency_key(conn, resource_key, "table_create", data.dedup_id, now=now)
+        if isinstance(idempotency_result, Failure):
+            raise_http_error(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "StorageError",
+                f"Failed to check idempotency key: {idempotency_result.failure()}",
+            )
+        cached = idempotency_result.unwrap()
+        if cached is not None:
+            return TableCreateResponse(**cached["data"])
+
+    result = create_discussion_table(
+        conn,
+        data.question,
+        title=data.title,
+        context=data.context,
+        creator_patron_id=data.creator_patron_id,
+        created_by=data.created_by,
+        host_ids=data.host_ids,
+        metadata=data.metadata,
+        policy=data.policy,
+        board=data.board,
+        now=now,
+    )
 
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableIdSelectionError):
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate table ID: {error.cause}",
-            )
+            raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", f"Failed to generate table ID: {error.cause}")
         if isinstance(error, TableCreateError):
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to create table: {error.cause}",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create table: {error}",
-        )
+            raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", f"Failed to create table: {error.cause}")
+        raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", f"Failed to create table: {error}")
 
-    table = result.unwrap().table
+    outcome = result.unwrap()
+    table = outcome.table
 
     # Log table creation
     log_table_create(logger, table.id, "rest:admin")
 
-    return table
+    response = TableCreateResponse(
+        table_id=table.id,
+        invite_code=outcome.invite_code,
+        web_url=outcome.web_url,
+        status=table.status.value,
+        version=table.version,
+        creator_id=table.creator_patron_id,
+        host_ids=outcome.host_ids,
+        title=table.question,
+        created_by=table.creator_patron_id,
+        metadata=outcome.metadata,
+        policy=outcome.policy,
+        board=outcome.board,
+        id=table.id,
+        question=table.question,
+        context=table.context,
+        created_at=table.created_at,
+        updated_at=table.updated_at,
+    )
+    if data.dedup_id is not None:
+        store_result = store_idempotency_key(
+            conn,
+            resource_key,
+            "table_create",
+            data.dedup_id,
+            {"data": response.model_dump(mode="json")},
+            now=now,
+        )
+        if isinstance(store_result, Failure):
+            raise_http_error(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "StorageError",
+                f"Failed to store idempotency key: {store_result.failure()}",
+            )
+    return response
 
 
 # =============================================================================
@@ -436,4 +535,4 @@ async def batch_delete_tables_endpoint(
     # Log batch deletion
     log_batch_table_delete(logger, deleted_ids, "rest:admin")
 
-    return BatchDeleteResponse(deleted_ids=deleted_ids)
+    return BatchDeleteResponse(deleted_count=len(deleted_ids), failed=[], deleted_ids=deleted_ids)

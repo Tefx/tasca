@@ -562,6 +562,8 @@ class TestTableDeleteBatch:
         result = table_delete_batch(ids=[id1, id2])
 
         assert result["ok"] is True
+        assert result["data"]["deleted_count"] == 2
+        assert result["data"]["failed"] == []
         assert set(result["data"]["deleted_ids"]) == {id1, id2}
 
     def test_batch_delete_rejects_open_table(self, test_db: sqlite3.Connection) -> None:
@@ -679,7 +681,7 @@ class TestTableJoin:
 
         # Add 3 sayings
         for i in range(3):
-            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker")
+            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker", speaker_kind="human")
 
         result = table_join(table_id=table_id, patron_id=patron_id)
 
@@ -703,7 +705,7 @@ class TestTableJoin:
 
         # Add 4 sayings (sequences 0..3)
         for i in range(4):
-            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker")
+            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker", speaker_kind="human")
 
         result = table_join(table_id=table_id)
 
@@ -719,7 +721,7 @@ class TestTableJoin:
 
         # Add 12 sayings — exceeds DEFAULT_HISTORY_LIMIT of 10
         for i in range(12):
-            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker")
+            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker", speaker_kind="human")
 
         result = table_join(table_id=table_id)
 
@@ -735,7 +737,7 @@ class TestTableJoin:
 
         # Add 3 sayings — well under DEFAULT_HISTORY_LIMIT of 10
         for i in range(3):
-            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker")
+            table_say(table_id=table_id, content=f"Saying {i}", speaker_name="Speaker", speaker_kind="human")
 
         result = table_join(table_id=table_id)
 
@@ -771,6 +773,7 @@ class TestTableSay:
             table_id="nonexistent-id",
             content="Hello",
             speaker_name="Test Speaker",
+            speaker_kind="human",
         )
 
         assert result["ok"] is False
@@ -787,6 +790,7 @@ class TestTableSay:
             table_id=table_id,
             content="Hello, world!",
             speaker_name="Test Speaker",
+            speaker_kind="human",
         )
 
         assert result["ok"] is True
@@ -796,7 +800,7 @@ class TestTableSay:
         assert data["sequence"] == 0  # First saying
         assert data["content"] == "Hello, world!"
         assert data["speaker"]["name"] == "Test Speaker"
-        assert data["speaker"]["kind"] == "agent"  # Default speaker_kind is "agent"
+        assert data["speaker"]["kind"] == "human"
 
     def test_say_with_patron(self) -> None:
         """Say with patron creates agent speaker."""
@@ -847,8 +851,8 @@ class TestTableListen:
         table_result = table_create(question="Test question")
         table_id = table_result["data"]["id"]
 
-        table_say(table_id=table_id, content="First", speaker_name="A")  # seq 0
-        table_say(table_id=table_id, content="Second", speaker_name="B")  # seq 1
+        table_say(table_id=table_id, content="First", speaker_name="A", speaker_kind="human")  # seq 0
+        table_say(table_id=table_id, content="Second", speaker_name="B", speaker_kind="human")  # seq 1
 
         # Listen for all
         result = table_listen(table_id=table_id, since_sequence=-1)
@@ -869,9 +873,9 @@ class TestTableListen:
         table_result = table_create(question="Test question")
         table_id = table_result["data"]["id"]
 
-        table_say(table_id=table_id, content="First", speaker_name="A")  # seq 0
-        table_say(table_id=table_id, content="Second", speaker_name="B")  # seq 1
-        table_say(table_id=table_id, content="Third", speaker_name="C")  # seq 2
+        table_say(table_id=table_id, content="First", speaker_name="A", speaker_kind="human")  # seq 0
+        table_say(table_id=table_id, content="Second", speaker_name="B", speaker_kind="human")  # seq 1
+        table_say(table_id=table_id, content="Third", speaker_name="C", speaker_kind="human")  # seq 2
 
         # Listen for sayings after sequence 0
         result = table_listen(table_id=table_id, since_sequence=0)
@@ -898,9 +902,9 @@ class TestTableListen:
         table_id = table_result["data"]["id"]
 
         # Add sayings with sequences 0, 1, 2
-        table_say(table_id=table_id, content="A", speaker_name="A")  # seq 0
-        table_say(table_id=table_id, content="B", speaker_name="B")  # seq 1
-        table_say(table_id=table_id, content="C", speaker_name="C")  # seq 2
+        table_say(table_id=table_id, content="A", speaker_name="A", speaker_kind="human")  # seq 0
+        table_say(table_id=table_id, content="B", speaker_name="B", speaker_kind="human")  # seq 1
+        table_say(table_id=table_id, content="C", speaker_name="C", speaker_kind="human")  # seq 2
 
         # First call: get all sayings
         result1 = table_listen(table_id=table_id, since_sequence=-1)
@@ -919,7 +923,7 @@ class TestTableListen:
         assert len(sayings2) == 0  # No new sayings
 
         # Add a new saying (seq 3)
-        table_say(table_id=table_id, content="D", speaker_name="D")
+        table_say(table_id=table_id, content="D", speaker_name="D", speaker_kind="human")
 
         # Third call: should get sequence 3 only (not 2 again)
         result3 = table_listen(table_id=table_id, since_sequence=result1["data"]["next_sequence"])
@@ -947,7 +951,7 @@ class TestTableListen:
         assert result["data"]["next_sequence"] == -1
 
         # Add a saying
-        table_say(table_id=table_id, content="First", speaker_name="A")
+        table_say(table_id=table_id, content="First", speaker_name="A", speaker_kind="human")
 
         # Poll from after max (sequence 0)
         result2 = table_listen(table_id=table_id, since_sequence=10)
@@ -999,8 +1003,8 @@ class TestTableExport:
         table_result = table_create(question="Discussion topic")
         table_id = table_result["data"]["id"]
 
-        table_say(table_id=table_id, content="First point", speaker_name="Alice")
-        table_say(table_id=table_id, content="Second point", speaker_name="Bob")
+        table_say(table_id=table_id, content="First point", speaker_name="Alice", speaker_kind="human")
+        table_say(table_id=table_id, content="Second point", speaker_name="Bob", speaker_kind="human")
 
         # Export as markdown
         result = table_export(table_id=table_id, format="markdown")
@@ -1009,8 +1013,8 @@ class TestTableExport:
         content = result["data"]["content"]
 
         # Verify content includes technical-design transcript lines.
-        assert "- [seq=0]" in content and "(agent:Alice): First point" in content
-        assert "- [seq=1]" in content and "(agent:Bob): Second point" in content
+        assert "- [seq=0]" in content and "(human:Alice): First point" in content
+        assert "- [seq=1]" in content and "(human:Bob): Second point" in content
         assert "First point" in content
         assert "Second point" in content
 
@@ -1051,8 +1055,8 @@ class TestTableExport:
         table_result = table_create(question="JSONL with sayings")
         table_id = table_result["data"]["id"]
 
-        table_say(table_id=table_id, content="First", speaker_name="A")
-        table_say(table_id=table_id, content="Second", speaker_name="B")
+        table_say(table_id=table_id, content="First", speaker_name="A", speaker_kind="human")
+        table_say(table_id=table_id, content="Second", speaker_name="B", speaker_kind="human")
 
         # Export as jsonl
         result = table_export(table_id=table_id, format="jsonl")
@@ -1401,6 +1405,7 @@ class TestErrorCodesNotFound:
             table_id="nonexistent-table-id",
             content="Hello",
             speaker_name="Test Speaker",
+            speaker_kind="human",
         )
 
         assert result["ok"] is False
@@ -1551,13 +1556,13 @@ class TestNotImplementedErrorCodes:
         Note: The error code is OPERATION_NOT_ALLOWED (not TABLE_CLOSED) per spec.
         See: src/tasca/shell/mcp/server.py table_say guard at line ~960
         """
-        # Create a table
-        table_result = table_create(question="Test table")
-        table_id = table_result["data"]["id"]
-
         # Register a patron for the tests
         patron_result = patron_register(name=unique_name("TestAgent"))
         patron_id = patron_result["data"]["id"]
+
+        # Create a table
+        table_result = table_create(question="Test table", created_by=patron_id)
+        table_id = table_result["data"]["id"]
 
         # Close the table via table_control
         close_result = table_control(
@@ -1591,14 +1596,14 @@ class TestNotImplementedErrorCodes:
         When table_update is called with a stale expected_version:
         - Should return VERSION_CONFLICT with current version details
         """
-        # Create a table
-        table_result = table_create(question="Test table")
-        table_id = table_result["data"]["id"]
-        current_version = table_result["data"]["version"]
-
         # Register a patron for the tests
         patron_result = patron_register(name=unique_name("TestAgent"))
         patron_id = patron_result["data"]["id"]
+
+        # Create a table
+        table_result = table_create(question="Test table", created_by=patron_id)
+        table_id = table_result["data"]["id"]
+        current_version = table_result["data"]["version"]
 
         # First update with correct version - should succeed
         first_update = table_update(
@@ -1796,6 +1801,7 @@ class TestStateGuardsTableSay:
             table_id=str(table_id),
             content="This should fail",
             speaker_name="Test Speaker",
+            speaker_kind="human",
         )
 
         assert result["ok"] is False
@@ -1832,6 +1838,7 @@ class TestStateGuardsTableSay:
             table_id=str(table_id),
             content="This should work on paused table",
             speaker_name="Test Speaker",
+            speaker_kind="human",
         )
 
         assert result["ok"] is True
@@ -1939,6 +1946,7 @@ class TestLimitsEnforcementTableSay:
             table_id=table_with_patron["table_id"],
             content=long_content,
             speaker_name="Test Speaker",
+            patron_id=table_with_patron["patron_id"],
         )
 
         assert result["ok"] is False
@@ -1971,6 +1979,7 @@ class TestLimitsEnforcementTableSay:
             table_id=table_id,
             content="First saying",
             speaker_name="Speaker 1",
+            patron_id=table_with_patron["patron_id"],
         )
         assert result1["ok"] is True
 
@@ -1978,6 +1987,7 @@ class TestLimitsEnforcementTableSay:
             table_id=table_id,
             content="Second saying",
             speaker_name="Speaker 2",
+            patron_id=table_with_patron["patron_id"],
         )
         assert result2["ok"] is True
 
@@ -1986,6 +1996,7 @@ class TestLimitsEnforcementTableSay:
             table_id=table_id,
             content="Third saying - should fail",
             speaker_name="Speaker 3",
+            patron_id=table_with_patron["patron_id"],
         )
 
         assert result3["ok"] is False
@@ -2017,6 +2028,7 @@ class TestLimitsEnforcementTableSay:
             table_id=table_with_patron["table_id"],
             content=content_with_many_mentions,
             speaker_name="Test Speaker",
+            patron_id=table_with_patron["patron_id"],
         )
 
         assert result["ok"] is False
@@ -2051,6 +2063,7 @@ class TestLimitsEnforcementTableSay:
             table_id=table_with_patron["table_id"],
             content="Hello @alice and @bob!",  # Under all limits
             speaker_name="Test Speaker",
+            patron_id=table_with_patron["patron_id"],
         )
 
         assert result["ok"] is True
@@ -2078,6 +2091,7 @@ class TestLimitsEnforcementTableSay:
             table_id=table_with_patron["table_id"],
             content="Hello world",  # 11 bytes
             speaker_name="Speaker 1",
+            patron_id=table_with_patron["patron_id"],
         )
         assert result1["ok"] is True
 
@@ -2087,6 +2101,7 @@ class TestLimitsEnforcementTableSay:
             table_id=table_with_patron["table_id"],
             content=large_content,
             speaker_name="Speaker 2",
+            patron_id=table_with_patron["patron_id"],
         )
 
         assert result2["ok"] is False
@@ -2140,6 +2155,7 @@ class TestTableWait:
             table_id=table_id,
             content="Test saying for wait",
             speaker_name="Test Speaker",
+            speaker_kind="human",
         )
         assert say_result["ok"] is True
         sequence = say_result["data"]["sequence"]
@@ -2204,6 +2220,7 @@ class TestTableWait:
             table_id=table_id,
             content="Saying triggering hit path",
             speaker_name="Test Speaker",
+            speaker_kind="human",
         )
         assert say_result["ok"] is True
 
@@ -2261,8 +2278,8 @@ class TestTableWait:
         table_id = table_result["data"]["id"]
 
         # Add two sayings
-        table_say(table_id=table_id, content="First saying", speaker_name="Speaker A")
-        table_say(table_id=table_id, content="Second saying", speaker_name="Speaker B")
+        table_say(table_id=table_id, content="First saying", speaker_name="Speaker A", speaker_kind="human")
+        table_say(table_id=table_id, content="Second saying", speaker_name="Speaker B", speaker_kind="human")
 
         # Wait for sayings after sequence 0 (should get only the second)
         result = await table_wait(table_id=table_id, since_sequence=0, wait_ms=100)

@@ -47,6 +47,8 @@ def create_tables_table_ddl(table_name: str = "tables") -> str:
     True
     >>> "version INTEGER NOT NULL" in create_tables_table_ddl()
     True
+    >>> "host_ids TEXT" in create_tables_table_ddl()
+    True
     """
     return f"""CREATE TABLE IF NOT EXISTS {table_name} (
     id TEXT PRIMARY KEY,
@@ -56,7 +58,8 @@ def create_tables_table_ddl(table_name: str = "tables") -> str:
     version INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    creator_patron_id TEXT
+    creator_patron_id TEXT,
+    host_ids TEXT
 )"""
 
 

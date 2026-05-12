@@ -9,6 +9,7 @@ Shell layer - handles I/O (database operations) and returns Result[T, E].
 from __future__ import annotations
 
 import sqlite3
+import json
 from datetime import datetime
 
 from returns.result import Failure, Result, Success
@@ -110,7 +111,30 @@ def _row_to_table(row: tuple) -> Table:
         created_at=datetime.fromisoformat(row[5]),
         updated_at=datetime.fromisoformat(row[6]),
         creator_patron_id=row[7] if len(row) > 7 else None,
+        host_ids=_decode_host_ids(row[8] if len(row) > 8 else None),
     )
+
+
+# @invar:allow shell_result: Private JSON adapter for persisted host_ids column.
+# @shell_orchestration: SQLite boundary adapter keeps host_ids encoding next to table row persistence.
+def _encode_host_ids(host_ids: list[str]) -> str:
+    """Encode host IDs for SQLite storage."""
+    return json.dumps(host_ids)
+
+
+# @invar:allow shell_result: Private JSON adapter for persisted host_ids column.
+# @shell_orchestration: SQLite boundary adapter keeps legacy-row decoding next to table row hydration.
+def _decode_host_ids(raw: str | None) -> list[str]:
+    """Decode host IDs from SQLite storage, treating missing legacy values as empty."""
+    if not raw:
+        return []
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(decoded, list):
+        return []
+    return [item for item in decoded if isinstance(item, str)]
 
 
 def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableError]:
@@ -126,8 +150,8 @@ def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableE
     try:
         conn.execute(
             """
-            INSERT INTO tables (id, question, context, status, version, created_at, updated_at, creator_patron_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tables (id, question, context, status, version, created_at, updated_at, creator_patron_id, host_ids)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 table.id,
@@ -138,6 +162,7 @@ def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableE
                 table.created_at.isoformat(),
                 table.updated_at.isoformat(),
                 table.creator_patron_id,
+                _encode_host_ids(table.host_ids),
             ),
         )
         conn.commit()
@@ -161,7 +186,7 @@ def get_table(conn: sqlite3.Connection, table_id: TableId) -> Result[Table, Tabl
     try:
         cursor = conn.execute(
             """
-            SELECT id, question, context, status, version, created_at, updated_at, creator_patron_id
+            SELECT id, question, context, status, version, created_at, updated_at, creator_patron_id, host_ids
             FROM tables WHERE id = ?
             """,
             (table_id,),
@@ -230,7 +255,7 @@ def update_table(
         cursor = conn.execute(
             """
             UPDATE tables
-            SET question = ?, context = ?, status = ?, version = ?, updated_at = ?
+            SET question = ?, context = ?, status = ?, version = ?, updated_at = ?, host_ids = ?
             WHERE id = ? AND version = ?
             """,
             (
@@ -239,6 +264,7 @@ def update_table(
                 updated_table.status.value,
                 updated_table.version,
                 updated_table.updated_at.isoformat(),
+                _encode_host_ids(updated_table.host_ids),
                 table_id,
                 expected_version,  # Extra safety: only update if version matches
             ),
@@ -274,7 +300,7 @@ def list_tables(conn: sqlite3.Connection) -> Result[list[Table], TableError]:
     try:
         cursor = conn.execute(
             """
-            SELECT id, question, context, status, version, created_at, updated_at, creator_patron_id
+            SELECT id, question, context, status, version, created_at, updated_at, creator_patron_id, host_ids
             FROM tables
             ORDER BY created_at DESC
             """
@@ -488,7 +514,8 @@ def create_tables_table(conn: sqlite3.Connection) -> Result[None, TableError]:
                 version INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                creator_patron_id TEXT
+                creator_patron_id TEXT,
+                host_ids TEXT
             )
         """)
         conn.commit()

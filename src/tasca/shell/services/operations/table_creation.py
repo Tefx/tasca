@@ -123,6 +123,13 @@ def create_discussion_table(
         return Failure(TableIdSelectionError(table_id_result.failure()))
 
     timestamp = now if now is not None else datetime.now(UTC)
+    effective_host_ids = host_ids
+    resolved_creator = created_by or creator_patron_id
+    if effective_host_ids is None:
+        effective_host_ids = [resolved_creator] if resolved_creator is not None else []
+    elif resolved_creator is not None and resolved_creator not in effective_host_ids:
+        effective_host_ids = [resolved_creator, *effective_host_ids]
+
     table = Table(
         id=table_id_result.unwrap(),
         question=resolved_question,
@@ -131,19 +138,19 @@ def create_discussion_table(
         version=Version(1),
         created_at=timestamp,
         updated_at=timestamp,
-        creator_patron_id=created_by or creator_patron_id,
+        creator_patron_id=resolved_creator,
+        host_ids=effective_host_ids,
     )
     create_result = create_table(conn, table)
     if isinstance(create_result, Failure):
         return Failure(TableCreateError(table, create_result.failure()))
 
     created = create_result.unwrap()
-    default_host_ids = [created.creator_patron_id] if created.creator_patron_id is not None else []
     return Success(TableCreationOutcome(
         table=created,
         invite_code=created.id,
         web_url=f"/tables/{created.id}",
-        host_ids=host_ids if host_ids is not None else default_host_ids,
+        host_ids=created.host_ids,
         metadata=metadata if metadata is not None else {},
         policy=policy if policy is not None else DEFAULT_TABLE_POLICY.copy(),
         board=board if board is not None else {},

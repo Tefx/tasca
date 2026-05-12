@@ -162,7 +162,8 @@ def prepare_table_update(table: Table, update: TableUpdate, now: datetime) -> Ta
         >>> update = TableUpdate(
         ...     question="Updated",
         ...     context="New context",
-        ...     status=TableStatus.OPEN
+        ...     status=TableStatus.OPEN,
+        ...     host_ids=["host-1"]
         ... )
         >>> result = prepare_table_update(table, update, datetime(2024, 1, 2, 12, 0))
         >>> result.question
@@ -187,6 +188,7 @@ def prepare_table_update(table: Table, update: TableUpdate, now: datetime) -> Ta
         created_at=table.created_at,
         updated_at=now,
         creator_patron_id=table.creator_patron_id,
+        host_ids=update.host_ids,
     )
 
 
@@ -240,7 +242,8 @@ def prepare_versioned_update(
         >>> update = TableUpdate(
         ...     question="Updated",
         ...     context="Added context",
-        ...     status=TableStatus.OPEN
+        ...     status=TableStatus.OPEN,
+        ...     host_ids=[]
         ... )
         >>> # Correct version
         >>> result = prepare_versioned_update(table, update, Version(2), datetime(2024, 1, 2))

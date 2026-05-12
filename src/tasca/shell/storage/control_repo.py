@@ -238,6 +238,7 @@ def atomic_control_table(
                 created_at=current_table.created_at,
                 updated_at=now,
                 creator_patron_id=current_table.creator_patron_id,
+                host_ids=current_table.host_ids,
             )
 
             return Success((saying, updated_table))

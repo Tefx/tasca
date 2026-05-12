@@ -60,6 +60,7 @@ class TableUpdate(BaseModel):
     question: str = Field(..., description="The question or topic for discussion")
     context: str | None = Field(..., description="Context for the discussion (null to clear)")
     status: TableStatus = Field(..., description="The table status")
+    host_ids: list[str] = Field(default_factory=list, description="Patron IDs authorized as hosts")
 
 
 class Table(BaseModel):
@@ -84,3 +85,4 @@ class Table(BaseModel):
     created_at: datetime
     updated_at: datetime
     creator_patron_id: str | None = None
+    host_ids: list[str] = Field(default_factory=list, description="Patron IDs authorized as hosts")

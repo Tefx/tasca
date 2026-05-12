@@ -45,6 +45,9 @@ def _run_schema_migrations(conn: sqlite3.Connection) -> None:
     if "creator_patron_id" not in table_columns:
         conn.execute("ALTER TABLE tables ADD COLUMN creator_patron_id TEXT")
 
+    if "host_ids" not in table_columns:
+        conn.execute("ALTER TABLE tables ADD COLUMN host_ids TEXT")
+
 
 def get_mcp_db() -> Generator[sqlite3.Connection]:
     """Get database connection for MCP tools.

@@ -25,6 +25,7 @@ from tasca.core.services.limits_service import (
 )
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
+from tasca.shell.api.errors import raise_http_error
 from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from tasca.shell.logging import get_logger, log_say, log_wait_returned, log_wait_timeout
 from tasca.shell.services.limited_saying_service import (
@@ -118,7 +119,15 @@ def _get_limits_config() -> LimitsConfig:
     Returns:
         LimitsConfig with values from settings.
     """
-    return settings_to_limits_config(settings)
+    config = settings_to_limits_config(settings)
+    if config.max_content_length is None:
+        return LimitsConfig(
+            max_sayings_per_table=config.max_sayings_per_table,
+            max_content_length=65536,
+            max_bytes_per_table=config.max_bytes_per_table,
+            max_mentions_per_saying=config.max_mentions_per_saying,
+        )
+    return config
 
 
 # @invar:allow shell_result: _get_table_or_404 helper raises HTTPException directly (no Result needed)
@@ -155,12 +164,15 @@ def _get_table_or_404(conn: sqlite3.Connection, table_id: str) -> Table:
 
 # @invar:allow shell_result: Maps service Result failures into existing HTTP response shapes.
 # @shell_orchestration: Transport-local HTTP status/detail mapping only.
+# @shell_complexity: Maps each shared table_say failure family to public REST status/code.
 def _raise_table_say_failure(error: TableSayError) -> None:
     """Raise the legacy HTTP response for a shared table_say failure."""
     if error.kind == TableSayErrorKind.LIMIT_EXCEEDED and error.limit_error is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=LimitErrorResponse(
+        raise_http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "LimitExceeded",
+            error.limit_error.message,
+            LimitErrorResponse(
                 error="limit_exceeded",
                 limit_kind=error.limit_error.kind.value,
                 limit=error.limit_error.limit,
@@ -170,18 +182,15 @@ def _raise_table_say_failure(error: TableSayError) -> None:
         )
 
     if error.kind == TableSayErrorKind.TABLE_NOT_FOUND:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error.message)
+        raise_http_error(status.HTTP_404_NOT_FOUND, "TableNotFound", error.message)
 
     if error.kind == TableSayErrorKind.OPERATION_NOT_ALLOWED:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error.message)
+        raise_http_error(status.HTTP_403_FORBIDDEN, "PermissionDenied", error.message, {"table_status": error.table_status} if error.table_status else {})
 
     if error.kind == TableSayErrorKind.INVALID_SPEAKER:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error.message)
+        raise_http_error(status.HTTP_400_BAD_REQUEST, "InvalidRequest", error.message)
 
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=error.message,
-    )
+    raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", error.message)
 
 
 # =============================================================================

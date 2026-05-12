@@ -334,8 +334,9 @@ async def test_422_on_invalid_input() -> None:
         # Missing required 'question' field - with admin token to pass auth
         response = await harness.create_table({}, admin_token=_ADMIN_TOKEN)
 
-        # FastAPI returns 422 for validation errors
-        assert response.status_code == 422
+        # Missing both canonical title and legacy question returns standard envelope.
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "InvalidRequest"
 
 
 # =============================================================================

@@ -13,17 +13,18 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 # imports to allow static analysis and doctest collection in environments where
 # it's not installed (e.g., during guard runs or in minimal test environments).
 if TYPE_CHECKING:
-    from fastapi import FastAPI, Request, Response
+    from fastapi import FastAPI, HTTPException, Request, Response
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.staticfiles import StaticFiles
 else:
     try:
-        from fastapi import FastAPI, Request, Response
+        from fastapi import FastAPI, HTTPException, Request, Response
         from fastapi.middleware.cors import CORSMiddleware
         from fastapi.staticfiles import StaticFiles
     except ImportError:
         # For static analysis/doctest collection in environments without fastapi
         FastAPI = None  # type: ignore[misc,assignment]
+        HTTPException = Exception  # type: ignore[misc,assignment]
         Request = None  # type: ignore[misc,assignment]
         Response = None  # type: ignore[misc,assignment]
         CORSMiddleware = None  # type: ignore[misc,assignment]
@@ -134,9 +135,11 @@ class MCPBearerAuthMiddleware:
         """
         from starlette.responses import JSONResponse
 
+        from tasca.shell.api.errors import error_envelope
+
         response = JSONResponse(
             status_code=401,
-            content={"detail": detail},
+            content=error_envelope("PermissionDenied", detail),
         )
 
         # Create a minimal receive callable for the response
@@ -250,6 +253,27 @@ def create_app() -> FastAPI:
     # The mcp_app uses path="/", so the full endpoint is /mcp/
     # Auth middleware is applied via MCPBearerAuthMiddleware wrapper
     app.mount("/mcp", mcp_app_with_auth)
+
+    from fastapi.exceptions import RequestValidationError
+    from tasca.shell.api.errors import exception_detail_to_envelope
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
+        """Render REST HTTPException failures with the standard error envelope."""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exception_detail_to_envelope(exc.status_code, exc.detail),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        _request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Render validation failures with the standard error envelope."""
+        return JSONResponse(
+            status_code=422,
+            content=exception_detail_to_envelope(422, exc.errors()),
+        )
 
     # Redirect POST /mcp -> POST /mcp/ for client compatibility
     # (Starlette mounts don't auto-redirect POST requests without trailing slash)

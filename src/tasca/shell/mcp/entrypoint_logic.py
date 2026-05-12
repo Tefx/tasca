@@ -73,16 +73,23 @@ def build_patron_response_data(patron: Patron, *, is_new: bool) -> dict[str, Any
 
 @deal.pre(lambda table: table is not None)
 @deal.post(lambda result: "id" in result and "status" in result)
+# @invar:allow entry_point_too_thick: Table payload intentionally includes canonical and compatibility fields.
 def build_table_dict(table: Table) -> dict[str, Any]:
     """Build MCP table payload."""
     return {
         "id": table.id,
+        "table_id": table.id,
         "question": table.question,
+        "title": table.question,
         "context": table.context,
         "status": table.status.value,
         "version": table.version,
         "created_at": table.created_at.isoformat(),
         "updated_at": table.updated_at.isoformat(),
+        "creator_id": table.creator_patron_id,
+        "created_by": table.creator_patron_id,
+        "creator_patron_id": table.creator_patron_id,
+        "host_ids": table.host_ids,
     }
 
 
@@ -211,10 +218,22 @@ def apply_table_patch(
         )
     new_question = patch.get("question", current_table.question)
     new_context = patch.get("context", current_table.context)
+    new_host_ids = patch.get("host_ids", current_table.host_ids)
+    if not isinstance(new_host_ids, list) or not all(isinstance(item, str) for item in new_host_ids):
+        return (
+            TableUpdate(
+                question=current_table.question,
+                context=current_table.context,
+                status=current_table.status,
+                host_ids=current_table.host_ids,
+            ),
+            error_response("INVALID_REQUEST", "host_ids must be a list of patron_id strings"),
+        )
     return TableUpdate(
         question=new_question,
         context=new_context,
         status=new_status,
+        host_ids=new_host_ids,
     ), None
 
 

@@ -33842,7 +33842,7 @@ phases:
     agent: gate-reviewer-tacit
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
-  status: pending
+  status: in_progress
   gate: Discussion stream Mermaid rendering is fixed without weakening Markdown/SVG
     security boundaries; visible UI rendering, green tests, spec conformance, and
     independent gate evidence are complete.
@@ -33852,7 +33852,7 @@ phases:
   steps:
   - id: web_mermaid_stream_fix.reproduce-red
     name: Reproduce Mermaid stream rendering gap
-    status: pending
+    status: claimed
     description: "step_type: test\nstep_intent: test_define_red\nexpected_result:\
       \ red\nagent: integration-verifier\n\nDefine a focused regression test that\
       \ exposes the current discussion-stream Mermaid rendering gap before product\
@@ -33948,6 +33948,8 @@ phases:
 
       '
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-05-12T09:27:29.692342+00:00'
   - id: web_mermaid_stream_fix.wire-renderer
     name: Wire Stream Markdown code fences to secure MermaidRenderer
     status: pending

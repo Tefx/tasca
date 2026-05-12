@@ -32214,7 +32214,7 @@ phases:
     agent: gate-reviewer-tacit
   - id: dup_guardrails.gate
     name: Gate duplicate-abstraction guardrails
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -32292,6 +32292,123 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T10:05:17.828634+00:00'
+    done_at: '2026-05-12T12:43:05.392605+00:00'
+    evidence: '## refs Read Confirmation
+
+      - evidence/dup_guardrails-parity-contract-capture.md — Preservation register
+      separates shared semantics from transport-local shaping and names blocker-class
+      drift for MCP control atomicity, limits ownership, export wrappers, and MCP
+      tool-schema ownership.
+
+      - tests/unit/test_dup_guardrails_control_red.py — Expected-red guardrails expose
+      MCP control rollback, exact documented REST payload, and REST/MCP control reason-format
+      convergence gaps; REST limit error body compatibility remains passing.
+
+      - docs/tasca-mcp-interface-v0.1.md — table.control MUST append CONTROL saying
+      and update status; append/status SHOULD be atomic; write tools accept dedup_id;
+      closed is terminal.
+
+      - docs/tasca-http-api-v0.1.md — REST table control documented body is action/reason/dedup_id.
+
+      - docs/tasca-technical-design-v0.1.md — table.control append audit saying +
+      update tables.status is required all-or-nothing atomic operation.
+
+      - src/tasca/shell/api/routes/tables_control.py — REST control currently delegates
+      to atomic_control_table.
+
+      - src/tasca/shell/mcp/entrypoints.py — MCP control path reviewed as split append/status
+      flow for downstream remediation.
+
+      - src/tasca/shell/mcp/server.py — MCP public schema surface reviewed as field-ownership
+      boundary.
+
+
+      ## Gate Review Report
+
+      | Step ID | Status | Evidence Quality | Concerns |
+
+      | --- | --- | --- | --- |
+
+      | dup_guardrails.parity-contract-capture | Complete | Strong static preservation
+      register with spec/source/test anchors | Downstream ownership inferred from
+      gate scope; no vectl inspection allowed |
+
+      | dup_guardrails.control-atomicity-red-tests | Complete | Strong executable
+      expected-red tests | Expected failures must be remediated downstream |
+
+
+      ## Wiring Audit Results
+
+      | Check | Result | Evidence |
+
+      | --- | --- | --- |
+
+      | W1-W8 guardrail-to-downstream ownership | PASS | Full table in `evidence/dup_guardrails-gate.md`
+      |
+
+      | Existing behavior regression check | PASS | `.venv/bin/python -m pytest tests/unit/api/test_tables_routes.py
+      tests/unit/mcp/test_mcp_server.py -q` → `152 passed`, exit code 0 |
+
+      | Expected-red guardrails | PASS | `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py`
+      → `3 failed, 1 passed`, exit code 1 as expected |
+
+
+      ## Escape Hatch Audit Results
+
+      Reviewed `@invar:allow` intersections in required source files. Result: WARNING,
+      not blocker. High MCP shell escape-hatch density warrants downstream deep review,
+      but no product-code hatches were introduced by this gate.
+
+
+      ## Decision Basis
+
+      - Shared semantics frozen: Yes — control atomicity, idempotency, closed-state
+      behavior, limits, export, and MCP schema ownership are pinned.
+
+      - Transport-local shaping frozen: Yes — REST auth/body/error/export shaping
+      and MCP envelopes/compat/schema are separated.
+
+      - Remaining blocker-class ambiguity: None unowned for this gate; known blockers
+      are explicitly downstream remediation obligations.
+
+
+      ## Gate Decision
+
+      Gate Decision: OPEN
+
+      verdict: PASS
+
+      blockers: []
+
+      gate_open_allowed: true
+
+      orchestrator_action_hint: COMPLETE
+
+
+      ## Artifact and Commit
+
+      - Worker artifact: evidence/dup_guardrails-gate.md
+
+      - Worker commit: ab559221de4e529a116ba31f6ad79c987d8f3e43
+
+      - Mainline squash commit: fcd4fe6
+
+
+      ## Verification
+
+      - Worker: `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py`
+      → exit code 1, expected-red.
+
+      - Worker: `.venv/bin/python -m pytest tests/unit/api/test_tables_routes.py tests/unit/mcp/test_mcp_server.py
+      -q` → exit code 0.
+
+      - Mainline final-state verification: same command families run after merge;
+      existing REST/MCP tests 152 passed and expected-red guardrails failed with expected
+      3 failed / 1 passed pattern.
+
+      - Files changed: evidence/dup_guardrails-gate.md
+
+      - Product code modified: none.'
   - id: dup_guardrails.control-atomicity-red-tests
     name: Define red regressions for atomic control and refactor guardrails
     status: done

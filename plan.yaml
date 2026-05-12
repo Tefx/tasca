@@ -33347,7 +33347,7 @@ phases:
       - None.'
   - id: retest-mid-gate
     name: Retest mid-gate after ruff import-order fix
-    status: claimed
+    status: done
     description: "step_type: test\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: phase-check\nagent: gate-reviewer\npriority: HIGH\n\nRetest/gate\
       \ step for `dup_foundation.mid-gate` after the batched ruff import-order remediation.\n\
@@ -33405,6 +33405,88 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-05-12T14:17:05.287758+00:00'
+    done_at: '2026-05-12T14:22:14.887025+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - src/tasca/shell/services/operations/__init__.py — read; package docstring
+      states transport-neutral shell operation orchestration without transport-specific
+      exceptions or response envelopes.
+
+
+      ## Mid-Gate Retest Report
+
+      Reviewer: gate-reviewer (independent of fix agent python-senior)
+
+      Scope: dup_foundation.mid-gate B1 ruff import-order blocker plus boundary recheck.
+
+
+      ### Ruff Recheck
+
+      Command: `./.venv/bin/python -m ruff check src/tasca/shell/services/operations
+      src/tasca/shell/storage/control_repo.py src/tasca/shell/storage/saying_repo.py
+      tests/unit/services/test_registration_creation_operations.py tests/unit/services/operations/test_table_control.py
+      tests/unit/api/test_export_routes.py tests/unit/storage/test_batch_delete_repo.py`
+
+      Worktree output: All checks passed; exit code 0.
+
+      Mainline final-state output: All checks passed.
+
+
+      ### Boundary Recheck
+
+      - AST import scan over operations modules found violations: [].
+
+      - Text scan found only docs/comments describing REST/MCP neutrality and future
+      adapter rewiring; no runtime imports of HTTPException/FastAPI/MCP envelopes/caller
+      state in shared operations.
+
+      - Shared operation ownership remains stable; __init__.py exports shared operation
+      result/error types and functions only.
+
+
+      ### Runtime Regression Recheck
+
+      Command: `./.venv/bin/python -m pytest tests/unit/services/test_registration_creation_operations.py
+      tests/unit/services/operations/test_table_control.py tests/unit/api/test_export_routes.py
+      tests/unit/storage/test_batch_delete_repo.py`
+
+      Worktree result: 52 passed in 1.27s.
+
+      Mainline final-state result: 52 passed.
+
+
+      ### Scope Proof
+
+      - Fix commit reviewed: e3922941582acf34f6e52d81f9b6b73acfe3f78c.
+
+      - Files changed by fix: src/tasca/shell/services/operations/__init__.py.
+
+      - Behavior changes: NONE; diff only reorders import blocks, no symbol additions/removals
+      or logic changes.
+
+      - Reviewer files changed: none.
+
+
+      ### Closure Fields
+
+      verdict: PASS
+
+      blockers: []
+
+      gate_open_allowed: true
+
+      orchestrator_action_hint: COMPLETE
+
+
+      ### Commit hash(es)
+
+      - none (verify-only).
+
+
+      ### Gaps/Notes
+
+      - uv.lock transient metadata diff in verifier worktree was restored by verifier;
+      final verifier worktree clean.'
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

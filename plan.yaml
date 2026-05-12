@@ -37827,7 +37827,7 @@ phases:
       \ under the now-authoritative standard REST error envelope."
   - id: retest-rest-limit-envelope-guardrail-closure
     name: Retest and close B-GATE-001 REST limit envelope guardrail
-    status: pending
+    status: claimed
     description: 'step_type: test
 
       step_intent: retest_green
@@ -37893,6 +37893,8 @@ phases:
     depends_on:
     - resolve-rest-limit-envelope-guardrail
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-12T20:11:30.257065+00:00'
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

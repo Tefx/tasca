@@ -37797,7 +37797,7 @@ phases:
       proof gap.
 
       - If any failure remains, evidence names the blocker and keeps `gate_open_allowed:
-      false.'
+      false`.'
     evidence_template: "## refs Read Confirmation (MANDATORY)\n\nFor each ref in this\
       \ step:\n- docs/tasca-http-api-v0.1.md — key passage or \"NOT READ: <reason>\"\
       \n- docs/tasca-technical-design-v0.1.md — key passage or \"NOT READ: <reason>\"\

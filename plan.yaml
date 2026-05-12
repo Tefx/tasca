@@ -35731,7 +35731,7 @@ phases:
       and retest ownership before the phase gate.'
   - id: web_mermaid_stream_fix.gate
     name: Gate Mermaid stream rendering fix
-    status: pending
+    status: claimed
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -35848,6 +35848,8 @@ phases:
     - web_mermaid_stream_fix.spec-conformance
     - web_mermaid_stream_fix.retest-spec-conformance-blockers
     agent: gate-reviewer
+    claimed_by: gate-reviewer
+    claimed_at: '2026-05-12T13:57:52.622654+00:00'
   - id: web_mermaid_stream_fix.fix-spec-conformance-blockers
     name: Fix spec-conformance blockers for Mermaid stream rendering
     status: done

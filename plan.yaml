@@ -34318,6 +34318,83 @@ phases:
     depends_on:
     - retest-foundation-conformance-wiring
     agent: python-senior
+  - id: retest-foundation-mcp-table-create-defaults
+    name: Retest MCP table.create surface and ParameterContract defaults
+    status: pending
+    description: "step_type: gate\nstep_intent: retest_green\nexpected_result: green\n\
+      verification_scope: phase-check protecting dup_foundation.gate and dup_adoption\
+      \ unlock path\nagent: gate-reviewer-tacit\npriority: HIGH\nsource_failed_steps:\n\
+      - dup_foundation.spec-conformance\n- dup_foundation.wiring-audit\nsource_retest_step:\
+      \ retest-foundation-conformance-wiring\nsource_fix_step: fix-foundation-mcp-table-create-defaults\n\
+      \nAs an INDEPENDENT RETEST/GATE reviewer, verify that fix-foundation-mcp-table-create-defaults\
+      \ closes the remaining B2 and B4 blocker-class issues before dup_foundation.gate\
+      \ or dup_adoption can proceed.\n\nYOUR GOAL IS TO FIND PROBLEMS, not to rubber-stamp\
+      \ the fix. Finding remaining issues is a valid retest outcome, but the headline\
+      \ must be BLOCKED unless every blocker-class obligation below is closed.\n\n\
+      ## Required Retest Scope\n1. B2 MCP table_create public surface/runtime/tool\
+      \ contract:\n   - runtime/server entrypoint accepts, defaults, forwards, or\
+      \ explicitly disposes documented fields including `title`, `created_by`, `host_ids`,\
+      \ `metadata`, `policy`, `board`, and dedup/invite/web response-shape considerations;\n\
+      \   - `tool_contracts.py` exposes ParameterContracts consistent with the documented\
+      \ MCP input surface;\n   - operation-only support in `table_creation.py` is\
+      \ not accepted as runtime conformance by itself;\n   - any deferred/non-intersecting\
+      \ item names its downstream owner and proves it cannot block `dup_foundation.gate`\
+      \ or `dup_adoption`.\n2. B4 MCP ParameterContract defaults:\n   - optional/defaulted\
+      \ parameters match spec and server signatures;\n   - runtime/default inspection\
+      \ proves `mentions is None` and `reply_to_sequence is None` where applicable;\n\
+      \   - regression tests cover every optional/defaulted MCP parameter, not only\
+      \ the two observed failures.\n3. Behavioral proof register:\n   - for each blocker\
+      \ obligation include `requirement_ref`, `behavior_claim`, `runtime_proof_expected`,\
+      \ `evidence_ref`, `status`, `closure_path`, and `gate_decision_basis`.\n\n##\
+      \ Required Decision Fields\nThe retest evidence MUST include: `headline`, `verdict`,\
+      \ `blockers`, `proof_gap_status`, `blocking_status`, `gate_open_allowed`, and\
+      \ `orchestrator_action_hint`.\n\nOPEN is allowed only when B2 and B4 are PROVEN\
+      \ or explicitly non-intersecting with downstream gates. NEEDS_TEST, UNPROVEN,\
+      \ or UNCERTAIN_BLOCKING items must BLOCK progression and name the required remediation."
+    verification: '- phase-check protecting dup_foundation.gate and dup_adoption unlock
+      path
+
+      - expected_result: green; retest must prove B2 and B4 are closed
+
+      - Runtime/tool-contract test or inspection proves table_create accepted/defaulted
+      fields OR approved downstream non-intersection for each remaining field
+
+      - Runtime/default inspection proves optional ParameterContract defaults match
+      spec/server signatures, including `mentions is None` and `reply_to_sequence
+      is None` where applicable
+
+      - Expanded regression tests cover every optional/defaulted MCP parameter
+
+      - Structured behavioral proof register includes requirement_ref, behavior_claim,
+      runtime_proof_expected, evidence_ref, status, closure_path, and gate_decision_basis
+      for each blocker-class item
+
+      - Evidence includes headline/verdict/blockers/proof_gap_status/blocking_status/gate_open_allowed/orchestrator_action_hint;
+      `gate_open_allowed: true` is valid only if no blocker-class proof gaps remain'
+    evidence_template: "## Retest Report\n\n### refs Read Confirmation (MANDATORY)\n\
+      For each ref in this step:\n- docs/tasca-mcp-interface-v0.1.md — key passage\
+      \ or \"NOT READ: <reason>\"\n- src/tasca/shell/mcp/server.py — key passage or\
+      \ \"NOT READ: <reason>\"\n- src/tasca/shell/mcp/tool_contracts.py — key passage\
+      \ or \"NOT READ: <reason>\"\n- src/tasca/shell/services/operations/table_creation.py\
+      \ — key passage or \"NOT READ: <reason>\"\n\nIf no refs were provided, state:\
+      \ \"No refs for this step.\"\n\n## Decision Fields\nheadline: PASS|BLOCKED\n\
+      verdict: OPEN|BLOCKED\nblockers:\n  - <B2/B4 item or []>\nproof_gap_status:\
+      \ PROVEN|NEEDS_TEST|UNPROVEN|UNCERTAIN_BLOCKING\nblocking_status: BLOCKING|NON_BLOCKING_WITH_PROOF\n\
+      gate_open_allowed: true|false\norchestrator_action_hint: PROCEED|CREATE_FIX_RETEST|DO_NOT_COMPLETE\n\
+      \n## Behavioral Proof Register\n| requirement_ref | behavior_claim | runtime_proof_expected\
+      \ | evidence_ref | status | closure_path | gate_decision_basis |\n| --- | ---\
+      \ | --- | --- | --- | --- | --- |\n| B2 | <claim> | <runtime/tool-contract proof>\
+      \ | <test/inspection> | PROVEN/NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING | <fix/defer/non-intersection>\
+      \ | <OPEN/BLOCK rationale> |\n| B4 | <claim> | <runtime/default inspection>\
+      \ | <test/inspection> | PROVEN/NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING | <fix/retest\
+      \ path> | <OPEN/BLOCK rationale> |\n\n## Commands / Inspections\n```\n<paste\
+      \ exact commands and outputs inspected>\n```\n\n## Coverage\n- table_create\
+      \ fields checked:\n- optional/defaulted MCP params checked:\n- remaining deferred\
+      \ items and downstream owner/non-intersection proof:\n\n## Headline\nPASS only\
+      \ if gate_open_allowed=true and no blocker-class proof gaps remain."
+    depends_on:
+    - fix-foundation-mcp-table-create-defaults
+    agent: gate-reviewer-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

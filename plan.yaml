@@ -34093,7 +34093,7 @@ phases:
       - Pre-existing uv.lock dirty state was not committed.'
   - id: retest-foundation-conformance-wiring
     name: Retest foundation conformance and wiring blocker closure
-    status: claimed
+    status: done
     description: "step_type: gate\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: phase-check\nagent: gate-reviewer-tacit\npriority: HIGH\n\
       source_failed_steps:\n- dup_foundation.spec-conformance\n- dup_foundation.wiring-audit\n\
@@ -34230,6 +34230,123 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T15:41:20.274743+00:00'
+    done_at: '2026-05-12T16:01:13.609420+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n\nNo refs for this step.\n\n\
+      ## Aggregated Retest Report\n\n**Reviewer**: gate-reviewer-tacit (independent\
+      \ of python-senior-tacit)\n**Protects downstream gates**: dup_foundation.gate,\
+      \ dup_adoption unlock path\n\n### Headline\nRetest is **BLOCKED**. Several remediations\
+      \ are real and tested, but blocker-class spec/default closure is not complete.\n\
+      \n### Blocking Status\nOPEN\n\n### Proof-Gap Status\nBLOCKING\n\n### Test-step\
+      \ semantic reporting\n- step_intent: retest_green\n- expected_result: green\n\
+      - observed_result: red / blocked\n- failure_alignment: remaining failures align\
+      \ with original spec-conformance/wiring closure fields, especially MCP table.create\
+      \ shape/default metadata and ParameterContract defaults.\n- verdict: FAIL /\
+      \ BLOCKED\n- blockers:\n  - B2: MCP `table_create` runtime/tool contract still\
+      \ does not accept spec input fields `title`, `created_by`, `host_ids`, `metadata`,\
+      \ `policy`, or `board`.\n  - B4: `table_say` ParameterContract defaults are\
+      \ incorrect for `mentions` and `reply_to_sequence`.\n- product implementation\
+      \ files modified by this reviewer: no\n\n## Behavioral Proof Register\n| requirement_ref\
+      \ | behavior_claim | runtime_proof_expected | evidence_ref | status | closure_path\
+      \ | gate_decision_basis |\n| --- | --- | --- | --- | --- | --- | --- |\n| B1\
+      \ patron.register dedup/idempotency | Explicit `dedup_id` and display-name return-existing\
+      \ behavior exist and preserve original identity fields. | Runtime/unit proof\
+      \ for dedup hit and stable patron identity. | `src/tasca/shell/services/operations/patron_registration.py:111-150`;\
+      \ `tests/unit/services/test_registration_creation_operations.py:34-70`; pytest\
+      \ targeted 31 passed; MCP dedup pytest 14 passed. | PROVEN | None. | Can proceed\
+      \ for B1. |\n| B2 table.create shape/defaults | Shared operation supports aliases/default\
+      \ objects, and MCP response emits compatibility/spec-visible aliases. However\
+      \ MCP runtime contract still exposes only `question/context/creator_patron_id/dedup_id`,\
+      \ not spec inputs `title/created_by/host_ids/metadata/policy/board`. | MCP/runtime\
+      \ proof that `tasca.table.create` accepts or explicitly non-intersects all spec\
+      \ fields and returns expected defaults. | Spec requires fields at `docs/tasca-mcp-interface-v0.1.md:231-240`;\
+      \ runtime signature only `src/tasca/shell/mcp/server.py:275-280`; contract params\
+      \ only `src/tasca/shell/mcp/tool_contracts.py:112-127`; operation-only support\
+      \ at `src/tasca/shell/services/operations/table_creation.py:59-72`. | UNPROVEN\
+      \ | Either wire spec fields through MCP contract/server/entrypoint or provide\
+      \ explicit non-intersection proof for input shape, not just persistence. | BLOCKER.\
+      \ |\n| B3 Markdown export format/board order | Core Markdown formatter emits\
+      \ Board section and stable key order; runtime export delegates to core, but\
+      \ passes no board snapshot. | Formatter/output proof for `[seq=...] timestamp\
+      \ (speaker): content`, board section, stable ordering. | `src/tasca/core/export_service.py:224-356`;\
+      \ doctest lines `277-298`; `src/tasca/shell/services/operations/table_export.py:115`;\
+      \ MCP export pytest 14 passed. | PROVEN | Board persistence remains downstream\
+      \ per `docs/foundation-conformance-wiring-dispositions.md:21-28`; formatter\
+      \ closure is acceptable, runtime board data remains non-intersecting only if\
+      \ downstream owner is enforced. | Non-blocking if B2/B4 fixed. |\n| B4 MCP ParameterContract\
+      \ defaults | Centralized defaults exist and are consumed for Field metadata,\
+      \ but some ParameterContract defaults are wrong. | Static/runtime proof all\
+      \ ParameterContract defaults match spec/server defaults. | `src/tasca/shell/mcp/tool_contracts.py:223-234`\
+      \ sets `mentions` default to `\"running\"` and `reply_to_sequence` default to\
+      \ `60000`; runtime inspection output: `mentions_is_none=False`, `reply_to_sequence_is_none=False`;\
+      \ test only checks subset at `tests/unit/mcp/test_tool_contracts.py:64-77`.\
+      \ | UNPROVEN | Correct defaults to `None` and add behavioral/default regression\
+      \ test for every optional/defaulted MCP parameter. | BLOCKER. |\n| R3 stale-version/concurrent\
+      \ control | Table control uses shared atomic operation; stale/concurrent conflicts\
+      \ preserve actual version and roll back control saying. | Runtime proof for\
+      \ stale/concurrent control conflict. | `src/tasca/shell/services/operations/table_control.py:174-244`;\
+      \ `src/tasca/shell/mcp/entrypoints.py:1013-1058`; `tests/unit/services/operations/test_table_control.py:148-209`;\
+      \ pytest targeted 31 passed. | PROVEN | None. | Can proceed for R3. |\n| W-B1\
+      \ shared operation production callers / dependency-gated ownership | Shared\
+      \ operations have non-test production callers in MCP entrypoints. | Static wiring\
+      \ proof or dependency-gated non-intersection proof. | Imports/callers: `src/tasca/shell/mcp/entrypoints.py:96-112`,\
+      \ calls at `209`, `299`, `570`, `613`, `1041`. | PROVEN | None. | Can proceed\
+      \ for W-B1. |\n| W-B2 MCP tool_contracts runtime consumption / dependency-gated\
+      \ ownership | Runtime consumes `parameter_field(...)` for FastMCP Annotated\
+      \ fields, but default metadata remains defective. | Runtime consumption proof\
+      \ and default correctness. | Runtime consumption: `src/tasca/shell/mcp/server.py:276-279`,\
+      \ `363-372`, etc.; defect: `src/tasca/shell/mcp/tool_contracts.py:223-234`.\
+      \ | UNPROVEN | Fix B4 default table and expand tests. | BLOCKER via B4. |\n\
+      | W-B3 dead_export hatch density not masking production orphans | No literal\
+      \ `dead_export` hatch found under `src/tasca`; shared operations have production\
+      \ callers. | Static scan + caller proof. | grep `dead_export|@invar:allow` under\
+      \ `src/tasca` found no `dead_export`; production caller refs above. | PROVEN\
+      \ | None. | Can proceed for W-B3. |\n| batch-delete ambiguity | Existing shared\
+      \ operation is wired into MCP; normative contract clarification is documented\
+      \ as downstream/non-intersecting. | Runtime proof of wire and explicit non-intersection/deferred\
+      \ owner. | `src/tasca/shell/services/operations/batch_delete.py:50-100`; `src/tasca/shell/mcp/entrypoints.py:567-598`;\
+      \ `tests/unit/storage/test_batch_delete_repo.py:225-262`; `docs/foundation-conformance-wiring-dispositions.md:30-38`;\
+      \ pytest targeted 31 passed. | NON_INTERSECTING | Downstream owner documented\
+      \ as `dup_adoption.batch-delete-spec-clarification`. | Acceptable for this retest.\
+      \ |\n\n## Gate Decision\n- headline: FAIL\n- verdict: BLOCKED\n- blockers:\n\
+      \  - B2: MCP table_create public surface remains incomplete; spec requires fields\
+      \ at `docs/tasca-mcp-interface-v0.1.md:231-240` but runtime/server and contract\
+      \ expose only the old subset at `src/tasca/shell/mcp/server.py:275-280` and\
+      \ `src/tasca/shell/mcp/tool_contracts.py:112-127`.\n  - B4: MCP ParameterContract\
+      \ defaults are wrong for `mentions` and `reply_to_sequence` at `src/tasca/shell/mcp/tool_contracts.py:223-234`;\
+      \ runtime inspection showed both defaults are not None.\n- proof_gap_status:\
+      \ BLOCKING\n- blocking_status: OPEN\n- gate_open_allowed: false\n- orchestrator_action_hint:\
+      \ DO_NOT_COMPLETE\n\n## Verification\n- Commands/inspections run:\n  - `pwd\
+      \ && git status --short --branch` in isolated worktree: exit 0; confirmed `/Users/tefx/Projects/tasca/.vectl/worktrees/retest-foundation-conformance-wiring`,\
+      \ branch `vectl/step-retest-foundation-conformance-wiring`.\n  - `invar_guard(path=...,\
+      \ changed=false)`: complete; ok=true; errors=0; warnings=63; files_checked=76.\n\
+      \  - `.venv/bin/python -m pytest tests/unit/services/test_registration_creation_operations.py\
+      \ tests/unit/mcp/test_tool_contracts.py tests/unit/services/operations/test_table_control.py\
+      \ tests/unit/storage/test_batch_delete_repo.py -q`: exit 0; 31 passed.\n  -\
+      \ `.venv/bin/python -m pytest tests/unit/mcp/test_mcp_server.py -q -k 'dedup\
+      \ or export_markdown or version_conflict_error or batch_delete'`: exit 0; 14\
+      \ passed.\n  - `.venv/bin/python - <<'PY' ...`: exit 0; printed `mentions: 'running'`,\
+      \ `reply_to_sequence: 60000`, both not None.\n  - `git status --short --branch\
+      \ && git diff --stat`: exit 0; pre-existing dirty `uv.lock` remains.\n- Runtime\
+      \ proof notes: automated gates are green for tested paths, but green tests do\
+      \ not cover the discovered incorrect ParameterContract defaults or omitted MCP\
+      \ table.create spec inputs.\n\n## Remediation Ownership Created\n- Planner added\
+      \ batched fix step `fix-foundation-mcp-table-create-defaults` depending on this\
+      \ retest.\n- Planner added independent downstream retest `retest-foundation-mcp-table-create-defaults`\
+      \ depending on the fix.\n- Planner updated `dup_foundation.gate` so downstream\
+      \ progression requires both this retest report and the new retest to pass.\n\
+      \n## Files changed\n- Commit hash(es): none — read-only verification; no reviewer-authored\
+      \ changes to commit.\n- Files changed: none by this reviewer.\n- Pre-existing\
+      \ dirty worktree note from reviewer: `uv.lock` was already modified at start\
+      \ and remains modified (`tasca` version `0.1.28` -> `0.1.29`). Reviewer did\
+      \ not edit or commit it.\n\n## Gaps/Notes\n- Any NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING\
+      \ items:\n  - B2 remains UNPROVEN/BLOCKING.\n  - B4 remains UNPROVEN/BLOCKING.\n\
+      - Any explicit non-intersection evidence:\n  - Batch-delete ambiguity documented\
+      \ in `docs/foundation-conformance-wiring-dispositions.md:30-38`.\n  - Board/metadata/policy\
+      \ persistence documented downstream in `docs/foundation-conformance-wiring-dispositions.md:21-28`,\
+      \ but this does not cover missing MCP table.create input surface.\n\n## Action\
+      \ Summary\nIndependent retest completed and rejected gate due to remaining blocker-class\
+      \ proof failures. Remediation ownership was created before completing this retest\
+      \ report."
   - id: fix-foundation-mcp-table-create-defaults
     name: Fix MCP table.create surface and ParameterContract defaults
     status: pending

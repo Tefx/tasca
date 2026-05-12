@@ -33263,9 +33263,11 @@ phases:
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked
   gate: Repo-wide verification, documentation sync, and independent deep review are
-    complete with no unresolved blocker-class drift.
+    complete with no unresolved blocker-class drift. Finalization also covers the
+    Web Mermaid stream rendering fix before plan closure.
   depends_on:
   - dup_adoption
+  - web_mermaid_stream_fix
   steps:
   - id: finalization.verify-full-plan
     name: Full-plan verification after transport consolidation

@@ -23,19 +23,16 @@ from tasca.core.domain.patron import PatronId
 from tasca.core.domain.saying import Saying, Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableId
 from tasca.core.services.limits_service import (
+    LimitError,
     LimitsConfig,
-    check_content_limits,
     settings_to_limits_config,
 )
 from tasca.core.table_state_machine import can_say
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
+from tasca.shell.services.limited_saying_service import append_saying_with_limits
 from tasca.shell.storage.saying_repo import (
-    SayingError,
-    append_saying,
-    count_sayings_by_table,
     get_table_max_sequence,
-    get_table_content_bytes,
     list_sayings_by_table,
 )
 from tasca.shell.storage.table_repo import TableNotFoundError, get_table
@@ -178,57 +175,26 @@ def _validate_can_say(table: Table) -> None:
         )
 
 
-# @invar:allow shell_result: _check_limits_before_append helper raises HTTPException directly (no Result needed)
-# @shell_orchestration: Multiple database calls + limit checks + HTTP error mapping
-def _check_limits_before_append(
-    conn: sqlite3.Connection,
-    table_id: str,
-    content: str,
-    config: LimitsConfig,
-) -> None:
-    """Check content limits before appending a saying.
-
-    Args:
-        conn: Database connection.
-        table_id: Table ID.
-        content: Content to validate.
-        config: Limits configuration.
-
-    Raises:
-        HTTPException: 400 if limit exceeded, 500 on database error.
-    """
-    # Get current counts
-    count_result = count_sayings_by_table(conn, table_id)
-    if isinstance(count_result, Failure):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to count sayings: {count_result.failure()}",
-        )
-    current_count = count_result.unwrap()
-
-    # Get current bytes
-    bytes_result = get_table_content_bytes(conn, table_id)
-    if isinstance(bytes_result, Failure):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get table bytes: {bytes_result.failure()}",
-        )
-    current_bytes = bytes_result.unwrap()
-
-    # Check all limits
-    limit_error = check_content_limits(content, current_count, current_bytes, config)
-
-    if limit_error is not None:
+# @invar:allow shell_result: Maps service Result failures into existing HTTP response shapes.
+# @shell_orchestration: Transport-local HTTP status/detail mapping only.
+def _raise_append_failure(error: LimitError | str) -> None:
+    """Raise the legacy HTTP response for an append-with-limits failure."""
+    if isinstance(error, LimitError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=LimitErrorResponse(
                 error="limit_exceeded",
-                limit_kind=limit_error.kind.value,
-                limit=limit_error.limit,
-                actual=limit_error.actual,
-                message=limit_error.message,
+                limit_kind=error.kind.value,
+                limit=error.limit,
+                actual=error.actual,
+                message=error.message,
             ).model_dump(),
         )
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Failed to append saying: {error}",
+    )
 
 
 # =============================================================================
@@ -272,10 +238,6 @@ async def append_saying_endpoint(
     table = _get_table_or_404(conn, table_id)
     _validate_can_say(table)
 
-    # Check limits
-    limits_config = _get_limits_config()
-    _check_limits_before_append(conn, table_id, data.content, limits_config)
-
     # Create speaker
     if data.patron_id is not None:
         speaker = Speaker(
@@ -290,15 +252,11 @@ async def append_saying_endpoint(
             patron_id=None,
         )
 
-    # Append saying
-    result = append_saying(conn, table_id, speaker, data.content)
+    # Append saying through the shared service that owns limit enforcement.
+    result = append_saying_with_limits(conn, table_id, speaker, data.content, _get_limits_config())
 
     if isinstance(result, Failure):
-        error = result.failure()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to append saying: {error}",
-        )
+        _raise_append_failure(result.failure())
 
     saying = result.unwrap()
 

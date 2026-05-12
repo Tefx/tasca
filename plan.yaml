@@ -37999,7 +37999,7 @@ phases:
   steps:
   - id: finalization.verify-full-plan
     name: Full-plan verification after transport consolidation and Web Mermaid fix
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: full-plan-check
@@ -38121,6 +38121,70 @@ phases:
     agent: integration-verifier-tacit
     claimed_by: integration-verifier-tacit
     claimed_at: '2026-05-12T20:14:16.765254+00:00'
+    done_at: '2026-05-12T20:24:18.416326+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n- `web/src/components/Stream.tsx`\
+      \ — read; Stream detects Mermaid code fences and renders through `MermaidRenderer`;\
+      \ raw saying content uses `ReactMarkdown` with GFM.\n- `web/src/rendering/mermaid.tsx`\
+      \ — read; Mermaid initializes with `startOnLoad: false`, `securityLevel: strict`,\
+      \ strips init directives, imports sanitized SVG via DOMParser/document.importNode.\n\
+      - `web/src/rendering/svg-sanitizer.ts` — read; strict SVG element/attribute\
+      \ allowlist removes event handlers, forbidden URLs, external references, and\
+      \ invalid/non-svg input.\n- `docs/tasca-web-uiux-v0.1.md` — read; Markdown rendering\
+      \ requires GFM, Mermaid, math; raw HTML disabled; Mermaid init stripped; SVG\
+      \ sanitized.\n- `docs/adr-001-mermaid-rendering.md` — read; client-side Mermaid\
+      \ accepted with guardrails: strip init directives, pin Mermaid 11.10.x, strict\
+      \ SVG sanitization, CSP, raw HTML disabled.\n- `docs/adr-002-mermaid-svg-sanitization.md`\
+      \ — read; Mermaid SVG treated as untrusted and sanitized by allowlist.\n\n##\
+      \ Full-Plan Verification Evidence\n**Commands executed / results**:\n- `invar_guard(changed=false)`\
+      \ → ok true, 0 errors, 80 warnings, 79 files checked, review_suggested true.\n\
+      - `.venv/bin/python -m ruff check . && .venv/bin/python -m mypy src/tasca` →\
+      \ FAILED: ruff 277 errors; mypy separately 171 errors in 26 files.\n- `.venv/bin/python\
+      \ -m pytest` → FAILED: 6 failed, 1113 passed.\n- targeted backend transport/shared-operation\
+      \ pytest → FAILED: 4 failed, 219 passed.\n- frontend pre-hydration `npm run\
+      \ lint && npm test -- --run && npm run build` → failed due missing eslint/node_modules.\n\
+      - `npm ci` → succeeded; reported 18 npm audit vulnerabilities.\n- frontend after\
+      \ hydration `npm run lint && npm test -- --run && npm run build` → passed (lint\
+      \ 0 errors/11 warnings; vitest 8 passed + 197 passed; build passed).\n- targeted\
+      \ web Mermaid/security vitest command → passed (Stream/Mermaid/Markdown/SVG\
+      \ sanitizer coverage).\n\n**Transport/shared-operation blockers**:\n- Full Python\
+      \ suite failures:\n  - `tests/unit/api/test_patrons_routes.py::TestRegisterPatron::test_register_patron_missing_display_name`\
+      \ expected 422, observed 400.\n  - `tests/unit/api/test_patrons_routes.py::TestGetPatron::test_get_patron_not_found`\
+      \ expected string detail, observed dict detail.\n  - `tests/unit/api/test_sayings_routes.py::TestAppendSaying::test_append_saying_table_not_found`\
+      \ expected string detail, observed dict detail.\n  - `tests/unit/api/test_sayings_routes.py::TestAppendSaying::test_append_saying_maps_shared_operation_error`\
+      \ expected plain string detail, observed structured envelope.\n  - `tests/unit/api/test_sayings_routes.py::TestStateGuards::test_say_on_closed_table_rejected`\
+      \ expected string detail, observed dict detail.\n  - `tests/unit/api/test_tables_routes.py::TestCreateTable::test_create_table_missing_question`\
+      \ expected 422, observed 400.\n- Targeted suite failures: 4 REST API error envelope/status\
+      \ expectation failures.\n\n**Web Mermaid regression results**:\n- Web Mermaid\
+      \ Stream rendering, Markdown raw HTML protection, Mermaid init stripping, SVG\
+      \ sanitizer tests, and frontend build/typecheck passed after dependency hydration.\n\
+      \n## Behavioral Proof Register\n- repo-wide guard/static checks: UNPROVEN/BLOCKER\
+      \ — ruff and mypy failed.\n- transport/shared-operation suites: UNPROVEN/BLOCKER\
+      \ — API error/status/detail mapping tests failed.\n- limits/body mapping: UNPROVEN/BLOCKER\
+      \ — REST body/status mapping tests failed.\n- atomic control: PROVEN — rollback/version\
+      \ tests passed.\n- export: PROVEN — Mermaid export preservation tests passed.\n\
+      - tool-schema consolidation: PROVEN — MCP tool contract tests passed.\n- web_mermaid_stream_fix\
+      \ / markdown security / init stripping / SVG sanitization / frontend build:\
+      \ PROVEN.\n- frontend dependency bootstrap/audit: SHOULD_FIX — `npm ci` required;\
+      \ npm audit vulnerabilities reported.\n\n## Broad Verifier Disposition\n- B1_static_full_repo:\
+      \ batched_fix/downstream-blocker → owned by `fix-full-plan-blockers`.\n- B2_full_pytest_api_failures:\
+      \ batched_fix/downstream-blocker → owned by `fix-full-plan-blockers`.\n- B3_targeted_transport_api_failures:\
+      \ batched_fix/downstream-blocker → owned by `fix-full-plan-blockers`.\n- S1_frontend_dependency_hydration/audit:\
+      \ should_fix/disposition → owned by `fix-full-plan-blockers`.\n\n## Remediation\
+      \ Ownership Created\n- Fix step created: `fix-full-plan-blockers`, depending\
+      \ on `finalization.verify-full-plan`.\n- Retest step created: `retest-full-plan-blockers`,\
+      \ depending on `fix-full-plan-blockers`.\n- Downstream finalization steps rewired\
+      \ so doc sync / deep wiring / reviews are blocked until retest closure.\n\n\
+      ## Closure Fields\nstep_intent: verification\nexpected_result: green\nobserved_result:\
+      \ red\nfailure_alignment: failures intersect downstream `finalization.gate`;\
+      \ specifically static checks and REST/API transport/body mapping regressions.\n\
+      verdict: FAIL\nblockers:\n  - B1: ruff/mypy static failures\n  - B2: full pytest\
+      \ API failures\n  - B3: targeted transport/shared-operation API failures\norchestrator_action_hint:\
+      \ COMPLETE_AS_ISSUE_DISCOVERY_WITH_REMEDIATION_OWNER\nproduct_implementation_files_modified:\
+      \ no\nCommit hash(es): none\ngate_open_allowed: false until `retest-full-plan-blockers`\
+      \ passes\nuncertainty_sources:\n  - Whether REST tests should be updated for\
+      \ structured error envelope or product behavior should revert; remediation owns\
+      \ adjudication.\n  - npm audit vulnerabilities were not triaged because this\
+      \ was verification-only."
   - id: finalization.doc-sync
     name: Sync documentation with consolidated transport behavior
     status: pending

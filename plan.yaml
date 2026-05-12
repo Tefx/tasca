@@ -35257,7 +35257,7 @@ phases:
     claimed_at: '2026-05-12T17:15:19.936813+00:00'
   - id: dup_adoption.rest-crud-export-adoption
     name: Adopt shared create/delete/export operations in REST routes
-    status: pending
+    status: claimed
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
       \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/patron-identity\n\
@@ -35318,6 +35318,8 @@ phases:
 
       '
     agent: python-refactor-master-tacit
+    claimed_by: python-refactor-master-tacit
+    claimed_at: '2026-05-12T17:15:26.403383+00:00'
   - id: dup_adoption.mcp-shared-ops-adoption
     name: Adopt shared operations in MCP entrypoints
     status: claimed

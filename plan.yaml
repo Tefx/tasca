@@ -33798,3 +33798,12 @@ phases:
     - finalization.deep-contract-strength
     - finalization.deep-black-box-verification
     agent: gate-reviewer-tacit
+- id: web_mermaid_stream_fix
+  name: Web Mermaid stream rendering fix
+  status: pending
+  gate: Discussion stream Mermaid rendering is fixed without weakening Markdown/SVG
+    security boundaries; visible UI rendering, green tests, spec conformance, and
+    independent gate evidence are complete.
+  depends_on:
+  - ux_a11y
+  - security_fix3

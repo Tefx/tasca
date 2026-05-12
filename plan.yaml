@@ -34225,6 +34225,99 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T15:41:20.274743+00:00'
+  - id: fix-foundation-mcp-table-create-defaults
+    name: Fix MCP table.create surface and ParameterContract defaults
+    status: pending
+    description: "step_type: implementation\nwork_type: defect_repair\nagent: python-senior\n\
+      priority: HIGH\nverification_scope: local-check protecting dup_foundation.gate\
+      \ and dup_adoption unlock path\nsource_failed_steps:\n- dup_foundation.spec-conformance\n\
+      - dup_foundation.wiring-audit\nsource_retest_step: retest-foundation-conformance-wiring\n\
+      \nBatched fix for the remaining blocker-class failures reported by retest-foundation-conformance-wiring.\
+      \ Fix ALL blockers below, not just the first.\n\n## Test-to-Fix Context (MANDATORY)\n\
+      The claimed retest found these remaining blocker issues:\n\n### B2 — MCP table_create\
+      \ public surface/runtime/tool contract incomplete\n- Spec requires table.create\
+      \ input fields including `title`, `created_by`, `host_ids`, `metadata`, `policy`,\
+      \ `board`, plus dedup/invite/web response-shape considerations.\n- Current runtime\
+      \ signature only exposes `question`, `context`, `creator_patron_id`, `dedup_id`\
+      \ at `src/tasca/shell/mcp/server.py:275-280`.\n- Current contract params at\
+      \ `src/tasca/shell/mcp/tool_contracts.py:112-127` omit spec fields.\n- Shared\
+      \ operation has operation-only support at `src/tasca/shell/services/operations/table_creation.py:59-72`,\
+      \ but operation-only support is not runtime conformance.\n- Required outcome:\
+      \ either wire spec fields through MCP contract/server/entrypoint boundary OR\
+      \ provide explicit downstream non-intersection/deferred-owner proof that the\
+      \ input-surface gap cannot block `dup_foundation.gate` or `dup_adoption`.\n\
+      - Verification must include runtime/tool-contract test proving accepted/defaulted\
+      \ fields or approved downstream non-intersection.\n\n### B4 — MCP ParameterContract\
+      \ defaults incorrect\n- `src/tasca/shell/mcp/tool_contracts.py:223-234` sets\
+      \ `mentions` default to `\"running\"` and `reply_to_sequence` default to `60000`.\n\
+      - Runtime inspection showed `mentions_is_none=False`, `reply_to_sequence_is_none=False`.\n\
+      - Required outcome: defaults match spec/server signatures (`None` for optional\
+      \ params where applicable), and tests cover every optional/defaulted MCP parameter.\n\
+      - Verification must include runtime/default inspection and expanded regression\
+      \ tests.\n\n## Required Remediation\n1. Correct the MCP `table_create` runtime/tool-contract\
+      \ boundary, preserving deployability-bearing semantics:\n   - module boundary:\
+      \ `tool_contracts.py` must describe the accepted public tool parameters accurately;\n\
+      \   - runtime/entrypoint boundary: `server.py` must accept/default/forward or\
+      \ explicitly dispose spec fields without handler-only drift;\n   - external\
+      \ contract boundary: documented MCP table.create inputs and response-shape obligations\
+      \ must be either satisfied or recorded as non-intersecting with a downstream\
+      \ owner.\n2. Correct every optional/defaulted MCP `ParameterContract` value\
+      \ so contract metadata matches server signatures and spec defaults.\n3. Add/extend\
+      \ focused regressions for both accepted/defaulted table.create fields and every\
+      \ optional/defaulted MCP parameter.\n4. If any table.create input-surface field\
+      \ is intentionally deferred, add an explicit proof note in tests/evidence naming\
+      \ the downstream owner and why the gap cannot block `dup_foundation.gate` or\
+      \ `dup_adoption`.\n\n## Root Cause vs Symptom\n- Root cause: centralized MCP\
+      \ contract metadata and runtime entrypoint signatures drifted from the documented\
+      \ external tool contract.\n- Symptoms: table.create omits documented input fields\
+      \ at the runtime surface; optional parameter defaults are wrong in `ParameterContract`\
+      \ inspection.\n- Why previous fix failed: prior aggregated fix closed several\
+      \ foundation blockers but did not fully reconcile MCP runtime/tool-contract\
+      \ public-surface conformance.\n- Why this fix is not surface-level: closure\
+      \ requires runtime inspection plus regression tests across the server entrypoint\
+      \ and declarative contract metadata, not only constant edits.\n\n## Failure-Mode\
+      \ Checklist\n- missing optional field fallback/default behavior\n- explicit\
+      \ `None` default semantics for optional params\n- stale contract metadata versus\
+      \ server signature precedence\n- runtime acceptance/forwarding versus operation-only\
+      \ support\n- downstream deferred-owner proof if any field remains unwired\n\n\
+      ## Completion Criteria (stub exclusion)\nThis is an IMPLEMENTATION step. Stub-only\
+      \ completion is NOT acceptable. Each deliverable MUST contain substantive logic\
+      \ or tests that process documented MCP inputs and produces/validates outputs\
+      \ that vary based on those inputs. Private stub classes (`_Runtime*`, `_Stub*`,\
+      \ `_Placeholder*`) do not satisfy this requirement."
+    verification: '- Main path: focused tests prove MCP table_create accepts/defaults
+      the documented fields or emits an approved deferred/non-intersection proof for
+      any intentionally unwired field.
+
+      - Failure path: runtime/default inspection proves optional ParameterContract
+      defaults match server signatures/spec defaults, including `mentions is None`
+      and `reply_to_sequence is None` where applicable.
+
+      - Regression coverage: tests cover every optional/defaulted MCP parameter in
+      tool contract metadata, not only table_create.
+
+      - Drift proof: contract metadata and runtime signature no longer disagree for
+      the affected public MCP tool surface.
+
+      - Gate intersection: evidence states whether any remaining table.create field
+      gap intersects `dup_foundation.gate` or `dup_adoption`; if it does, the gap
+      is fixed here rather than deferred.'
+    evidence_template: "## refs Read Confirmation (MANDATORY)\n\nFor each ref in this\
+      \ step:\n- docs/tasca-mcp-interface-v0.1.md — key passage or \"NOT READ: <reason>\"\
+      \n- docs/tasca-http-api-v0.1.md — key passage or \"NOT READ: <reason>\"\n- src/tasca/shell/mcp/server.py\
+      \ — key passage or \"NOT READ: <reason>\"\n- src/tasca/shell/mcp/tool_contracts.py\
+      \ — key passage or \"NOT READ: <reason>\"\n- src/tasca/shell/services/operations/table_creation.py\
+      \ — key passage or \"NOT READ: <reason>\"\n\nIf no refs were provided, state:\
+      \ \"No refs for this step.\"\n\n## Fix Evidence\n- Files changed:\n- B2 closure\
+      \ evidence:\n  - table_create runtime signature/accepted inputs:\n  - tool contract\
+      \ params:\n  - accepted/defaulted field proof or deferred-owner non-intersection\
+      \ proof:\n- B4 closure evidence:\n  - optional/defaulted ParameterContract inspection\
+      \ output:\n  - parameters covered by regression tests:\n- Commands/tests run:\n\
+      ```\n<paste exact commands and output summary>\n```\n- Remaining gaps and gate\
+      \ intersection:\n- Headline: PASS | PASS_WITH_DEBT | FAIL"
+    depends_on:
+    - retest-foundation-conformance-wiring
+    agent: python-senior
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

@@ -32226,7 +32226,7 @@ phases:
 
       '
     depends_on:
-    - dup_foundation.mid-gate
+    - retest-mid-gate
     agent: python-senior-tacit
   - id: dup_foundation.wiring-audit
     name: Wiring completeness audit for shared operation foundation

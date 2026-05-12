@@ -32752,6 +32752,7 @@ phases:
     - retest-mid-gate
     - dup_foundation.mcp-tool-contracts-source
     - retest-foundation-conformance-wiring
+    - retest-foundation-mcp-table-create-defaults
     agent: gate-reviewer-tacit
   - id: dup_guardrails.gate
     name: Gate duplicate-abstraction guardrails

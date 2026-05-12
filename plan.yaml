@@ -38249,7 +38249,7 @@ phases:
 
       '
     depends_on:
-    - finalization.verify-full-plan
+    - retest-full-plan-blockers
     agent: wiring-auditor
   - id: finalization.deep-spec-conformance
     name: Deep cross-surface spec conformance audit

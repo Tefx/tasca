@@ -34093,3 +34093,78 @@ phases:
     depends_on:
     - web_mermaid_stream_fix.reproduce-red
     agent: frontend-engineer
+  - id: web_mermaid_stream_fix.green-retest
+    name: Green retest for Mermaid stream rendering
+    status: pending
+    description: 'step_type: test
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: local-check
+
+      agent: integration-verifier
+
+
+      As an INDEPENDENT TESTER, verify that the expected-red Mermaid stream rendering
+      regression is now green and that adjacent Markdown/Mermaid security behavior
+      did not regress.
+
+
+      Scope:
+
+      - Re-run the focused Stream rendering tests added in `web_mermaid_stream_fix.reproduce-red`.
+
+      - Re-run existing Mermaid renderer, SVG sanitizer, and Markdown security tests.
+
+      - Run the frontend build/typecheck path.
+
+
+      Required command families:
+
+      - Focused Vitest for `Stream.test.tsx`.
+
+      - Focused Vitest for `web/src/rendering/mermaid.security.test.ts`, `svg-sanitizer.security.test.ts`,
+      and `markdown.security.test.tsx`.
+
+      - `npm run build` from `web/` or the repo-standard equivalent.
+
+
+      Success means green runtime evidence, not just code review.'
+    verification: '- local-check protecting `web_mermaid_stream_fix.gate`
+
+      - `expected_result: green` after `web_mermaid_stream_fix.wire-renderer`.
+
+      - Evidence includes actual focused test commands and frontend build output.
+
+      - Mermaid rendering, invalid Mermaid fallback, raw HTML disabled behavior, and
+      SVG sanitizer coverage are all green.'
+    evidence_template: "## Verification Report\n\n**Tester**: integration-verifier\
+      \ (independent of implementation)\n**Scope**: Mermaid fenced code rendering\
+      \ in Web UI discussion stream\n**Independence Level**: L1\n**Timestamp**: <ISO\
+      \ 8601>\n\n### refs Read Confirmation (MANDATORY)\nFor each ref in this step:\n\
+      - web/src/components/Stream.test.tsx — key passage or \"NOT READ: <reason>\"\
+      \n- web/src/components/Stream.tsx — key passage or \"NOT READ: <reason>\"\n\
+      - web/src/rendering/mermaid.security.test.ts — key passage or \"NOT READ: <reason>\"\
+      \n- web/src/rendering/svg-sanitizer.security.test.ts — key passage or \"NOT\
+      \ READ: <reason>\"\n- web/src/rendering/markdown.security.test.tsx — key passage\
+      \ or \"NOT READ: <reason>\"\n- web/package.json — key passage or \"NOT READ:\
+      \ <reason>\"\n\nIf no refs were provided, state: \"No refs for this step.\"\n\
+      \n### Test Execution\n- Commands executed:\n  ```\n  <actual test/build commands>\n\
+      \  ```\n- Output summary:\n  ```\n  <paste key output, not only \"passed\">\n\
+      \  ```\n\n### Behavioral Proof Register\n| requirement_ref | behavior_claim\
+      \ | runtime_proof_expected | evidence_ref | status | closure_path | gate_decision_basis\
+      \ |\n| --- | --- | --- | --- | --- | --- | --- |\n| docs/tasca-web-uiux-v0.1.md\
+      \ Markdown rendering MVP | Mermaid fenced code in saying.content renders as\
+      \ a diagram | Focused Stream test / DOM output | <ref> | PROVEN/NEEDS_TEST/UNPROVEN\
+      \ | <path> | <basis> |\n| ADR-001/ADR-002 | Renderer strips init directives\
+      \ and sanitizes SVG | Security tests pass | <ref> | PROVEN/NEEDS_TEST/UNPROVEN\
+      \ | <path> | <basis> |\n\n### Issues Found\n| Severity | Description | Location\
+      \ | Reproduction |\n| --- | --- | --- | --- |\n| blocker | <issue or none> |\
+      \ <file:line> | <steps> |\n\n### Headline\n- [ ] PASS: No blocking issues found\n\
+      - [ ] PASS_WITH_DEBT: Only explicit non-blocking debt remains\n- [ ] FAIL: Blocking\
+      \ issues or blocking proof gaps remain\n\n**Confidence**: high/medium/low\n"
+    depends_on:
+    - web_mermaid_stream_fix.wire-renderer
+    agent: integration-verifier

@@ -34794,7 +34794,7 @@ phases:
       \  \"product_implementation_files_modified\": false\n}\n```"
   - id: fix-foundation-gate-blockers
     name: Fix all dup_foundation gate blockers
-    status: pending
+    status: claimed
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior\npriority: HIGH\nsymbolic_testing: false\n\nBatched remediation\
       \ for the failed dup_foundation.gate review. Fix ALL blocker families below\
@@ -34898,6 +34898,8 @@ phases:
     depends_on:
     - dup_foundation.gate
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-12T16:43:13.143378+00:00'
   - id: retest-foundation-gate-blockers
     name: Retest dup_foundation gate blocker closure
     status: pending

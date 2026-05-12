@@ -33828,6 +33828,143 @@ phases:
     - retest-mid-gate
     - dup_foundation.mcp-tool-contracts-source
     agent: python-senior-tacit
+  - id: retest-foundation-conformance-wiring
+    name: Retest foundation conformance and wiring blocker closure
+    status: pending
+    description: "step_type: gate\nstep_intent: retest_green\nexpected_result: green\n\
+      verification_scope: phase-check\nagent: gate-reviewer-tacit\npriority: HIGH\n\
+      source_failed_steps:\n- dup_foundation.spec-conformance\n- dup_foundation.wiring-audit\n\
+      \nAs an INDEPENDENT RETEST/GATE reviewer, verify that the aggregated remediation\
+      \ from fix-foundation-conformance-wiring closes BOTH concurrent failed phase-check\
+      \ reports before dup_foundation.gate or dup_adoption can proceed.\n\nThis step\
+      \ replaces the failed parallel checks as the progression blocker. It must retest\
+      \ the exact closure fields from both reports, not only review the fix summary.\n\
+      \n## Required Retest Scope\n1. Spec conformance closure:\n   - patron.register\
+      \ dedup/idempotency semantics and display_name identity separation\n   - table.create\
+      \ field/default shape, including created_by/title/host_ids/metadata/policy/board/dedup_id/invite_code/web_url\
+      \ disposition\n   - Markdown export format: `[seq=...] timestamp (speaker):\
+      \ content`, board section, stable order\n   - MCP ParameterContract defaults\
+      \ versus centralized constants/spec defaults\n   - stale-version/concurrent\
+      \ control runtime proof\n   - batch-delete ambiguity classified as clarification-owned\
+      \ or explicitly non-intersecting\n2. Wiring audit closure:\n   - shared operations\
+      \ and Result/outcome/error types have non-test production callers OR explicit\
+      \ dependency-gated adoption ownership with non-intersection proof\n   - MCP\
+      \ tool_contracts metadata is consumed by server/runtime OR explicitly dependency-gated\
+      \ with non-intersection proof\n   - dead_export hatch density no longer masks\
+      \ production-orphaned work\n3. Gate decision basis:\n   - every blocker-class\
+      \ obligation is PROVEN or has explicit non-intersection/deferred-owner proof\n\
+      \   - NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING items have closure paths and cannot\
+      \ bypass this retest\n\nFinding remaining issues is a valid retest outcome,\
+      \ but the headline must be BLOCKED unless all blocker-class obligations above\
+      \ are closed."
+    verification: '- phase-check protecting dup_foundation.gate and dup_adoption unlock
+      path
+
+      - expected_result: green; retest must prove both original failed reports are
+      closed
+
+      - Run or inspect the exact spec-conformance and wiring-audit closure fields
+      listed in this step
+
+      - Structured behavioral proof register includes requirement_ref, behavior_claim,
+      runtime_proof_expected, evidence_ref, status, closure_path, and gate_decision_basis
+      for each blocker-class item
+
+      - OPEN is allowed only when every B*/R3/W-B* blocker is PROVEN or explicitly
+      non-intersecting with downstream gates; otherwise BLOCK progression'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Aggregated Retest Report
+
+
+      **Reviewer**: gate-reviewer-tacit (independent of python-senior-tacit)
+
+      **Protects downstream gates**: dup_foundation.gate, dup_adoption unlock path
+
+
+      ## Behavioral Proof Register
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      | --- | --- | --- | --- | --- | --- | --- |
+
+      | B1 patron.register dedup/idempotency | | | | PROVEN/UNPROVEN/NON_INTERSECTING
+      | | |
+
+      | B2 table.create shape/defaults | | | | PROVEN/UNPROVEN/NON_INTERSECTING |
+      | |
+
+      | B3 Markdown export format/board order | | | | PROVEN/UNPROVEN/SPEC_CORRECTION
+      | | |
+
+      | B4 MCP ParameterContract defaults | | | | PROVEN/UNPROVEN | | |
+
+      | R3 stale-version/concurrent control runtime proof | | | | PROVEN/UNPROVEN
+      | | |
+
+      | W-B1 shared ops production adoption | | | | PROVEN/UNPROVEN/NON_INTERSECTING
+      | | |
+
+      | W-B2 tool_contracts runtime consumption | | | | PROVEN/UNPROVEN/NON_INTERSECTING
+      | | |
+
+      | W-B3 dead_export hatch density | | | | PROVEN/UNPROVEN/NON_INTERSECTING |
+      | |
+
+      | Batch-delete spec ambiguity | | | | CLARIFIED/NON_INTERSECTING/UNPROVEN |
+      | |
+
+
+      ## Closure Field Checklist
+
+      - [ ] Dedup/idempotency semantics fixed or split with spec-aligned transport-vs-identity
+      ownership
+
+      - [ ] Table.create shape/defaults covered field-by-field or deferred with explicit
+      non-intersection proof
+
+      - [ ] Markdown export matches design template or has explicit spec-correction
+      owner
+
+      - [ ] MCP ParameterContract defaults match centralized constants/spec defaults
+
+      - [ ] Stale-version/concurrent control runtime proof executed and cited
+
+      - [ ] Shared operations/outcomes used by non-test production callers or adoption
+      deferral is explicitly gated and non-intersecting
+
+      - [ ] tool_contracts consumed by runtime or adoption deferral is explicitly
+      gated and non-intersecting
+
+      - [ ] dead_export hatches removed or justified without masking orphan wiring
+
+      - [ ] Batch-delete ambiguity has clarification/verification ownership or non-intersection
+      proof
+
+
+      ## Gate Decision
+
+      - [ ] OPEN: all blocker-class obligations are PROVEN or explicitly non-intersecting/deferred
+      behind gated ownership
+
+      - [ ] BLOCKED: one or more blocker-class obligations remain NEEDS_TEST, UNPROVEN,
+      or UNCERTAIN_BLOCKING
+
+
+      **Confidence**: high/medium/low'
+    depends_on:
+    - fix-foundation-conformance-wiring
+    agent: gate-reviewer-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

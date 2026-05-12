@@ -20,6 +20,11 @@ function makeSaying(sequence: number): Saying {
   }
 }
 
+const DOCUMENTED_MERMAID_MARKDOWN = `\`\`\`mermaid
+flowchart TD
+  A --> B
+\`\`\``
+
 describe('Stream live region announcements', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -147,5 +152,21 @@ describe('Stream live region announcements', () => {
       vi.advanceTimersByTime(1)
     })
     expect(liveRegion).toHaveTextContent('1 new saying in stream')
+  })
+})
+
+describe('Stream Mermaid Markdown rendering', () => {
+  it('renders documented mermaid fences in saying content as diagrams, not ordinary code', () => {
+    const mermaidSaying: Saying = {
+      ...makeSaying(1),
+      content: DOCUMENTED_MERMAID_MARKDOWN,
+    }
+
+    const { container } = render(
+      <Stream sayings={[mermaidSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    expect(container.querySelector('code.language-mermaid')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Mermaid diagram')).toBeInTheDocument()
   })
 })

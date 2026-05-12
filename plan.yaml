@@ -35412,3 +35412,175 @@ phases:
     depends_on:
     - web_mermaid_stream_fix.spec-conformance
     agent: frontend-engineer
+  - id: web_mermaid_stream_fix.retest-spec-conformance-blockers
+    name: Retest spec-conformance blockers for Mermaid stream rendering
+    status: pending
+    description: 'step_type: verification
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: phase-check
+
+      agent: spec-verifier
+
+      independence_level: L1
+
+
+      As an INDEPENDENT SPEC VERIFIER, re-check the semantic FAIL from `web_mermaid_stream_fix.spec-conformance`
+      after `web_mermaid_stream_fix.fix-spec-conformance-blockers`.
+
+
+      Scope: B1/B2/B3 closure and explicit R8 disposition only; do not reopen unrelated
+      phase scope unless it intersects the gate.
+
+
+      Required blocker re-checks:
+
+
+      B1: SVG sanitizer is not ADR-002 strict allowlist-first. It allows non-ADR elements/attrs
+      such as `use`, `symbol`, `title`, `desc`, `textpath`, and many attributes beyond
+      ADR-002. `use` is explicitly forbidden by default in ADR-002 unless separately
+      reviewed and strictly constrained.
+
+
+      B2: URL/reference policy is weaker than ADR-002. Relative URLs, `file:`, `mailto:`,
+      and `url(...)` values are not comprehensively constrained to internal fragments.
+      ADR-002 allows internal fragments only (`#id`, `url(#id)`) and rejects javascript/data/file/http(s)/relative
+      URLs.
+
+
+      B3: Export behavior has no Mermaid-specific runtime proof. Static code suggests
+      raw content preservation, but no JSONL/Markdown export tests assert a Mermaid
+      fenced block remains a code block and no `<svg` is embedded.
+
+
+      R8 explicit disposition requirement: ADR-002 guidance prefers DOMParser/imported
+      nodes and says do not inject raw strings via innerHTML; current renderer uses
+      sanitized string with `dangerouslySetInnerHTML`. Classify R8 as one of: REMEDIATED,
+      NON_BLOCKING_NON_INTERSECTING, SPEC_STALE_OR_ADVISORY, or BLOCKER. If not remediated,
+      provide non-intersection or spec-staleness rationale sufficient for gate decision
+      basis.
+
+
+      Closure contract:
+
+      - `verdict: PASS`
+
+      - `blockers: []`
+
+      - `gate_open_allowed: true`
+
+
+      A retest that finds remaining blockers is still valuable verification, but this
+      step is not closure-complete until the closure contract above is satisfied.'
+    verification: '- phase-check protecting `web_mermaid_stream_fix.gate`
+
+      - Re-run/conduct spec conformance checks for B1/B2/B3 against ADR-002 and export
+      requirements.
+
+      - Runtime evidence includes sanitizer negative tests for forbidden elements/attrs
+      and URL/reference rules.
+
+      - Runtime evidence includes JSONL and Markdown export tests proving Mermaid
+      fenced blocks remain code blocks and no `<svg` is embedded.
+
+      - R8 is explicitly dispositioned as REMEDIATED, NON_BLOCKING_NON_INTERSECTING,
+      SPEC_STALE_OR_ADVISORY, or BLOCKER with rationale.
+
+      - Closure output MUST include exactly: `verdict: PASS`, `blockers: []`, and
+      `gate_open_allowed: true`; otherwise the phase gate must remain blocked.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - docs/adr-002-mermaid-svg-sanitization.md — key passage or "NOT READ: <reason>"
+
+      - docs/adr-001-mermaid-rendering.md — key passage or "NOT READ: <reason>"
+
+      - docs/tasca-web-uiux-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - docs/tasca-technical-design-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/svg-sanitizer.ts — key passage or "NOT READ: <reason>"
+
+      - web/src/rendering/svg-sanitizer.security.test.ts — key passage or "NOT READ:
+      <reason>"
+
+      - tests/unit/api/test_export_routes.py — key passage or "NOT READ: <reason>"
+
+      - tests/unit/test_cli_export.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/core/export_service.py — key passage or "NOT READ: <reason>"
+
+
+      ## Spec Conformance Retest Report
+
+
+      **Original failed step**: web_mermaid_stream_fix.spec-conformance
+
+      **Fix step reviewed**: web_mermaid_stream_fix.fix-spec-conformance-blockers
+
+
+      ### Requirements Register
+
+      | ID | Requirement | Evidence refs | Verdict | Notes |
+
+      | --- | --- | --- | --- | --- |
+
+      | B1 | ADR-002 strict allowlist-first SVG elements/attrs | <test/code refs>
+      | PASS/FAIL | <notes> |
+
+      | B2 | URL/reference policy allows only internal fragments | <test/code refs>
+      | PASS/FAIL | <notes> |
+
+      | B3 | Mermaid export remains fenced code with no embedded SVG | <test/code
+      refs> | PASS/FAIL | <notes> |
+
+      | R8 | DOMParser/imported nodes vs sanitized string/dangerouslySetInnerHTML
+      | <evidence refs> | REMEDIATED/NON_BLOCKING_NON_INTERSECTING/SPEC_STALE_OR_ADVISORY/BLOCKER
+      | <rationale> |
+
+
+      ### Runtime Proof
+
+      **Commands executed**:
+
+      ```
+
+      <exact commands>
+
+      ```
+
+
+      **Actual output**:
+
+      ```
+
+      <paste output showing tests/build/conformance evidence>
+
+      ```
+
+
+      ### Closure Output
+
+      ```yaml
+
+      verdict: PASS
+
+      blockers: []
+
+      gate_open_allowed: true
+
+      r8_disposition: <REMEDIATED|NON_BLOCKING_NON_INTERSECTING|SPEC_STALE_OR_ADVISORY>
+
+      ```
+
+
+      If closure is not achieved, replace the closure output with the remaining blockers
+      and keep `gate_open_allowed: false`.'
+    depends_on:
+    - web_mermaid_stream_fix.fix-spec-conformance-blockers
+    agent: spec-verifier

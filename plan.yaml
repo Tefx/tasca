@@ -32455,7 +32455,7 @@ phases:
     agent: wiring-auditor
   - id: dup_foundation.spec-conformance
     name: Verify shared foundation against HTTP/MCP specs
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -32533,6 +32533,8 @@ phases:
     - retest-mid-gate
     - dup_foundation.mcp-tool-contracts-source
     agent: spec-verifier-tacit
+    claimed_by: spec-verifier-tacit
+    claimed_at: '2026-05-12T14:33:55.404047+00:00'
   - id: dup_foundation.gate
     name: Gate shared application foundation
     status: pending

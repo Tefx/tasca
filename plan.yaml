@@ -32665,7 +32665,7 @@ phases:
       orchestrator_action_hint: DO_NOT_COMPLETE'
   - id: dup_foundation.gate
     name: Gate shared application foundation
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -32760,6 +32760,118 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T16:27:51.288753+00:00'
+    done_at: '2026-05-12T16:42:32.637543+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n\nNo refs for this step.\n\n\
+      ## Gate Review Report\n| Step ID | Status | Evidence Quality | Concerns |\n\
+      | ------- | ------ | ---------------- | -------- |\n| dup_foundation.gate |\
+      \ FAIL | Strong: source inspection + full pytest + targeted MCP/shared-op tests\
+      \ + invar guard | Shared-operation ownership seam remains unsafe: REST table/control/batch-delete\
+      \ still bypass foundation shared operations; full test suite has 5 failures.\
+      \ |\n\n## Wiring Audit Results (W1-W8 or equivalent)\n| Check | Result | Evidence\
+      \ | Notes |\n| ----- | ------ | -------- | ----- |\n| W1 shared-operation ownership\
+      \ | FAIL | `src/tasca/shell/services/operations/table_control.py:175`, `table_creation.py:59`,\
+      \ `batch_delete.py:50`, `table_export.py:53`, `patron_registration.py:68` define\
+      \ owners; REST bypasses several owners. | Ownership exists but is not singularly\
+      \ adopted. |\n| W2 REST/MCP boundary separation | FAIL | MCP calls shared ops\
+      \ in `src/tasca/shell/mcp/entrypoints.py:209`, `306`, `583`, `626`, `1054`;\
+      \ REST still calls lower-level repos in `src/tasca/shell/api/routes/tables.py:123`,\
+      \ `144`, `445` and `tables_control.py:164`. | Unsafe seam: REST adapters duplicate\
+      \ table create/control/batch-delete orchestration instead of shared ops. |\n\
+      | W3 MCP tool-contract source | PASS | `src/tasca/shell/mcp/server.py:66` imports\
+      \ `parameter_field`; signatures use it at lines `244-250`, `276-285`, `386-389`,\
+      \ `499-500`; `tests/unit/mcp/test_tool_contracts.py:107-137` verifies defaults\
+      \ match runtime. | Declarative contracts are runtime-consumed. |\n| W4 table.create\
+      \ defaults/shape | PASS for MCP, PARTIAL overall | `tests/unit/mcp/test_mcp_server.py:211-244`;\
+      \ `tests/integration/test_mcp.py:411-438`; `src/tasca/shell/services/operations/table_creation.py:141-149`.\
+      \ | REST create still bypasses shared creation owner at `src/tasca/shell/api/routes/tables.py:123-144`.\
+      \ |\n| W5 patron.register dedup/idempotency | PASS | `src/tasca/shell/services/operations/patron_registration.py:111-150`;\
+      \ `tests/unit/services/test_registration_creation_operations.py:34-56`. | REST\
+      \ patron tests passed in targeted run. |\n| W6 control atomicity/stale-version/canonical\
+      \ audit | FAIL | Full pytest failure: `tests/unit/test_dup_guardrails_control_red.py:96-123`,\
+      \ `126-139`, `142-175`; REST route directly uses `atomic_control_table` and\
+      \ custom formatting at `src/tasca/shell/api/routes/tables_control.py:153-164`,\
+      \ not `execute_table_control`. | Exact unsafe ownership seam blocking adoption.\
+      \ |\n| W7 export markdown/runtime adoption | FAIL regression | Full pytest failure:\
+      \ `tests/unit/test_cli_export.py:148`; current markdown shape from `src/tasca/core/export_service.py:306-313`\
+      \ no longer matches test expectation. | Export shared op exists and REST/MCP\
+      \ use it, but full regression suite fails. |\n| W8 dead/orphan/escape hatch\
+      \ density | WARNING | Escape hatch grep found 160 `@invar:allow` matches in\
+      \ `src/tasca`; MCP/server/entrypoints have high hatch density. Invar guard passed.\
+      \ | Not independently blocking because guard passes, but density remains a maintainability\
+      \ risk. |\n\n## Escape Hatch Audit Results\n- @invar:allow / escape hatches\
+      \ inspected in MCP server/entrypoints/tool_contracts and REST routes.\n- No\
+      \ `dead_export` hatch found in inspected changed/foundation surfaces.\n- High\
+      \ MCP hatch density is acknowledged but not primary blocker.\n- `invar guard`\
+      \ passed with 0 errors/warnings.\n\n## Smoke / Liveness Evidence\n- Runtime\
+      \ surfaces touched: MCP server/tool contract surface; shared shell operations\
+      \ for patron registration, table creation, table control, table export, batch\
+      \ delete; REST control/table/batch-delete/export routes intersect due shared-operation\
+      \ adoption requirement.\n- Commands/probes:\n  - `.venv/bin/invar guard` → PASS,\
+      \ 0 errors/warnings.\n  - `.venv/bin/python -m pytest tests/unit/mcp/test_tool_contracts.py\
+      \ tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py -q` → 152\
+      \ passed.\n  - `.venv/bin/python -m pytest tests/unit/services/test_registration_creation_operations.py\
+      \ tests/unit/services/operations/test_table_control.py tests/unit/storage/test_control_repo.py\
+      \ tests/unit/storage/test_batch_delete_repo.py tests/unit/api/test_export_routes.py\
+      \ tests/unit/api/test_patrons_routes.py -q` → 75 passed.\n  - `.venv/bin/python\
+      \ -m pytest tests/unit/api/test_tables_routes.py -q` → 42 passed.\n  - `.venv/bin/python\
+      \ -m pytest -q` → FAIL: 5 failed, 1098 passed.\n- Fixture-vs-real integration\
+      \ distinction:\n  - `tests/integration/test_mcp.py` uses in-process HTTP/TestClient\
+      \ MCP protocol fixtures, not an external live server.\n  - Unit MCP tests use\
+      \ in-memory SQLite and fixture-patched MCP DB.\n  - No external deployed runtime\
+      \ smoke was performed.\n\n## CLI Surface Preservation\n- CLI touched? yes: MCP\
+      \ entrypoint/packaged version surface intersects `tasca-mcp`.\n- Matrix/evidence:\n\
+      \  - `.venv/bin/tasca --help` printed CLI usage.\n  - `.venv/bin/tasca-mcp --help`\
+      \ initialized FastMCP stdio server output instead of normal help-only exit.\n\
+      \  - Blocking CLI regression is full pytest failure in `tests/unit/test_cli_export.py:148`.\n\
+      \n## Issues Identified\n| Severity | Description | Related Step | Blocking?\
+      \ |\n| -------- | ----------- | ------------ | --------- |\n| BLOCKER | Full\
+      \ regression suite fails: 5 failed, 1098 passed. | dup_foundation.gate | yes\
+      \ |\n| BLOCKER | REST control route does not accept documented HTTP payload\
+      \ without `speaker_name`; failure at `tests/unit/test_dup_guardrails_control_red.py:126-139`;\
+      \ route requires `speaker_name` at `src/tasca/shell/api/routes/tables_control.py:50-55`.\
+      \ | control adoption | yes |\n| BLOCKER | REST and MCP control audit content\
+      \ diverges; failure at `tests/unit/test_dup_guardrails_control_red.py:142-175`;\
+      \ REST builds `Completed` without `Reason:` at `src/tasca/shell/api/routes/tables_control.py:153-156`.\
+      \ | control adoption | yes |\n| BLOCKER | REST control bypasses shared `execute_table_control`;\
+      \ direct atomic call at `src/tasca/shell/api/routes/tables_control.py:164`,\
+      \ while shared owner is `src/tasca/shell/services/operations/table_control.py:175`.\
+      \ | control adoption | yes |\n| BLOCKER | REST table creation and batch-delete\
+      \ bypass shared owners; `src/tasca/shell/api/routes/tables.py:123-144` and `445`\
+      \ call lower-level services/repos instead of `create_discussion_table` / `delete_tables_batch`.\
+      \ | shared-op adoption | yes |\n| BLOCKER | CLI markdown export regression:\
+      \ `tests/unit/test_cli_export.py:148` expects metadata table row absent from\
+      \ current output. | export surface | yes |\n| BLOCKER | Startup policy wiring\
+      \ regression: `tests/unit/test_usercustomize.py:17` cannot import `tasca.shell.invar_runtime_policy`.\
+      \ | runtime guard | yes |\n| WARNING | Worktree had pre-existing dirty `uv.lock`\
+      \ version drift (`0.1.28` -> `0.1.29`) before review and remains dirty. | worktree\
+      \ hygiene | no, but should be reconciled by owner |\n\n## Gate Decision\nheadline:\
+      \ FAIL\nverdict: FAIL\nblockers:\n  - Full regression suite fails: `.venv/bin/python\
+      \ -m pytest -q` => 5 failed, 1098 passed.\n  - Unsafe ownership seam: REST control/table-create/batch-delete\
+      \ adapters still bypass shared-operation owners.\n  - REST control documented\
+      \ payload/canonical audit formatting blockers remain.\n  - CLI markdown export\
+      \ and usercustomize runtime policy regressions remain.\nproof_gap_status: BLOCKING\n\
+      blocking_status: OPEN\ngate_open_allowed: false\norchestrator_action_hint: DO_NOT_COMPLETE\n\
+      \n## Verification\n- Commands/inspections run:\n  - `pwd && git status --short\
+      \ --branch && git log --oneline -8`\n  - `git diff -- uv.lock && git diff --stat\
+      \ HEAD~8..HEAD && git diff --name-only HEAD~8..HEAD`\n  - `.venv/bin/invar guard`\
+      \ → PASS\n  - `.venv/bin/python -m pytest tests/unit/mcp/test_tool_contracts.py\
+      \ tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py -q` → PASS,\
+      \ 152 passed\n  - `.venv/bin/python -m pytest tests/unit/services/test_registration_creation_operations.py\
+      \ tests/unit/services/operations/test_table_control.py tests/unit/storage/test_control_repo.py\
+      \ tests/unit/storage/test_batch_delete_repo.py tests/unit/api/test_export_routes.py\
+      \ tests/unit/api/test_patrons_routes.py -q` → PASS, 75 passed\n  - `.venv/bin/python\
+      \ -m pytest tests/unit/api/test_tables_routes.py -q` → PASS, 42 passed\n  -\
+      \ `.venv/bin/python -m pytest -q` → FAIL, 5 failed / 1098 passed\n  - `.venv/bin/tasca\
+      \ --help && .venv/bin/tasca-mcp --help` → `tasca --help` printed usage; `tasca-mcp\
+      \ --help` initialized FastMCP stdio server output\n  - Source inspections listed\
+      \ above.\n- Files changed: none by auditor. Pre-existing dirty file observed:\
+      \ `uv.lock`.\n- Commit hash(es): none — read-only gate verification; no auditor\
+      \ changes to commit.\n\n## Remediation Ownership Created\n- Planner added batched\
+      \ implementation fix step `fix-foundation-gate-blockers` depending on this gate\
+      \ report.\n- Planner added independent downstream retest step `retest-foundation-gate-blockers`\
+      \ depending on the fix.\n- `dup_adoption` remains locked by phase dependency\
+      \ on `dup_foundation`, so downstream unlock cannot proceed until the new retest\
+      \ path is resolved."
   - id: dup_guardrails.gate
     name: Gate duplicate-abstraction guardrails
     status: done

@@ -38634,7 +38634,7 @@ phases:
     agent: gate-reviewer-tacit
   - id: fix-full-plan-blockers
     name: Remediate full-plan verifier blockers in one batch
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -38942,6 +38942,121 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-12T20:24:50.363527+00:00'
+    done_at: '2026-05-12T20:44:17.418887+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Batched Full-Plan Remediation Evidence
+
+      **Source verifier**: finalization.verify-full-plan
+
+      **Remediation type**: closure step
+
+
+      ### Blocker Register
+
+      | Blocker | Disposition | Command/Test | Result | Residual Risk |
+
+      | --- | --- | --- | --- | --- |
+
+      | B1_static_full_repo | Fixed | `.venv/bin/python -m ruff check .`; `.venv/bin/python
+      -m mypy src/tasca` | Ruff: `All checks passed!`; Mypy: `Success: no issues found
+      in 78 source files` | None identified |
+
+      | B2_full_pytest_api_failures | Fixed | `.venv/bin/python -m pytest`; exact
+      six REST regression tests | Full pytest: `1119 passed`; exact REST regression
+      tests: `6 passed` | None identified |
+
+      | B3_targeted_transport_api_failures | Fixed | `.venv/bin/python -m pytest tests/unit/api
+      tests/unit/mcp/test_mcp_server.py tests/unit/services/test_limited_saying_service.py`
+      | `259 passed` | None identified |
+
+      | S1_frontend_dependency_hydration/audit | Dispositioned; partially remediated
+      | `npm ci`; `npm audit fix`; `npm run build && npm run lint && npm test`; `npm
+      audit --audit-level=moderate` | Hydration succeeded; non-breaking audit fix
+      reduced 18 vulnerabilities to 9; build/lint/test passed (`197 passed`) | Deferred:
+      remaining audit issues require breaking/out-of-range upgrades (`vite@8.0.12`,
+      `mermaid@11.15.0`) affecting frontend dependency policy, not Python/API finalization
+      blockers |
+
+
+      ### Root Cause and Fix Summary
+
+      - B1: repo-wide static enforcement exposed accumulated ruff formatting/modernization
+      debt and mypy issues around fallback imports, row typing, untyped decorators,
+      and return casts. Applied safe ruff cleanup and targeted typing fixes at source.
+
+      - B2/B3: product behavior is standardized REST error envelopes and 400 transport
+      validation for shared patron/table operations. Updated stale tests to assert
+      intentional structured envelope/status semantics instead of plain-string detail
+      or legacy status codes.
+
+      - S1: `web/node_modules` was absent and required `npm ci`; non-breaking `npm
+      audit fix` was applied; remaining vulnerabilities require breaking dependency
+      upgrades and are dispositioned as non-blocking for the current finalization
+      gate.
+
+
+      ### Worktree Verification
+
+      - `.venv/bin/python -m ruff check .` → `All checks passed!`
+
+      - `.venv/bin/python -m mypy src/tasca` → `Success: no issues found in 78 source
+      files`
+
+      - `.venv/bin/python -m pytest` → `1119 passed in 11.75s`
+
+      - Exact stale REST tests → `6 passed in 0.30s`
+
+      - Targeted transport/shared-operation suite → `259 passed in 4.41s`
+
+      - `npm ci` → installed 510 packages
+
+      - `npm audit fix` → changed 18 packages; reduced audit from 18 vulnerabilities
+      to 9
+
+      - `npm run build && npm run lint && npm test` → build passed; lint passed with
+      11 warnings under max 20; web tests `197 passed`
+
+      - `npm audit --audit-level=moderate` → 9 remaining vulnerabilities requiring
+      breaking/out-of-range force upgrades
+
+
+      ### Mainline Verification Barrier
+
+      - Squash merge committed as `0186e43` (`[vectl] step-fix-full-plan-blockers
+      completed`).
+
+      - `.venv/bin/python -m ruff check . && .venv/bin/python -m mypy src/tasca` →
+      ruff all checks passed; mypy no issues.
+
+      - `.venv/bin/python -m pytest` → `1119 passed in 9.84s`.
+
+      - `.venv/bin/python -m pytest tests/unit/api tests/unit/mcp/test_mcp_server.py
+      tests/unit/services/test_limited_saying_service.py -q` → `259 passed in 4.51s`.
+
+      - In `web/`: `npm ci && npm run build && npm run lint && npm test -- --run`
+      → hydration/build/lint/test passed; lint 0 errors/11 warnings; Vitest 197 passed.
+
+      - In `web/`: `npm audit --audit-level=moderate` → 9 remaining vulnerabilities,
+      all requiring breaking/out-of-range upgrades (`vite@8.0.12`, `mermaid@11.15.0`)
+      for full remediation.
+
+
+      ### Implementation Evidence
+
+      - Worktree commit hash(es): `b0b22efc44f968880eed536f1e412a0615369f4c`.
+
+      - Mainline squash commit: `0186e43`.
+
+      - Files changed: Python source/tests, `uv.lock`, `web/package-lock.json`, new
+      `tests/unit/api/error_assertions.py`.
+
+      - Residual blockers: None for B1/B2/B3. S1 residual audit risk is deferred as
+      non-blocking due breaking frontend dependency upgrades required; retest owns
+      independent confirmation of this disposition.'
   - id: retest-full-plan-blockers
     name: Retest full-plan verifier blockers after batched remediation
     status: pending

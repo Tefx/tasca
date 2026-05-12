@@ -11,17 +11,31 @@ All database operations use Result[T, E] for error handling.
 
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import NewType
 
 from returns.result import Failure, Result, Success
 
 from tasca.core.domain.patron import PatronId
 from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
-from tasca.core.services.saying_service import compute_next_sequence, get_max_sequence
+from tasca.core.services.saying_service import compute_next_sequence
 
 # Type for repository errors
 SayingError = NewType("SayingError", str)
+
+
+class SayingExportSizeExceededError(Exception):
+    """Export content exceeds the configured byte limit."""
+
+    def __init__(self, table_id: str, estimated_bytes: int, max_bytes: int) -> None:
+        self.table_id = table_id
+        self.estimated_bytes = estimated_bytes
+        self.max_bytes = max_bytes
+        super().__init__(
+            f"Export size exceeded: table has ~{estimated_bytes // (1024 * 1024)} MiB "
+            f"of content (limit: {max_bytes // (1024 * 1024)} MiB). "
+            f"Use a larger max_bytes limit if needed."
+        )
 
 
 # @shell_orchestration: Multi-step operation with transaction
@@ -57,7 +71,7 @@ def append_saying(
     try:
         # Generate saying ID
         saying_id = SayingId(str(uuid.uuid4()))
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         cursor = conn.cursor()
 
@@ -267,14 +281,6 @@ def get_recent_sayings(
         Or Failure with error.
     """
     try:
-        # Get total count to determine if there are older sayings
-        cursor = conn.execute(
-            "SELECT COUNT(*) FROM sayings WHERE table_id = ?",
-            (table_id,),
-        )
-        total_row = cursor.fetchone()
-        total_count = int(total_row[0]) if total_row else 0
-
         # Get recent sayings in descending order (newest first)
         # Fetch more than limit to check for has_more
         cursor = conn.execute(
@@ -293,8 +299,6 @@ def get_recent_sayings(
         # Apply byte limit while collecting sayings
         sayings: list[Saying] = []
         total_bytes = 0
-        has_more_by_count = len(rows) > limit
-
         for row in rows[:limit]:  # Only consider up to limit
             saying = _row_to_saying(row)
             content_bytes = len(saying.content.encode("utf-8"))
@@ -321,9 +325,6 @@ def get_recent_sayings(
         oldest_sequence = sayings[0].sequence
         history_sequence = oldest_sequence - 1
 
-        # has_more: are there sayings older than the oldest we returned?
-        has_more = oldest_sequence > 0 or (total_count > len(sayings))
-
         # More precise check: is there a saying with sequence < oldest_sequence?
         cursor = conn.execute(
             "SELECT 1 FROM sayings WHERE table_id = ? AND sequence < ? LIMIT 1",
@@ -348,7 +349,7 @@ def list_all_sayings_by_table(
     conn: sqlite3.Connection,
     table_id: str,
     max_bytes: int = DEFAULT_EXPORT_MAX_BYTES,
-) -> Result[list[Saying], SayingError]:
+) -> Result[list[Saying], SayingError | SayingExportSizeExceededError]:
     """List ALL sayings for a table for export WITHOUT count truncation.
 
     This is the export path function - it does NOT truncate by count.
@@ -385,13 +386,7 @@ def list_all_sayings_by_table(
             estimated_bytes = total_chars * 2
 
             if estimated_bytes > max_bytes:
-                return Failure(
-                    SayingError(
-                        f"Export size exceeded: table has ~{estimated_bytes // (1024 * 1024)} MiB "
-                        f"of content (limit: {max_bytes // (1024 * 1024)} MiB). "
-                        f"Use a larger max_bytes limit if needed."
-                    )
-                )
+                return Failure(SayingExportSizeExceededError(table_id, estimated_bytes, max_bytes))
 
         # Fetch ALL sayings without count limit
         cursor = conn.execute(

@@ -8,21 +8,22 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
-from typing import Generator
+from collections.abc import Generator
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from returns.result import Failure, Success
 
 from tasca.core.domain.patron import PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.shell.api.routes.export import router
+from tasca.shell.services.operations.table_export import export_table
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.saying_repo import append_saying
 from tasca.shell.storage.table_repo import create_table
-
 
 # =============================================================================
 # Test Fixtures
@@ -30,7 +31,7 @@ from tasca.shell.storage.table_repo import create_table
 
 
 @pytest.fixture
-def test_db() -> Generator[sqlite3.Connection, None, None]:
+def test_db() -> Generator[sqlite3.Connection]:
     """Create an in-memory database with tables schema."""
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     apply_schema(conn)
@@ -43,7 +44,7 @@ def app(test_db: sqlite3.Connection) -> FastAPI:
     """Create a FastAPI app with export router and test database."""
     app = FastAPI()
 
-    def get_test_db() -> Generator[sqlite3.Connection, None, None]:
+    def get_test_db() -> Generator[sqlite3.Connection]:
         yield test_db
 
     from tasca.shell.api.deps import get_db
@@ -73,7 +74,7 @@ def create_test_table(
     status: TableStatus = TableStatus.OPEN,
 ) -> Table:
     """Create a test table directly in the database."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     table = Table(
         id=TableId(table_id),
         question=question,
@@ -565,3 +566,65 @@ class TestExportIntegration:
         assert table2.id not in response1.text
         assert table2.id in response2.text
         assert table1.id not in response2.text
+
+
+class TestExportOperation:
+    """Tests for shared export operation used by REST and MCP adapters."""
+
+    def test_operation_selects_jsonl_formatter_and_returns_payload(
+        self, test_db: sqlite3.Connection
+    ) -> None:
+        table = create_test_table(test_db, "table-op", "Shared operation?")
+        create_test_saying(test_db, table.id, "Operation content", speaker_name="Speaker")
+
+        result = export_table(
+            test_db,
+            table.id,
+            "jsonl",
+            exported_at="2024-01-01T00:00:00+00:00",
+        )
+
+        assert isinstance(result, Success)
+        outcome = result.unwrap()
+        assert outcome.status == "ok"
+        assert outcome.filename == "table-op.jsonl"
+        assert outcome.table is not None
+        assert len(outcome.sayings) == 1
+        assert outcome.content is not None
+        lines = outcome.content.split("\n")
+        assert json.loads(lines[0])["type"] == "export_header"
+        assert json.loads(lines[2])["saying"]["content"] == "Operation content"
+
+    def test_operation_returns_typed_not_found(self, test_db: sqlite3.Connection) -> None:
+        result = export_table(test_db, "missing", "markdown")
+
+        assert isinstance(result, Failure)
+        outcome = result.failure()
+        assert outcome.status == "not_found"
+        assert outcome.content is None
+        assert outcome.error == "Table not found: missing"
+
+    def test_operation_returns_typed_invalid_format(self, test_db: sqlite3.Connection) -> None:
+        table = create_test_table(test_db, "format-op", "Format?")
+
+        result = export_table(test_db, table.id, "xml")
+
+        assert isinstance(result, Failure)
+        outcome = result.failure()
+        assert outcome.status == "invalid_format"
+        assert outcome.content is None
+        assert "Supported formats" in (outcome.error or "")
+
+    def test_operation_returns_typed_limit_exceeded(self, test_db: sqlite3.Connection) -> None:
+        table = create_test_table(test_db, "limit-op", "Limit?")
+        create_test_saying(test_db, table.id, "0123456789", speaker_name="Speaker")
+
+        result = export_table(test_db, table.id, "markdown", max_bytes=1)
+
+        assert isinstance(result, Failure)
+        outcome = result.failure()
+        assert outcome.status == "limit_exceeded"
+        assert outcome.table is not None
+        assert outcome.estimated_bytes is not None
+        assert outcome.max_bytes == 1
+        assert outcome.content is None

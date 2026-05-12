@@ -6,17 +6,17 @@ from datetime import datetime
 import pytest
 from returns.result import Failure, Success
 
-from tasca.core.domain.seat import Seat, SeatId, SeatState
 from tasca.core.domain.saying import Speaker, SpeakerKind
+from tasca.core.domain.seat import Seat, SeatId, SeatState
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
+from tasca.shell.services.operations.batch_delete import delete_tables_batch
 from tasca.shell.storage.database import apply_schema
-from tasca.shell.storage.seat_repo import create_seat
 from tasca.shell.storage.saying_repo import append_saying
+from tasca.shell.storage.seat_repo import create_seat
 from tasca.shell.storage.table_repo import (
     batch_delete_tables,
     create_table,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -220,3 +220,43 @@ class TestErrors:
         result = batch_delete_tables(db_conn, ["t1"])
         assert isinstance(result, Success)
         assert db_conn.execute("SELECT COUNT(*) FROM tables").fetchone()[0] == 0
+
+
+class TestBatchDeleteOperation:
+    def test_operation_deletes_valid_closed_tables(self, db_conn):
+        create_table(db_conn, _make_table("t1"))
+        create_table(db_conn, _make_table("t2"))
+
+        result = delete_tables_batch(db_conn, ["t1", "t2"])
+
+        assert isinstance(result, Success)
+        outcome = result.unwrap()
+        assert outcome.status == "deleted"
+        assert set(outcome.deleted_ids) == {"t1", "t2"}
+        assert outcome.rejections == []
+        assert db_conn.execute("SELECT COUNT(*) FROM tables").fetchone()[0] == 0
+
+    def test_operation_returns_shared_precondition_details_without_deleting(self, db_conn):
+        create_table(db_conn, _make_table("closed"))
+        create_table(db_conn, _make_table("open", status=TableStatus.OPEN))
+
+        result = delete_tables_batch(db_conn, ["closed", "open", "missing"])
+
+        assert isinstance(result, Failure)
+        outcome = result.failure()
+        assert outcome.status == "precondition_failed"
+        assert outcome.deleted_ids == []
+        assert [(r.table_id, r.reason) for r in outcome.rejections] == [
+            ("open", "TABLE_NOT_CLOSED"),
+            ("missing", "NOT_FOUND"),
+        ]
+        assert db_conn.execute("SELECT id FROM tables WHERE id = 'closed'").fetchone()[0] == "closed"
+
+    def test_operation_returns_typed_invalid_request(self, db_conn):
+        result = delete_tables_batch(db_conn, [])
+
+        assert isinstance(result, Failure)
+        outcome = result.failure()
+        assert outcome.status == "invalid_request"
+        assert outcome.max_batch_size == 100
+        assert outcome.error is not None

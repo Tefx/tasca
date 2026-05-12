@@ -38876,6 +38876,206 @@ phases:
     depends_on:
     - finalization.verify-full-plan
     agent: python-senior
+  - id: retest-full-plan-blockers
+    name: Retest full-plan verifier blockers after batched remediation
+    status: pending
+    description: 'step_type: test
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: full-plan-check
+
+      work_type: technical_debt_remediation
+
+      agent: integration-verifier-tacit
+
+      priority: HIGH
+
+
+      As an INDEPENDENT TESTER, retest the blocker families reported by `finalization.verify-full-plan`
+      after `fix-full-plan-blockers`.
+
+
+      This retest is the closure gate for the batched remediation path. Downstream
+      finalization doc sync, deep review, and final gate may not proceed until this
+      step records `gate_open_allowed: true`.
+
+
+      ## Required command coverage
+
+      Rerun exact failed commands or validated reduced equivalents plus the full finalization
+      verification command set:
+
+      - Static/type closure: `.venv/bin/python -m ruff check . && .venv/bin/python
+      -m mypy src/tasca`
+
+      - Full pytest closure for B2: rerun the full pytest command used by `finalization.verify-full-plan`,
+      or a validated reduced equivalent for rapid iteration followed by the full finalization
+      pytest command before OPEN.
+
+      - Targeted transport/shared-operation closure for B3: rerun the targeted command
+      that produced `4 failed, 219 passed`, or a reduced equivalent with exact listed
+      tests plus sibling stale-envelope tests, followed by the full finalization verification
+      command set before OPEN.
+
+      - Frontend hydration/audit disposition for S1: from `web/`, run dependency hydration
+      (`npm ci`) when `node_modules` is absent in the isolated environment, rerun
+      required frontend build/typecheck/security/Mermaid checks from finalization,
+      and record npm audit disposition.
+
+      - Previously proven non-blocking finalization checks must remain accounted for:
+      invar full scan, Web Mermaid Stream rendering, markdown raw HTML protection,
+      Mermaid init stripping, SVG sanitizer, frontend build/typecheck, atomic control,
+      export, and tool-schema consolidation.
+
+
+      ## Closure fields (MANDATORY)
+
+      Evidence MUST include these parseable fields:
+
+      - `verdict`: `PASS` or `FAIL`
+
+      - `blockers`: list of remaining blocker ids, empty only when closed
+
+      - `gate_open_allowed`: true only when B1/B2/B3 are closed and S1 has explicit
+      non-blocking or fixed disposition
+
+
+      ## Behavioral proof register
+
+      For each blocker/proof obligation, include:
+
+      - `requirement_ref`
+
+      - `behavior_claim`
+
+      - `runtime_proof_expected`
+
+      - `evidence_ref`
+
+      - `status`: PROVEN | NEEDS_TEST | UNPROVEN | UNCERTAIN_BLOCKING
+
+      - `closure_path`
+
+      - `gate_decision_basis`
+
+
+      `NEEDS_TEST`, `UNPROVEN`, and `UNCERTAIN_BLOCKING` MUST keep `gate_open_allowed:
+      false` unless explicit non-intersection evidence is recorded.'
+    verification: '- expected_result: green.
+
+      - `.venv/bin/python -m ruff check . && .venv/bin/python -m mypy src/tasca` is
+      green or any remaining item has explicit accepted non-intersection evidence;
+      default is FAIL if the command still fails.
+
+      - Full pytest or validated reduced equivalent plus final full command set proves
+      the six REST API failures and targeted transport/shared-operation failures are
+      closed.
+
+      - Frontend hydration/audit disposition is present and does not hide high/moderate
+      vulnerabilities without explicit finalization-gate rationale.
+
+      - Evidence includes parseable `verdict`, `blockers`, and `gate_open_allowed`;
+      downstream gate may open only with `verdict: PASS`, `blockers: []`, `gate_open_allowed:
+      true`.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Full-Plan Remediation Retest Report
+
+
+      verdict: <PASS|FAIL>
+
+      blockers: []
+
+      gate_open_allowed: <true|false>
+
+
+      ### Commands Executed
+
+      ```text
+
+      <paste exact commands and working directories>
+
+      ```
+
+
+      ### Command Results
+
+      | Obligation | Command | Result | Evidence Ref |
+
+      | --- | --- | --- | --- |
+
+      | B1 ruff/mypy | `.venv/bin/python -m ruff check . && .venv/bin/python -m mypy
+      src/tasca` | <PASS/FAIL> | <log/ref> |
+
+      | B2 full pytest API failures | <full pytest or validated equivalent plus final
+      full command> | <PASS/FAIL> | <log/ref> |
+
+      | B3 targeted transport/shared-operation failures | <targeted command> | <PASS/FAIL>
+      | <log/ref> |
+
+      | S1 frontend hydration/audit | `npm ci` / audit / build/typecheck/security
+      checks | <PASS/DEFERRED> | <log/ref> |
+
+      | Previously proven non-blocking finalization checks | <commands> | <PASS/WARN>
+      | <log/ref> |
+
+
+      ### Behavioral Proof Register
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      | --- | --- | --- | --- | --- | --- | --- |
+
+      | B1_static_full_repo | Static/type command family is authoritative and closed
+      | ruff + mypy green | <ref> | <PROVEN/NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING>
+      | <path> | <OPEN/BLOCK basis> |
+
+      | B2_full_pytest_api_failures | REST error envelope/status expectations reconciled
+      | full pytest or validated full final command | <ref> | <status> | <path> |
+      <basis> |
+
+      | B3_targeted_transport_api_failures | Targeted shared-operation REST failures
+      closed | targeted pytest | <ref> | <status> | <path> | <basis> |
+
+      | S1_frontend_dependency_hydration/audit | Frontend deps/audit are fixed or
+      explicitly non-blocking | npm ci + audit/build/typecheck/security evidence |
+      <ref> | <status> | <path> | <basis> |
+
+
+      ### Failure Details If Any
+
+      ```text
+
+      <remaining failures or NONE>
+
+      ```
+
+
+      ### Final Closure Decision
+
+      - verdict: <PASS|FAIL>
+
+      - blockers: <list>
+
+      - gate_open_allowed: <true|false>
+
+      '
+    depends_on:
+    - fix-full-plan-blockers
+    agent: integration-verifier-tacit
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

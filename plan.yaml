@@ -34786,6 +34786,140 @@ phases:
     depends_on:
     - dup_foundation.gate
     agent: python-senior
+  - id: retest-foundation-gate-blockers
+    name: Retest dup_foundation gate blocker closure
+    status: pending
+    description: 'step_type: gate
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: phase-check
+
+      work_type: technical_debt_remediation
+
+      agent: gate-reviewer-tacit
+
+      independence_level: L2
+
+
+      Independent adversarial retest of the dup_foundation.gate blocker batch after
+      `fix-foundation-gate-blockers`.
+
+
+      As an INDEPENDENT REVIEWER, assess whether all blocker families from the failed
+      dup_foundation.gate are closed and whether dup_adoption may safely unlock. Finding
+      issues is valuable; block progress if evidence is incomplete or any gate-intersecting
+      blocker remains open.
+
+
+      ## Required Retest Coverage
+
+      1. Full regression proof for `.venv/bin/python -m pytest -q` or justified mainline-equivalent
+      `uv run pytest -q`.
+
+      2. REST shared-operation ownership seam: table control, table creation, and
+      batch-delete REST adapters must consume shared operation owners or have explicit
+      non-intersection proof.
+
+      3. REST control documented payload and canonical audit parity with MCP.
+
+      4. CLI markdown export surface preservation and spec-coverage strength.
+
+      5. Startup policy import/runtime wiring validity for `tasca.shell.invar_runtime_policy`
+      or documented intentional path change with non-intersection proof.
+
+      6. Worktree hygiene: verify no unowned `uv.lock` drift is included unless justified.
+
+
+      ## Required Audits
+
+      - Wiring audit: inspect route/entrypoint paths and cite file:line evidence that
+      shared owners are used.
+
+      - Escape hatch audit: verify no guardrail bypass, skip marker, or test weakening
+      was used to hide blocker families.
+
+      - CLI surface preservation: if CLI export was touched, verify canonical markdown
+      output and CLI tests remain meaningful.
+
+      - Smoke/liveness evidence: include at least one real REST/control or CLI invocation/test
+      path that exercises the rewired surface end-to-end.
+
+      - Full regression proof: paste the command and output, not just a summary.
+
+
+      ## Decision Fields (MANDATORY)
+
+      Return all fields exactly:
+
+      - `headline`: PASS | PASS_WITH_DEBT | FAIL
+
+      - `verdict`: PASS | FAIL
+
+      - `blockers`: list
+
+      - `proof_gap_status`: CLOSED | OPEN | BLOCKING
+
+      - `blocking_status`: CLOSED | OPEN
+
+      - `gate_open_allowed`: true | false
+
+      - `orchestrator_action_hint`: COMPLETE_GATE | DO_NOT_COMPLETE | CREATE_FIX
+
+
+      Gate may open only when all blocker-class behavioral obligations are PROVEN
+      or have explicit non-intersection evidence.'
+    verification: '- phase-check protecting dup_foundation.gate, dup_adoption unlock,
+      finalization full regression, invar guard, and CLI surface preservation.
+
+      - Decision fields are present: headline, verdict, blockers, proof_gap_status,
+      blocking_status, gate_open_allowed, orchestrator_action_hint.
+
+      - Full regression command output is pasted and green, or any residual red has
+      explicit gate-intersection disposition and blocks open.
+
+      - Wiring audit proves REST table control/create/batch-delete ownership seam
+      is closed or blocks open.
+
+      - Escape hatch audit finds no test weakening, route bypass, or guardrail bypass.
+
+      - Smoke/liveness evidence exercises at least one rewired REST/control or CLI
+      path end-to-end.
+
+      - Retest agent is independent of the python-senior fix agent.'
+    evidence_template: "## refs Read Confirmation (MANDATORY)\nFor each ref in this\
+      \ step:\n- <filename> — key passage or \"NOT READ: <reason>\"\n\nIf no refs\
+      \ were provided, state: \"No refs for this step.\"\n\n## Gate Retest Report\n\
+      \n**Reviewer**: gate-reviewer-tacit (independent of fix agent)\n**Phase**: dup_foundation\n\
+      **Retested fix step**: fix-foundation-gate-blockers\n\n### Decision Fields (MANDATORY)\n\
+      ```yaml\nheadline: \"PASS|PASS_WITH_DEBT|FAIL\"\nverdict: \"PASS|FAIL\"\nblockers:\n\
+      \  - \"<blocker or empty>\"\nproof_gap_status: \"CLOSED|OPEN|BLOCKING\"\nblocking_status:\
+      \ \"CLOSED|OPEN\"\ngate_open_allowed: true|false\norchestrator_action_hint:\
+      \ \"COMPLETE_GATE|DO_NOT_COMPLETE|CREATE_FIX\"\n```\n\n### Blocker Family Retest\
+      \ Matrix\n| Family | Evidence reviewed | Verdict | Remaining blocker? |\n| ---\
+      \ | --- | --- | --- |\n| Full regression | <command/output> | PASS/FAIL | YES/NO\
+      \ |\n| REST shared ops ownership | <file:line evidence> | PASS/FAIL | YES/NO\
+      \ |\n| REST control payload/audit parity | <test/output/file:line> | PASS/FAIL\
+      \ | YES/NO |\n| REST create/delete owner adoption | <file:line/test> | PASS/FAIL\
+      \ | YES/NO |\n| CLI markdown export | <test/output/spec proof> | PASS/FAIL |\
+      \ YES/NO |\n| Startup policy wiring | <import/runtime proof> | PASS/FAIL | YES/NO\
+      \ |\n| uv.lock hygiene | <status/proof> | PASS/FAIL | YES/NO |\n\n### Wiring\
+      \ Audit\n```text\n<paste route/entrypoint evidence, including shared owner call\
+      \ sites>\n```\n\n### Escape Hatch Audit\n```text\n<paste search/review evidence\
+      \ for skipped tests, weakened assertions, bypass markers, or route-level duplicate\
+      \ business logic>\n```\n\n### CLI Surface Preservation\n```text\n<paste CLI/export\
+      \ focused evidence if CLI export touched>\n```\n\n### Smoke/Liveness Evidence\n\
+      ```text\n<paste real invocation or focused integration path output>\n```\n\n\
+      ### Full Regression Proof\n```text\n<paste `.venv/bin/python -m pytest -q` or\
+      \ justified equivalent output>\n```\n\n### Gate Decision Basis\nFor each unresolved\
+      \ item, state whether it intersects dup_foundation.gate, dup_adoption, finalization,\
+      \ invar guard, or CLI surface preservation. Gate open is forbidden while any\
+      \ blocker-class intersection remains."
+    depends_on:
+    - fix-foundation-gate-blockers
+    agent: gate-reviewer-tacit
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

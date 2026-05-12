@@ -35824,6 +35824,7 @@ phases:
     - dup_adoption.rest-crud-export-adoption
     - dup_adoption.mcp-shared-ops-adoption
     - dup_adoption.mid-gate
+    - dup_adoption.transport-say-append-shared-operation-retest
     - dup_adoption.server-tool-contract-adoption
     agent: blind-tester-tacit
   - id: dup_adoption.spec-conformance

@@ -32101,7 +32101,7 @@ phases:
       - REST/MCP adapter rewiring not done per out-of-scope guardrail.'
   - id: dup_foundation.mid-gate
     name: Mid-gate shared-operation boundary review
-    status: pending
+    status: claimed
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -32164,6 +32164,8 @@ phases:
     - dup_foundation.create-register-ops
     - dup_foundation.delete-export-ops
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-12T13:42:07.101810+00:00'
   - id: dup_foundation.mcp-tool-contracts-source
     name: Create MCP tool-contract source of truth
     status: pending

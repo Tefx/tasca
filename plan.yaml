@@ -31593,7 +31593,7 @@ phases:
     no remaining work items in dup_guardrails.'
 - id: dup_foundation
   name: Consolidation Foundation (Guardrails + Shared Ops)
-  status: pending
+  status: in_progress
   gate: Guardrails and shared shell-application owners are both established before
     transport adoption; no transport leakage or atomic-control drift remains.
   context: 'Compacted structure: duplicate-abstraction guardrails absorbed into this
@@ -32428,7 +32428,7 @@ phases:
     agent: integration-verifier-tacit
   - id: dup_guardrails.parity-contract-capture
     name: Capture REST/MCP parity contract
-    status: pending
+    status: claimed
     description: 'step_type: review
 
       verification_scope: phase-check
@@ -32557,6 +32557,8 @@ phases:
 
       '
     agent: spec-verifier-tacit
+    claimed_by: spec-verifier-tacit
+    claimed_at: '2026-05-12T09:25:40.035639+00:00'
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

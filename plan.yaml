@@ -35991,7 +35991,7 @@ phases:
     claimed_at: '2026-05-12T18:46:29.344593+00:00'
   - id: dup_adoption.spec-conformance
     name: Verify adopted transports against HTTP/MCP specs
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -36078,6 +36078,8 @@ phases:
     - dup_adoption.transport-say-append-shared-operation-retest
     - dup_adoption.server-tool-contract-adoption
     agent: spec-verifier-tacit
+    claimed_by: spec-verifier-tacit
+    claimed_at: '2026-05-12T18:46:34.146776+00:00'
   - id: dup_adoption.gate
     name: Gate transport adoption and runtime conformance
     status: pending

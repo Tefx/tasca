@@ -34686,7 +34686,7 @@ phases:
     agent: gate-reviewer-tacit
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
-  status: in_progress
+  status: done
   gate: Discussion stream Mermaid rendering is fixed without weakening Markdown/SVG
     security boundaries; visible UI rendering, green tests, spec conformance, and
     independent gate evidence are complete.
@@ -35782,7 +35782,7 @@ phases:
       and retest ownership before the phase gate.'
   - id: web_mermaid_stream_fix.gate
     name: Gate Mermaid stream rendering fix
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -35901,6 +35901,58 @@ phases:
     agent: gate-reviewer
     claimed_by: gate-reviewer
     claimed_at: '2026-05-12T13:57:52.622654+00:00'
+    done_at: '2026-05-12T14:14:18.655654+00:00'
+    evidence: "## Gate Review Report\nReviewer: gate-reviewer (independent)\nPhase:\
+      \ web_mermaid_stream_fix\nHeadline: PASS\nBlocking Status: none\nProof-Gap Status:\
+      \ no blocker-class proof gaps remain\nVerdict: PASS\n\n### refs Read Confirmation\
+      \ (MANDATORY)\n- docs/tasca-web-uiux-v0.1.md — Mermaid fenced code must render\
+      \ in saying content; raw HTML disabled; init directives stripped; SVG sanitized.\n\
+      - docs/adr-001-mermaid-rendering.md — client-side Mermaid, init stripping, sanitized\
+      \ SVG, CSP/raw HTML disabled, exports keep Mermaid as code blocks.\n- docs/adr-002-mermaid-svg-sanitization.md\
+      \ — strict allowlist, forbidden script/foreignObject/a/image/style/on*, no raw\
+      \ string innerHTML.\n- docs/tasca-technical-design-v0.1.md — export contracts\
+      \ and web rendering security requirements.\n- web/src/components/Stream.tsx\
+      \ — ReactMarkdown code overrides route saying.content Mermaid fences to MermaidRenderer.\n\
+      - web/src/rendering/mermaid.tsx — strict init, init stripping, render, sanitizeSvg,\
+      \ DOMParser/importNode insertion.\n- web/src/rendering/svg-sanitizer.ts — allowlisted\
+      \ tags/attrs and URL policy; disallowed elements/attrs/values removed.\n\n###\
+      \ Execution Review\n- fix-spec-conformance-blockers: PASS; commit ae1435f reviewed.\n\
+      - green-retest/uiux audit evidence: PASS; DOM artifacts show visible Mermaid,\
+      \ normal code, invalid fallback, raw HTML escaped.\n- retest-spec-conformance-blockers:\
+      \ PASS; B1/B2/B3/R8 closure verified with blockers [].\n\n### Wiring Audit (W1-W8)\n\
+      - W1 saying.content source: PROVEN.\n- W2 Mermaid fence detection: PROVEN.\n\
+      - W3 existing renderer route: PROVEN.\n- W4 normal code preservation: PROVEN.\n\
+      - W5 init directive stripping: PROVEN.\n- W6 sanitizer in path: PROVEN.\n- W7\
+      \ safe DOM insertion (no Mermaid dangerouslySetInnerHTML): PROVEN.\n- W8 export\
+      \ non-regression: PROVEN.\n\n### Security Boundary Audit\n- Raw HTML disabled:\
+      \ PROVEN.\n- Init directives stripped: PROVEN.\n- SVG sanitizer remains in path:\
+      \ PROVEN.\n- No unsanitized SVG injection path: PROVEN.\n- Scoped frontend files\
+      \ contain no @invar:allow; unrelated Python escape hatches do not affect this\
+      \ phase.\n\n### UI/Visible Rendering Evidence\n- DOM artifacts in evidence/\
+      \ show valid Mermaid diagram role img/SVG, normal code preserved, invalid Mermaid\
+      \ fallback, and raw HTML escaped.\n- Supplemental blind-tester Mode D: PASS;\
+      \ npm Stream/Markdown/security tests passed, production build passed, dev/preview\
+      \ HTTP root returned 200 text/html.\n\n### Behavioral Proof Register\nbehavioral_proof_register:\n\
+      \  stream_to_mermaid_renderer: PROVEN\n  raw_html_disabled: PROVEN\n  init_directives_stripped:\
+      \ PROVEN\n  svg_sanitizer_in_path: PROVEN\n  visible_rendering_evidence: PROVEN\n\
+      \  spec_conformance_b1_b2_b3_r8: PROVEN\n\n### Verification commands/output\n\
+      Gate-reviewer worktree: `npm test -- src/components/Stream.test.tsx` => 8 passed;\
+      \ `npm test -- src/rendering/mermaid.security.test.ts src/rendering/svg-sanitizer.security.test.ts\
+      \ src/rendering/markdown.security.test.tsx` => 95 passed; Python export tests\
+      \ => 47 passed; `npm run build` => success.\nSupplemental blind-tester Mode\
+      \ D: `npm test` => 8 files / 197 tests passed; `npm run build` => success; Vite\
+      \ dev and preview servers served HTTP 200 text/html.\nMainline final-state gate:\
+      \ `npm --prefix web test -- src/components/Stream.test.tsx src/rendering/mermaid.security.test.ts\
+      \ src/rendering/svg-sanitizer.security.test.ts src/rendering/markdown.security.test.tsx`\
+      \ => 4 files / 103 tests passed; `npm --prefix web run build` => success with\
+      \ chunk-size warnings only; `uv run pytest tests/unit/api/test_export_routes.py\
+      \ tests/unit/test_cli_export.py` => 47 passed.\n\n### Gate Decision\ngate_open_allowed:\
+      \ true\nverdict: PASS\nblockers: []\norchestrator_action_hint: COMPLETE\n\n\
+      ### Commit hash(es)\n- Fix commit reviewed: ae1435f.\n- Reviewer commit: none\
+      \ (verify-only; no source changes).\n- Blind-tester commit: none (verify-only;\
+      \ no source changes).\n\n### Files changed\n- none by gate reviewer or blind\
+      \ tester.\n\n### Gaps/Notes\n- npm audit warnings observed during dependency\
+      \ install, not introduced by this phase and non-blocking for this gate."
   - id: web_mermaid_stream_fix.fix-spec-conformance-blockers
     name: Fix spec-conformance blockers for Mermaid stream rendering
     status: done

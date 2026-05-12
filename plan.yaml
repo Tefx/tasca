@@ -37748,6 +37748,74 @@ phases:
     depends_on:
     - dup_adoption.gate
     agent: python-senior
+  - id: retest-rest-limit-envelope-guardrail-closure
+    name: Retest and close B-GATE-001 REST limit envelope guardrail
+    status: pending
+    description: 'step_type: test
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: phase-check
+
+      blocker_id: B-GATE-001
+
+      agent: gate-reviewer-tacit
+
+
+      Gate-closure retest for B-GATE-001. As an independent reviewer, rerun the failing
+      guardrail plus the focused conformance bundle after `resolve-rest-limit-envelope-guardrail`.
+
+
+      Required command:
+
+      `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py tests/unit/mcp/test_spec_conformance_remediation.py
+      tests/integration/test_rest_spec_conformance_remediation.py -q`
+
+
+      Required closure decision fields:
+
+      - `verdict`: PASS | FAIL
+
+      - `blockers`: [] or blocker list with IDs
+
+      - `gate_open_allowed`: true | false
+
+
+      This step must BLOCK phase closure unless B-GATE-001 is closed with executable
+      proof. Passing liveness or unrelated B1-B9 checks alone is insufficient; the
+      guardrail/conformance bundle above is the authoritative retest path for this
+      blocker.'
+    verification: '- The exact required pytest command is rerun and returns green.
+
+      - Evidence includes the formerly failing test result for `test_rest_sayings_limit_failure_preserves_status_error_and_body_semantics`.
+
+      - Evidence includes closure fields: `verdict`, `blockers`, and `gate_open_allowed`.
+
+      - `gate_open_allowed` is true only if B-GATE-001 has no remaining blocker or
+      proof gap.
+
+      - If any failure remains, evidence names the blocker and keeps `gate_open_allowed:
+      false.'
+    evidence_template: "## refs Read Confirmation (MANDATORY)\n\nFor each ref in this\
+      \ step:\n- docs/tasca-http-api-v0.1.md — key passage or \"NOT READ: <reason>\"\
+      \n- docs/tasca-technical-design-v0.1.md — key passage or \"NOT READ: <reason>\"\
+      \n- tests/unit/test_dup_guardrails_control_red.py — key passage or \"NOT READ:\
+      \ <reason>\"\n- tests/unit/mcp/test_spec_conformance_remediation.py — key passage\
+      \ or \"NOT READ: <reason>\"\n- tests/integration/test_rest_spec_conformance_remediation.py\
+      \ — key passage or \"NOT READ: <reason>\"\n\n## B-GATE-001 Gate-Closure Retest\n\
+      \n**Command executed**:\n```\n.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py\
+      \ tests/unit/mcp/test_spec_conformance_remediation.py tests/integration/test_rest_spec_conformance_remediation.py\
+      \ -q\n```\n\n**Actual output**:\n```\n<paste full pytest output>\n```\n\n**Formerly\
+      \ failing guardrail**:\n- tests/unit/test_dup_guardrails_control_red.py::test_rest_sayings_limit_failure_preserves_status_error_and_body_semantics\
+      \ — PASS | FAIL\n\n**Closure fields**:\n```yaml\nverdict: \"PASS|FAIL\"\nblockers:\n\
+      \  - \"<blocker id and summary, or empty>\"\ngate_open_allowed: true|false\n\
+      ```\n\n**Decision basis**:\n- B-GATE-001 closed because: <why>\n- Remaining\
+      \ unresolved behavioral runtime obligations: <none or list with disposition>\n"
+    depends_on:
+    - resolve-rest-limit-envelope-guardrail
+    agent: gate-reviewer-tacit
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

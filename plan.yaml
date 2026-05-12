@@ -37596,6 +37596,158 @@ phases:
       - `git merge --squash vectl/step-spec-conformance-retest-b1-b9` reported `Already
       up to date. (nothing to squash)`, so no product delta required a new mainline
       commit.'
+  - id: resolve-rest-limit-envelope-guardrail
+    name: Resolve REST limit error envelope guardrail blocker
+    status: pending
+    description: 'step_type: implementation
+
+      blocker_id: B-GATE-001
+
+      provenance: gate failure from dup_adoption.gate
+
+      disposition: blocking-now
+
+      agent: python-senior
+
+
+      Fix ALL of B-GATE-001 in one batched remediation path; do not split into serial
+      fix chains.
+
+
+      Issue fingerprint:
+
+      - Failing command: `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py
+      tests/unit/mcp/test_spec_conformance_remediation.py tests/integration/test_rest_spec_conformance_remediation.py
+      -q`
+
+      - Failing test: `tests/unit/test_dup_guardrails_control_red.py::test_rest_sayings_limit_failure_preserves_status_error_and_body_semantics`
+      at line 200
+
+      - Observed mismatch: legacy detail body `{''error'': ''limit_exceeded'', ...}`
+      expected, actual response detail is standard envelope `{''error'': {''code'':
+      ''LimitExceeded'', ''details'': {...}}}`.
+
+
+      Required adjudication and repair:
+
+      1. Read `docs/tasca-http-api-v0.1.md`, `docs/tasca-technical-design-v0.1.md`,
+      the failing guardrail test, and the newly standardized REST error envelope implementation.
+
+      2. Determine whether the guardrail is stale after intended standard-envelope
+      remediation OR whether product behavior introduced unreviewed response-shape
+      drift.
+
+      3. If the guardrail is stale: update or retire only the stale expectation while
+      preserving equivalent executable public REST behavior coverage for status, error
+      code, and body semantics under the standard envelope.
+
+      4. If behavior is wrong: restore the documented guarded response shape in the
+      REST path and keep/update the guardrail to prove the documented behavior.
+
+      5. Do NOT suppress, xfail, or delete the failing test without equivalent coverage
+      tied to spec evidence.
+
+      6. Provide a short decision record in evidence: stale_guardrail or behavior_wrong,
+      spec passages cited, implementation/test files changed, and why coverage remains
+      equivalent.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION remediation step. Stub-only completion is NOT acceptable.
+      The deliverable MUST reconcile the public REST error response contract with
+      executable guardrail coverage and produce behavior or expectations that vary
+      according to the documented error semantics.
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause to resolve: ambiguity between legacy REST guardrail expectations
+      and standardized REST error envelope authority.
+
+      - Symptom: one guardrail expects legacy `detail.error == limit_exceeded` while
+      runtime returns the standardized envelope `detail.error.code == LimitExceeded`.
+
+      - Why this fix is not surface-level: evidence must prove which public contract
+      is authoritative before changing tests or behavior.'
+    verification: '- Decision record states `stale_guardrail` or `behavior_wrong`
+      with citations from both docs and implementation/test evidence.
+
+      - If stale: failing guardrail is updated to standard envelope expectations and
+      still proves REST status, error code, and body details for limit failures.
+
+      - If behavior wrong: REST behavior is restored to the documented guarded shape
+      and the guardrail proves it.
+
+      - No xfail/skip/delete-only suppression is used; equivalent executable coverage
+      remains.
+
+      - Targeted proof includes the failing guardrail test and any changed focused
+      conformance tests.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - docs/tasca-http-api-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - docs/tasca-technical-design-v0.1.md — key passage or "NOT READ: <reason>"
+
+      - tests/unit/test_dup_guardrails_control_red.py — key passage or "NOT READ:
+      <reason>"
+
+      - tests/unit/mcp/test_spec_conformance_remediation.py — key passage or "NOT
+      READ: <reason>"
+
+      - tests/integration/test_rest_spec_conformance_remediation.py — key passage
+      or "NOT READ: <reason>"
+
+
+      ## B-GATE-001 Remediation Evidence
+
+
+      **Decision**: stale_guardrail | behavior_wrong
+
+
+      **Spec authority cited**:
+
+      - HTTP API: <section/passage>
+
+      - Technical design: <section/passage>
+
+
+      **Implementation/test evidence**:
+
+      - Standard envelope implementation reviewed: <file:line summary>
+
+      - Files changed: <list>
+
+
+      **Coverage equivalence**:
+
+      - Status semantics covered by: <test/assertion>
+
+      - Error code semantics covered by: <test/assertion>
+
+      - Body/details semantics covered by: <test/assertion>
+
+
+      **Commands run**:
+
+      ```
+
+      <paste targeted pytest commands and outputs>
+
+      ```
+
+
+      **No suppression confirmation**: <confirm no xfail/skip/delete-only suppression
+      was used>
+
+      '
+    depends_on:
+    - dup_adoption.gate
+    agent: python-senior
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

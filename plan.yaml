@@ -33196,7 +33196,7 @@ phases:
       - Gaps/Notes: Static review artifact only; no product code modified.'
   - id: fix-mid-gate-ruff-import-order
     name: Fix mid-gate ruff import-order blocker
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior\npriority: HIGH\n\nBatched remediation ownership for failed\
       \ gate `dup_foundation.mid-gate`.\n\n## Blocker to Fix (ALL of these, not just\
@@ -33294,6 +33294,57 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-12T13:57:47.439117+00:00'
+    done_at: '2026-05-12T14:12:51.118604+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - src/tasca/shell/services/operations/__init__.py — read operations export initializer
+      and import block; lint blocker was import ordering only.
+
+
+      ## Fix Evidence
+
+      - Worktree commit: cfa3c5ce8544f2791a16e7e18016b87a13c90aa1.
+
+      - Mainline commit after squash merge: e392294 [vectl] step-fix-mid-gate-ruff-import-order
+      completed.
+
+      - Files changed: src/tasca/shell/services/operations/__init__.py.
+
+      - Behavior changes: NONE.
+
+      - Import-order/lint-only explanation: reordered table_control and table_creation
+      import blocks per Ruff/isort ordering; no symbols, exports, runtime logic, storage
+      behavior, REST/MCP behavior, or tests changed.
+
+
+      ## Exact scoped ruff command executed
+
+      `./.venv/bin/python -m ruff check src/tasca/shell/services/operations src/tasca/shell/storage/control_repo.py
+      src/tasca/shell/storage/saying_repo.py tests/unit/services/test_registration_creation_operations.py
+      tests/unit/services/operations/test_table_control.py tests/unit/api/test_export_routes.py
+      tests/unit/storage/test_batch_delete_repo.py`
+
+
+      ## Ruff output
+
+      All checks passed.
+
+
+      ## Targeted runtime tests rerun
+
+      `./.venv/bin/python -m pytest tests/unit/services/test_registration_creation_operations.py
+      tests/unit/services/operations/test_table_control.py tests/unit/api/test_export_routes.py
+      tests/unit/storage/test_batch_delete_repo.py`
+
+      Worktree result: 52 passed in 1.30s.
+
+      Mainline final-state gate: exact scoped ruff command passed; targeted pytest
+      command => 52 passed.
+
+
+      ## Gaps/Notes
+
+      - None.'
   - id: retest-mid-gate
     name: Retest mid-gate after ruff import-order fix
     status: pending

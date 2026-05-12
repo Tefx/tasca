@@ -184,7 +184,7 @@ def test_rest_and_mcp_control_reason_format_converges_on_canonical_rule(
 def test_rest_sayings_limit_failure_preserves_status_error_and_body_semantics(
     conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """REST limit failures remain a 400 with the existing detail body shape."""
+    """REST limit failures remain a 400 with the standard error envelope."""
     from tasca.config import settings
 
     _insert_table(conn, "limits-table")
@@ -198,9 +198,15 @@ def test_rest_sayings_limit_failure_preserves_status_error_and_body_semantics(
 
     assert response.status_code == 400
     assert response.json()["detail"] == {
-        "error": "limit_exceeded",
-        "limit_kind": "content",
-        "limit": 5,
-        "actual": 6,
-        "message": "content exceeds limit: 6 > 5",
+        "error": {
+            "code": "LimitExceeded",
+            "message": "content exceeds limit: 6 > 5",
+            "details": {
+                "error": "limit_exceeded",
+                "limit_kind": "content",
+                "limit": 5,
+                "actual": 6,
+                "message": "content exceeds limit: 6 > 5",
+            },
+        },
     }

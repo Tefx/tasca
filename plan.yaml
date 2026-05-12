@@ -32665,7 +32665,7 @@ phases:
       orchestrator_action_hint: DO_NOT_COMPLETE'
   - id: dup_foundation.gate
     name: Gate shared application foundation
-    status: pending
+    status: claimed
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -32758,6 +32758,8 @@ phases:
     - retest-foundation-conformance-wiring
     - retest-foundation-mcp-table-create-defaults
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-12T16:27:51.288753+00:00'
   - id: dup_guardrails.gate
     name: Gate duplicate-abstraction guardrails
     status: done

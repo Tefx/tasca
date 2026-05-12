@@ -36884,7 +36884,7 @@ phases:
       \ gate may proceed."
   - id: batched-spec-conformance-remediation
     name: Batched remediation for spec-conformance blockers B1-B9
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       verification_scope: local-check
@@ -37159,6 +37159,103 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-12T19:07:48.550191+00:00'
+    done_at: '2026-05-12T19:51:21.714758+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n- docs/tasca-mcp-interface-v0.1.md\
+      \ — error envelope requires `error.code/message/details`; write tools accept\
+      \ `dedup_id`; table.control/update permissions require creator/host/human-admin;\
+      \ agent table_say requires `patron_id`; saying max bytes 65536.\n- docs/tasca-http-api-v0.1.md\
+      \ — admin-required REST endpoints must use Bearer auth and standard error envelope;\
+      \ REST binds to MCP semantics for patrons/tables/sayings.\n- docs/tasca-technical-design-v0.1.md\
+      \ — error envelope consolidated across HTTP/MCP; table.say/control/update atomicity;\
+      \ permission matrix and 65536 content max.\n- docs/foundation-conformance-wiring-dispositions.md\
+      \ — prior disposition made B3/B4/B5/B9 eligible for downstream dup_adoption\
+      \ remediation; table create transport fields and batch-delete contract were\
+      \ known follow-ups.\n- src/tasca/shell/api/routes/tables.py — REST table create\
+      \ returned core Table and lacked dedup/spec shape; batch delete returned only\
+      \ deleted_ids.\n- src/tasca/shell/api/routes/tables_control.py — REST control\
+      \ uses shared atomic operation and admin auth.\n- src/tasca/shell/api/routes/patrons.py\
+      \ — REST patron response used legacy id/name shape and ignored dedup_id.\n-\
+      \ src/tasca/shell/api/routes/sayings.py — REST table_say used shared operation\
+      \ but inherited unset content max unless settings configured.\n- src/tasca/shell/api/routes/export.py\
+      \ — export route maps shared operation errors via HTTPException.\n- src/tasca/shell/api/auth.py\
+      \ — HTTPBearer auto_error produced non-standard missing-token detail before\
+      \ route auth handler.\n- src/tasca/shell/mcp/entrypoints.py — MCP table_say\
+      \ auto-registered missing agent patron_id and resolved mentions after append;\
+      \ control/update lacked actor authorization; batch delete returned only deleted_ids.\n\
+      - src/tasca/shell/mcp/responses.py — MCP response shaping delegates to core\
+      \ mcp_response.\n- src/tasca/shell/mcp/tool_contracts.py — table_say description\
+      \ still documented auto-registration; batch-delete contract says deleted_count\
+      \ plus failed array.\n- src/tasca/shell/services/operations/table_creation.py\
+      \ — shared create operation already accepts title/created_by/host_ids/metadata/policy/board\
+      \ and returns transport-ready outcome.\n- src/tasca/shell/services/operations/patron_registration.py\
+      \ — shared patron registration already implements dedup_id return-existing semantics.\n\
+      - src/tasca/shell/services/operations/table_control.py — shared control operation\
+      \ owns atomic control saying append plus status mutation.\n- src/tasca/shell/services/operations/batch_delete.py\
+      \ — shared batch delete operation has all-or-nothing validation and rejection\
+      \ details.\n- tests/integration/test_api.py — REST tests covered auth/create/get/delete\
+      \ and needed updated invalid-input envelope expectation.\n- tests/integration/test_mcp.py\
+      \ — MCP integration covered auth, control, update, batch delete; updated for\
+      \ permission-owned creators and canonical auth/batch shape.\n- tests/unit/mcp/test_mcp_server.py\
+      \ — MCP unit tests covered server contracts and were updated to respect agent\
+      \ patron_id requirement.\n\n## Batched Remediation Evidence\n**Changed blocker\
+      \ set**: B1_auth_error_envelope, B2_standard_error_envelope, B3_rest_dedup_missing,\
+      \ B4_rest_patron_shape, B5_rest_table_create_shape, B6_mcp_control_update_permissions,\
+      \ B7_table_say_agent_patron_required, B8_table_say_limit_and_mention_order,\
+      \ B9_batch_delete_response_contract\n\n**why_previous_gate_missed_it**: Prior\
+      \ checks emphasized liveness/shared-operation adoption, not adversarial REST/MCP\
+      \ response/error shape and permission/atomicity probes.\n\n**why_previous_fix_failed**:\
+      \ The prior transport_say fix narrowed append ordering only; remaining drift\
+      \ existed across auth envelopes, response schemas, dedup, permissions, and batch-delete\
+      \ shape.\n\n**reversal_risk**: High; changes keep shared operations as mutation\
+      \ owners and add adapter-level shaping/authorization/validation tests.\n\n##\
+      \ Per-Blocker Closure Table\n| Blocker | Action | Files changed | Tests/proofs\
+      \ | Gate-intersection disposition |\n| --- | --- | --- | --- | --- |\n| B1_auth_error_envelope\
+      \ | fixed | `src/tasca/shell/api/auth.py`, `src/tasca/shell/api/app.py`, `src/tasca/shell/api/errors.py`\
+      \ | integration auth tests + REST envelope tests | Intersects public HTTP/MCP\
+      \ auth contract; implemented |\n| B2_standard_error_envelope | fixed | `src/tasca/core/mcp_response.py`,\
+      \ `src/tasca/shell/api/errors.py` | invar guard + focused REST/MCP error tests\
+      \ | Intersects public error contract; implemented |\n| B3_rest_dedup_missing\
+      \ | fixed | `routes/patrons.py`, `routes/tables.py` | REST patron/table dedup\
+      \ return-existing tests | Intersects dup_adoption/final public write semantics;\
+      \ implemented |\n| B4_rest_patron_shape | fixed | `routes/patrons.py` | REST\
+      \ patron create/get canonical shape tests | Intersects HTTP binding to MCP patron\
+      \ contract; implemented |\n| B5_rest_table_create_shape | fixed | `routes/tables.py`\
+      \ | REST table create canonical shape test | Intersects HTTP table.create binding;\
+      \ implemented |\n| B6_mcp_control_update_permissions | fixed | `mcp/entrypoints.py`,\
+      \ host persistence/storage/model/schema paths | unauthorized control/update\
+      \ no-mutation tests; host/creator/admin allowed tests | Intersects normative\
+      \ MCP permission matrix; implemented creator/host/human-admin enforcement before\
+      \ mutation |\n| B7_table_say_agent_patron_required | fixed | `mcp/entrypoints.py`,\
+      \ `tool_contracts.py`, tests | missing agent patron_id error + no append test\
+      \ | Intersects MCP table_say input rules; implemented |\n| B8_table_say_limit_and_mention_order\
+      \ | fixed | `mcp/entrypoints.py`, `routes/sayings.py` | ambiguous mention and\
+      \ over-limit atomic no-append tests | Intersects atomicity and mention/limit\
+      \ contract; implemented |\n| B9_batch_delete_response_contract | fixed | `mcp/entrypoints.py`,\
+      \ `routes/tables.py` | batch delete success shape tests | Intersects MCP runtime\
+      \ contract; implemented deleted_count/failed with deleted_ids compatibility\
+      \ |\n\n## B6 Host Authorization Closure\n- Persisted `host_ids` on tables, added\
+      \ schema/migration support, hydrated/stored `host_ids` through table repository,\
+      \ preserved hosts on control mutations, exposed hosts in MCP table payloads,\
+      \ and checked `creator_patron_id` or persisted `host_ids` before MCP `table_control`/`table_update`.\n\
+      - `patron_id: null` remains the human-admin path and is authorized before mutation.\n\
+      - No unresolved B6 host authorization gap remains.\n\n## Implementation Evidence\n\
+      - Worktree commit hash(es): `fb48eeb` and `30889e1`.\n- Mainline squash commit:\
+      \ `c75657f` (`[vectl] step-batched-spec-conformance-remediation completed`).\n\
+      - Files changed: core table/domain/schema/mcp_response/table_service; API app/auth/errors/routes;\
+      \ MCP database/entrypoint_logic/entrypoints/tool_contracts; table creation/storage\
+      \ repos; integration/unit tests listed in merge output.\n- Worktree verification:\
+      \ focused pytest passed; `invar_guard(changed=true)` passed.\n- Mainline verification\
+      \ barrier:\n  - `.venv/bin/python -m pytest tests/integration/test_api.py tests/integration/test_mcp.py\
+      \ tests/integration/test_rest_spec_conformance_remediation.py tests/unit/mcp/test_mcp_server.py\
+      \ tests/unit/mcp/test_spec_conformance_remediation.py -q` → 164 passed.\n  -\
+      \ `.venv/bin/invar guard --changed` → 0 errors; doctest passed; CrossHair verified\
+      \ core files; property tests passed 23/23 functions; warnings/infos reported\
+      \ but no errors.\n- Spec link: MCP defaults/error/permissions/table_say/batch\
+      \ semantics from `docs/tasca-mcp-interface-v0.1.md`; REST auth/error/binding\
+      \ from `docs/tasca-http-api-v0.1.md`; atomicity/error/permission constraints\
+      \ from `docs/tasca-technical-design-v0.1.md`.\n- Gaps/Notes: No B1-B9 blocker\
+      \ remains open from this implementation evidence; downstream retest owns independent\
+      \ confirmation."
   - id: spec-conformance-retest-b1-b9
     name: Retest spec conformance for B1-B9 remediation
     status: pending

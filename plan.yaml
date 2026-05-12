@@ -36084,7 +36084,7 @@ phases:
       \ a new mainline commit."
   - id: dup_adoption.spec-conformance
     name: Verify adopted transports against HTTP/MCP specs
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -36173,6 +36173,64 @@ phases:
     agent: spec-verifier-tacit
     claimed_by: spec-verifier-tacit
     claimed_at: '2026-05-12T18:46:34.146776+00:00'
+    done_at: '2026-05-12T19:07:14.456345+00:00'
+    evidence: "## Spec Conformance Report\n\n**Headline**: FAIL\n**Blocking Status**:\
+      \ OPEN → OWNED_BY_REMEDIATION\n**Proof-Gap Status**: BLOCKING → OWNED_BY_REMEDIATION\n\
+      **Verdict**: FAIL\n**Blockers**: [B1_auth_error_envelope, B2_standard_error_envelope,\
+      \ B3_rest_dedup_missing, B4_rest_patron_shape, B5_rest_table_create_shape, B6_mcp_control_update_permissions,\
+      \ B7_table_say_agent_patron_required, B8_table_say_limit_and_mention_order,\
+      \ B9_batch_delete_response_contract]\n**Orchestrator Action Hint**: DO_NOT_COMPLETE_AS_GREEN;\
+      \ COMPLETE_AS_ISSUE_DISCOVERY_AFTER_REMEDIATION_OWNER_CREATED\n\n### refs Read\
+      \ Confirmation (MANDATORY)\nNo refs for this step.\n\n## Coverage Summary\n\
+      - Total requirements: 19\n- CONFORMS: 4\n- DIVERGES: 8\n- PARTIAL: 3\n- NEEDS_TEST:\
+      \ 4\n\n## Top Risks / Blockers\n1. Permission bypass: MCP table_control/table_update\
+      \ lack creator/host/admin authorization despite normative permissions (B6).\n\
+      2. `table.say` can persist a saying before returning `AMBIGUOUS_MENTION` because\
+      \ mention resolution occurs after append (B8).\n3. REST surfaces are not thin\
+      \ MCP bindings for patron/table create and use non-standard error envelopes\
+      \ (B1, B2, B4, B5).\n4. Content limit 65536 is documented but default settings\
+      \ leave content max unset (B8).\n5. Behavioral precedence/idempotency/atomicity\
+      \ claims lack focused runtime proof (B3 plus NEEDS_TEST items).\n6. Batch delete\
+      \ public description/contract contradicts implementation response shape (B9).\n\
+      \n## Broad Verifier Disposition Pass\n- B1_auth_error_envelope: batched_fix;\
+      \ downstream-blocker.\n- B2_standard_error_envelope: batched_fix; downstream-blocker.\n\
+      - B3_rest_dedup_missing: batched_fix or explicit spec disposition; downstream-blocker.\n\
+      - B4_rest_patron_shape: batched_fix or explicit spec disposition; downstream-blocker.\n\
+      - B5_rest_table_create_shape: batched_fix or explicit spec disposition; downstream-blocker.\n\
+      - B6_mcp_control_update_permissions: batched_fix; blocker.\n- B7_table_say_agent_patron_required:\
+      \ batched_fix or explicit spec disposition; blocker.\n- B8_table_say_limit_and_mention_order:\
+      \ batched_fix; blocker.\n- B9_batch_delete_response_contract: batched_fix or\
+      \ explicit spec disposition; downstream-blocker.\n- NEEDS_TEST items: dedup\
+      \ return-existing, control atomic append/status, closed-control dedup precedence,\
+      \ closed/paused table.say, export order/control events are owned by retest closure.\n\
+      \n## Remediation Ownership Created\n- Batched fix step created: `dup_adoption.batched-spec-conformance-remediation`\
+      \ (planner reported `batched-spec-conformance-remediation`) depending on this\
+      \ step.\n- Retest step created: `dup_adoption.spec-conformance-retest-b1-b9`\
+      \ (planner reported `spec-conformance-retest-b1-b9`) depending on the batched\
+      \ fix step.\n- Gate dependency updated: `dup_adoption.gate` now depends on `spec-conformance-retest-b1-b9`\
+      \ while retaining existing phase dependencies.\n\n## Closure Fields\nstep_intent:\
+      \ verification\nexpected_result: green\nobserved_result: red; blocker-class\
+      \ divergences found and converted into explicit remediation ownership\nfailure_alignment:\
+      \ implementation does not conform to multiple MUST/public-contract requirements\
+      \ cited above; not green-complete\nverdict: FAIL\nblockers: [B1_auth_error_envelope,\
+      \ B2_standard_error_envelope, B3_rest_dedup_missing, B4_rest_patron_shape, B5_rest_table_create_shape,\
+      \ B6_mcp_control_update_permissions, B7_table_say_agent_patron_required, B8_table_say_limit_and_mention_order,\
+      \ B9_batch_delete_response_contract]\norchestrator_action_hint: COMPLETE_AS_ISSUE_DISCOVERY_WITH_REMEDIATION_OWNER\n\
+      product_implementation_files_modified: no\nCommit hash(es): none; verification-only\
+      \ audit made no product/doc changes.\nbehavioral_proof_register:\n  R4_dedup_return_existing:\
+      \ NEEDS_TEST owned by `dup_adoption.spec-conformance-retest-b1-b9`\n  R9_control_atomic_append_status:\
+      \ NEEDS_TEST owned by `dup_adoption.spec-conformance-retest-b1-b9`\n  R10_closed_control_dedup_precedence:\
+      \ NEEDS_TEST owned by `dup_adoption.spec-conformance-retest-b1-b9`\n  R14_say_closed_paused:\
+      \ NEEDS_TEST owned by `dup_adoption.spec-conformance-retest-b1-b9`\n  R15_export_order_control_events:\
+      \ NEEDS_TEST owned by `dup_adoption.spec-conformance-retest-b1-b9`\ngate_open_allowed:\
+      \ false until remediation and retest pass\nuncertainty_sources:\n  - Batch-delete\
+      \ has no normative MCP spec section; current runtime contract and disposition\
+      \ note conflict with implementation response shape.\n  - Several behavioral\
+      \ claims have only static code paths/comments, not authoritative runtime proof.\n\
+      \n## Planner Remediation Evidence\n- Planner task succeeded and mutated the\
+      \ plan to add one batched remediation path plus retest.\n- Changed step IDs\
+      \ reported by planner: `batched-spec-conformance-remediation`, `spec-conformance-retest-b1-b9`,\
+      \ `dup_adoption.gate`."
   - id: dup_adoption.gate
     name: Gate transport adoption and runtime conformance
     status: pending

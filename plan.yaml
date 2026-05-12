@@ -39059,7 +39059,7 @@ phases:
       independent confirmation of this disposition.'
   - id: retest-full-plan-blockers
     name: Retest full-plan verifier blockers after batched remediation
-    status: pending
+    status: claimed
     description: 'step_type: test
 
       step_intent: retest_green
@@ -39257,6 +39257,8 @@ phases:
     depends_on:
     - fix-full-plan-blockers
     agent: integration-verifier-tacit
+    claimed_by: integration-verifier-tacit
+    claimed_at: '2026-05-12T20:44:38.144606+00:00'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

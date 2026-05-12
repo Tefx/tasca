@@ -35620,6 +35620,7 @@ phases:
       '
     depends_on:
     - dup_adoption.mid-gate
+    - dup_adoption.transport-say-append-shared-operation-retest
     agent: python-refactor-master-tacit
   - id: dup_adoption.transport-conformance
     name: Verify REST/MCP consumer-boundary conformance

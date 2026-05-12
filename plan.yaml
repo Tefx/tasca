@@ -36392,7 +36392,7 @@ phases:
       \ or other plan steps were started by worker.\n  - Blockers: none."
   - id: dup_adoption.transport-say-append-shared-operation-retest
     name: transport-say-append-shared-operation-retest
-    status: pending
+    status: claimed
     description: 'step_type: gate
 
       step_intent: retest_green
@@ -36587,6 +36587,8 @@ phases:
     depends_on:
     - dup_adoption.transport-say-append-shared-operation-fix
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-12T18:03:25.423958+00:00'
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

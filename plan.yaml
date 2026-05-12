@@ -34088,7 +34088,7 @@ phases:
       - Pre-existing uv.lock dirty state was not committed.'
   - id: retest-foundation-conformance-wiring
     name: Retest foundation conformance and wiring blocker closure
-    status: claimed
+    status: pending
     description: "step_type: gate\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: phase-check\nagent: gate-reviewer-tacit\npriority: HIGH\n\
       source_failed_steps:\n- dup_foundation.spec-conformance\n- dup_foundation.wiring-audit\n\
@@ -34223,8 +34223,6 @@ phases:
     depends_on:
     - fix-foundation-conformance-wiring
     agent: gate-reviewer-tacit
-    claimed_by: gate-reviewer-tacit
-    claimed_at: '2026-05-12T15:30:04.706462+00:00'
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

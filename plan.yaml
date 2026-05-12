@@ -35181,7 +35181,7 @@ phases:
       :true,\"orchestrator_action_hint\":\"COMPLETE_GATE\"}\n```"
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
-  status: in_progress
+  status: done
   gate: REST and MCP consume the same shared operations, runtime surfaces remain runnable,
     and consumer boundaries agree on resolved facts.
   depends_on:
@@ -37827,7 +37827,7 @@ phases:
       \ under the now-authoritative standard REST error envelope."
   - id: retest-rest-limit-envelope-guardrail-closure
     name: Retest and close B-GATE-001 REST limit envelope guardrail
-    status: claimed
+    status: done
     description: 'step_type: test
 
       step_intent: retest_green
@@ -37895,9 +37895,101 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T20:11:30.257065+00:00'
+    done_at: '2026-05-12T20:13:36.075813+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - `docs/tasca-http-api-v0.1.md`: read. Key passages: lines 36-44 define standard
+      error envelope; lines 67-82 define sayings endpoints including listen/wait query
+      params and timeout success semantics.
+
+      - `docs/tasca-technical-design-v0.1.md`: read. Key passages: lines 126-136 require
+      all errors to conform to `{ "error": { "code", "message", "details" } }`; lines
+      214-218 define mention-limit guardrail; lines 340-348 define backend verification
+      expectations.
+
+      - `tests/unit/test_dup_guardrails_control_red.py`: read. Key passage: lines
+      184-212 contain formerly failing guardrail asserting HTTP 400 and standard `LimitExceeded`
+      envelope details.
+
+      - `tests/unit/mcp/test_spec_conformance_remediation.py`: read. Key passages:
+      tests cover agent patron_id validation, ambiguous mention reject-before-append,
+      65536 limit reject-before-append, authorization immutability, allowed authorization
+      paths, and batch delete contract.
+
+      - `tests/integration/test_rest_spec_conformance_remediation.py`: read. Key passages:
+      REST auth/validation errors use standard envelope; patron create/get dedup shape;
+      table create shape/dedup.
+
+
+      ## B-GATE-001 Gate-Closure Retest
+
+      **Command executed**:
+
+      `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py tests/unit/mcp/test_spec_conformance_remediation.py
+      tests/integration/test_rest_spec_conformance_remediation.py -q`
+
+
+      **Actual output**:
+
+      ```text
+
+      collected 13 items
+
+
+      tests/unit/test_dup_guardrails_control_red.py ....                       [ 30%]
+
+      tests/unit/mcp/test_spec_conformance_remediation.py ......               [ 76%]
+
+      tests/integration/test_rest_spec_conformance_remediation.py ...          [100%]
+
+
+      13 passed in 2.18s
+
+      ```
+
+
+      **Formerly failing guardrail**:
+
+      `tests/unit/test_dup_guardrails_control_red.py::test_rest_sayings_limit_failure_preserves_status_error_and_body_semantics`
+      result: PASS. Focused confirmation output: `1 passed in 0.22s`.
+
+
+      ## Closure Fields
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      observed_result: green
+
+      failure_alignment: none
+
+      verdict: PASS
+
+      blockers: []
+
+      gate_open_allowed: true
+
+      orchestrator_action_hint: COMPLETE
+
+      product_implementation_files_modified: no
+
+      Commit hash(es): none
+
+      uncertainty_sources: []
+
+
+      ## Mainline Merge/Verification Barrier
+
+      - Branch `vectl/step-retest-rest-limit-envelope-guardrail-closure` was clean
+      and verification-only.
+
+      - `git merge --squash vectl/step-retest-rest-limit-envelope-guardrail-closure`
+      reported `Already up to date. (nothing to squash)`, so no product delta required
+      a new mainline commit.'
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
-  status: locked
+  status: pending
   gate: Repo-wide verification, documentation sync, and independent deep review are
     complete with no unresolved blocker-class drift. Finalization also covers the
     Web Mermaid stream rendering fix before plan closure.

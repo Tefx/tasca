@@ -32372,7 +32372,7 @@ phases:
       adoption consumes tool_contracts.py.'
   - id: dup_foundation.wiring-audit
     name: Wiring completeness audit for shared operation foundation
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -32455,6 +32455,67 @@ phases:
     agent: wiring-auditor
     claimed_by: wiring-auditor
     claimed_at: '2026-05-12T14:34:01.130275+00:00'
+    done_at: '2026-05-12T14:50:11.256061+00:00'
+    evidence: '## Wiring Audit Report Outcome
+
+      Headline: FAIL / ISSUES_FOUND. Wiring audit found blocker-class orphan/adoption
+      issues and aggregated remediation ownership has been created before progression.
+
+
+      ## refs Read Confirmation (MANDATORY)
+
+      Wiring auditor read shared operation modules, operations __init__, mcp/tool_contracts.py,
+      server.py, entrypoints.py, services/mcp tests.
+
+
+      ## Detected Blockers
+
+      - W-B1: Shared operations are production-orphaned/test-only; runtime adapters
+      still call storage/core directly; new Result/outcome/error types are not used
+      by non-test production callers.
+
+      - W-B2: MCP tool_contracts metadata is not consumed by server/runtime; server.py
+      and entrypoints.py still manually declare duplicate Field descriptions/defaults.
+
+      - W-B3: dead_export escape hatch density in shared operations is blocking and
+      masks orphan wiring.
+
+      - Positive non-blocker: no transport leakage found in shared operations.
+
+
+      ## Broad Verifier Disposition
+
+      All wiring blockers were promoted into owned remediation and dependency gating;
+      no dead path or escape-hatch issue was left as a note.
+
+
+      ## Batched Fix Ownership Created
+
+      Planner aggregated this failure with `dup_foundation.spec-conformance` and added:
+
+      - `fix-foundation-conformance-wiring`
+
+      - `retest-foundation-conformance-wiring`
+
+      `dup_foundation.gate` now depends on the aggregated retest, blocking phase/adoption
+      progression until closure is proven.
+
+
+      ## Closure rationale
+
+      Original wiring-audit step is completed as a failure/issue-detection artifact
+      per batched-fix protocol; the created fix/retest path owns actual closure.
+
+
+      ## Closure Fields
+
+      verdict: FAIL
+
+      blockers: [shared_operations_orphaned, tool_contracts_unconsumed, dead_export_density]
+
+      gate_open_allowed: false
+
+      orchestrator_action_hint: DO_NOT_COMPLETE'
   - id: dup_foundation.spec-conformance
     name: Verify shared foundation against HTTP/MCP specs
     status: done

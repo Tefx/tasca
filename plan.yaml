@@ -31688,7 +31688,7 @@ phases:
     agent: python-senior-tacit
   - id: dup_foundation.create-register-ops
     name: Extract shared patron-registration and table-creation operations
-    status: pending
+    status: claimed
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior-tacit\n\nAnchors:\n- spec_refs:\n  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/patron-identity\n\
       \  - docs/tasca-http-api-v0.1.md#tasca-http-api-binding-v0-1/3-endpoints/tables\n\
@@ -31760,6 +31760,8 @@ phases:
     depends_on:
     - dup_guardrails.gate
     agent: python-senior-tacit
+    claimed_by: python-senior-tacit
+    claimed_at: '2026-05-12T13:05:32.597416+00:00'
   - id: dup_foundation.delete-export-ops
     name: Extract shared batch-delete and export operations
     status: pending

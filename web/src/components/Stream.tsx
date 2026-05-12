@@ -14,13 +14,24 @@
  * - New sayings highlight briefly with a CSS animation on entry.
  */
 
-import { useEffect, useRef, useState, useCallback, type RefObject } from 'react'
+import {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+  type ReactNode,
+} from 'react'
 import ReactMarkdown from 'react-markdown'
+import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Saying, SpeakerKind } from '../api/sayings'
 import type { ConnectionStatus } from '../hooks/useLongPoll'
 import type { TableStatus } from '../api/tables'
 import { useNow } from '../hooks/useNow'
+import { MermaidRenderer } from '../rendering/mermaid'
 
 // =============================================================================
 // Accessibility: Debounced Aria-Live Announcements
@@ -346,6 +357,56 @@ function speakerKindClass(kind: SpeakerKind): string {
   return kind
 }
 
+/** Detect Mermaid fenced code blocks emitted by react-markdown/remark. */
+function isMermaidCodeFence(className: string | undefined): boolean {
+  return className?.split(/\s+/).some((token) => token === 'mermaid' || token === 'language-mermaid') ?? false
+}
+
+/** ReactMarkdown emits fenced code as pre > code; Mermaid renders as a block component instead. */
+function containsSingleMermaidCodeChild(children: ReactNode): boolean {
+  if (Children.count(children) !== 1) return false
+
+  const child = Children.only(children)
+  if (!isValidElement<{ className?: string }>(child)) return false
+
+  return isMermaidCodeFence(child.props.className)
+}
+
+/** ReactMarkdown component overrides for the saying.content rendering pipeline. */
+const markdownComponents: Components = {
+  // Keep links safe — open in new tab
+  a: ({ ...props }) => (
+    <a {...props} target="_blank" rel="noopener noreferrer" />
+  ),
+  pre: ({ node: _node, children, ...props }) => {
+    void _node
+
+    if (containsSingleMermaidCodeChild(children)) {
+      return <>{children}</>
+    }
+
+    return <pre {...props}>{children}</pre>
+  },
+  code: ({ node: _node, className, children, ...props }) => {
+    void _node
+
+    if (isMermaidCodeFence(className)) {
+      return (
+        <MermaidRenderer
+          code={String(children).replace(/\n$/, '')}
+          className="mc-mermaid-diagram"
+        />
+      )
+    }
+
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    )
+  },
+}
+
 // =============================================================================
 // Connection Badge
 // =============================================================================
@@ -444,12 +505,7 @@ function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps)
       >
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{
-            // Keep links safe — open in new tab
-            a: ({ ...props }) => (
-              <a {...props} target="_blank" rel="noopener noreferrer" />
-            ),
-          }}
+          components={markdownComponents}
         >
           {saying.content}
         </ReactMarkdown>

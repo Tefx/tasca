@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { Stream } from './Stream'
 import type { Saying } from '../api/sayings'
 
@@ -156,6 +156,13 @@ describe('Stream live region announcements', () => {
 })
 
 describe('Stream Mermaid Markdown rendering', () => {
+  beforeEach(() => {
+    Object.defineProperty(SVGElement.prototype, 'getBBox', {
+      configurable: true,
+      value: () => ({ x: 0, y: 0, width: 120, height: 48 }),
+    })
+  })
+
   it('renders documented mermaid fences in saying content as diagrams, not ordinary code', () => {
     const mermaidSaying: Saying = {
       ...makeSaying(1),
@@ -168,5 +175,73 @@ describe('Stream Mermaid Markdown rendering', () => {
 
     expect(container.querySelector('code.language-mermaid')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Mermaid diagram')).toBeInTheDocument()
+  })
+
+  it('produces sanitized SVG DOM output for saying.content Mermaid fences', async () => {
+    const mermaidSaying: Saying = {
+      ...makeSaying(1),
+      content: DOCUMENTED_MERMAID_MARKDOWN,
+    }
+
+    const { container } = render(
+      <Stream sayings={[mermaidSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector('.mc-mermaid-diagram svg')).toBeInTheDocument()
+    })
+    expect(container.querySelector('.mc-mermaid-diagram script')).not.toBeInTheDocument()
+    expect(container.querySelector('.mc-mermaid-diagram [onload]')).not.toBeInTheDocument()
+  })
+
+  it('preserves raw HTML escaping, inline code, and non-Mermaid fenced code', () => {
+    const mixedSaying: Saying = {
+      ...makeSaying(1),
+      content: 'Inline `mermaid` stays code.\n\n```ts\nconst x = 1\n```\n\n<script>alert(1)</script>',
+    }
+
+    const { container } = render(
+      <Stream sayings={[mixedSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    expect(screen.getByText('mermaid')).toBeInTheDocument()
+    expect(container.querySelector('code.language-ts')).toHaveTextContent('const x = 1')
+    expect(container.querySelector('[aria-label="Mermaid diagram"]')).not.toBeInTheDocument()
+    expect(container.querySelector('script')).not.toBeInTheDocument()
+    expect(container.innerHTML).toContain('&lt;script')
+  })
+
+  it('strips Mermaid init directives before rendering in the stream path', async () => {
+    const initDirectiveSaying: Saying = {
+      ...makeSaying(1),
+      content: '```mermaid\n%%{init: {"theme": "dark"}}%%\nflowchart TD\n  A --> B\n```',
+    }
+
+    const { container } = render(
+      <Stream sayings={[initDirectiveSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector('.mc-mermaid-diagram svg')).toBeInTheDocument()
+    })
+    expect(container).not.toHaveTextContent('%%{init')
+    expect(container).not.toHaveTextContent('theme')
+  })
+
+  it('shows the MermaidRenderer fallback for invalid Mermaid without restoring code-fence rendering', async () => {
+    const invalidMermaidSaying: Saying = {
+      ...makeSaying(1),
+      content: '```mermaid\nnot a valid mermaid diagram\n```',
+    }
+
+    const { container } = render(
+      <Stream sayings={[invalidMermaidSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to render diagram')
+    })
+    expect(container.querySelector('code.language-mermaid')).not.toBeInTheDocument()
+    expect(screen.getByText('not a valid mermaid diagram')).toBeInTheDocument()
   })
 })

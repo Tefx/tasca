@@ -262,7 +262,7 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps): JSX.
   // Handle rendering states
   if (renderState === 'rendering') {
     return (
-      <div className={className} role="status" aria-label="Loading diagram">
+      <div className={className} role="status" aria-label="Mermaid diagram">
         <div className="flex items-center justify-center p-4 text-muted-foreground">
           <span className="animate-pulse">Rendering diagram...</span>
         </div>
@@ -284,7 +284,7 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps): JSX.
 
   if (!svgContent) {
     return (
-      <div className={className}>
+      <div className={className} aria-label="Mermaid diagram">
         <div className="text-muted-foreground p-4">No diagram to display</div>
       </div>
     )

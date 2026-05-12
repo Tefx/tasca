@@ -389,6 +389,22 @@
   padding: 0;
 }
 
+/* Mermaid diagrams: keep rendered SVGs inside stream log blocks on narrow widths. */
+.mc-log-content .mc-mermaid-diagram {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.625rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--mc-radius-sm);
+}
+
+.mc-log-content .mc-mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 .mc-log-content ul,
 .mc-log-content ol {
   margin: 0.25rem 0;

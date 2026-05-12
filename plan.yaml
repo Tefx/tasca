@@ -38634,7 +38634,7 @@ phases:
     agent: gate-reviewer-tacit
   - id: fix-full-plan-blockers
     name: Remediate full-plan verifier blockers in one batch
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -38940,6 +38940,8 @@ phases:
     depends_on:
     - finalization.verify-full-plan
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-12T20:24:50.363527+00:00'
   - id: retest-full-plan-blockers
     name: Retest full-plan verifier blockers after batched remediation
     status: pending

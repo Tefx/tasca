@@ -34535,7 +34535,7 @@ phases:
     claimed_at: '2026-05-12T10:05:28.532457+00:00'
   - id: web_mermaid_stream_fix.uiux-audit
     name: Native UI audit for Mermaid discussion diagrams
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       verification_scope: phase-check
@@ -34660,6 +34660,8 @@ phases:
     depends_on:
     - web_mermaid_stream_fix.wire-renderer
     agent: uiux-auditor
+    claimed_by: uiux-auditor
+    claimed_at: '2026-05-12T10:05:43.282923+00:00'
   - id: web_mermaid_stream_fix.spec-conformance
     name: Spec conformance for Mermaid stream rendering
     status: claimed

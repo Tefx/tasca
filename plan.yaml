@@ -36233,7 +36233,7 @@ phases:
       \ `dup_adoption.gate`."
   - id: dup_adoption.gate
     name: Gate transport adoption and runtime conformance
-    status: pending
+    status: claimed
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -36325,6 +36325,8 @@ phases:
     - dup_adoption.spec-conformance
     - spec-conformance-retest-b1-b9
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-12T19:59:01.181994+00:00'
   - id: dup_adoption.transport-say-append-shared-operation-fix
     name: transport-say-append-shared-operation-fix
     status: done

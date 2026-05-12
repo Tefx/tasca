@@ -31604,7 +31604,7 @@ phases:
   steps:
   - id: dup_foundation.table-control-operation
     name: Extract transport-neutral atomic table-control operation
-    status: pending
+    status: claimed
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-senior-tacit\n\nAnchors:\n- spec_refs:\n  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-1-table-state-machine-normative/valid-transitions\n\
       \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/5-tools/5-2-table/tasca-table-control\n\
@@ -31686,6 +31686,8 @@ phases:
     depends_on:
     - dup_guardrails.gate
     agent: python-senior-tacit
+    claimed_by: python-senior-tacit
+    claimed_at: '2026-05-12T13:05:44.029737+00:00'
   - id: dup_foundation.create-register-ops
     name: Extract shared patron-registration and table-creation operations
     status: claimed

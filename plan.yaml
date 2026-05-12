@@ -35181,7 +35181,7 @@ phases:
       :true,\"orchestrator_action_hint\":\"COMPLETE_GATE\"}\n```"
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
-  status: pending
+  status: in_progress
   gate: REST and MCP consume the same shared operations, runtime surfaces remain runnable,
     and consumer boundaries agree on resolved facts.
   depends_on:
@@ -35318,7 +35318,7 @@ phases:
     agent: python-refactor-master-tacit
   - id: dup_adoption.mcp-shared-ops-adoption
     name: Adopt shared operations in MCP entrypoints
-    status: pending
+    status: claimed
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       agent: python-refactor-master-tacit\ntags:\n- integration\n\nAnchors:\n- spec_refs:\n\
       \  - docs/tasca-mcp-interface-v0.1.md#tasca-mcp-interface-spec-v0-1/1-2-defaults-limits-and-error-format-normative/error-response-shape\n\
@@ -35383,6 +35383,8 @@ phases:
 
       '
     agent: python-refactor-master-tacit
+    claimed_by: python-refactor-master-tacit
+    claimed_at: '2026-05-12T17:15:12.836621+00:00'
   - id: dup_adoption.mid-gate
     name: Mid-gate transport adoption boundary review
     status: pending

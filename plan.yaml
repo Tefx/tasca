@@ -33708,7 +33708,7 @@ phases:
       final verifier worktree clean.'
   - id: fix-foundation-conformance-wiring
     name: Fix foundation conformance and wiring blockers
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -33962,6 +33962,8 @@ phases:
     - retest-mid-gate
     - dup_foundation.mcp-tool-contracts-source
     agent: python-senior-tacit
+    claimed_by: python-senior-tacit
+    claimed_at: '2026-05-12T14:50:59.164090+00:00'
   - id: retest-foundation-conformance-wiring
     name: Retest foundation conformance and wiring blocker closure
     status: pending

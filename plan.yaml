@@ -34197,7 +34197,7 @@ phases:
       \ No product implementation files were modified."
   - id: web_mermaid_stream_fix.wire-renderer
     name: Wire Stream Markdown code fences to secure MermaidRenderer
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       tags: [integration]
@@ -34384,6 +34384,76 @@ phases:
     agent: frontend-engineer
     claimed_by: frontend-engineer
     claimed_at: '2026-05-12T09:46:02.336178+00:00'
+    done_at: '2026-05-12T10:04:37.190126+00:00'
+    evidence: "## Integration Evidence\n\n### refs Read Confirmation (MANDATORY)\n\
+      - docs/tasca-web-uiux-v0.1.md — Markdown MVP requires Mermaid fenced code blocks\
+      \ in saying content, raw HTML disabled, init directives stripped, SVG sanitized.\n\
+      - docs/adr-001-mermaid-rendering.md — Client-side Mermaid via official APIs;\
+      \ exports keep Mermaid as code blocks; raw HTML disabled.\n- docs/adr-002-mermaid-svg-sanitization.md\
+      \ — Sanitization is strict allowlist; forbid script/foreignObject/on*/style\
+      \ and sanitize before DOM insertion.\n- docs/tasca-technical-design-v0.1.md\
+      \ — §8.2 requires client-side Mermaid, stripped init directives, sanitized SVG\
+      \ allowlist.\n- web/src/components/Stream.tsx — Stream renders `saying.content`\
+      \ through `ReactMarkdown` with `remarkGfm`; Mermaid routing was missing.\n-\
+      \ web/src/rendering/mermaid.tsx — `MermaidRenderer` strips init directives,\
+      \ calls `mermaid.render`, then `sanitizeSvg()` before `dangerouslySetInnerHTML`.\n\
+      - web/src/rendering/svg-sanitizer.ts — sanitizer removes dangerous SVG tags/attrs\
+      \ and returns empty on missing SVG root.\n- web/src/styles/table/stream.css\
+      \ — log content already styles inline/pre code and table overflow; Mermaid needed\
+      \ bounded diagram styling.\n- web/src/components/Stream.test.tsx — expected-red\
+      \ asserted Mermaid fences must not remain `code.language-mermaid` and must expose\
+      \ Mermaid diagram UI.\n\n## Action Summary\n- Wired `Stream.tsx` ReactMarkdown\
+      \ `code` override to detect `mermaid` / `language-mermaid` fenced blocks and\
+      \ render `MermaidRenderer`.\n- Preserved inline code and non-Mermaid fenced\
+      \ code via default `<code>` rendering.\n- Added `pre` override to avoid invalid\
+      \ `pre > div` output for Mermaid blocks.\n- Added stream CSS so Mermaid SVGs\
+      \ stay within log block width with horizontal overflow containment.\n- Added\
+      \ integration/security regression tests for SVG DOM output, raw HTML escaping,\
+      \ init stripping, normal code, inline code, and invalid Mermaid fallback.\n\n\
+      **Command or test exercising the full path**:\n```\nnpm test -- src/components/Stream.test.tsx\
+      \ src/rendering/mermaid.security.test.ts src/rendering/svg-sanitizer.security.test.ts\
+      \ src/rendering/markdown.security.test.tsx\nnpm run build\nnpm run lint\n```\n\
+      \n**Actual output**:\n```\nTest Files 4 passed (4)\nTests 91 passed (91)\n\n\
+      npm run build:\n✓ built in 9.63s (worker) / ✓ built in 2.90s (mainline)\nExit\
+      \ Code: 0\n\nnpm run lint:\n✖ 11 problems (0 errors, 11 warnings)\nExit Code:\
+      \ 0\nWarnings are pre-existing react-refresh/only-export-components warnings\
+      \ in unrelated/shared rendering files.\n```\n\n**Path exercised**: `saying.content`\
+      \ → `Stream.tsx` → `ReactMarkdown` code override → `MermaidRenderer` → `sanitizeSvg`\
+      \ → rendered DOM/SVG\n\n**Visible rendering proof**:\n```\nPassing test assertion:\n\
+      await waitFor(() => {\n  expect(container.querySelector('.mc-mermaid-diagram\
+      \ svg')).toBeInTheDocument()\n})\nAlso asserted no <code class=\"language-mermaid\"\
+      > remains.\n```\n\n**Security boundary proof**:\n- raw HTML remains disabled:\
+      \ Stream test asserts `<script>` is not in DOM and escaped `&lt;script` remains;\
+      \ markdown security suite passed.\n- Mermaid init directive stripping still\
+      \ covered: Stream test with `%%{init: ...}%%` rendered SVG and asserted directive/theme\
+      \ text absent; mermaid security tests passed.\n- SVG sanitizer still used: Stream\
+      \ DOM-output test asserts no script/onload in `.mc-mermaid-diagram`; svg sanitizer\
+      \ security suite passed.\n- no new unsanitized SVG insertion path: only uses\
+      \ existing `MermaidRenderer`; no new `dangerouslySetInnerHTML` added.\n\n**Regression\
+      \ notes**:\n- ordinary fenced code behavior: Stream test asserts `code.language-ts`\
+      \ still renders `const x = 1`.\n- inline code behavior: Stream test asserts\
+      \ inline `mermaid` remains ordinary code text.\n- invalid Mermaid fallback:\
+      \ Stream test asserts `role=\"alert\"` with `Failed to render diagram` and no\
+      \ `code.language-mermaid` restoration.\n\n**Verification Run (Command + Exit\
+      \ Code)**\n- Worker: `npm test -- src/components/Stream.test.tsx src/rendering/mermaid.security.test.ts\
+      \ src/rendering/svg-sanitizer.security.test.ts src/rendering/markdown.security.test.tsx`\
+      \ — Exit Code: 0\n- Worker: `npm run build` — Exit Code: 0\n- Worker: `npm run\
+      \ lint` — Exit Code: 0\n- Mainline final-state verification: same command family\
+      \ on main after squash merge — tests 91/91 pass, build passes, lint exits 0\
+      \ with 11 warnings.\n\n**Deviation records**:\n- type: test_error\n  artifact:\
+      \ web/src/components/Stream.test.tsx\n  what changed: added jsdom `SVGElement.prototype.getBBox`\
+      \ shim and async integration assertions.\n  why: the expected-red test artifact\
+      \ did not account for official Mermaid rendering requiring SVG geometry APIs\
+      \ that jsdom does not implement, and it only asserted initial routing rather\
+      \ than final async SVG DOM output.\n  impact: test-only support/proof; no production\
+      \ behavior change.\n\n**Commit hash(es)**: worker 1df1735f26466c95b6c47fc5090db1bb55e4e00b;\
+      \ mainline squash 91d7c31\n**Files changed**:\n- web/src/components/Stream.tsx\n\
+      - web/src/components/Stream.test.tsx\n- web/src/rendering/mermaid.tsx\n- web/src/styles/table/stream.css\n\
+      \n**Spec link**: docs/tasca-web-uiux-v0.1.md Markdown rendering MVP; ADR-001;\
+      \ ADR-002; docs/tasca-technical-design-v0.1 §8.2\n**Gaps/Notes**: Invalid Mermaid\
+      \ test intentionally logs the renderer error to stderr while asserting graceful\
+      \ fallback; main worktree after verification only has pre-existing uv.lock and\
+      \ untracked .artifacts/dev-timeline/plan.yaml.lock dirt."
   - id: web_mermaid_stream_fix.green-retest
     name: Green retest for Mermaid stream rendering
     status: pending

@@ -36233,7 +36233,7 @@ phases:
       \ `dup_adoption.gate`."
   - id: dup_adoption.gate
     name: Gate transport adoption and runtime conformance
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       verification_scope: phase-check
@@ -36327,6 +36327,48 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T19:59:01.181994+00:00'
+    done_at: '2026-05-12T20:07:06.592005+00:00'
+    evidence: "## Gate Review Report\n\nheadline: FAIL\nblocking_status: BLOCKED →\
+      \ OWNED_BY_REMEDIATION\nproof_gap_status: One blocker-class public behavior\
+      \ guardrail failed under independent rerun.\nverdict: FAIL\ngate_open_allowed:\
+      \ false until remediation/retest closure\n\n### refs Read Confirmation (MANDATORY)\n\
+      No refs for this step.\n\n### Gate Findings\n- B-GATE-001: REST sayings limit\
+      \ failure response-shape guardrail failed at `tests/unit/test_dup_guardrails_control_red.py::test_rest_sayings_limit_failure_preserves_status_error_and_body_semantics`\
+      \ line 200.\n- Failing command: `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py\
+      \ tests/unit/mcp/test_spec_conformance_remediation.py tests/integration/test_rest_spec_conformance_remediation.py\
+      \ -q`.\n- Result: `1 failed, 12 passed`.\n- Failure fingerprint: expected legacy\
+      \ detail body `{'error': 'limit_exceeded', ...}` but actual response detail\
+      \ is standard envelope `{'error': {'code': 'LimitExceeded', 'details': {...}}}`.\n\
+      - Gate interpretation: this is an executable public REST behavior guardrail\
+      \ failure; approving would bless either an unreviewed response-shape breaking\
+      \ change or a stale guardrail without audit closure.\n\n### Positive Gate Evidence\
+      \ Preserved\n- Runnable REST surface proven with real TCP uvicorn probe and\
+      \ integration REST tests.\n- Runnable MCP surface proven with MCP stdio probe\
+      \ and focused integration subset.\n- REST/MCP shared-operation wiring mostly\
+      \ passed W1-W8 audit.\n- B1-B9 focused spec conformance tests passed after remediation.\n\
+      - Escape hatch audit found no blocker-class misuse; warnings remain technical\
+      \ debt, not this blocker.\n\n### Remediation Ownership Created\n- Fix step created:\
+      \ `resolve-rest-limit-envelope-guardrail`, depending on `dup_adoption.gate`.\n\
+      - Retest/gate-closure step created: `retest-rest-limit-envelope-guardrail-closure`,\
+      \ depending on `resolve-rest-limit-envelope-guardrail`.\n- Planner rationale:\
+      \ the fix step adjudicates stale guardrail vs wrong behavior using spec-backed\
+      \ evidence and the retest reruns the failing guardrail plus focused conformance\
+      \ bundle with closure fields.\n\n### Gate Decision Fields\nheadline: FAIL\n\
+      gate_decision: BLOCKED\nverdict: FAIL\nblockers:\n  - B-GATE-001: REST sayings\
+      \ limit failure response-shape guardrail fails.\norchestrator_action_hint: COMPLETE_AS_ISSUE_DISCOVERY_WITH_REMEDIATION_OWNER\n\
+      product_implementation_files_modified: no\nCommit hash(es): none\nuncertainty_sources:\n\
+      \  - Plan state was not inspected by the gate reviewer per dispatch policy;\
+      \ completion status was based on task summary plus git log.\n  - Prior phase\
+      \ evidence artifacts for some steps were not present as dedicated files; independent\
+      \ spot checks/probes were run instead.\n\n### Verification Run (Command + Exit\
+      \ Code)\n- `git status --short --branch` → clean isolated branch after reverting\
+      \ accidental uv.lock drift.\n- `.venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py\
+      \ tests/unit/mcp/test_spec_conformance_remediation.py tests/integration/test_rest_spec_conformance_remediation.py\
+      \ -q` → exit 1, `1 failed, 12 passed`; blocker at `tests/unit/test_dup_guardrails_control_red.py:200`.\n\
+      - `invar_guard changed=True` → passed; 0 findings; no changed files.\n- `.venv/bin/python\
+      \ -m pytest tests/integration/test_api.py -q` → 9 passed.\n- `.venv/bin/python\
+      \ -m pytest tests/integration/test_mcp.py -q -k 'stdio or list_tools or tool'`\
+      \ → 5 passed, 26 deselected.\n- live REST/MCP stdio probe → REST and MCP passed."
   - id: dup_adoption.transport-say-append-shared-operation-fix
     name: transport-say-append-shared-operation-fix
     status: done

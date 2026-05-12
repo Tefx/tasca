@@ -36392,7 +36392,7 @@ phases:
       \ or other plan steps were started by worker.\n  - Blockers: none."
   - id: dup_adoption.transport-say-append-shared-operation-retest
     name: transport-say-append-shared-operation-retest
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       step_intent: retest_green
@@ -36589,6 +36589,61 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-12T18:03:25.423958+00:00'
+    done_at: '2026-05-12T18:10:58.610110+00:00'
+    evidence: "## Retest Decision Register\n- headline: PASS\n- verdict: PASS\n- proof_gap_status:\
+      \ CLOSED\n- blocking_status: CLOSED\n- gate_open_allowed: true\n- orchestrator_action_hint:\
+      \ PROCEED\n- requirement_ref: dup_adoption.mid-gate/B1\n- behavior_claim: REST\
+      \ and MCP saying append consume the same transport-neutral shell operation for\
+      \ business orchestration while preserving transport-local shaping.\n- runtime_proof_expected:\
+      \ focused behavioral tests plus adapter/wiring audit evidence.\n- evidence_ref:\
+      \ `41 passed`; shared operation `src/tasca/shell/services/limited_saying_service.py:206-282`;\
+      \ REST call site `src/tasca/shell/api/routes/sayings.py:224-238`; MCP call site\
+      \ `src/tasca/shell/mcp/entrypoints.py:826-837`.\n- closure_path: CLOSED because\
+      \ table lookup, state guard, speaker resolution/constraint validation, limits,\
+      \ append, and typed errors are centralized in `append_saying_operation`; adapters\
+      \ map local envelopes/errors/idempotency.\n- gate_decision_basis: Downstream\
+      \ dup_adoption progression is safe for B1; no blocker found in wiring or focused\
+      \ behavioral retest.\n\n## refs Read Confirmation (MANDATORY)\n- `src/tasca/shell/api/routes/sayings.py`\
+      \ — REST imports `append_saying_operation` at lines 30-34 and calls it in POST\
+      \ append at lines 224-238; HTTP status/detail mapping remains in `_raise_table_say_failure`\
+      \ lines 156-184.\n- `src/tasca/shell/mcp/entrypoints.py` — MCP imports shared\
+      \ operation at lines 91-96; `table_say` keeps MCP compatibility/idempotency/mentions/envelope\
+      \ handling around shared call at lines 786-866.\n- `src/tasca/shell/services/limited_saying_service.py`\
+      \ — shared operation `append_saying_operation` owns lookup/state/speaker/limit/append/error\
+      \ classification at lines 206-282.\n- `AGENTS.md` — worktree-local `AGENTS.md`\
+      \ was absent; reviewer consulted repository root `AGENTS.md`, which requires\
+      \ Shell functions to return `Result[T,E]`, handle I/O, and forbids direct vectl\
+      \ plan edits.\n- `INVAR.md` — Shell is required for I/O and must return `Result[T,E]`;\
+      \ escape hatches must include reasons.\n\n## Wiring Audit\n- Shared operation:\
+      \ `append_saying_operation`, `src/tasca/shell/services/limited_saying_service.py:206-282`.\n\
+      - REST adapter call site(s): `append_saying_endpoint`, `src/tasca/shell/api/routes/sayings.py:224-238`.\n\
+      - MCP adapter call site(s): `table_say`, `src/tasca/shell/mcp/entrypoints.py:826-837`.\n\
+      - Transport-local shaping preserved: REST maps typed failures to HTTP responses\
+      \ at `sayings.py:156-184`; MCP maps typed failures to MCP envelopes at `entrypoints.py:680-699`,\
+      \ keeps idempotency at `entrypoints.py:754-779` and response building/storage\
+      \ at `entrypoints.py:858-866`.\n- Duplicate orchestration removed: REST append\
+      \ no longer performs table lookup/state/limit/append itself. MCP `table_say`\
+      \ delegates core append orchestration to shared operation; remaining pre-call\
+      \ work is MCP compatibility/auto-registration/idempotency-key preparation and\
+      \ envelope handling, not the full decision tree.\n\n## Behavioral Test Evidence\n\
+      - Shared operation tests: `tests/unit/services/test_limited_saying_service.py:67-150`.\n\
+      - REST adapter tests: `tests/unit/api/test_sayings_routes.py:227-270` plus append\
+      \ route suite.\n- MCP adapter tests: `tests/unit/mcp/test_mcp_server.py:1806-1850`\
+      \ plus table_say state/limit tests.\n- Commands/output:\n  ```text\n  .venv/bin/python\
+      \ -m pytest tests/unit/services/test_limited_saying_service.py tests/unit/api/test_sayings_routes.py\
+      \ tests/unit/mcp/test_mcp_server.py::TestStateGuardsTableSay tests/unit/mcp/test_mcp_server.py::TestLimitsEnforcementTableSay\
+      \ tests/unit/mcp/test_mcp_server.py::TestErrorCodesNotFound::test_table_say_not_found\n\
+      \  41 passed in 3.97s\n  ```\n  ```text\n  invar_guard(path=..., changed=true)\n\
+      \  passed; errors=0; warnings=0\n  ```\n\n## Smoke / Liveness Evidence\n- REST/MCP\
+      \ public-ish path probe or focused integration: pytest exercised REST TestClient\
+      \ append/list/wait paths and MCP `table_say` paths.\n- Fixture-vs-real distinction:\
+      \ in-process pytest fixtures with SQLite/test DB, not a deployed live server.\n\
+      \n## Blockers / Warnings / Notes\n- Blockers: none.\n- Warning: isolated worktree\
+      \ had pre-existing/unattributed `uv.lock` modification; reviewer made no product/test\
+      \ edits and did not commit.\n- No vectl tools used.\n\n## Files changed\n- Commit\
+      \ hash(es): none/read-only auditor pass.\n- Files changed by auditor: none.\n\
+      \n## Action Summary\nIndependent retest completed for `dup_adoption.mid-gate/B1`;\
+      \ gate may proceed."
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
   status: locked

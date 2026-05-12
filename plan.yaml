@@ -34969,7 +34969,7 @@ phases:
       \ was not committed."
   - id: retest-foundation-gate-blockers
     name: Retest dup_foundation gate blocker closure
-    status: pending
+    status: claimed
     description: 'step_type: gate
 
       step_intent: retest_green
@@ -35101,6 +35101,8 @@ phases:
     depends_on:
     - fix-foundation-gate-blockers
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-12T16:57:12.372242+00:00'
 - id: dup_adoption
   name: Transport Adoption + Runtime Conformance
   status: locked

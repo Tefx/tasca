@@ -39884,7 +39884,7 @@ phases:
     claimed_at: '2026-05-13T02:23:04.052247+00:00'
   - id: fix-pp-invar-storage-config-residual
     name: Residual Invar budget remediation — storage/config/services
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -40115,6 +40115,8 @@ phases:
     depends_on:
     - retest-full-plan-blockers
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-13T02:23:18.957877+00:00'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

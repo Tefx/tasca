@@ -39308,7 +39308,7 @@ phases:
       \ instability; no product fixes were made by this verification-only step."
   - id: fix-pp-invar-full-scan
     name: Residual Invar budget remediation — CLI and API routes
-    status: claimed
+    status: pending
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -39538,8 +39538,6 @@ phases:
     depends_on:
     - retest-full-plan-blockers
     agent: python-senior
-    claimed_by: python-senior
-    claimed_at: '2026-05-13T02:56:20.224246+00:00'
   - id: retest-pp-invar-full-scan
     name: Retest PP-invar-full-scan after residual Invar remediation
     status: pending

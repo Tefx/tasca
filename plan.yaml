@@ -40416,6 +40416,182 @@ phases:
     depends_on:
     - fix-pp-invar-mcp-residual
     agent: python-senior
+  - id: fix-pp-invar-mcp-proxy-budget-followup
+    name: Residual Invar remediation — MCP proxy budget blocker
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+      reduction_step: true
+
+      followup_reason: `fix-pp-invar-mcp-residual` is complete and immutable, but
+      fresh authoritative guard output reports `src/tasca/shell/mcp/proxy.py` escape_hatch_file_limit
+      shell_result 2/2 and project-budget contribution. This follow-up owns the proxy
+      budget issue without editing the completed MCP step.
+
+
+      Bounded MCP follow-up for proxy escape-hatch/file-level budget accounting.
+
+
+      ## Target residual inventory (this step owns exactly this proxy surface)
+
+      - `src/tasca/shell/mcp/proxy.py` escape_hatch_file_limit shell_result 2/2 and
+      contribution to project shell_result/budget accounting.
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause: proxy transport forwarding still relies on shell_result escape-hatch
+      budget rather than a sufficiently narrow Result-returning shell seam or justified
+      boundary shape that satisfies current guard policy.
+
+      - Symptom: full guard reports proxy shell_result file-limit/project-budget blockers
+      despite focused MCP proxy tests passing after `cceec3e`.
+
+      - Why previous fix failed: the completed MCP residual step intentionally preserved
+      proxy semantics and did not close proxy budget accounting.
+
+      - Why this fix is not surface-level: it must either reduce the budget usage
+      through real seam extraction/adaptation or produce authoritative direct closure
+      evidence; it must not hide the issue with suppressions or owner-only exemptions.
+
+
+      ## Required remediation constraints
+
+      - command_family_locked: `uvx invar-tools guard --all`.
+
+      - symbolic_testing: true.
+
+      - No suppressions, owner-only exemptions, `# noqa` budget evasion, or placeholder/stub-only
+      proxy adapters.
+
+      - Preserve proxy deployability/runtime semantics: local/remote mode switching,
+      JSON-RPC forwarding, auth/header behavior, error translation, and existing integration
+      proxy tests must remain compatible.
+
+      - If a pure helper is extracted into Core, it MUST include meaningful `@pre`/`@post`
+      contracts and at least one doctest before implementation logic.
+
+      - Do not broaden into MCP entrypoint direct blockers; those are owned by `fix-pp-invar-mcp-entrypoints-followup`.
+
+
+      ## MCP Proxy Surface Preservation evidence requirements
+
+      Evidence MUST include:
+
+      - before/after guard count for proxy shell_result/escape_hatch budget
+
+      - exact proxy-mode test/smoke evidence for local/remote forwarding behavior
+
+      - error path evidence for failed remote/proxy request behavior
+
+      - confirmation that no new project-level escape hatch or suppression was added
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
+
+
+      ## Residual ownership semantics
+
+      This bounded follow-up owns only the proxy budget blocker. Remaining entrypoint/project-wide
+      debt is owned by sibling residual steps and the final retest; do not roll back
+      mergeable proxy progress because other surfaces remain open.'
+    verification: '- Command lock: run/use `uvx invar-tools guard --all` as the authoritative
+      command family; do not substitute `uv run`, partial guard, suppressions, or
+      owner-only exemptions as closure evidence.
+
+      - Before/after residual inventory: evidence lists proxy shell_result/escape_hatch
+      counts and project-budget contribution before and after.
+
+      - Proxy budget closure: proxy shell_result escape-hatch/file-limit blocker is
+      closed or explicitly dispositioned with downstream owner and why it remains.
+
+      - MCP proxy surface preservation: focused proxy smoke covers local/remote mode
+      switching, JSON-RPC forwarding, auth/header behavior, and highest-risk error
+      path.
+
+      - Regression smoke: ruff and mypy over touched proxy/MCP files pass; focused
+      pytest including `tests/integration/test_mcp_proxy.py` and any touched unit
+      MCP tests passes or any failure is dispositioned as blocker-class residual.
+
+      - Files/commits: evidence lists files changed and commit ids produced by the
+      worker.
+
+      - Residual disposition: unresolved proxy/project-budget obligations keep `retest-pp-invar-full-scan`
+      closed until owned by a follow-up step.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - src/tasca/shell/mcp/proxy.py — key passage or "NOT READ: <reason>"
+
+      - tests/integration/test_mcp_proxy.py — key passage or "NOT READ: <reason>"
+
+      - tests/unit/mcp — key passage or "NOT READ: <reason>"
+
+
+      ## MCP Proxy Budget Follow-up Evidence
+
+      command_family_locked: uvx invar-tools guard --all
+
+      symbolic_testing: true
+
+
+      ### Before/After Residual Inventory
+
+      | File | Rule | Before | After | Disposition |
+
+      |---|---|---:|---:|---|
+
+
+      ### Proxy Surface Preservation Matrix
+
+      | Proxy behavior | Command/test evidence | Output excerpt | Failure-path covered?
+      |
+
+      |---|---|---|---|
+
+
+      ### Verification Commands and Outputs
+
+      - `uvx invar-tools guard --all`: <output summary>
+
+      - ruff/mypy: <commands and outputs>
+
+      - pytest smoke: <commands and outputs>
+
+
+      ### Files Changed
+
+      - <path>
+
+
+      ### Commits
+
+      - <commit>: <message>
+
+
+      ### Residual Blocker Disposition
+
+      - <none or file/rule/count/reason/owner/closure path>'
+    depends_on:
+    - fix-pp-invar-mcp-residual
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

@@ -43574,6 +43574,171 @@ phases:
     depends_on:
     - finalization.deep-wiring-audit
     agent: python-senior
+  - id: finalization.retest-deep-wiring-table-metadata-contract
+    name: retest-deep-wiring-table-metadata-contract
+    status: pending
+    description: 'step_type: test
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: full-plan-check
+
+      agent: integration-verifier-tacit
+
+      priority: HIGH
+
+
+      Independent retest after `finalization.fix-deep-wiring-table-metadata-contract`.
+
+
+      As an INDEPENDENT TESTER, verify the failed broad wiring audit blockers F1 and
+      F2 are closed from a fresh perspective. This retest protects downstream finalization
+      gates: deep spec conformance, deep architecture review, deep contract-strength
+      review, black-box verification, and final gate.
+
+
+      Test for:
+
+      - REST table create with metadata/policy/board and later REST GET/readback if
+      the support strategy was chosen.
+
+      - MCP table_create with metadata/policy/board and later `table_get`, `table_join`,
+      and `table_wait(include_table=true)` readback if the support strategy was chosen.
+
+      - MCP `table_update` patching metadata/policy/board either persists and reads
+      back correctly or returns explicit `INVALID_REQUEST` for unsupported keys.
+
+      - Legacy table rows without metadata/policy/board do not crash and follow the
+      documented fallback/rejection behavior.
+
+      - Tool contracts, runtime responses, and tests agree; no accepted field is silently
+      dropped.
+
+
+      Finding issues is valuable. If any supported key is accepted but not recoverable
+      later, report blocker and keep downstream gates blocked.
+
+
+      Independence Level: L2 (cross-surface REST/MCP/storage contract verification).'
+    verification: '- full-plan-check retest: F1 create/readback parity is proven for
+      the chosen strategy across REST and MCP.
+
+      - full-plan-check retest: F2 table_update metadata/policy/board behavior is
+      proven to persist/read back or explicitly reject unsupported keys with `INVALID_REQUEST`.
+
+      - `uv run invar guard` output is reviewed.
+
+      - Targeted pytest output for REST/MCP/storage regressions is reviewed.
+
+      - Downstream finalization gates may proceed only if no silent-drop or write-only
+      metadata fields remain.'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier-tacit (independent of implementation)
+
+      **Scope**: F1/F2 table metadata/policy/board contract remediation
+
+      **Independence Level**: L2
+
+      **Timestamp**: <ISO 8601>
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - src/tasca/shell/mcp/tool_contracts.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/services/operations/table_creation.py — key passage or "NOT
+      READ: <reason>"
+
+      - src/tasca/shell/api/routes/tables.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoints.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/storage/table_repo.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/core/domain/table.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/server.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoint_logic.py — key passage or "NOT READ: <reason>"
+
+
+      ### Behavioral Proof Register
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      | --- | --- | --- | --- | --- | --- | --- |
+
+      | F1 | create metadata/policy/board is not write-only | REST and MCP create-then-read
+      proof or explicit rejection proof | <test/output> | PROVEN/NEEDS_TEST/UNPROVEN
+      | <path> | <OPEN/BLOCK basis> |
+
+      | F2 | table_update does not silently drop metadata/policy/board | update readback
+      proof or INVALID_REQUEST proof | <test/output> | PROVEN/NEEDS_TEST/UNPROVEN
+      | <path> | <OPEN/BLOCK basis> |
+
+
+      ### Test Execution
+
+      Commands executed:
+
+      ```text
+
+      uv run invar guard
+
+      <targeted pytest command(s) for REST/MCP/storage metadata regressions>
+
+      ```
+
+      Actual output:
+
+      ```text
+
+      <paste output, not summary>
+
+      ```
+
+
+      ### Required Regression Evidence
+
+      - REST create-then-read metadata/policy/board: PASS/FAIL/N/A with reason
+
+      - MCP create-then-read metadata/policy/board: PASS/FAIL/N/A with reason
+
+      - MCP table_update metadata/policy/board: PASS/FAIL/N/A with reason
+
+      - Explicit INVALID_REQUEST for unsupported keys if reject/remove strategy chosen:
+      PASS/FAIL/N/A with reason
+
+      - Legacy row fallback: PASS/FAIL
+
+
+      ### Issues Found
+
+      | Severity | Description | Location | Reproduction |
+
+      | --- | --- | --- | --- |
+
+      | blocker | <issue> | <file:line or surface> | <steps> |
+
+
+      ### Headline
+
+      - [ ] PASS: F1 and F2 closed; downstream finalization gates may proceed.
+
+      - [ ] FAIL: Silent drop/write-only field or proof gap remains.
+
+
+      **Confidence**: high/medium/low'
+    depends_on:
+    - finalization.fix-deep-wiring-table-metadata-contract
+    agent: integration-verifier-tacit
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

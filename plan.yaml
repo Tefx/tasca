@@ -40592,6 +40592,219 @@ phases:
     depends_on:
     - fix-pp-invar-mcp-residual
     agent: python-senior
+  - id: fix-pp-invar-project-budget-followup
+    name: Residual Invar remediation — project-level budget closure
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+      closure_step: true
+
+
+      Project-level residual closure after bounded CLI/API, MCP entrypoint, MCP proxy,
+      and completed storage/config remediation.
+
+
+      ## Target residual inventory (this step owns project-level blockers not guaranteed
+      by per-surface follow-ups)
+
+      - `<project>` shell_complexity_debt: 8 unaddressed complexity warnings (limit
+      5).
+
+      - `<project>` escape_hatch_project_limit file_size 6/5.
+
+      - `<project>` escape_hatch_project_limit shell_result 12/5.
+
+      - `<project>` escape_hatch_budget 76/15.
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause: aggregate guard budgets remain above project policy after per-file
+      residual blockers are reduced; remaining budget pressure may be distributed
+      across multiple surfaces and cannot be safely considered closed by a single
+      local fix.
+
+      - Symptom: authoritative full guard reports project-level complexity/file-size/shell_result/escape-hatch
+      budget blockers even when targeted CLI/API/MCP/storage smoke passes.
+
+      - Why prior steps are insufficient alone: bounded residual steps intentionally
+      own local surfaces; this closure step owns aggregate budget accounting and any
+      residual project-level blocker still intersecting the final retest.
+
+      - Why this fix is not surface-level: it must use root-cause reductions (thinning,
+      real Result seams, contracted Core extraction, deletion of obsolete hatches)
+      and cannot add suppressions, owner-only exemptions, or bookkeeping-only budget
+      evasion.
+
+
+      ## Required remediation constraints
+
+      - command_family_locked: `uvx invar-tools guard --all`.
+
+      - symbolic_testing: true.
+
+      - No suppressions, owner-only exemptions, `# noqa` budget evasion, or placeholder/stub-only
+      adapters.
+
+      - Treat per-surface completed work as immutable unless fresh guard evidence
+      proves regression in a touched dependency.
+
+      - Prefer smallest targeted reductions that close aggregate budgets: remove obsolete
+      escape hatches, reduce true complexity hotspots, and finish direct Result seam
+      reductions left by preceding residual steps.
+
+      - Preserve deployability-bearing surfaces for CLI, API, MCP server/proxy: startup/invocation/tool/route
+      behavior must remain reachable and behaviorally compatible.
+
+
+      ## Required project residual register
+
+      Evidence MUST include a before/after register for every project-level blocker
+      above, plus a mapped owner for every remaining nonzero project-budget contributor.
+      If a project-level budget remains open, evidence must say which follow-up owns
+      it and why it does not bypass `retest-pp-invar-full-scan`.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION/closure step. Stub-only completion is NOT acceptable.
+      Each deliverable MUST contain substantive logic that processes its inputs and
+      produces outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
+
+
+      ## Residual ownership semantics
+
+      This is the final project-budget residual ownership step before `retest-pp-invar-full-scan`.
+      It may be a closure step rather than a reduction-only step: unresolved blocker-class
+      project-budget debt must be explicitly dispositioned as blocking the retest,
+      not marked non-blocking by provenance.'
+    verification: '- Command lock: run/use `uvx invar-tools guard --all` as the authoritative
+      command family; do not substitute `uv run`, partial guard, suppressions, or
+      owner-only exemptions as closure evidence.
+
+      - Project residual register: evidence lists before/after for shell_complexity_debt,
+      escape_hatch_project_limit file_size, escape_hatch_project_limit shell_result,
+      and escape_hatch_budget with budget, current count, and disposition.
+
+      - Aggregate closure: project-level blockers are closed or remain explicitly
+      listed as blocker-class residual with owner/closure path; no unresolved blocker
+      is labeled merely pre-existing or out-of-scope.
+
+      - Direct blocker regression guard: evidence confirms CLI/API, MCP entrypoint,
+      MCP proxy, and storage/config direct residuals owned by preceding steps did
+      not regress.
+
+      - Surface preservation: representative CLI, API, and MCP smoke covers any surface
+      touched by this project-level closure step.
+
+      - Regression smoke: ruff and mypy over touched Python files pass; focused pytest
+      covering touched CLI/API/MCP/storage/config seams passes or any failure is dispositioned
+      as blocker-class residual.
+
+      - Files/commits: evidence lists files changed and commit ids produced by the
+      worker.
+
+      - Final retest readiness: evidence states whether `retest-pp-invar-full-scan`
+      may run and names any blocker that keeps it closed.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - src/tasca/cli.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/api/routes/sayings.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/api/routes/tables.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoints.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoint_session_tools.py — key passage or "NOT READ:
+      <reason>"
+
+      - src/tasca/shell/mcp/proxy.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/config.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/storage/search_repo.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/storage/table_repo.py — key passage or "NOT READ: <reason>"
+
+
+      ## Project Budget Closure Evidence
+
+      command_family_locked: uvx invar-tools guard --all
+
+      symbolic_testing: true
+
+
+      ### Project Residual Register
+
+      | Project blocker | Limit | Before | After | Disposition | Remaining owner |
+
+      |---|---:|---:|---:|---|---|
+
+
+      ### Contributor Register
+
+      | File | Rule | Count | Action taken | Remaining? |
+
+      |---|---|---:|---|---|
+
+
+      ### Direct Blocker Regression Guard
+
+      | Surface | Prior owner step | Current guard status | Regressed? |
+
+      |---|---|---|---|
+
+
+      ### Surface Preservation Smoke
+
+      | Surface | Command/test | Output excerpt | Status |
+
+      |---|---|---|---|
+
+
+      ### Verification Commands and Outputs
+
+      - `uvx invar-tools guard --all`: <output summary>
+
+      - ruff/mypy: <commands and outputs>
+
+      - pytest smoke: <commands and outputs>
+
+
+      ### Files Changed
+
+      - <path>
+
+
+      ### Commits
+
+      - <commit>: <message>
+
+
+      ### Residual Blocker Disposition
+
+      - <none or project blocker/file/rule/count/reason/owner/closure path>'
+    depends_on:
+    - fix-pp-invar-full-scan
+    - fix-pp-invar-mcp-entrypoints-followup
+    - fix-pp-invar-mcp-proxy-budget-followup
+    - fix-pp-invar-storage-config-residual
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

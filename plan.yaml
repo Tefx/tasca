@@ -41601,7 +41601,7 @@ phases:
   - id: fix-pp-invar-table-service-doctest
     name: Residual Invar remediation — table_service prepare_table_update doctest
       blocker
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -41737,6 +41737,47 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T04:50:08.552409+00:00'
+    done_at: '2026-05-13T04:56:28.069763+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n\n- `src/tasca/core/services/table_service.py`\
+      \ — READ. Key passage: `prepare_table_update` doctest constructs `Table(id=TableId(\"\
+      t1\"), status=TableStatus.OPEN, ...)` but the doctest only imported `datetime`;\
+      \ `TableId` and `TableStatus` were not defined in that example context.\n\n\
+      ## Doctest Blocker Fix Evidence\n\n**symbolic_testing**: true\n**command_family_locked**:\
+      \ `uvx invar-tools guard --all`\n**Target doctest**: `tasca.core.services.table_service.prepare_table_update`\n\
+      \n### Failure Context Reproduced or Confirmed\n- File/line: `src/tasca/core/services/table_service.py:163`\n\
+      - Prior exception: `NameError(\"name 'TableId' is not defined\")`\n- Root cause\
+      \ confirmation: The doctest used `TableId` and `TableStatus` without importing\
+      \ them into the doctest example context. Adding explicit doctest imports preserves\
+      \ executable documentation and avoids unused runtime imports.\n\n### Changes\
+      \ Made\n- Touched files:\n  - `src/tasca/core/services/table_service.py`\n-\
+      \ Summary of minimal import/name/doctest repair:\n  - Added `>>> from tasca.core.domain.table\
+      \ import TableId, TableStatus` to the `prepare_table_update` doctest.\n  - Added\
+      \ the same explicit import to adjacent `prepare_versioned_update` doctest because\
+      \ it uses the same identifiers.\n  - No behavior, contracts, suppressions, skips,\
+      \ or runtime implementation logic changed.\n\n### Verification Commands and\
+      \ Output\n- Worker commit: `af23917` — `fix table service doctest imports`.\n\
+      - Main salvage merge commit: `552d7b9` — `[vectl] salvage partial progress from\
+      \ step-fix-pp-invar-table-service-doctest`.\n- Authoritative full guard: `uvx\
+      \ invar-tools guard --all` — target table_service doctests now PASS; static\
+      \ phase passed with errors=0; full guard now fails at a different downstream\
+      \ doctest: `src/tasca/shell/logging.py::tasca.shell.logging.log_batch_table_delete`\
+      \ with `AttributeError(\"'Success' object has no attribute 'log'\")`.\n- Focused\
+      \ doctest/pytest: `uv run python -m doctest -v src/tasca/core/services/table_service.py`\
+      \ — PASS (`31 tests in 8 items. 31 passed. Test passed.`).\n- Ruff: `uv run\
+      \ ruff check src/tasca/core/services/table_service.py` — PASS (`All checks passed!`).\n\
+      - Mypy: `uv run mypy src/tasca/core/services/table_service.py` — PASS (`Success:\
+      \ no issues found in 1 source file`).\n\n### Broad Verifier Disposition Pass\n\
+      - `src/tasca/shell/logging.py::tasca.shell.logging.log_batch_table_delete` doctest\
+      \ `AttributeError(\"'Success' object has no attribute 'log'\")` => `batched_fix`\
+      \ / focused remediation owner `fix-pp-invar-shell-logging-doctest`.\n- `retest-pp-invar-full-scan`\
+      \ is kept blocked until `fix-pp-invar-shell-logging-doctest` completes.\n\n\
+      ### No-suppression Statement\n- No suppressions, skips, xfails, placeholder\
+      \ edits, or contract weakening were used.\n- Core contracts and doctests remain\
+      \ preserved.\n\n### Files changed\n- `src/tasca/core/services/table_service.py`\
+      \ — added explicit domain identifier imports inside doctest examples.\n\n###\
+      \ Final retest readiness\n- `retest-pp-invar-full-scan`: CLOSED until `fix-pp-invar-shell-logging-doctest`\
+      \ completes.\n- Blockers if CLOSED: shell logging doctest Result/logger mismatch,\
+      \ now owned by `fix-pp-invar-shell-logging-doctest`."
   - id: fix-pp-invar-shell-logging-doctest
     name: Residual Invar remediation — shell logging doctest Result mismatch
     status: pending

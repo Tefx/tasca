@@ -38500,7 +38500,7 @@ phases:
       - Downstream finalization review steps were blocked on the retest before progression.'
   - id: finalization.deep-spec-conformance
     name: Deep cross-surface spec conformance audit
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       verification_scope: full-plan-check
@@ -38564,6 +38564,8 @@ phases:
     - retest-pp-invar-full-scan-final
     - finalization.retest-deep-wiring-table-metadata-contract
     agent: spec-verifier-tacit
+    claimed_by: spec-verifier-tacit
+    claimed_at: '2026-05-13T08:14:15.588209+00:00'
   - id: finalization.deep-architecture-review
     name: Deep architecture and boundary review
     status: claimed

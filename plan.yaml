@@ -43793,7 +43793,7 @@ phases:
       - None for the requested task."
   - id: finalization.retest-deep-wiring-table-metadata-contract
     name: retest-deep-wiring-table-metadata-contract
-    status: pending
+    status: claimed
     description: 'step_type: test
 
       step_intent: retest_green
@@ -43956,6 +43956,8 @@ phases:
     depends_on:
     - finalization.fix-deep-wiring-table-metadata-contract
     agent: integration-verifier-tacit
+    claimed_by: integration-verifier-tacit
+    claimed_at: '2026-05-13T06:31:54.003582+00:00'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

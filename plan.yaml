@@ -39687,7 +39687,7 @@ phases:
     agent: integration-verifier-tacit
   - id: fix-pp-invar-mcp-residual
     name: Residual Invar budget remediation — MCP residual seams only
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -39877,6 +39877,52 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T02:56:26.611103+00:00'
+    done_at: '2026-05-13T03:26:10.849332+00:00'
+    evidence: "## refs Read Confirmation\n- src/tasca/shell/mcp/entrypoint_session_tools.py\
+      \ — defines McpResult = Result[McpEnvelope, McpEnvelope]; seat/proxy helpers\
+      \ now return Success/Failure envelopes.\n- src/tasca/shell/mcp/entrypoints.py\
+      \ — routes seat_heartbeat, seat_list, connect, and connection_status through\
+      \ Result-returning implementation seams.\n- src/tasca/shell/mcp/server.py —\
+      \ FastMCP adapter wrappers unwrap internal Result values via _to_mcp_response,\
+      \ preserving public JSON envelopes.\n- src/tasca/shell/mcp/proxy.py — existing\
+      \ proxy protocol hatches at switch_to_remote and forward_jsonrpc_request preserved\
+      \ by scope.\n- src/tasca/shell/mcp/entrypoint_logic.py — deterministic payload/validation\
+      \ helpers remain contracted helper surface.\n- src/tasca/shell/mcp/tool_contracts.py\
+      \ — declarative MCP metadata maps public tool names/defaults/spec anchors to\
+      \ runtime entrypoints.\n- tests/unit/mcp, tests/integration/test_mcp.py, tests/integration/test_mcp_proxy.py\
+      \ — executable MCP contract sources covering server wrappers, proxy, middleware,\
+      \ spec conformance, tool contracts, HTTP/STDIO, auth, and proxy forwarding.\n\
+      \n## MCP Residual Invar Remediation Evidence\nsymbolic_testing: true\ncommand_family_locked:\
+      \ uvx invar-tools guard --all\nsalvage_commit: 587d79c\n\n### Closed Surface\
+      \ Regression Confirmation\n- entrypoint_logic.py: remains closed; no shell_result/file-limit\
+      \ regression reported.\n- tool_contracts.py: remains closed; no shell_result/file-limit\
+      \ regression reported.\n\n### Before/After Residual Budget Register\n- src/tasca/shell/mcp/entrypoint_session_tools.py\
+      \ shell_result: 7 -> 0 (closed)\n- src/tasca/shell/mcp/entrypoints.py shell_result:\
+      \ 27 -> 0 (closed)\n- src/tasca/shell/mcp/server.py shell_result: 18 -> 1 (reduced,\
+      \ under file budget)\n- src/tasca/shell/mcp/proxy.py shell_result: 2 -> 2 (preserved\
+      \ at stated per-file budget)\n\n### Root-Cause Changes\n- Converted MCP session/tool\
+      \ seams to Result-returning helpers with Success/Failure MCP envelopes.\n- Introduced\
+      \ boundary unwrapping in FastMCP registration so framework receives JSON-serializable\
+      \ envelopes while internal seams satisfy Result-returning shell policy.\n- Preserved\
+      \ proxy protocol semantics and previously closed entrypoint_logic/tool_contracts\
+      \ reductions.\n\n### Verification\n- Worker verification: uvx invar-tools guard\
+      \ --all failed globally due remaining CLI/API/project budget debt, while MCP\
+      \ target counts were closed/reduced as above; ruff/mypy over touched MCP files\
+      \ passed; focused MCP pytest passed (232 tests).\n- Mainline verification after\
+      \ squash merge:\n  - uvx invar-tools guard --all: still fails on remaining CLI/API/project\
+      \ budget debt; MCP target counts remain closed/reduced; non_suppressible: []\
+      \ in guard output.\n  - ./.venv/bin/python -m ruff check src/tasca/shell/mcp/entrypoint_session_tools.py\
+      \ src/tasca/shell/mcp/entrypoints.py src/tasca/shell/mcp/server.py: PASS.\n\
+      \  - ./.venv/bin/python -m mypy same files: PASS.\n  - ./.venv/bin/python -m\
+      \ pytest -q tests/unit/mcp tests/integration/test_mcp.py tests/integration/test_mcp_proxy.py:\
+      \ 232 passed.\n\n### Files changed\n- src/tasca/shell/mcp/entrypoint_session_tools.py\n\
+      - src/tasca/shell/mcp/entrypoints.py\n- src/tasca/shell/mcp/server.py\n\n###\
+      \ Commits\n- cceec3e: [vectl] step-fix-pp-invar-mcp-residual completed\n\n###\
+      \ Residual blocker-class debt in MCP surface\n- src/tasca/shell/mcp/proxy.py\
+      \ shell_result remains 2/2 by scope and under the file budget; global project-weighted\
+      \ budget remains blocked by CLI/API/project debt.\n\n### Gaps/Notes\n- Remaining\
+      \ full-guard blockers are outside this MCP step and are owned by CLI/API residual\
+      \ work and final retest."
   - id: fix-pp-invar-storage-config-residual
     name: Residual Invar budget remediation — storage/config/services
     status: done

@@ -45396,7 +45396,7 @@ phases:
       - None."
   - id: finalization.retest-black-box-public-surface-blockers
     name: Retest black-box public-surface blockers
-    status: claimed
+    status: done
     description: 'step_type: test
 
       step_intent: retest_green
@@ -45639,6 +45639,149 @@ phases:
     agent: blind-tester-tacit
     claimed_by: blind-tester-tacit
     claimed_at: '2026-05-13T10:06:09.386039+00:00'
+    done_at: '2026-05-13T10:12:38.036419+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: blind-tester-tacit (independent public-surface verifier)
+
+      **Scope**: B1-B5 black-box HTTP + MCP public-surface retest
+
+      **Independence Level**: L3
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ### Public HTTP Server Evidence
+
+      **Server launch/invocation path**:
+
+      TASCA_API_HOST=127.0.0.1 TASCA_API_PORT=8765 TASCA_DB_PATH=<worktree temp>/http.db
+      TASCA_ADMIN_TOKEN=<token> ./.venv/bin/tasca. Port proof showed TCP 127.0.0.1:8765
+      LISTEN.
+
+
+      **B1 POST /api/v1/tables/join**:
+
+      Contract: docs/tasca-http-api-v0.1.md Tables section says POST /api/v1/tables/join
+      response includes table, sequence_latest, history_sequence, initial {sayings,next_sequence,has_more_history};
+      empty-history cursors use 0.
+
+      Actual: POST /api/v1/tables created table quick-goat-waves. POST /api/v1/tables/join
+      with invite_code/history limits returned 200 with table status open/version
+      1, sequence_latest:0, history_sequence:0, initial:{sayings:[],next_sequence:0,has_more_history:false},
+      seat:null.
+
+      Verdict: PROVEN.
+
+
+      **B2 wait with existing saying**:
+
+      Contract: docs/tasca-http-api-v0.1.md Sayings section says GET /sayings/wait
+      returns already-available sayings immediately, including since_sequence=-1&timeout=0.
+
+      Actual: After creating a saying sequence 0, GET /api/v1/tables/quick-goat-waves/sayings/wait?since_sequence=-1&timeout=0
+      returned 200 with sayings including sequence 0, next_sequence:0, timeout:false.
+
+      Verdict: PROVEN.
+
+
+      **B3 authenticated post-close HTTP saying**:
+
+      Contract: docs/tasca-http-api-v0.1.md Sayings section says closed-table state
+      failures return HTTP 409 with error code TableClosed.
+
+      Actual: After closing table, authenticated post-close saying returned 409 with
+      error.code TableClosed and details.table_status closed.
+
+      Verdict: PROVEN.
+
+
+      ### MCP stdio/discovery Evidence
+
+      **MCP invocation path**:
+
+      TASCA_DB_PATH=<worktree temp>/mcp.db ./.venv/bin/tasca-mcp via MCP stdio ClientSession
+      discovery/tools/call. Discovery initialized protocolVersion 2025-11-25, serverInfo
+      name tasca version 0.1.29; tools included table_create, table_join, table_get.
+
+
+      **B4 table_join response/cursor**:
+
+      Contract: docs/tasca-mcp-interface-v0.1.md tasca.table.join output has data.table,
+      sequence_latest, history_sequence, initial {sayings,next_sequence,has_more_history};
+      empty baseline values are 0.
+
+      Actual: table_create created rich-shark-jogs. table_join returned ok true and
+      data with table status open, sequence_latest:0, history_sequence:0, initial:{sayings:[],next_sequence:0,has_more_history:false};
+      data.initial_sayings absent.
+
+      Verdict: PROVEN.
+
+
+      **B5 table_get wrapper**:
+
+      Contract: docs/tasca-mcp-interface-v0.1.md tasca.table.get output is {"table":{...}}
+      inside runtime envelope data.
+
+      Actual: table_get returned ok true with data.table wrapper containing table_id
+      rich-shark-jogs and status open.
+
+      Verdict: PROVEN.
+
+
+      ### Behavioral Proof Register
+
+      - B1: PROVEN; HTTP join route is publicly reachable without admin auth and returns
+      documented table + initial cursor shape; gate decision not blocking.
+
+      - B2: PROVEN; since_sequence=-1&timeout=0 returns already-existing saying immediately
+      with coherent cursor; gate decision not blocking.
+
+      - B3: PROVEN; authenticated saying after close rejected as closed-table state
+      via HTTP 409 TableClosed, not permission denial; gate decision not blocking.
+
+      - B4: PROVEN; MCP table_join discovery/docs and live response agree on data.initial
+      shape and empty-history cursor baseline; gate decision not blocking.
+
+      - B5: PROVEN; MCP table_get discovery/docs and live response agree on data.table
+      wrapper; gate decision not blocking.
+
+
+      ### Mandatory semantic reporting
+
+      Headline: PASS
+
+      Blocking Status: CLOSED
+
+      Proof-Gap Status: NONE
+
+      Verdict: PASS
+
+      Blockers: []
+
+      Orchestrator Action Hint: COMPLETE
+
+      product_files_modified: false
+
+      Commit hash(es): none — verify-only step with no repo mutations
+
+
+      ### Completion Receipt
+
+      Surface Area Tested: HTTP ./.venv/bin/tasca; endpoints GET /api/v1/tables, POST
+      /api/v1/tables, POST /api/v1/tables/join, POST /api/v1/tables/{id}/sayings,
+      GET /api/v1/tables/{id}/sayings/wait?since_sequence=-1&timeout=0, POST /api/v1/tables/{id}/control;
+      MCP stdio ./.venv/bin/tasca-mcp; tools initialize, tools/list, table_create,
+      table_join, table_get.
+
+      Vulnerabilities Triggered: none. No 500s, crashes, or unhandled errors in required
+      probes.
+
+      The Blind Verdict: PASS.'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

@@ -437,7 +437,6 @@ TOOL_CONTRACTS_BY_NAME: Final[dict[str, ToolContract]] = {
 }
 
 
-# @invar:allow shell_result: Declarative MCP metadata lookup for runtime annotations, not an I/O boundary.
 def parameter_contract(tool_name: str, parameter_name: str) -> ParameterContract:
     """Return the authoritative ParameterContract for runtime registration.
 
@@ -453,7 +452,6 @@ def parameter_contract(tool_name: str, parameter_name: str) -> ParameterContract
     raise KeyError(f"Unknown MCP parameter: {tool_name}.{parameter_name}")
 
 
-# @invar:allow shell_result: Declarative MCP metadata lookup for runtime registration, not an I/O boundary.
 def tool_contract(tool_name: str) -> ToolContract:
     """Return the authoritative ToolContract for runtime registration.
 
@@ -463,7 +461,6 @@ def tool_contract(tool_name: str) -> ToolContract:
     return TOOL_CONTRACTS_BY_NAME[tool_name]
 
 
-# @invar:allow shell_result: Declarative MCP metadata lookup for runtime defaults, not an I/O boundary.
 def parameter_default(tool_name: str, parameter_name: str) -> Any:
     """Return the runtime default from centralized MCP parameter metadata.
 
@@ -475,7 +472,6 @@ def parameter_default(tool_name: str, parameter_name: str) -> Any:
     return parameter_contract(tool_name, parameter_name).default
 
 
-# @invar:allow shell_result: Declarative MCP metadata adapter returns Pydantic FieldInfo for FastMCP.
 def parameter_field(tool_name: str, parameter_name: str) -> FieldInfo:
     """Build a Pydantic Field from centralized MCP contract metadata.
 

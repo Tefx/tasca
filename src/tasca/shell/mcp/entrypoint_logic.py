@@ -73,7 +73,6 @@ def build_patron_response_data(patron: Patron, *, is_new: bool) -> dict[str, Any
 
 @deal.pre(lambda table: table is not None)
 @deal.post(lambda result: "id" in result and "status" in result)
-# @invar:allow entry_point_too_thick: Table payload intentionally includes canonical and compatibility fields.
 def build_table_dict(table: Table) -> dict[str, Any]:
     """Build MCP table payload."""
     return {
@@ -128,8 +127,6 @@ def build_seat_dict(seat: Seat, expires_at: datetime) -> dict[str, Any]:
 
 
 @deal.post(lambda result: result is None or (result.get("ok") is False and "error" in result))
-# @invar:allow entry_point_too_thick: Branching validates MCP protocol invariants and keeps
-#   explicit error payload shape for agent/human speaker constraints.
 def validate_speaker_constraints(
     speaker_kind: str,
     patron_id: str | None,
@@ -179,8 +176,6 @@ def build_join_next_action(has_history: bool, next_sequence: int) -> str:
 
 
 # +#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+
-# @invar:allow shell_result: Pure patch parser returns TableStatus/error tuple consumed by
-#   shell adapters; not an I/O boundary and intentionally not a Result envelope.
 def _parse_patch_status(
     current_table: Table, patch: dict[str, Any]
 ) -> tuple[TableStatus, dict[str, Any] | None]:
@@ -199,8 +194,6 @@ def _parse_patch_status(
 
 @deal.pre(lambda current_table, patch: current_table is not None and patch is not None)
 @deal.post(lambda result: len(result) == 2)
-# @invar:allow entry_point_too_thick: Patch assembly carries backward-compatible fallback
-#   semantics for invalid status while preserving existing MCP response shape.
 def apply_table_patch(
     current_table: Table,
     patch: dict[str, Any],
@@ -239,8 +232,6 @@ def apply_table_patch(
 
 @deal.pre(lambda saying, mentions_all, mentions_resolved, mentions_unresolved: saying is not None)
 @deal.post(lambda result: "id" in result and "_next_action" in result)
-# @invar:allow entry_point_too_thick: Response payload keeps spec and backward-compatible
-#   fields in one place to prevent drift across table_say call sites.
 def build_say_response(
     saying: Any,
     mentions_all: bool,
@@ -299,7 +290,6 @@ def build_table_update_actor_metadata(
     }
 
 
-# @invar:allow shell_result: Helper builds MCP next-action guidance string for wait loop.
 def _silence_nudge(empty_waits: int, threshold: int, next_sequence: int) -> str:
     return (
         f"No new messages ({empty_waits}/{threshold}). "
@@ -308,7 +298,6 @@ def _silence_nudge(empty_waits: int, threshold: int, next_sequence: int) -> str:
     )
 
 
-# @invar:allow shell_result: Helper builds MCP next-action guidance string for wait loop.
 def _silence_stall(empty_waits: int, next_sequence: int) -> str:
     return (
         f"Silence for {empty_waits} consecutive waits - discussion may be stalling. "
@@ -320,7 +309,6 @@ def _silence_stall(empty_waits: int, next_sequence: int) -> str:
     )
 
 
-# @invar:allow shell_result: Helper builds MCP next-action guidance string for wait loop.
 def _silence_last_chance(empty_waits: int, threshold: int, next_sequence: int) -> str:
     return (
         f"Extended silence ({empty_waits}/{threshold}). If you have ANY remaining "
@@ -332,7 +320,6 @@ def _silence_last_chance(empty_waits: int, threshold: int, next_sequence: int) -
     )
 
 
-# @invar:allow shell_result: Helper builds MCP next-action guidance string for wait loop.
 def _silence_exit(threshold: int) -> str:
     return (
         f"Empty waits reached {threshold}. Discussion is over. "

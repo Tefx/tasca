@@ -38553,7 +38553,7 @@ phases:
       '
     depends_on:
     - finalization.deep-spec-conformance
-    - retest-pp-invar-full-scan
+    - retest-pp-invar-full-scan-final
     agent: blind-tester-tacit
   - id: finalization.gate
     name: Final gate for duplicate-abstraction remediation

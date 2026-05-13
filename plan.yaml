@@ -38187,7 +38187,7 @@ phases:
       \ was verification-only."
   - id: finalization.doc-sync
     name: Sync documentation with consolidated transport behavior
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -38244,6 +38244,8 @@ phases:
     depends_on:
     - retest-pp-invar-full-scan-final
     agent: doc-reviewer-tacit
+    claimed_by: doc-reviewer-tacit
+    claimed_at: '2026-05-13T05:57:16.839833+00:00'
   - id: finalization.deep-wiring-audit
     name: Deep wiring audit after consolidation
     status: claimed

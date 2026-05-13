@@ -38871,7 +38871,7 @@ phases:
       review_files_modified: []'
   - id: finalization.deep-black-box-verification
     name: Black-box verification of consolidated public surfaces
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: full-plan-check
@@ -38939,6 +38939,133 @@ phases:
     agent: blind-tester-tacit
     claimed_by: blind-tester-tacit
     claimed_at: '2026-05-13T09:21:39.838082+00:00'
+    done_at: '2026-05-13T09:39:39.082985+00:00'
+    evidence: '## Verification Report
+
+
+      Headline: FAIL
+
+      Blocking Status: OPEN
+
+      Proof-Gap Status: NONE
+
+      Verdict: FAIL
+
+      Blockers: B1, B2, B3, B4, B5
+
+      Orchestrator Action Hint: DO_NOT_COMPLETE until remediation ownership exists
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ### Black-Box Scenarios
+
+      - HTTP scenarios: started documented public server command via .venv/bin/tasca
+      with isolated SQLite DB/admin token; verified liveness, patron creation, admin
+      enforcement, table creation, documented join, saying/listen/wait, control pause/dedup/resume/close/post-close
+      rejection, export markdown/jsonl, oversized saying, and batch-delete >100 rejection.
+
+      - MCP scenarios: used public stdio MCP surface through FastMCP client against
+      .venv/bin/tasca-mcp; listed tools; verified patron/table/say/listen/heartbeat/control/wait/export/delete-batch
+      flows.
+
+      - Discovery/default visibility checks: runtime MCP discovery exposed 17 expected
+      tools and documented defaults including patron_register.kind=agent, table_join
+      limits, table_wait defaults, seat_heartbeat defaults, seat_list.active_only,
+      table_export.format, and table_delete_batch limit documentation.
+
+
+      ### Public-surface blockers
+
+      - B1: HTTP spec documents POST /api/v1/tables/join, but public server returned
+      405.
+
+      - B2: HTTP wait endpoint failed to return an already-existing saying for since_sequence=-1;
+      response was 200 with {"sayings":[],"next_sequence":0,"timeout":true}.
+
+      - B3: Authenticated post-close saying returned 403 PermissionDenied instead
+      of state/closed-table semantics.
+
+      - B4: MCP table_join returned data.initial_sayings instead of documented data.initial;
+      sequence_latest=-1 and initial_sayings.next_sequence=-1 instead of documented
+      empty-history 0 values.
+
+      - B5: MCP table_get returned the table object directly under data, not documented
+      data.table wrapper.
+
+
+      ### Passing public checks
+
+      - HTTP liveness, auth enforcement, patron/table create, control pause/resume/close,
+      pause dedup replay, post-close control rejection, export markdown/jsonl, oversized
+      content rejection, and batch-delete >100 rejection passed.
+
+      - MCP discovery, documented defaults visibility, table create/say/listen/seat/control/wait/export/delete-batch,
+      control audit saying, close terminal behavior, and default export passed.
+
+
+      ### Mandatory semantic reporting
+
+      - step_intent: verification/full-plan-check
+
+      - expected_result: green
+
+      - observed_result: fail — public HTTP and MCP surfaces mostly run, discovery/default
+      visibility passes, and control audit behavior is externally observable, but
+      documented join/get/wait/error-shape contracts drift on public surfaces.
+
+      - failure_alignment: B1-B5 are exact public-surface contract drift blockers.
+
+      - verdict: FAIL
+
+      - blockers: [B1, B2, B3, B4, B5]
+
+      - product_files_modified: false
+
+      - gate_open_allowed: false
+
+      - Commit hash(es): none — verify-only step with no repo mutations
+
+
+      ### Behavioral proof register
+
+      - HTTP server starts and serves public tables route: PROVEN via .venv/bin/tasca
+      and GET /api/v1/tables.
+
+      - HTTP patron/table creation through public API with admin auth: PROVEN.
+
+      - HTTP documented table join: UNPROVEN due 405.
+
+      - HTTP control pause/resume/close and audit saying visibility: PROVEN.
+
+      - HTTP wait returns existing sayings newer than since_sequence: UNPROVEN due
+      empty timeout despite existing saying.
+
+      - HTTP export markdown/jsonl: PROVEN.
+
+      - MCP discovery exposes defaults/docs: PROVEN.
+
+      - MCP patron/table/say/listen/seat/control/export flows: PROVEN except join/get
+      shape drift separately.
+
+      - MCP documented join/get response shapes: UNPROVEN due response shape drift.
+
+
+      ### Remediation created
+
+      - finalization.fix-black-box-public-surface-blockers
+
+      - finalization.retest-black-box-public-surface-blockers
+
+      - finalization.gate was blocked on the new retest.
+
+
+      ### Verdict
+
+      ISSUES_FOUND / FAIL'
   - id: finalization.gate
     name: Final gate for duplicate-abstraction remediation
     status: pending

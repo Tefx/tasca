@@ -38932,6 +38932,7 @@ phases:
     - finalization.deep-contract-strength
     - finalization.deep-black-box-verification
     - retest-pp-invar-full-scan-final
+    - finalization.retest-concurrent-review-blockers
     agent: gate-reviewer-tacit
   - id: fix-full-plan-blockers
     name: Remediate full-plan verifier blockers in one batch

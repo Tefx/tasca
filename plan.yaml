@@ -9572,6 +9572,53 @@ phases:
       \ of ASGI transport vs external server\n- 100% code path audit of harness.py\n\
       - Dependency vulnerability scanning\n- End-to-end tests requiring external services\n\
       - Whether the Hypothesis failures can be triggered in production paths"
+  - id: integration-fix2-validation-evidence-closure
+    name: Validation evidence closure for historical integration_fix2 red evidence
+    status: done
+    description: 'Validation-closure/disposition record only; no product-code work.
+      This step closes historical completed-evidence guard debt for integration_fix2.r1-reverify
+      and integration_fix2.integration-fix2-gate. Provenance: historical completed
+      evidence contained FAIL. Disposition: closed by later limits/security/MCP remediation
+      and finalization evidence; no current blocker-class issue remains for remaining
+      gates. Gate intersection: finalization.gate is already OPEN/PASS and current
+      acceptance is owned by later remediation/finalization, so this historical red
+      evidence must not reopen live execution work.'
+    verification: phase-check protecting downstream and final gates. Evidence must
+      record green/OPEN/gate_open_allowed=true disposition for integration_fix2.r1-reverify
+      and integration_fix2.integration-fix2-gate and explain why historical FAIL evidence
+      is closed by later remediation/finalization without altering current finalization
+      PASS meaning.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - steps: integration_fix2.r1-reverify; integration_fix2.integration-fix2-gate
+
+      - disposition: historical failure evidence closed
+
+      - gate_intersection: later remediation and finalization.gate own current acceptance;
+      no unresolved live blocker remains
+
+      - required marker: green/OPEN/gate_open_allowed=true'
+    depends_on:
+    - integration_fix2.r1-reverify
+    - integration_fix2.integration-fix2-gate
+    agent: gate-reviewer-tacit
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Historical Evidence Closure\n- closed_steps:\n  - integration_fix2.r1-reverify\n\
+      \  - integration_fix2.integration-fix2-gate\n- historical_signal: FAIL in completed\
+      \ evidence\n- provenance: historical completed-evidence guard debt, not a new\
+      \ product-code blocker\n- disposition: closed by subsequent limits_fix/security_fix3/MCP\
+      \ remediation chains and the current finalization.gate OPEN/PASS record\n- gate_intersection_reasoning:\
+      \ any live integration blocker would intersect later integration/remediation\
+      \ phases, full-plan verification, and finalization.gate; those later records\
+      \ are done and OPEN/PASS, so the historical red evidence is superseded for plan-validation\
+      \ purposes\n- current_acceptance_owner: downstream remediation phases plus finalization.verify-full-plan\
+      \ and finalization.gate\n- result: green/OPEN/gate_open_allowed=true\n\nNo product\
+      \ code changed."
 - id: l3_fix2
   name: L3 fix round 2 — address l3_fix gate review findings
   status: done

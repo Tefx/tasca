@@ -43579,7 +43579,7 @@ phases:
       none (verify-only step).'
   - id: finalization.fix-deep-wiring-table-metadata-contract
     name: fix-deep-wiring-table-metadata-contract
-    status: claimed
+    status: done
     description: "step_type: implementation\nverification_scope: full-plan-check remediation\n\
       agent: python-senior\npriority: HIGH\nsymbolic_testing: false\n\nBatched remediation\
       \ for failed broad wiring audit step `finalization.deep-wiring-audit`.\n\n##\
@@ -43727,6 +43727,70 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T06:18:04.175698+00:00'
+    done_at: '2026-05-13T06:31:32.193148+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n- src/tasca/shell/mcp/tool_contracts.py\
+      \ — lines 112-147 advertise table_create returning/storing metadata/policy/board;\
+      \ lines 316-338 advertise table_update patch keys host_ids/metadata/policy/board.\n\
+      - src/tasca/shell/services/operations/table_creation.py — TableCreationOutcome\
+      \ exposed metadata/policy/board; creation now persists them on Table.\n- src/tasca/shell/api/routes/tables.py\
+      \ — REST TableCreateRequest/TableCreateResponse include metadata/policy/board\
+      \ and create response emits them.\n- src/tasca/shell/mcp/entrypoints.py — MCP\
+      \ create emits metadata/policy/board; table_get/table_join/table_wait(include_table=True)\
+      \ use _build_table_dict.\n- src/tasca/shell/storage/table_repo.py — prior INSERT/SELECT/DDL\
+      \ omitted metadata fields; now metadata fields are included.\n- src/tasca/core/domain/table.py\
+      \ — prior Table omitted metadata fields; now Table and TableUpdate carry metadata/policy/board.\n\
+      - src/tasca/shell/mcp/server.py — runtime wrapper accepts patch: dict[str, Any]\
+      \ for table_update and delegates unchanged.\n- src/tasca/shell/mcp/entrypoint_logic.py\
+      \ — prior _apply_table_patch only handled question/context/status/host_ids and\
+      \ _build_table_dict omitted metadata fields; now both support metadata/policy/board.\n\
+      \n## Contract Strategy Chosen\n- Strategy: SUPPORT\n- Reason: Existing public\
+      \ contracts and create responses already advertise metadata/policy/board; supporting\
+      \ persistence/readback avoids breaking callers and fixes write-only accepted\
+      \ fields.\n- Surfaces updated: Core domain model, schema DDL/migration, storage\
+      \ row encoding/decoding, table repository create/get/list/update, table creation\
+      \ operation, control-table returned domain object, MCP table dict/update patch\
+      \ handling, REST/MCP/storage regression tests.\n- State semantics: table_update\
+      \ remains optimistic-concurrency guarded and last-writer-wins after version\
+      \ match. Omitted metadata/policy/board preserve current values in MCP patch.\
+      \ Explicit null clears patched field to {}. Legacy rows or malformed stored\
+      \ JSON fall back to {}.\n\n## Files Changed\n- src/tasca/core/domain/table.py\
+      \ — added metadata/policy/board to Table and TableUpdate.\n- src/tasca/core/schema.py\
+      \ — added table DDL columns and doctest expectations.\n- src/tasca/core/services/table_service.py\
+      \ — preserve replace-only update semantics for metadata fields.\n- src/tasca/core/storage_rows.py\
+      \ — added contracted/doctested JSON object encode/decode helpers and row mapping.\n\
+      - src/tasca/shell/storage/database.py — added backward-compatible migrations\
+      \ for metadata/policy/board columns.\n- src/tasca/shell/storage/table_repo.py\
+      \ — persisted/read metadata fields and legacy-column fallback projection.\n\
+      - src/tasca/shell/storage/control_repo.py — preserved metadata fields across\
+      \ control status updates.\n- src/tasca/shell/services/operations/table_creation.py\
+      \ — persisted create metadata fields instead of response-only ownership.\n-\
+      \ src/tasca/shell/mcp/entrypoint_logic.py — included metadata fields in table\
+      \ payloads and table_update patch logic.\n- tests/unit/storage/test_table_repo.py\
+      \ — added persistence and legacy fallback coverage.\n- tests/unit/api/test_tables_routes.py\
+      \ — added REST create-then-GET parity regression.\n- tests/unit/mcp/test_mcp_server.py\
+      \ — added MCP create/get/join/wait parity and table_update behavior tests.\n\
+      \n## Verification\n- Worker: uv run pytest tests/unit/storage/test_table_repo.py\
+      \ tests/unit/api/test_tables_routes.py tests/unit/mcp/test_mcp_server.py — 174\
+      \ passed.\n- Worker: uv run invar guard — passed; static errors 0, doctest passed,\
+      \ property tests passed; worker noted non-blocking pre-existing warnings/infos\
+      \ and runtime warning about async_identity.\n- Mainline final-state verification\
+      \ after squash merge:\n  - git diff --check HEAD~1..HEAD: passed (no output)\n\
+      \  - uv run invar guard: passed with 0 errors, 0 warnings; doctest passed; crosshair/property\
+      \ skipped because no changed files\n  - uv run pytest tests/unit/storage/test_table_repo.py\
+      \ tests/unit/api/test_tables_routes.py tests/unit/mcp/test_mcp_server.py: 174\
+      \ passed in 3.02s\n\n## Regression Proof\n- REST create/readback: TestGetTable::test_create_then_get_preserves_table_metadata_policy_board\
+      \ proves create response and later GET match.\n- MCP create/readback: TestTableGet::test_create_then_get_and_join_preserve_metadata_policy_board\
+      \ and TestTableWait::test_table_wait_include_table_preserves_metadata_policy_board\
+      \ prove get/join/wait snapshots read back persisted fields.\n- table_update\
+      \ behavior: test_table_update_persists_metadata_policy_board_and_null_clears\
+      \ proves updates persist/read back; test_table_update_rejects_non_object_metadata_fields\
+      \ proves no silent drop for invalid metadata shape.\n- Contract/docs/runtime\
+      \ agreement: MCP contracts still advertise supported fields; runtime now persists,\
+      \ patches, and emits those fields consistently.\n\n## Commit hash(es)\n- Worktree:\
+      \ 76ebb02 fix table metadata persistence contract\n- Main merge: 0425a62 [vectl]\
+      \ step-finalization.fix-deep-wiring-table-metadata-contract completed\n\n##\
+      \ Spec link\n- finalization.fix-deep-wiring-table-metadata-contract\n\n## Gaps/Notes\n\
+      - None for the requested task."
   - id: finalization.retest-deep-wiring-table-metadata-contract
     name: retest-deep-wiring-table-metadata-contract
     status: pending

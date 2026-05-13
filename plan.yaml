@@ -39591,7 +39591,7 @@ phases:
       \ and project-budget follow-up steps."
   - id: retest-pp-invar-full-scan
     name: Retest PP-invar-full-scan after residual Invar remediation
-    status: pending
+    status: claimed
     description: "step_type: test\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: full-plan-check\nwork_type: technical_debt_remediation\n\
       priority: HIGH\nagent: integration-verifier-tacit\nsymbolic_testing: true\n\
@@ -39745,6 +39745,8 @@ phases:
     - fix-pp-invar-mcp-proxy-doctest
     - fix-pp-invar-patron-repo-doctest
     agent: integration-verifier-tacit
+    claimed_by: integration-verifier-tacit
+    claimed_at: '2026-05-13T05:20:07.274007+00:00'
   - id: fix-pp-invar-mcp-residual
     name: Residual Invar budget remediation — MCP residual seams only
     status: done

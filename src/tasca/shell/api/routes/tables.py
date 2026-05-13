@@ -19,7 +19,7 @@ from tasca.core.services.batch_delete_service import (
 )
 from tasca.shell.api.auth import verify_admin_token
 from tasca.shell.api.deps import get_db
-from tasca.shell.api.errors import raise_http_error
+from tasca.shell.api.errors import error_envelope
 from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from tasca.shell.api.routes import tables_control
 from tasca.shell.logging import (
@@ -144,7 +144,12 @@ def _table_create_response(
 ) -> Result[TableCreateResponse, HTTPException]:
     """Create a table and return the REST response model."""
     if data.title is None and data.question is None:
-        return Failure(_http_error(status.HTTP_400_BAD_REQUEST, "Either title or question is required"))
+        return Failure(
+            _http_error(
+                status.HTTP_400_BAD_REQUEST,
+                error_envelope("InvalidRequest", "Either title or question is required"),
+            )
+        )
     resource_key = "table_create"
     if data.dedup_id is not None:
         cached_result = check_idempotency_key(conn, resource_key, "table_create", data.dedup_id, now=now)

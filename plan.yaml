@@ -41957,6 +41957,142 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T04:56:52.554471+00:00'
+  - id: fix-pp-invar-mcp-proxy-doctest
+    name: Residual Invar remediation — MCP proxy switch doctest Result mismatch
+    status: pending
+    description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
+      priority: HIGH\nagent: python-senior\nsymbolic_testing: true\ncommand_family_locked:\
+      \ uvx invar-tools guard --all\n\nFocused downstream full-guard blocker after\
+      \ salvaged commit `fc12c1a` closed the shell logging doctest Result/logger mismatch.\
+      \ Focused logging doctest passed (27 tests), ruff/mypy passed, and mainline\
+      \ `uvx invar-tools guard --all` now passes the logging doctests but exits nonzero\
+      \ on a new MCP proxy doctest blocker.\n\n## Exact failure context\nAuthoritative\
+      \ full guard command `uvx invar-tools guard --all` now passes static with errors=0;\
+      \ earlier table_service/logging doctests pass; blocker is:\n- `src/tasca/shell/mcp/proxy.py::tasca.shell.mcp.proxy.switch_to_local`\n\
+      - doctest lines:\n  - `>>> from tasca.shell.mcp.proxy import get_upstream_config,\
+      \ switch_to_remote, switch_to_local`\n  - `>>> switch_to_remote(\"http://api.example.com\"\
+      )`\n- Expected nothing\n- Got: `<Success: UpstreamConfig(url='http://api.example.com',\
+      \ token=None, session_id=None)>`\n- This blocks `retest-pp-invar-full-scan`.\n\
+      \n## Required remediation\nFix the doctest or proxy seam properly by respecting\
+      \ the current Result-returning `switch_to_remote` / `switch_to_local` contracts\
+      \ while preserving proxy mode behavior.\n\nHard constraints:\n- No suppressions,\
+      \ skips, xfail markers, placeholders, or doctest weakening.\n- Do not weaken\
+      \ doctests, contracts, or behavioral coverage.\n- Preserve proxy mode behavior,\
+      \ upstream config semantics, remote/local switching behavior, and current Result-returning\
+      \ shell contracts.\n- Treat this as a shell seam / Result contract-output mismatch,\
+      \ not a permission to hide output or discard returned Result values.\n- If the\
+      \ correct doctest pattern is assigning the returned Success or asserting its\
+      \ value, update the doctest to express the Result contract clearly; if the seam\
+      \ behavior is wrong, fix the seam consistently without breaking current call\
+      \ sites.\n\n## Root Cause vs Symptom\n- Symptom: doctest expected no printed\
+      \ repr for `switch_to_remote(\"http://api.example.com\")`, but the Result-returning\
+      \ function emits `<Success: UpstreamConfig(url='http://api.example.com', token=None,\
+      \ session_id=None)>` when evaluated as a bare expression.\n- Required root-cause\
+      \ evidence: explain whether the doctest call site or the proxy helper contract\
+      \ is wrong under the current Result-returning contract, and why the chosen fix\
+      \ preserves remote/local proxy mode behavior.\n- This fix must close the MCP\
+      \ proxy doctest blocker without reopening table_service/logging doctests or\
+      \ other residual Invar closures.\n\n## Completion Criteria (stub exclusion)\n\
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. The\
+      \ deliverable MUST contain substantive doctest contract correction or proxy\
+      \ seam correction that exercises real proxy behavior and produces outputs that\
+      \ vary based on inputs. Private stubs/placeholders do not satisfy this requirement."
+    verification: '- Run the authoritative command exactly: `uvx invar-tools guard
+      --all`; it must exit 0 or, if a new downstream blocker appears after this fix,
+      evidence must show this MCP proxy doctest blocker is closed and identify the
+      new blocker without suppressing it.
+
+      - Run the focused doctest/pytest invocation for `src/tasca/shell/mcp/proxy.py::tasca.shell.mcp.proxy.switch_to_local`,
+      or the closest supported proxy doctest invocation (for example `uv run python
+      -m doctest -v src/tasca/shell/mcp/proxy.py`), and verify the `switch_to_remote("http://api.example.com")`
+      doctest no longer fails with unexpected `<Success: UpstreamConfig(...)>` output.
+
+      - Run ruff over touched files, including `src/tasca/shell/mcp/proxy.py`.
+
+      - Run mypy over touched files or the closest supported `src/tasca` scope.
+
+      - If proxy behavior is touched beyond doctest-only correction, run focused proxy
+      unit/integration tests covering remote/local switching and upstream config behavior
+      (including `tests/integration/test_mcp_proxy.py` or the closest available proxy
+      test set).
+
+      - Evidence confirms no skips/xfails/suppressions/placeholders and no doctest/contract
+      weakening were used.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - src/tasca/shell/mcp/proxy.py — key passage or "NOT READ: <reason>"
+
+      - tests/unit/mcp — key passage or "NOT READ: <reason>"
+
+      - tests/integration/test_mcp_proxy.py — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## MCP Proxy Doctest Fix Evidence
+
+
+      **symbolic_testing**: true
+
+      **command_family_locked**: `uvx invar-tools guard --all`
+
+
+      ### Failure closure
+
+      - Original blocker: `src/tasca/shell/mcp/proxy.py::tasca.shell.mcp.proxy.switch_to_local`
+
+      - Original unexpected output: `<Success: UpstreamConfig(url=''http://api.example.com'',
+      token=None, session_id=None)>`
+
+      - Chosen disposition: doctest contract correction | proxy seam correction
+
+      - Root cause vs symptom explanation: <why this was the correct contract-preserving
+      fix>
+
+
+      ### Commands executed
+
+      ```text
+
+      <paste exact focused doctest/pytest command and output>
+
+      <paste exact ruff command and output>
+
+      <paste exact mypy command and output>
+
+      <paste exact `uvx invar-tools guard --all` output or blocker excerpt if it advances
+      to a new downstream blocker>
+
+      ```
+
+
+      ### Proxy behavior preservation
+
+      - Remote switch behavior preserved: PASS/FAIL + evidence
+
+      - Local switch behavior preserved: PASS/FAIL + evidence
+
+      - Upstream config Result-returning contract preserved: PASS/FAIL + evidence
+
+      - Focused proxy tests run if proxy behavior touched: PASS/FAIL/N/A + justification
+
+
+      ### Guard disposition
+
+      - `verdict`: PASS | FAIL
+
+      - `closed_blocker`: true | false
+
+      - `new_downstream_blocker`: <none or exact blocker>
+
+      - `no_suppression_or_weakening`: true | false'
+    depends_on:
+    - fix-pp-invar-shell-logging-doctest
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

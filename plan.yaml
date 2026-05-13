@@ -43426,6 +43426,154 @@ phases:
       ### Commits
 
       none (verify-only step).'
+  - id: finalization.fix-deep-wiring-table-metadata-contract
+    name: fix-deep-wiring-table-metadata-contract
+    status: pending
+    description: "step_type: implementation\nverification_scope: full-plan-check remediation\n\
+      agent: python-senior\npriority: HIGH\nsymbolic_testing: false\n\nBatched remediation\
+      \ for failed broad wiring audit step `finalization.deep-wiring-audit`.\n\n##\
+      \ Blockers to Fix (ALL of these, not just the first)\n\n### F1 — HIGH — table_create\
+      \ metadata contract is not backed by persistence/readback\nEvidence anchors:\n\
+      - `src/tasca/shell/mcp/tool_contracts.py:112-147` advertises table create metadata/policy/board.\n\
+      - `src/tasca/shell/services/operations/table_creation.py:27-32,154-156` includes\
+      \ metadata/policy/board in `TableCreationOutcome`.\n- REST response emits them\
+      \ in `src/tasca/shell/api/routes/tables.py:180-192`.\n- MCP response emits them\
+      \ in `src/tasca/shell/mcp/entrypoints.py:355-373`.\n- Persistence only stores\
+      \ id/question/context/status/version/created_at/updated_at/creator_patron_id/host_ids\
+      \ in `src/tasca/shell/storage/table_repo.py:112-127` and DDL `470-478`.\n- Domain\
+      \ table omits metadata/policy/board in `src/tasca/core/domain/table.py:80-88`.\n\
+      Impact: callers can send metadata/policy/board and see them in create responses,\
+      \ but later `table_get`, `table_join`, `table_wait(include_table=true)`, or\
+      \ REST GET cannot recover them.\n\n### F2 — HIGH — table_update metadata/policy/board\
+      \ patch contract is advertised but ignored\nEvidence anchors:\n- `src/tasca/shell/mcp/tool_contracts.py:316-338`\
+      \ says patch allowed keys include `host_ids`, `metadata`, `policy`, `board`.\n\
+      - Runtime wrapper accepts `patch` in `src/tasca/shell/mcp/server.py:520-534`.\n\
+      - Entrypoint delegates patch to `_apply_table_patch` in `src/tasca/shell/mcp/entrypoints.py:1070-1083`.\n\
+      - Actual patch logic handles only question/context/status/host_ids in `src/tasca/shell/mcp/entrypoint_logic.py:220-279`.\n\
+      - Response table dict returns host_ids/identity only, no metadata/policy/board\
+      \ in `src/tasca/shell/mcp/entrypoint_logic.py:78-104`.\nImpact: MCP clients\
+      \ are told they can update metadata/policy/board, but those fields are silently\
+      \ dropped.\n\n## Required contract strategy decision\nChoose and implement ONE\
+      \ coherent strategy across domain/storage/REST/MCP/contracts/docs/tests:\n\n\
+      1. **Support strategy**: persist and read back `metadata`, `policy`, and `board`\
+      \ across table creation, storage, domain table representation, REST create/get,\
+      \ MCP create/get/join/wait(include_table=true), and MCP table_update responses;\
+      \ OR\n2. **Reject/remove strategy**: remove or reject those fields consistently\
+      \ from create/update contracts, runtime validation, docs, and tests, returning\
+      \ explicit `INVALID_REQUEST` for unsupported table_update keys and avoiding\
+      \ write-only accepted fields.\n\nYou MUST NOT silently drop accepted fields.\
+      \ A response field that cannot be recovered later is a blocker-class contract\
+      \ violation.\n\n## Hardened acceptance checklist\n- Failure-mode checklist:\n\
+      \  - create response vs later readback parity for REST and MCP\n  - missing-field\
+      \ fallback behavior for legacy stored tables\n  - explicit clear/null overwrite\
+      \ semantics for metadata/policy/board if support strategy is chosen\n  - stale-definition\
+      \ vs new-state precedence between tool contracts, domain model, and storage\
+      \ rows\n  - partial-write / transaction behavior for storage updates\n- State\
+      \ semantics:\n  - define whether table_update is last-writer-wins for metadata/policy/board\n\
+      \  - preserve id/question/context/status/version/creator/host_ids behavior exactly\n\
+      \  - define backward-compatible behavior for existing rows without these fields\n\
+      - Out-of-scope guardrail:\n  - Do not broaden unrelated table lifecycle semantics.\n\
+      \  - Do not introduce a second metadata source of truth.\n  - Do not hide unsupported\
+      \ fields by accepting and discarding them.\n\n## Invar requirements\n- Any Core\
+      \ changes under `src/tasca/core/**` require `@pre`/`@post` contracts and at\
+      \ least one doctest before implementation.\n- Shell code must return `Result[T,\
+      \ E]` where applicable and keep I/O in Shell.\n- Run `uv run invar guard` plus\
+      \ targeted pytest for the changed REST/MCP/storage paths.\n\n## Completion Criteria\
+      \ (stub exclusion)\nThis is an IMPLEMENTATION step. Stub-only completion is\
+      \ NOT acceptable. Each deliverable MUST contain substantive logic that processes\
+      \ its inputs and produces outputs that vary based on those inputs. Private stub\
+      \ classes (`_Runtime*`, `_Stub*`, `_Placeholder*`) do not satisfy this requirement.\n\
+      \n## Gate Preview (what the gate WILL reject)\n1. Metadata/policy/board accepted\
+      \ by create or update but absent from subsequent readback.\n2. `table_update`\
+      \ silently ignoring supported or documented patch keys.\n3. Tool contracts,\
+      \ REST schemas, docs, tests, and runtime behavior disagreeing about supported\
+      \ keys.\n4. Legacy-row fallback that crashes or invents inconsistent defaults\
+      \ without tests.\n5. Invar guard failures or uncontracted Core changes."
+    verification: '- Main path: create-then-read regression coverage proves REST and
+      MCP behavior for metadata/policy/board matches the chosen strategy.
+
+      - Failure path: table_update metadata/policy/board either persists/readbacks
+      correctly or returns explicit `INVALID_REQUEST` for unsupported keys; no silent
+      drops remain.
+
+      - Proof: `uv run invar guard` and targeted pytest for REST/MCP/storage/domain
+      paths are run with outputs captured.
+
+      - Proof: contracts/docs/runtime behavior agree on whether metadata/policy/board
+      are supported.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - src/tasca/shell/mcp/tool_contracts.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/services/operations/table_creation.py — key passage or "NOT
+      READ: <reason>"
+
+      - src/tasca/shell/api/routes/tables.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoints.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/storage/table_repo.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/core/domain/table.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/server.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoint_logic.py — key passage or "NOT READ: <reason>"
+
+
+      ## Contract Strategy Chosen
+
+      - Strategy: SUPPORT | REJECT/REMOVE
+
+      - Reason: <why this strategy is coherent with specs and existing behavior>
+
+      - Surfaces updated: domain | storage | REST | MCP contracts | MCP runtime |
+      docs | tests
+
+
+      ## Regression Evidence
+
+      - REST create-then-read metadata/policy/board: <test name and output, or explicit
+      INVALID_REQUEST path if unsupported>
+
+      - MCP create-then-read/join/wait(include_table=true) metadata/policy/board:
+      <test name and output, or explicit INVALID_REQUEST path if unsupported>
+
+      - MCP table_update metadata/policy/board: <persist/readback proof or explicit
+      INVALID_REQUEST proof>
+
+      - Legacy row fallback behavior: <test name and output>
+
+
+      ## Commands Executed
+
+      ```text
+
+      uv run invar guard
+
+      <targeted pytest commands>
+
+      ```
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause: <contract/persistence/update source-of-truth mismatch>
+
+      - Symptom: <write-only metadata/policy/board fields or silent table_update drops>
+
+      - Why this fix is not surface-level: <evidence that all affected surfaces now
+      share one strategy>
+
+
+      ## Remaining Gaps
+
+      - <none, or explicit non-intersecting residuals>'
+    depends_on:
+    - finalization.deep-wiring-audit
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

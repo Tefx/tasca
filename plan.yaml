@@ -44197,6 +44197,229 @@ phases:
       ### Verdict
 
       PASS'
+  - id: finalization.fix-concurrent-review-blockers
+    name: Batched fix for concurrent finalization review blockers
+    status: pending
+    description: 'step_type: implementation
+
+      agent: python-senior
+
+      work_type: defect_repair
+
+      priority: HIGH
+
+      provenance: introduced_or_exposed_by_concurrent_finalization_reviews
+
+      disposition: blocking-now
+
+
+      Batched remediation for concurrent failed finalization reviews. Fix ALL blocker
+      families below in one unified implementation pass; do not create separate serial
+      fix chains.
+
+
+      ## Blockers to Fix (ALL of these)
+
+
+      ### A1: Architecture boundary return-shape mismatch
+
+      - Failing test: `tests/unit/services/operations/test_table_control.py::test_normalizes_action_and_control_content`
+
+      - Symptom: expected a plain `str`, got `returns.result.Success` from `build_control_content(...)`
+      or a stale caller expectation.
+
+      - Closure: reconcile the shared shell-application contract around `tasca.shell.services.operations.table_control.build_control_content(...)`.
+      Either update stale tests/callers to unwrap `Result[str, ...]` where shell contracts
+      intentionally return `Result`, or correct the contract if evidence shows the
+      helper should return `str`. Preserve shell Result semantics where applicable.
+
+      - Overlap: this also closes the stale entrypoint `Success`/`Failure` assumptions
+      in B3.
+
+
+      ### B1: REST schema/migration drift for canonical table fields
+
+      - Runtime symptom: REST `POST /api/v1/tables` with metadata/policy/board returns
+      500 on an existing legacy DB path: `table tables has no column named metadata`.
+
+      - Reported cause: `get_db()` only applies `CREATE TABLE IF NOT EXISTS`, while
+      `table_repo.create_table()` now inserts `metadata`, `policy`, and `board`.
+
+      - Closure: make API DB initialization apply the same migrations as `apply_schema()`
+      or centralize schema application so API startup/get_db cannot leave legacy columns
+      absent. Add a regression using a legacy DB fixture missing those columns, then
+      prove create succeeds and canonical fields persist.
+
+
+      ### B2: HTTP table control `dedup_id` accepted but ignored
+
+      - Runtime symptom: HTTP `POST /tables/{table_id}/control` accepts documented
+      `dedup_id`, but `_control_table_response` ignores it. First close returns 200;
+      second close with same `dedup_id` returns 409 instead of replaying the original
+      response. MCP same-dedup close correctly replays.
+
+      - Closure: implement REST control idempotency using the same idempotency repository/scope
+      semantics as MCP, unless an authoritative spec change explicitly says REST control
+      `dedup_id` is accepted-but-ignored. Prefer implementation because the documented
+      surface already accepts `dedup_id`.
+
+
+      ### B3: Focused conformance command failures
+
+      - Runtime symptom: focused conformance command reported 25 passed / 3 failed.
+
+      - Known failure families: stale entrypoint call assumptions (`Success`/`Failure`
+      vs dict), REST table-create shape/dedup integration, and the table control return-shape
+      contract.
+
+      - Closure: update stale guardrail tests to call `tasca.shell.mcp.server` wrappers
+      or unwrap `entrypoints` Results, and keep tests aligned with public REST/MCP
+      behavior.
+
+
+      ## Invar and boundary requirements
+
+      - Core changes require `@pre`/`@post` contracts and at least one doctest before
+      implementation.
+
+      - Shell code returns `Result[T, E]` where applicable; do not collapse Result
+      contracts just to satisfy a stale test.
+
+      - Do not broaden unrelated table lifecycle semantics; remediation is limited
+      to schema migration initialization, idempotent control replay, and stale Result/dict
+      test expectations.
+
+      - Preserve architecture review positives: no REST/MCP transport imports in shell
+      services, no API/MCP/service imports in storage, and no new split-truth for
+      consolidated surfaces.
+
+
+      ## Expected touch paths
+
+      - `src/tasca/shell/services/operations/table_control.py`
+
+      - `tests/unit/services/operations/test_table_control.py`
+
+      - `src/tasca/shell/api/db.py` or the actual module owning `get_db()`
+
+      - `src/tasca/shell/api/routes/tables.py`
+
+      - `src/tasca/shell/api/routes/tables_control.py`
+
+      - `src/tasca/shell/storage/schema.py` / `src/tasca/core/schema.py` / schema
+      application owner as applicable
+
+      - `tests/integration/test_rest_spec_conformance_remediation.py`
+
+      - `tests/unit/mcp/test_spec_conformance_remediation.py`
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
+
+
+      ## Root Cause vs Symptom evidence required
+
+      Evidence must identify whether each failure was caused by stale tests, stale
+      callers, missing schema migration, or missing HTTP idempotency plumbing. Symptom-only
+      patches are not acceptable.'
+    verification: '- All four blocker families are addressed in one batched change
+      set, not serial partial chains
+
+      - Regression coverage includes legacy DB schema migration, REST control same-dedup
+      replay, MCP parity or documented delta, and table_control return-shape contract
+
+      - Invar requirements are satisfied for any Core changes: @pre/@post plus doctest
+
+      - No unrelated table lifecycle semantics are broadened
+
+      - Architecture boundary remains clean: shell services do not import REST/MCP
+      transports and storage does not import API/MCP/service layers'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - tests/unit/services/operations/test_table_control.py — key passage or "NOT
+      READ: <reason>"
+
+      - tests/integration/test_rest_spec_conformance_remediation.py — key passage
+      or "NOT READ: <reason>"
+
+      - tests/unit/mcp/test_spec_conformance_remediation.py — key passage or "NOT
+      READ: <reason>"
+
+      - src/tasca/shell/services/operations/table_control.py — key passage or "NOT
+      READ: <reason>"
+
+      - src/tasca/shell/api/routes/tables_control.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/api/routes/tables.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/core/schema.py — key passage or "NOT READ: <reason>"
+
+
+      ## Batched Remediation Evidence
+
+
+      **Architecture return-shape closure**:
+
+      - Root cause: <stale test | stale caller | contract bug>
+
+      - Files changed:
+
+      - Proof that shell Result semantics are preserved where applicable:
+
+
+      **REST legacy DB migration closure**:
+
+      - Legacy fixture shape:
+
+      - Schema application path used by API get_db/startup:
+
+      - Proof metadata/policy/board persist:
+
+
+      **HTTP control dedup_id closure**:
+
+      - Idempotency scope/repo used:
+
+      - First close response:
+
+      - Same-dedup retry response:
+
+      - MCP parity evidence:
+
+
+      **Focused conformance closure**:
+
+      - Stale Result/dict guardrail updates:
+
+      - Tests added/updated:
+
+
+      **Invar/Core compliance**:
+
+      - Core files changed: <none or list>
+
+      - @pre/@post/doctest proof for each Core function changed:
+
+
+      **Non-goals respected**:
+
+      - No broadened unrelated table lifecycle semantics: yes/no
+
+      - No shell transport imports introduced: yes/no
+
+      - No storage API/MCP/service imports introduced: yes/no'
+    depends_on:
+    - finalization.deep-architecture-review
+    - finalization.deep-spec-conformance
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

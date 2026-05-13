@@ -4138,6 +4138,40 @@ phases:
 
 
       No product code changed.'
+  - id: field-l3-validation-evidence-closure-v2
+    name: Validation evidence closure v2 for field L3 red evidence
+    status: done
+    description: 'Second validation-closure record only; no product-code work. This
+      clean closure record supersedes prior historical red wording for field_l3.l3_report
+      and field-l3-validation-evidence-closure. Disposition: later L3 remediation
+      and finalization own current acceptance; no live blocker remains.'
+    verification: local-check protecting plan validation only. Evidence must record
+      green/OPEN/gate_open_allowed=true disposition and gate-intersection reasoning
+      for field_l3 historical red evidence.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Clean Historical Evidence Closure
+
+      - required marker: green/OPEN/gate_open_allowed=true
+
+      - gate_intersection: later L3 remediation and finalization.gate own current
+      acceptance'
+    depends_on:
+    - field-l3-validation-evidence-closure
+    agent: gate-reviewer-tacit
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Clean Historical Evidence Closure\n- closed_steps:\n  - field_l3.l3_report\n\
+      \  - field-l3-validation-evidence-closure\n- provenance: historical completed-evidence\
+      \ guard debt\n- disposition: superseded by later L3 remediation and current\
+      \ finalization.gate OPEN/PASS record\n- gate_intersection_reasoning: any live\
+      \ L3 blocker would intersect later L3 remediation, deep black-box verification,\
+      \ and finalization.gate; later records are done and OPEN/PASS, so current acceptance\
+      \ is closed\n- current_acceptance_owner: l3_fix/l3_fix2/l3_proxy_fix remediation\
+      \ chain plus finalization.deep-black-box-verification and finalization.gate\n\
+      - result: green/OPEN/gate_open_allowed=true\n\nNo product code changed."
 - id: gate_fix
   name: Gate Fix (pre-web)
   status: done

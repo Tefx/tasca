@@ -41781,7 +41781,7 @@ phases:
       \ now owned by `fix-pp-invar-shell-logging-doctest`."
   - id: fix-pp-invar-shell-logging-doctest
     name: Residual Invar remediation — shell logging doctest Result mismatch
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -41958,6 +41958,96 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T04:56:52.554471+00:00'
+    done_at: '2026-05-13T05:03:57.479420+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+
+      - `src/tasca/shell/logging.py` — READ. Key passage: `get_logger(name: str) ->
+      Result[logging.Logger, str]` returns `Success(logging.getLogger(name))`, while
+      `log_event(logger: logging.Logger, ...)` calls `logger.log(...)`. The doctests
+      were passing the `Success` wrapper where the helper contract requires the unwrapped
+      `logging.Logger`.
+
+
+      ## Fix Evidence
+
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+
+      ### Root Cause vs Symptom
+
+      - Symptom: `Success` object passed to `logger.log(...)` path.
+
+      - Root cause: doctest call sites were stale after `get_logger` became Result-returning.
+      The shell helper contract remains correct: `log_event` and convenience log functions
+      accept a concrete `logging.Logger`, not `Result[Logger, str]`.
+
+      - Why this is not surface-level: the fix preserves the Result boundary by explicitly
+      unwrapping at the call site, and the batch delete doctest now verifies real
+      structured logging output whose JSON fields vary from function inputs.
+
+
+      ### Commands
+
+      - Worker commit: `00a7d24` — `fix logging doctest result unwrap`.
+
+      - Main salvage merge commit: `fc12c1a` — `[vectl] salvage partial progress from
+      step-fix-pp-invar-shell-logging-doctest`.
+
+      - `uvx invar-tools guard --all`: FAIL due new downstream proxy doctest only;
+      logging doctest closed. Static passed=true/errors=0; `src/tasca/shell/logging.py::tasca.shell.logging.log_batch_table_delete`
+      PASSED; all logging doctests passed; new failure `src/tasca/shell/mcp/proxy.py::tasca.shell.mcp.proxy.switch_to_local`
+      expected nothing but got `<Success: UpstreamConfig(...)>`.
+
+      - Focused logging doctest: `uv run python -c "import doctest; import tasca.shell.logging
+      as m; result = doctest.testmod(m, verbose=True); raise SystemExit(result.failed)"`
+      — PASS (`27 passed`).
+
+      - Ruff: `uv run ruff check src/tasca/shell/logging.py` — PASS (`All checks passed!`).
+
+      - Mypy: `uv run mypy src/tasca/shell/logging.py` — PASS (`Success: no issues
+      found in 1 source file`).
+
+
+      ### Guard Closure
+
+      - logging_doctest: closed
+
+      - downstream blockers: `src/tasca/shell/mcp/proxy.py::tasca.shell.mcp.proxy.switch_to_local`
+      doctest Result-output mismatch, now owned by `fix-pp-invar-mcp-proxy-doctest`.
+
+
+      ### Broad Verifier Disposition Pass
+
+      - `src/tasca/shell/mcp/proxy.py::tasca.shell.mcp.proxy.switch_to_local` emits
+      `<Success: UpstreamConfig(...)>` where doctest expects no output => `batched_fix`
+      / focused remediation owner `fix-pp-invar-mcp-proxy-doctest`.
+
+      - `retest-pp-invar-full-scan` is kept blocked until `fix-pp-invar-mcp-proxy-doctest`
+      completes.
+
+
+      ### No-suppression Statement
+
+      - No skips, xfails, suppressions, placeholders, fake returns, or doctest weakening
+      were used.
+
+
+      ### Files changed
+
+      - `src/tasca/shell/logging.py` — updated examples to unwrap `get_logger` Result
+      and added real structured-output assertions for `log_batch_table_delete`.
+
+
+      ### Final retest readiness
+
+      - `retest-pp-invar-full-scan`: CLOSED until `fix-pp-invar-mcp-proxy-doctest`
+      completes.
+
+      - Blockers if CLOSED: MCP proxy `switch_to_local` doctest Result-output mismatch.'
   - id: fix-pp-invar-mcp-proxy-doctest
     name: Residual Invar remediation — MCP proxy switch doctest Result mismatch
     status: pending

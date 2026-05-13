@@ -44924,6 +44924,280 @@ phases:
       ### Verdict
 
       PASS'
+  - id: finalization.fix-black-box-public-surface-blockers
+    name: Batched fix for black-box public-surface blockers
+    status: pending
+    description: 'step_type: implementation
+
+      agent: python-senior
+
+      priority: HIGH
+
+      public_surface_remediation: true
+
+      runtime_surfaces:
+
+      - HTTP public server
+
+      - MCP stdio/discovery
+
+
+      Complete one batched remediation for ALL black-box public-surface blockers B1-B5
+      reported by `finalization.deep-black-box-verification`. Treat these as blocker-class
+      contract/runtime drift because they affect documented HTTP and MCP public surfaces.
+
+
+      ## Blockers to Fix (ALL of these, not just the first)
+
+
+      ### B1 — HTTP join route drift
+
+      Observed black-box evidence: HTTP spec documents `POST /api/v1/tables/join`,
+      but the public server returned 405.
+
+      Required disposition: prefer implementing the documented public route. Only
+      if authoritative product intent is that the route is absent, update public docs/spec/tests
+      coherently and make the retest prove the public contract no longer advertises
+      an unavailable route.
+
+      Acceptance:
+
+      - Public HTTP server exposes a coherent documented join surface.
+
+      - `POST /api/v1/tables/join` succeeds according to the documented request/response
+      contract OR the route is intentionally removed from the public contract everywhere.
+
+      - No handler-only proof: evidence must come through the real HTTP server entrypoint.
+
+
+      ### B2 — HTTP wait cursor/listen semantics drift
+
+      Observed black-box evidence: `GET /api/v1/tables/{id}/sayings/wait?since_sequence=-1&timeout=0`
+      returned `{"sayings":[],"next_sequence":0,"timeout":true}` despite an already-existing
+      saying.
+
+      Required disposition: align wait/listen cursor semantics with the documented
+      behavior for already-existing sayings and cursor `since_sequence=-1`.
+
+      Acceptance:
+
+      - With at least one existing saying, the public HTTP wait endpoint returns the
+      existing saying when called with `since_sequence=-1&timeout=0`.
+
+      - `next_sequence` advances consistently with the returned sayings and matches
+      listen/wait cursor semantics.
+
+      - Timeout behavior is not used to mask already-available data.
+
+
+      ### B3 — HTTP post-close saying error semantics drift
+
+      Observed black-box evidence: authenticated post-close HTTP saying returned HTTP
+      403 `PermissionDenied` with a closed-table message; black-box expected state/closed-table
+      semantics.
+
+      Required disposition: align HTTP status, error code, and envelope with the public
+      contract for closed-table/state errors, or explicitly update the contract if
+      403 is authoritative. Prevent misleading `PermissionDenied` for state/closed-table
+      failures.
+
+      Acceptance:
+
+      - Authenticated requests that fail because the table is closed return a state/closed-table
+      error contract, not a permission-denied contract unless docs/spec explicitly
+      make 403 authoritative.
+
+      - Error envelope fields are public-contract coherent across status code, error
+      code, and message.
+
+      - Retest can distinguish auth failure from closed-state failure.
+
+
+      ### B4 — MCP `table_join` response shape/cursor drift
+
+      Observed black-box evidence: MCP `table_join` returned `data.initial_sayings`
+      instead of documented `data.initial`, and empty-history `sequence_latest`/`next_sequence`
+      were `-1` instead of documented `0` values.
+
+      Required disposition: align MCP stdio/discovery behavior with the documented
+      response shape and cursor baseline, or update contract if implementation shape
+      is intentionally authoritative.
+
+      Acceptance:
+
+      - MCP discovery/docs and live `table_join` response agree on the `data.initial`
+      vs `data.initial_sayings` field name.
+
+      - Empty-history cursor values match the public contract; if changed to `-1`,
+      docs/spec/tests must say so consistently and explain cursor semantics.
+
+      - Evidence must use MCP stdio/discovery, not direct function calls.
+
+
+      ### B5 — MCP `table_get` wrapper drift
+
+      Observed black-box evidence: MCP `table_get` returned the table object directly
+      under `data`, not documented `data.table` wrapper.
+
+      Required disposition: align live MCP `table_get` response with documented `data.table`
+      wrapper or update public contract coherently if direct `data` is authoritative.
+
+      Acceptance:
+
+      - MCP discovery/docs and live `table_get` response use the same wrapper shape.
+
+      - Retest proves clients can rely on the documented field path.
+
+
+      ## Docs/runtime agreement requirement
+
+      If implementation intentionally differs from the failed black-box expectation,
+      update public docs/spec/tests in the same fix so the retest proves a coherent
+      public contract. Do NOT leave docs advertising behavior that HTTP server or
+      MCP stdio/discovery does not provide.
+
+
+      ## Runtime evidence expectations for fix evidence
+
+      Provide concrete probes or commands sufficient for the retest owner to rerun:
+
+      - HTTP server launch/invocation path used for public API probes.
+
+      - HTTP probes covering B1, B2, and B3, including request method/path/query/body
+      and observed status/body.
+
+      - MCP stdio/discovery invocation path and tool calls covering B4 and B5.
+
+      - Contract/doc files changed, if any, with before/after public-shape summary.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.'
+    verification: '- ALL B1-B5 blockers are addressed in one coherent remediation,
+      not selectively.
+
+      - Public HTTP server probes demonstrate the documented join route disposition,
+      wait cursor semantics for `since_sequence=-1&timeout=0`, and closed-table error
+      semantics through the real server entrypoint.
+
+      - MCP stdio/discovery probes demonstrate `table_join` and `table_get` response
+      shapes/cursors match the public contract.
+
+      - Docs/spec/tests are updated when implementation intentionally diverges from
+      the failed expectation, and no public contract advertises unavailable behavior.
+
+      - Evidence includes main path and failure/state path proof for HTTP and MCP
+      public surfaces.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Black-Box Public Surface Fix Evidence
+
+
+      **Blockers fixed**: B1, B2, B3, B4, B5 (ALL required)
+
+
+      ### HTTP public server probes
+
+      **Server launch/invocation path**:
+
+      ```
+
+      <paste exact command or harness used to start/query the public HTTP server>
+
+      ```
+
+
+      **B1 join route probe**:
+
+      ```
+
+      <method/path/body and actual status/body for POST /api/v1/tables/join, or doc/spec
+      removal proof if intentionally absent>
+
+      ```
+
+
+      **B2 wait cursor probe**:
+
+      ```
+
+      <setup existing saying; GET /api/v1/tables/{id}/sayings/wait?since_sequence=-1&timeout=0;
+      actual status/body showing existing saying and next_sequence>
+
+      ```
+
+
+      **B3 post-close saying error probe**:
+
+      ```
+
+      <authenticated post-close request; actual status/body showing coherent closed-table/state
+      semantics rather than misleading PermissionDenied, unless 403 is documented
+      authoritative>
+
+      ```
+
+
+      ### MCP stdio/discovery probes
+
+      **MCP stdio/discovery invocation**:
+
+      ```
+
+      <paste exact MCP command/session/tool discovery path>
+
+      ```
+
+
+      **B4 table_join probe**:
+
+      ```
+
+      <tool call and actual response showing documented data.initial/sequence_latest/next_sequence
+      contract, or coherent updated contract>
+
+      ```
+
+
+      **B5 table_get probe**:
+
+      ```
+
+      <tool call and actual response showing documented data.table wrapper, or coherent
+      updated contract>
+
+      ```
+
+
+      ### Docs/runtime agreement
+
+      - Docs/spec files changed: <list or "none">
+
+      - Public contract after remediation: <brief summary>
+
+      - Runtime surfaces verified against that contract: HTTP public server, MCP stdio/discovery
+
+
+      ### Headline
+
+      - [ ] PASS: B1-B5 fixed and public docs/runtime agree
+
+      - [ ] FAIL: Any blocker remains or docs/runtime still diverge'
+    depends_on:
+    - finalization.deep-black-box-verification
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

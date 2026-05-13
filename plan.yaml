@@ -39591,7 +39591,7 @@ phases:
       \ and project-budget follow-up steps."
   - id: retest-pp-invar-full-scan
     name: Retest PP-invar-full-scan after residual Invar remediation
-    status: claimed
+    status: done
     description: "step_type: test\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: full-plan-check\nwork_type: technical_debt_remediation\n\
       priority: HIGH\nagent: integration-verifier-tacit\nsymbolic_testing: true\n\
@@ -39747,6 +39747,88 @@ phases:
     agent: integration-verifier-tacit
     claimed_by: integration-verifier-tacit
     claimed_at: '2026-05-13T05:20:07.274007+00:00'
+    done_at: '2026-05-13T05:31:04.185670+00:00'
+    evidence: "step_intent: retest_green\nexpected_result: green\nobserved_result:\
+      \ fail; `uvx invar-tools guard --all` returned status=failed\nfailure_alignment:\
+      \ new_or_unresolved\nverdict: FAIL\nblockers:\n  - B1: Authoritative guard failed\
+      \ property stage: `src/tasca/core/storage_rows.py::row_to_table` raised `'None'\
+      \ is not a valid TableStatus` on generated input satisfying current @pre.\n\
+      \  - B2: Focused CLI pytest smoke failed collection: `tests/unit/test_cli.py`\
+      \ cannot import `create_table_via_mcp` from `tasca.cli`.\ngate_open_allowed:\
+      \ false\nproduct_files_modified: no; product file list: []\norchestrator_action_hint:\
+      \ DO_NOT_COMPLETE\n\n## refs Read Confirmation\n- `src/tasca/cli.py`: READ.\
+      \ CLI exposes `new,mcp,version,export,skills`; banner prints Web UI/MCP setup;\
+      \ direct DB table creation path exists.\n- `src/tasca/shell/api/routes/sayings.py`:\
+      \ READ. Sayings route defines append/list/wait models and maps shared `append_saying_operation`\
+      \ failures to HTTP errors.\n- `src/tasca/shell/api/routes/tables.py`: READ.\
+      \ Tables route owns create/list/get/update/delete and includes table control\
+      \ router; creation handles validation/idempotency.\n- `src/tasca/shell/mcp/entrypoints.py`:\
+      \ READ. MCP tool orchestration has file-size hatch; permission preflight preserves\
+      \ `error_response`/`success_response` envelopes.\n- `src/tasca/shell/mcp/entrypoint_session_tools.py`:\
+      \ READ. Session tools implement heartbeat/list/connect/status with MCP response\
+      \ envelopes.\n- `src/tasca/shell/mcp/proxy.py`: READ. Proxy mode initializes\
+      \ upstream MCP sessions, stores `mcp-session-id`, and forwards JSON-RPC with\
+      \ network/JSON error paths.\n- `src/tasca/config.py`: READ. Settings normalize\
+      \ `TASCA_ADMIN_TOKEN`; empty/null/clear sentinel falls back to generated secure\
+      \ token.\n- `src/tasca/shell/services/operations/table_control.py`: READ. Table\
+      \ control validates action/transition and delegates all-or-nothing mutation\
+      \ to `atomic_control_table`.\n- `src/tasca/shell/skills_cli.py`: READ. Skills\
+      \ CLI lists/shows/installs bundled `SKILL.md` files via importlib.resources.\n\
+      - `src/tasca/shell/storage/saying_repo.py`: READ. `append_saying` uses `BEGIN\
+      \ IMMEDIATE` to atomically allocate sequence and insert.\n- `src/tasca/shell/storage/search_repo.py`:\
+      \ READ. Search uses FTS5 and maps malformed rows/query syntax to Result failures.\n\
+      - `src/tasca/shell/storage/table_repo.py`: READ. `update_table` enforces optimistic\
+      \ concurrency and re-reads on race.\n- `tests/unit/test_cli.py`: READ. It imports\
+      \ `create_table_via_mcp` and `create_table_via_rest`; collection fails because\
+      \ at least `create_table_via_mcp` is absent.\n- `tests/unit/api`: READ representative\
+      \ API tests; covers in-memory FastAPI route behavior, auth, and error paths.\n\
+      - `tests/integration/test_api.py`: READ. Uses in-process ASGI transport to exercise\
+      \ REST wiring.\n- `tests/unit/mcp`: READ representative MCP tests; covers MCP\
+      \ tools, proxy config/forwarding, and metadata contracts.\n- `tests/integration/test_mcp.py`:\
+      \ READ. Covers MCP HTTP auth/init/tools and STDIO process path.\n- `tests/integration/test_mcp_proxy.py`:\
+      \ READ. E2E proxy tests start upstream subprocess and validate connect/forward/disconnect/error\
+      \ behavior.\n\n## residual_budget_register\n- `non_suppressible`: CLOSED (`[]`)\
+      \ in guard output.\n- `escape_hatch_budget`: 12/15, warning only, within budget.\n\
+      - Static blocker inventory: errors 0; warnings remain but no blocker-class static\
+      \ residuals.\n- CLI/API direct blockers: static closed, but CLI pytest collection\
+      \ blocker remains.\n- MCP entrypoint/session/proxy blockers: static closed;\
+      \ MCP smoke passed.\n- Storage/config/service residuals: static closed; full\
+      \ gate blocked by property failure.\n\n## surface_preservation_register\n- Authoritative\
+      \ Invar: `uvx invar-tools guard --all` FAIL; property stage failed.\n- Ruff\
+      \ changed/source surfaces: PASS (`All checks passed!`).\n- Mypy full source:\
+      \ PASS (`Success: no issues found in 81 source files`).\n- CLI help/skills:\
+      \ PASS; help lists `{new,mcp,version,export,skills}`, skills outputs `tasca-moderation`.\n\
+      - CLI unit smoke: FAIL collection; missing `create_table_via_mcp` public import.\n\
+      - API unit/integration: PASS (`79 passed`).\n- MCP unit/integration/proxy: PASS\
+      \ (`211 passed`).\n- Worktree: no tracked file modifications.\n\n## completed_step_regression_register\n\
+      - Storage/config/service residuals: not reopened statically; full gate still\
+      \ FAIL due property failure.\n- MCP residual/follow-up: not reopened; MCP smoke\
+      \ `211 passed`, guard static no MCP direct errors.\n- MCP proxy budget/follow-up:\
+      \ not reopened; proxy tests included in MCP run.\n- CLI/API full-scan follow-up:\
+      \ CLI runtime help passed; CLI unit collection failed, classified as blocker.\n\
+      - Project budget follow-up: budget within limit (`12/15`, `non_suppressible:\
+      \ []`), but property blocker prevents closure.\n\n## behavioral_proof_register\n\
+      - authoritative_invar_full_scan: UNPROVEN — exact `uvx invar-tools guard --all`\
+      \ failed property stage; closure path: `fix-pp-invar-final-retest-blockers`.\n\
+      - non_suppressible_absent: PROVEN — guard output `non_suppressible: []`.\n-\
+      \ cli_surface_preservation: UNCERTAIN_BLOCKING — runtime CLI help/skills passed,\
+      \ but focused CLI pytest collection failed; closure path: `fix-pp-invar-final-retest-blockers`.\n\
+      - api_surface_preservation: PROVEN — API smoke `79 passed`.\n- mcp_surface_preservation:\
+      \ PROVEN — MCP smoke `211 passed`.\n- ruff_mypy_regression_smoke: PROVEN — ruff\
+      \ and mypy exited 0.\n- downstream_gate: UNPROVEN — B1/B2 remain; gate_open_allowed=false.\n\
+      \n## Verification Commands and Outputs\n- `uvx invar-tools guard --all`: FAIL;\
+      \ static passed, doctest passed, CrossHair verified, property tests failed;\
+      \ `row_to_table` raised `'None' is not a valid TableStatus`.\n- `uv run --group\
+      \ dev ruff check ...`: PASS.\n- `uv run --group dev mypy src/tasca`: PASS (`81\
+      \ source files`).\n- focused CLI pytest including `tests/unit/test_cli.py`:\
+      \ FAIL collection, `ImportError: cannot import name 'create_table_via_mcp' from\
+      \ 'tasca.cli'`.\n- API tests: PASS (`79 passed`).\n- MCP tests: PASS (`211 passed`).\n\
+      - CLI help/skills smoke: PASS.\n\n## Remediation ownership created\n- Planner\
+      \ created `fix-pp-invar-final-retest-blockers` as one batched implementation\
+      \ fix covering B1 and B2.\n- Planner created `retest-pp-invar-full-scan-final`\
+      \ and rewired downstream finalization steps to depend on the new retest.\n\n\
+      ## Files changed\nNo tracked product files changed.\n\n## Commits\nCommit hash(es):\
+      \ none (verify-only step)."
   - id: fix-pp-invar-mcp-residual
     name: Residual Invar budget remediation — MCP residual seams only
     status: done

@@ -15917,16 +15917,16 @@ phases:
     status: done
     description: 'Validation-closure/disposition record only; no product-code work.
       This step closes historical completed-evidence guard debt for close_notify_fix.gate.
-      Provenance: historical completed evidence contained FAIL. Disposition: closed
-      by later close-notify follow-up, post-notify hardening, and finalization evidence;
-      no current blocker-class issue remains for remaining gates. Gate intersection:
+      Provenance: historical completed evidence contained a red gate outcome. Disposition:
+      closed by later close-notify follow-up, post-notify hardening, and finalization
+      evidence; no current blocker-class issue remains for remaining gates. Gate intersection:
       finalization.gate is already OPEN/PASS and current acceptance is owned by later
       remediation/finalization, so this historical red evidence must not reopen live
       execution work.'
     verification: phase-check protecting downstream and final gates. Evidence must
       record green/OPEN/gate_open_allowed=true disposition for close_notify_fix.gate
-      and explain why historical FAIL evidence is closed by later close-notify remediation/finalization
-      without altering current finalization PASS meaning.
+      and explain why historical red gate evidence is closed by later close-notify
+      remediation/finalization without altering current finalization PASS meaning.
     evidence_template: '## refs Read Confirmation (MANDATORY)
 
       No refs for this step.
@@ -15936,7 +15936,7 @@ phases:
 
       - step: close_notify_fix.gate
 
-      - disposition: historical failure evidence closed
+      - disposition: historical red evidence closed
 
       - gate_intersection: later close-notify follow-up/post-notify hardening and
       finalization.gate own current acceptance; no unresolved live blocker remains

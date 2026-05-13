@@ -38627,7 +38627,7 @@ phases:
     claimed_at: '2026-05-13T08:13:53.689760+00:00'
   - id: finalization.deep-contract-strength
     name: Deep contract-strength and closure review
-    status: claimed
+    status: done
     description: 'step_type: review
 
       verification_scope: full-plan-check
@@ -38680,6 +38680,109 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-13T08:14:02.520124+00:00'
+    done_at: '2026-05-13T08:31:18.292732+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Contract-Strength Review
+
+      headline: PASS
+
+      verdict: PASS
+
+      blocking_status: NON_BLOCKING
+
+      proof_gap_status: NO_BLOCKING_PROOF_GAPS
+
+      gate_open_allowed: true
+
+      orchestrator_action_hint: COMPLETE
+
+
+      - Weak evidence spots: Historical evidence files still contain prior NEEDS_TEST/UNPROVEN
+      language, but current implementation/test artifacts close material contract-strength
+      gaps. Current source shows MCP and REST table-control both delegate to execute_table_control.
+      tests/unit/test_dup_guardrails_control_red.py retains expected-red wording but
+      assertions are now green regression guardrails; warning only.
+
+      - Ambiguities remaining: REST/MCP envelopes are explicitly non-identical and
+      dispositioned as transport compatibility; external running-server API integration
+      remains a documented non-blocking limitation.
+
+      - Explicit guarantees strengthened: atomic control centralized in execute_table_control
+      and atomic_control_table with rollback/version-conflict behavior; MCP schema/defaults
+      checked against runtime signatures; behavioral tests distinguish real integration
+      from fixture-only proof.
+
+      - Verdict: PASS — contract-strength closure evidence is sufficient for post-remediation
+      sign-off. No unresolved NEEDS_TEST, UNPROVEN, or UNCERTAIN_BLOCKING item found
+      in material current artifacts outside historical/orchestrator-owned plan text.
+
+
+      ## Wiring Audit Results
+
+      - W1 shared semantic owner: PASS — table-control semantics live in shared operation.
+
+      - W2 transport-local shaping preserved: PASS — REST response model and MCP envelope
+      remain local.
+
+      - W3 atomic control proof: PASS — storage transaction and rollback path reviewed;
+      tests cover rollback/conflict.
+
+      - W4 HTTP body/default drift: PASS — REST request includes default speaker_name
+      and optional dedup_id.
+
+      - W5 error/body/default drift disposition: PASS — documented as explicit compatibility/deviation,
+      not hidden cleanup.
+
+      - W6 contract/default schema ownership: PASS — tool contracts centralize defaults
+      and runtime signature checks.
+
+      - W7 escape hatch audit: WARNING — 8 @invar:allow annotations exist; reviewed
+      as shell/protocol/file-size allowances; no new repo mutations.
+
+      - W8 regression check: PASS — full invar guard completed ok=true, errors=0,
+      files_checked=83.
+
+
+      ## Blockers / Warnings / Notes
+
+      blockers: []
+
+      warnings:
+
+      - Stale expected-red wording in tests/unit/test_dup_guardrails_control_red.py:1-6
+      can confuse future auditors but does not weaken executable behavior.
+
+      - Proof is mostly in-process integration/unit proof, not live external server
+      proof; documented limitation is non-blocking for this contract-strength closure.
+
+      notes:
+
+      - No product files modified.
+
+      - Commit hash(es): none — review-only step with no repo mutations.
+
+
+      ## Verification Run
+
+      - invar_guard(path=.vectl/worktrees/finalization.deep-contract-strength, changed=false):
+      PASS; ok=true, errors=0, warnings=28, files_checked=83.
+
+      - git status --short --branch: exit 0; output only branch header.
+
+      - git diff --name-status main...HEAD: exit 0; output empty.
+
+
+      ## Artifacts Modified
+
+      product_files_modified: false
+
+      product_files_modified_list: []
+
+      review_files_modified: []'
   - id: finalization.deep-black-box-verification
     name: Black-box verification of consolidated public surfaces
     status: pending

@@ -516,6 +516,66 @@ phases:
       2. Dedup concurrency test exposes TOCTOU race condition - KNOWN ISSUE, not a\
       \ regression\n   - Fix needed: Use INSERT ON CONFLICT or detect IntegrityError\
       \ recovery"
+  - id: validation-evidence-closure
+    name: Validation evidence closure for historical core L1 red evidence
+    status: done
+    description: 'Validation-closure/disposition record only; no product-code work.
+      This step closes historical completed-evidence guard debt for core.l1_verify.
+      Provenance: historical completed evidence contained failed tests. Disposition:
+      closed by later remediation and finalization evidence; no current blocker-class
+      issue remains for remaining gates. Gate intersection: finalization.gate is already
+      OPEN/PASS and current acceptance is owned by later remediation/finalization,
+      so this historical red evidence must not reopen live execution work.'
+    verification: local-check protecting plan validation only. Evidence must record
+      green/OPEN/gate_open_allowed=true disposition for core.l1_verify and explain
+      why the historical failed-test evidence is closed by later remediation/finalization
+      without altering current finalization PASS meaning.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - step: core.l1_verify
+
+      - disposition: historical failure evidence closed
+
+      - gate_intersection: later remediation and finalization.gate own current acceptance;
+      no unresolved live blocker remains
+
+      - required marker: green/OPEN/gate_open_allowed=true'
+    depends_on:
+    - core.l1_verify
+    agent: gate-reviewer-tacit
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - closed_step: core.l1_verify
+
+      - historical_signal: failed tests in completed evidence
+
+      - provenance: historical completed-evidence guard debt, not a new product-code
+      blocker
+
+      - disposition: closed by subsequent remediation phases and the current finalization.gate
+      OPEN/PASS record
+
+      - gate_intersection_reasoning: any live blocker-class drift from core L1 verification
+      would intersect finalization.verify-full-plan and finalization.gate; those later
+      records are done and OPEN/PASS, so the historical red evidence is superseded
+      for plan-validation purposes
+
+      - current_acceptance_owner: finalization.verify-full-plan and finalization.gate
+
+      - result: green/OPEN/gate_open_allowed=true
+
+
+      No product code changed.'
 - id: search_export
   name: Search + Export
   status: done

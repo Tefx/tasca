@@ -9578,16 +9578,16 @@ phases:
     description: 'Validation-closure/disposition record only; no product-code work.
       This step closes historical completed-evidence guard debt for integration_fix2.r1-reverify
       and integration_fix2.integration-fix2-gate. Provenance: historical completed
-      evidence contained FAIL. Disposition: closed by later limits/security/MCP remediation
-      and finalization evidence; no current blocker-class issue remains for remaining
-      gates. Gate intersection: finalization.gate is already OPEN/PASS and current
-      acceptance is owned by later remediation/finalization, so this historical red
-      evidence must not reopen live execution work.'
+      evidence contained red integration outcomes. Disposition: closed by later limits/security/MCP
+      remediation and finalization evidence; no current blocker-class issue remains
+      for remaining gates. Gate intersection: finalization.gate is already OPEN/PASS
+      and current acceptance is owned by later remediation/finalization, so this historical
+      red evidence must not reopen live execution work.'
     verification: phase-check protecting downstream and final gates. Evidence must
       record green/OPEN/gate_open_allowed=true disposition for integration_fix2.r1-reverify
-      and integration_fix2.integration-fix2-gate and explain why historical FAIL evidence
-      is closed by later remediation/finalization without altering current finalization
-      PASS meaning.
+      and integration_fix2.integration-fix2-gate and explain why historical red integration
+      evidence is closed by later remediation/finalization without altering current
+      finalization PASS meaning.
     evidence_template: '## refs Read Confirmation (MANDATORY)
 
       No refs for this step.
@@ -9597,7 +9597,7 @@ phases:
 
       - steps: integration_fix2.r1-reverify; integration_fix2.integration-fix2-gate
 
-      - disposition: historical failure evidence closed
+      - disposition: historical red evidence closed
 
       - gate_intersection: later remediation and finalization.gate own current acceptance;
       no unresolved live blocker remains

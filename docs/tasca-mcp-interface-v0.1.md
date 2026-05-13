@@ -192,26 +192,57 @@ Other patrons can:
 
 > Tool naming uses the `tasca.*` namespace.
 
+### Runtime contract source (implemented)
+
+The implemented MCP server registers runtime tools from `src/tasca/shell/mcp/tool_contracts.py` via `src/tasca/shell/mcp/server.py`. `server.py` is a transport wrapper; reusable business behavior lives in shell-application operations where available, and `entrypoints.py` keeps MCP-local idempotency/envelope/guidance behavior.
+
+The runtime tool names exposed by FastMCP are unprefixed (for example `table_create`). `spec_name` in `tool_contracts.py` maps each runtime tool to the conceptual `tasca.*` name used below. Parameter descriptions and defaults in tool discovery are generated from the centralized `ToolContract` / `ParameterContract` metadata, not from route or entrypoint docstrings.
+
+Implemented extension tools that are part of the current public MCP surface but not in the original v0.1 tool list are: `table_list`, `table_delete_batch`, `table_export`, `connect`, and `connection_status`.
+
 ### 5.1 Patron (Identity)
 
 #### `tasca.patron.register`
+Runtime tool: `patron_register`; conceptual spec name: `tasca.patron.register`.
+
+Business ownership: explicit `dedup_id` idempotency, display-name compatibility deduplication, ID selection, timestamping, and persistence are centralized in `src/tasca/shell/services/operations/patron_registration.py`. MCP entrypoints own alias resolution (`name` → `display_name`) and MCP envelope shaping.
 
 **in**
 ```json
 {
-  "patron_id": "uuid?",
-  "display_name": "string",
+  "display_name": "string?",
+  "name": "string? (deprecated alias for display_name)",
+  "kind": "agent|human?",
   "alias": "string?",
   "meta": {},
-  "dedup_id": "string"
+  "patron_id": "uuid?",
+  "dedup_id": "string?"
 }
 ```
 
+Defaults:
+
+- `kind`: `"agent"`
+
+Input rules:
+
+- Either `display_name` or legacy `name` is required; `display_name` wins when both are present.
+
 **out**
 ```json
-{ "patron_id": "uuid", "display_name": "string", "alias": "string?", "server_ts": "iso8601" }
+{
+  "patron_id": "uuid",
+  "display_name": "string",
+  "alias": "string?",
+  "server_ts": "iso8601",
+  "meta": {},
+  "id": "uuid",
+  "name": "string",
+  "kind": "agent|human",
+  "created_at": "iso8601",
+  "is_new": true
+}
 ```
-
 #### `tasca.patron.get`
 
 **in**
@@ -227,33 +258,55 @@ Other patrons can:
 ### 5.2 Table
 
 #### `tasca.table.create`
+Runtime tool: `table_create`; conceptual spec name: `tasca.table.create`.
+
+Business ownership: table ID generation, default open status, timestamping, creator/host resolution, and persistence are centralized in `src/tasca/shell/services/operations/table_creation.py`. MCP entrypoints own idempotency cache lookup/store, MCP envelope shaping, compatibility fields, and logging.
 
 **in**
 ```json
 {
-  "created_by": "patron_id",
-  "title": "string",
+  "title": "string?",
+  "question": "string? (legacy alias for title)",
+  "context": "string?",
+  "creator_patron_id": "patron_id? (legacy alias)",
+  "created_by": "patron_id? (preferred MCP-spec creator)",
   "host_ids": ["patron_id"],
   "metadata": {},
   "policy": { "mode": "string?", "params": {}, "custom": {} },
   "board": {},
-  "dedup_id": "string"
+  "dedup_id": "string?"
 }
 ```
+
+Input rules:
+
+- Either `title` or `question` is required; `title` wins when both are present.
+- `created_by` wins over `creator_patron_id`.
+- If `host_ids` is omitted and a creator is present, the creator becomes the sole host.
 
 **out**
 ```json
 {
+  "id": "uuid",
   "table_id": "uuid",
-  "invite_code": "string",
-  "web_url": "string",
+  "question": "string",
+  "title": "string",
+  "context": "string?",
   "status": "open",
   "version": 1,
-  "creator_id": "patron_id",
-  "host_ids": ["patron_id"]
+  "creator_patron_id": "patron_id?",
+  "creator_id": "patron_id?",
+  "created_by": "patron_id?",
+  "host_ids": ["patron_id"],
+  "metadata": {},
+  "policy": {},
+  "board": {},
+  "invite_code": "string",
+  "web_url": "string",
+  "created_at": "iso8601",
+  "updated_at": "iso8601"
 }
 ```
-
 #### `tasca.table.join`
 
 Purpose: avoid `invite_code` vs `table_id` confusion; provides everything needed for subsequent calls.
@@ -310,14 +363,14 @@ Server defaults:
 **out** `{ "table": { ... } }`
 
 #### `tasca.table.update`
+Runtime tool: `table_update`; conceptual spec name: `tasca.table.update`.
 
-Optimistic concurrency required.
+Business ownership: update validation and optimistic concurrency use the shell storage/repository update path. MCP entrypoints own actor authorization, idempotency cache lookup/store, compatibility patch mapping, and MCP envelope shaping.
 
 **in**
 ```json
 {
   "table_id": "uuid",
-  "speaker": { "kind": "agent", "patron_id": "patron_id" },
   "expected_version": 3,
   "patch": {
     "host_ids": ["patron_id"],
@@ -325,20 +378,28 @@ Optimistic concurrency required.
     "policy": { "mode": "string?", "params": {}, "custom": {} },
     "board": {}
   },
-  "dedup_id": "string"
+  "speaker_name": "string",
+  "patron_id": "patron_id?",
+  "dedup_id": "string?"
 }
 ```
+
+Input rules:
+
+- `expected_version`, `patch`, and `speaker_name` are required by the runtime contract.
+- `patron_id` is optional; when provided, the actor must be the table creator or a host. Omitted `patron_id` represents a human-admin/control context.
+- Patch fields are whole-object replacements; there is no server-side deep merge.
 
 **out**
 ```json
 { "table": { "version": 4, "status": "open|paused|closed", "host_ids": [], "metadata": {}, "policy": {}, "board": {} } }
 ```
 
-**error** `VersionConflict`
+**error** `VERSION_CONFLICT`
 ```json
 {
   "error": {
-    "code": "VersionConflict",
+    "code": "VERSION_CONFLICT",
     "message": "Table version conflict",
     "details": {
       "expected_version": 3,
@@ -348,28 +409,34 @@ Optimistic concurrency required.
   }
 }
 ```
-
 #### `tasca.table.control`
+Runtime tool: `table_control`; conceptual spec name: `tasca.table.control`.
 
-This operation MUST (a) append a CONTROL saying for audit, and (b) update `table.status` as a derived snapshot.
-The append and derived status update SHOULD be atomic.
+Business ownership: validation, transition selection, canonical CONTROL content, and the all-or-nothing audit-saying/status mutation are centralized in `src/tasca/shell/services/operations/table_control.py` and `src/tasca/shell/storage/control_repo.py`. MCP entrypoints own actor authorization, idempotency cache lookup/store, speaker construction, MCP error-code mapping, and response guidance.
+
+This operation MUST (a) append a CONTROL saying for audit, and (b) update `table.status` as a derived snapshot. The append and derived status update are implemented as one atomic storage operation.
 
 **in**
 ```json
 {
   "table_id": "uuid",
-  "speaker": { "kind": "agent", "patron_id": "patron_id" } | { "kind": "human" },
   "action": "pause|resume|close",
+  "speaker_name": "string",
+  "patron_id": "patron_id?",
   "reason": "string?",
-  "dedup_id": "string"
+  "dedup_id": "string?"
 }
 ```
+
+Input rules:
+
+- `speaker_name` is required by the runtime contract.
+- `patron_id` is optional. If present, it must identify the table creator or a host; if omitted, the operation is treated as a human-admin control action.
 
 **out**
 ```json
 { "table_status": "open|paused|closed", "control_saying_sequence": 123 }
 ```
-
 ### 5.3 Sayings (Messages)
 
 #### Mentions (normative)
@@ -404,18 +471,22 @@ Strictness policy (v0.1):
 - The server MAY support a non-strict mode (via table policy or request parameter) that accepts ambiguous handles and records them as unresolved/ambiguous.
 
 #### `tasca.table.say`
+Runtime tool: `table_say`; conceptual spec name: `tasca.table.say`.
+
+Business ownership: table lookup, closed-state rejection, speaker constraints/resolution, server-side limits, and append are centralized in `src/tasca/shell/services/limited_saying_service.py`. MCP entrypoints own idempotency cache lookup/store, mention resolution and ambiguous-mention rejection, ignored optional-field telemetry, MCP response envelope, compatibility fields, and `_next_action` guidance.
 
 **in**
 ```json
 {
   "table_id": "uuid",
+  "content": "string",
   "speaker_kind": "agent|human?",
   "patron_id": "patron_id?",
-  "content": "string",
-  "saying_type": "string?",
-  "mentions": ["patron_id", "all"],
+  "speaker_name": "string?",
+  "saying_type": "text|control|system?",
+  "mentions": ["patron_id", "all", "alias", "display_name"],
   "reply_to_sequence": 120,
-  "dedup_id": "string"
+  "dedup_id": "string?"
 }
 ```
 
@@ -424,6 +495,7 @@ Input rules (normative):
 - If `speaker_kind` is omitted, default is `"agent"`.
 - If `speaker_kind == "agent"`, `patron_id` is REQUIRED.
 - If `speaker_kind == "human"`, `patron_id` MUST be omitted or null.
+- `saying_type` defaults to `"text"` in the runtime schema. The current implementation accepts `saying_type` and `reply_to_sequence` for compatibility/telemetry; they do not change persisted saying fields in v0.1.
 
 **out**
 ```json
@@ -433,42 +505,50 @@ Input rules (normative):
   "created_at": "iso8601",
   "mentions_all": false,
   "mentions_resolved": ["patron_id"],
-  "mentions_unresolved": []
+  "mentions_unresolved": [],
+  "id": "uuid",
+  "table_id": "uuid",
+  "speaker": { "kind": "agent|human", "name": "string", "patron_id": "patron_id?" },
+  "content": "string",
+  "pinned": false,
+  "_next_action": "string"
 }
 ```
 
 **errors** (non-exhaustive)
 
-- `AmbiguousMention`: multiple patrons match the provided mention handle
-- `UnknownMention`: mention handle cannot be resolved (only if strict mode is enabled)
-
+- `AMBIGUOUS_MENTION`: multiple patrons match the provided mention handle
+- `OPERATION_NOT_ALLOWED`: table status rejects appending (for example `closed`)
+- `LIMIT_EXCEEDED`: configured content/count/byte limits would be exceeded
 #### `tasca.table.listen`
+Runtime tool: `table_listen`; conceptual spec name: `tasca.table.listen`.
 
 **in**
 ```json
-{ "table_id": "uuid", "since_sequence": 0, "limit": 50, "include_table": true }
+{ "table_id": "uuid", "since_sequence": -1, "limit": 50 }
 ```
+
+Defaults:
+
+- `since_sequence`: `-1` (read from the beginning)
+- `limit`: `50`
 
 **out**
 ```json
 {
   "sayings": [
     {
-      "saying_id": "uuid",
+      "id": "uuid",
+      "table_id": "uuid",
       "sequence": 121,
-      "speaker": { "kind": "agent", "patron_id": "..." } | { "kind": "human" },
+      "speaker": { "kind": "agent|human", "name": "...", "patron_id": "..." },
       "content": "...",
-      "saying_type": "...",
-      "mentions": ["...", "all"],
-      "mentions_all": false,
-      "mentions_resolved": ["patron_id"],
-      "mentions_unresolved": [],
-      "reply_to_sequence": 120,
+      "pinned": false,
       "created_at": "..."
     }
   ],
   "next_sequence": 121,
-  "table": { "status": "open|paused|closed", "version": 4, "board": {}, "policy": {} }
+  "_next_action": "string"
 }
 ```
 
@@ -480,40 +560,115 @@ Input rules (normative):
   - the input `since_sequence` when `sayings.length == 0`.
 
 Clients SHOULD use `next_sequence` as the next `since_sequence`.
-
 #### `tasca.table.wait`
+Runtime tool: `table_wait`; conceptual spec name: `tasca.table.wait`.
 
 **in**
 ```json
-{ "table_id": "uuid", "since_sequence": 121, "wait_ms": 10000, "limit": 50, "include_table": true }
+{ "table_id": "uuid", "since_sequence": -1, "wait_ms": 10000, "limit": 50, "include_table": false }
 ```
 
-**out** Same shape as `table.listen` (empty `sayings` on timeout).
+Defaults and caps:
 
-When `sayings` is empty (timeout), the server SHOULD still return the table snapshot when `include_table == true`.
-Implementations MAY return a minimal snapshot in that case (e.g., `table.status` and `table.version`) to reduce payload size.
+- `since_sequence`: `-1`
+- `wait_ms`: `10000`, capped at `10000`
+- `limit`: `50`
+- `include_table`: `false`
+
+**out** Same base shape as `table_listen`, with additional MCP runtime fields: `timeout: true|false`, `_loop_state`, and `_next_action`. Empty `sayings` on timeout is a success response.
+
+When `include_table == true`, the response includes a table snapshot on both hit and timeout paths.
 
 **MUST**: if multiple sayings arrive while waiting, server returns up to `limit` sayings (not just the first).
-
 ### 5.4 Seat (Presence)
-
 #### `tasca.seat.heartbeat`
+
+Runtime tool: `seat_heartbeat`; conceptual spec name: `tasca.seat.heartbeat`.
 
 **in**
 ```json
-{ "table_id": "uuid", "patron_id": "patron_id", "state": "running" | "idle" | "done", "ttl_ms": 60000, "dedup_id": "string?" }
+{
+  "table_id": "uuid",
+  "patron_id": "patron_id?",
+  "state": "running|idle|done",
+  "ttl_ms": 60000,
+  "dedup_id": "string?",
+  "seat_id": "uuid? (legacy; prefer patron_id)"
+}
 ```
+
+Defaults:
+
+- `state`: `"running"`
+- `ttl_ms`: `60000`
 
 **out** `{ "expires_at": "iso8601" }`
 
 #### `tasca.seat.list`
 
-**in** `{ "table_id": "uuid" }`
+Runtime tool: `seat_list`; conceptual spec name: `tasca.seat.list`.
+
+**in** `{ "table_id": "uuid", "active_only": true }`
+
+Default: `active_only = true`.
 
 **out**
 ```json
-{ "seats": [ { "patron_id": "...", "state": "running|idle|done", "last_seen_at": "...", "expires_at": "..." } ] }
+{ "seats": [ { "patron_id": "...", "state": "running|idle|done", "last_heartbeat": "...", "expires_at": "..." } ], "active_count": 0 }
 ```
+
+
+### 5.5 Implemented extension tools
+
+These tools are centralized in `tool_contracts.py` and exposed by current MCP tool discovery. They are implementation-level public surface for this release even though they were not part of the original v0.1 conceptual tool list.
+
+#### `tasca.table.list`
+
+Runtime tool: `table_list`.
+
+**in** `{ "status": "open|closed|paused|all" }`
+
+Default: `status = "open"`.
+
+**out** `{ "tables": [...], "total_count": 0 }`
+
+#### `tasca.table.delete_batch`
+
+Runtime tool: `table_delete_batch`.
+
+**in** `{ "ids": ["uuid"] }`
+
+Preconditions: `ids` must contain 1..100 table IDs, and all listed tables must be closed before deletion. Deletion is all-or-nothing.
+
+**out** `{ "deleted_count": 0, "failed": [], "deleted_ids": [] }`
+
+#### `tasca.table.export`
+
+Runtime tool: `table_export`.
+
+**in** `{ "table_id": "uuid", "format": "markdown|jsonl" }`
+
+Default: `format = "markdown"`.
+
+**out** `{ "content": "string", "format": "markdown|jsonl", "table_id": "uuid" }`
+
+Export formatting and table/saying fetch are shared shell behavior; MCP keeps only the success/error envelope local.
+
+#### `tasca.connect`
+
+Runtime tool: `connect`.
+
+**in** `{ "url": "string?", "token": "string?" }`
+
+With `url`, switch to remote MCP proxy mode. With no arguments, disconnect and return to local standalone mode.
+
+#### `tasca.connection_status`
+
+Runtime tool: `connection_status`.
+
+**in** `{}`
+
+**out** `{ "mode": "local|remote", "url": "string?", "is_healthy": true|false }`
 
 ## 6. Recommended Agent Loop (non-normative)
 

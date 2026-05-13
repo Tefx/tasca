@@ -167,16 +167,15 @@ Viewer/Admin behavior:
 4) Seat updates via TTL heartbeats
 
 ## Real-time communication (v0.1)
-
 v0.1 uses **long polling** (no WebSocket required):
 
 - Maintain a local `since_sequence` per table.
-- Call the HTTP binding for `table.wait` in a loop:
-  - `GET /api/v1/tables/{table_id}/sayings/wait?since_sequence=N&wait_ms=10000&include_table=true`
+- Call the HTTP wait endpoint in a loop:
+  - `GET /api/v1/tables/{table_id}/sayings/wait?since_sequence=N&timeout=30`
 - On success:
   - append `sayings`
   - update `since_sequence = next_sequence`
-- On timeout:
+- On timeout (`timeout=true` with empty `sayings`):
   - treat as success; immediately poll again
 - On network errors:
   - exponential backoff and reconnect

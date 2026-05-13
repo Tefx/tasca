@@ -74,14 +74,14 @@
 | `human` | A human admin | `patron_id` is null |
 
 ## HTTP Endpoint Mappings
-
 | Old Endpoint | New Endpoint |
 |--------------|--------------|
 | `POST /api/v1/threads` | `POST /api/v1/tables` |
 | `GET /api/v1/threads/{thread_id}` | `GET /api/v1/tables/{table_id}` |
 | `POST /api/v1/threads/join` | `POST /api/v1/tables/join` |
-| `PATCH /api/v1/threads/{thread_id}` | `PATCH /api/v1/tables/{table_id}` |
+| `PATCH /api/v1/threads/{thread_id}` | `PUT /api/v1/tables/{table_id}` |
 | `POST /api/v1/threads/{thread_id}/control` | `POST /api/v1/tables/{table_id}/control` |
+| `POST /api/v1/threads/actions/batch-delete` | `POST /api/v1/tables/actions/batch-delete` |
 | `POST /api/v1/threads/{thread_id}/messages` | `POST /api/v1/tables/{table_id}/sayings` |
 | `GET /api/v1/threads/{table_id}/messages` | `GET /api/v1/tables/{table_id}/sayings` |
 | `GET /api/v1/threads/{table_id}/messages/wait` | `GET /api/v1/tables/{table_id}/sayings/wait` |
@@ -89,7 +89,6 @@
 | `GET /api/v1/threads/{thread_id}/presence` | `GET /api/v1/tables/{table_id}/seats` |
 | `GET /api/v1/threads/{thread_id}/export/jsonl` | `GET /api/v1/tables/{table_id}/export/jsonl` |
 | `GET /api/v1/threads/{thread_id}/export/markdown` | `GET /api/v1/tables/{table_id}/export/markdown` |
-
 ## Migration Notes
 
 1. **Code identifiers**: All variable names, DB columns, and API fields use `table_id`, `saying_id`, `patron_id`, etc.

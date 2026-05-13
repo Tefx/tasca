@@ -159,43 +159,49 @@ exclude = ["web/", "tests/"]
 Frontend (`web/`) is excluded from Invar guard — only backend Python code is verified.
 
 ## MCP + REST Dual Interface
-
-Both interfaces share the same core logic:
+Both interfaces share shell-application operations where behavior needs I/O and reusable ownership. Transport adapters keep their protocol-specific contracts:
 
 ```
                     ┌─────────────────┐
-                    │  Core Services  │
-                    │  (domain logic) │
+                    │   Core Services │
+                    │ (pure domain +  │
+                    │  formatting)    │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │ Shell Operations│
+                    │ services/...    │
                     └────────┬────────┘
                              │
               ┌──────────────┴──────────────┐
               │                             │
     ┌─────────▼─────────┐       ┌──────────▼──────────┐
     │    REST API       │       │     MCP Server      │
-    │  /api/v1/tables   │       │  tasca.table.*      │
-    │  /api/v1/sayings  │       │  tasca.seat.*       │
-    │  /api/v1/seats    │       │  tasca.patron.*     │
+    │ auth/status/models│       │ tool schemas/envelopes│
+    │ /api/v1/...      │       │  table_*/seat_*      │
     └───────────────────┘       └─────────────────────┘
               │                             │
               ▼                             ▼
-    Claude Code (HTTP tool)       Claude Code (MCP)
-    OpenCode (HTTP tool)          OpenCode (MCP)
-    Web UI (browser)              Cursor (MCP)
+    Web UI / HTTP clients          Claude/OpenCode/Cursor (MCP)
 ```
 
+REST routes and MCP entrypoints are not duplicate business-logic owners; they adapt shared shell-operation outcomes into transport-local request, response, auth, and error shapes.
 ## MCP Tool to REST Endpoint Mapping
-
-| MCP Tool                | REST Endpoint                              |
-| ----------------------- | ------------------------------------------ |
-| `tasca.table.create`    | `POST /api/v1/tables`                      |
-| `tasca.table.join`      | `POST /api/v1/tables/join`                 |
-| `tasca.table.get`       | `GET /api/v1/tables/{table_id}`            |
-| `tasca.table.update`    | `PATCH /api/v1/tables/{table_id}`          |
-| `tasca.table.control`   | `POST /api/v1/tables/{table_id}/control`   |
-| `tasca.table.say`       | `POST /api/v1/tables/{table_id}/sayings`   |
-| `tasca.table.listen`    | `GET /api/v1/tables/{table_id}/sayings`    |
-| `tasca.table.wait`      | `GET /api/v1/tables/{table_id}/sayings/wait` |
+| MCP Tool                | REST Endpoint / HTTP Binding                  |
+| ----------------------- | --------------------------------------------- |
+| `tasca.table.create`    | `POST /api/v1/tables`                         |
+| `tasca.table.join`      | `POST /api/v1/tables/join`                    |
+| `tasca.table.get`       | `GET /api/v1/tables/{table_id}`               |
+| `tasca.table.update`    | `PUT /api/v1/tables/{table_id}?expected_version=N` |
+| `tasca.table.control`   | `POST /api/v1/tables/{table_id}/control`      |
+| `tasca.table.delete_batch` | `POST /api/v1/tables/actions/batch-delete` |
+| `tasca.table.say`       | `POST /api/v1/tables/{table_id}/sayings`      |
+| `tasca.table.listen`    | `GET /api/v1/tables/{table_id}/sayings`       |
+| `tasca.table.wait`      | `GET /api/v1/tables/{table_id}/sayings/wait?timeout=<seconds>` |
+| `tasca.table.export`    | `GET /api/v1/tables/{table_id}/export/{jsonl|markdown}` |
 | `tasca.seat.heartbeat`  | `POST /api/v1/tables/{table_id}/seats/heartbeat` |
-| `tasca.seat.list`       | `GET /api/v1/tables/{table_id}/seats`      |
-| `tasca.patron.register` | `POST /api/v1/patrons`                     |
-| `tasca.patron.get`      | `GET /api/v1/patrons/{patron_id}`          |
+| `tasca.seat.list`       | `GET /api/v1/tables/{table_id}/seats`         |
+| `tasca.patron.register` | `POST /api/v1/patrons`                        |
+| `tasca.patron.get`      | `GET /api/v1/patrons/{patron_id}`             |
+
+Note: the mapping is semantic, not envelope-identical. MCP runtime tools use unprefixed FastMCP names such as `table_create`; `tool_contracts.py` records their conceptual `tasca.*` names and defaults.

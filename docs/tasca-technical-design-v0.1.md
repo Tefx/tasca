@@ -42,13 +42,21 @@ Rationale: these are already detailed, but leave a few "implementation-degree" d
 
 ### Runtime components
 
-- **API server (FastAPI)**
+- **HTTP API server (FastAPI)**
   - Exposes HTTP endpoints (`/api/v1/...`) per `tasca-http-api-v0.1.md`.
-  - Implements the MCP tool semantics (may be internal service layer).
+  - Owns HTTP transport concerns: admin-token dependencies, Pydantic request/response models, HTTP status/detail mapping, logging, and response headers/content types.
+- **MCP server (FastMCP + JSON-RPC/SSE/STDIO)**
+  - Registers public tool schemas from `src/tasca/shell/mcp/tool_contracts.py` via `src/tasca/shell/mcp/server.py`.
+  - Owns MCP transport concerns: tool discovery metadata, MCP envelopes, proxy/local mode switching, idempotency cache placement where tool-specific, and `_next_action` guidance.
+- **Shell-application operations (`src/tasca/shell/services/...`)**
+  - Own shared, transport-neutral application behavior that still requires I/O: patron registration, table creation, atomic table control, saying append with limits, batch delete, and export orchestration.
+  - Return typed outcomes/errors that HTTP and MCP adapters map to transport-local shapes.
+- **Core services/domain (`src/tasca/core/...`)**
+  - Own pure domain/state/validation logic and reusable formatting primitives without I/O.
 - **SQLite storage** (single instance; WAL enabled).
 - **Frontend SPA** (React+TS+Vite) rendering Markdown client-side.
 
-Rationale: long polling + single writer aligns with one-shot agent constraint and minimal ops burden. **[Proven]** (stated in v0.1 docs)
+Rationale: shared business ownership belongs in shell-application operations when behavior needs repositories, timestamps, settings, or idempotency storage. Routes and MCP entrypoints should not duplicate business decisions; they should adapt shared outcomes to their transport contracts. **[Proven]** (implemented in `src/tasca/shell/services/operations/*`, `src/tasca/shell/services/limited_saying_service.py`, and `src/tasca/shell/mcp/tool_contracts.py`)
 
 ## 3) Core invariants (MUST)
 
@@ -77,8 +85,10 @@ These are the "teeth" that make the system consistent under retries and polling.
 
 ### 3.4 At-least-once delivery + idempotent writes
 
-- All write operations accept `dedup_id`.
-- On dedup hit, server returns the *original success response* (`return_existing`).
+- MCP write tools that expose `dedup_id` MUST return the *original success response* (`return_existing`) on dedup hit.
+- HTTP endpoints expose idempotency only where the implemented REST request model includes `dedup_id` (currently patron registration, table creation, and table control compatibility input); HTTP routes must document any narrower transport surface rather than implying automatic parity with MCP.
+
+Rationale: idempotency semantics are shared where implemented, but the public REST and MCP field surfaces are intentionally transport-local. **[Proven]** (centralized patron/table creation/control paths plus route/tool contracts)
 
 ### 3.5 Paused-state behavior (normative, v0.1)
 
@@ -119,21 +129,38 @@ These operations MUST be atomic (all-or-nothing):
 
 Rationale: without atomicity, clients will observe gaps, duplicates, or inconsistent state in long polling. **[Likely]**
 
+### 4.3 Shared operation ownership boundaries (implemented)
+
+The implemented ownership model separates reusable shell-application operations from transport adapters:
+
+| Operation area | Shared owner | HTTP adapter responsibility | MCP adapter responsibility |
+|---|---|---|---|
+| Patron registration | `src/tasca/shell/services/operations/patron_registration.py` | Resolve REST request aliases and shape canonical+compat response | Resolve `name` alias, return MCP envelope and compatibility fields |
+| Table creation | `src/tasca/shell/services/operations/table_creation.py` | Admin auth, REST idempotency cache, REST response model | MCP idempotency cache, MCP envelope, compatibility fields |
+| Table control | `src/tasca/shell/services/operations/table_control.py` + `src/tasca/shell/storage/control_repo.py` | Admin auth, HTTP status/detail mapping | Creator/host authorization, MCP error codes, idempotency cache, `_next_action` |
+| Saying append | `src/tasca/shell/services/limited_saying_service.py` | Admin auth for human/LAN posting, REST `Saying` response | Mention resolution, MCP idempotency cache, MCP envelope/guidance |
+| Batch delete | `src/tasca/shell/services/operations/batch_delete.py` | Admin auth and HTTP 409/422 mapping | MCP envelope and error-code mapping |
+| Export | `src/tasca/shell/services/operations/table_export.py` + core export formatting | Download header/media type shaping | MCP `{content, format, table_id}` envelope |
+
+Routes and MCP entrypoints may contain transport orchestration, but they MUST NOT re-own the shared business decisions above. If behavior changes, update the shared operation first and keep HTTP/MCP adapter differences explicit.
+
 ## 5) Public contract consolidation
 
 This section does **not** redefine the MCP/HTTP specs; it fixes the remaining ambiguous corners.
 
 ### 5.1 Error envelope (HTTP + MCP tool results)
 
-- All errors MUST conform to:
+- Shared operations return typed outcomes/errors; transport adapters own public error shaping.
+- MCP tool failures SHOULD use the MCP response envelope:
 
 ```json
 { "error": { "code": "ErrorCode", "message": "...", "details": {} } }
 ```
 
-- Servers SHOULD ignore unknown request fields; MAY return `warnings[]` indicating ignored fields.
+- HTTP routes SHOULD use `error_envelope(...)` for new/updated surfaces, but existing legacy endpoints may still expose FastAPI `detail` strings or route-local detail objects where tests bind that behavior.
+- Servers SHOULD ignore unknown request fields when the transport framework permits it; MAY return `warnings[]` indicating ignored fields.
 
-Rationale: forward compatibility and consistent client handling. **[Proven]**
+Rationale: consistent machine-readable errors remain the target, while implemented REST/MCP adapters currently preserve transport-local compatibility contracts. **[Proven]**
 
 ### 5.2 Permission matrix (v0.1)
 
@@ -145,7 +172,7 @@ Rationale: forward compatibility and consistent client handling. **[Proven]**
 | Join table | `POST /api/v1/tables/join` | No | Low risk; needed for viewing. **[Likely]** |
 | Create table (human/UI) | `POST /api/v1/tables` | **Yes** | Prevent LAN drive-by table spam; creation is an admin capability in v0.1. **[Likely]** |
 | Say as human | `POST /api/v1/tables/{id}/sayings` | **Yes** | Prevent drive-by injection on LAN. **[Likely]** |
-| table.update / table.control | `PATCH/POST ...` | **Yes** | Privileged controls per v0.1 trust model. **[Proven]** |
+| table.update / table.control | `PUT/POST ...` | **Yes** | Privileged controls per v0.1 trust model. **[Proven]** |
 
 Admin auth mechanism (normative):
 
@@ -157,26 +184,27 @@ Notes:
 
 ### 5.3 Dedup key canonicalization
 
-Spec defines dedup scope as `{table_id, speaker_key, tool_name, dedup_id}`.
+Spec-level MCP dedup scope is `{table_id, speaker_key, tool_name, dedup_id}` for speaker-scoped table writes.
 
-Define a canonical server-internal speaker key:
+Define a canonical server-internal speaker key for `table_say`:
 
 - `speaker_key = patron_id` when `speaker_kind == "agent"`
 - `speaker_key = "human"` when `speaker_kind == "human"`
 
-Canonical scope key:
+Implemented operation scopes are transport/tool specific:
 
-```
-dedup_scope_key = "{table_id}:{speaker_key}:{tool_name}:{dedup_id}"
-```
+| Surface | Implemented resource key |
+|---|---|
+| `table_say` MCP | `saying:{table_id}:{speaker_key}` plus tool name and `dedup_id` |
+| `table_control` MCP | `control:{table_id}` plus tool name and `dedup_id` |
+| `table_create` REST/MCP | `table_create` plus tool name and `dedup_id` |
+| `patron_register` REST/MCP | `patron_register` plus tool name and `dedup_id` |
 
-- Storage MAY hash this string to a fixed-length key.
+- Storage MAY hash scope strings to fixed-length keys.
 - TTL default 24h unless overridden by table policy within server-defined bounds.
+- Any future change to scope must be treated as a compatibility migration because dedup hits return existing public responses.
 
-Rationale: deterministic, cross-language stable, avoids subtle differences in JSON serialization. **[Likely]**
-
-Failure condition: if clients generate `dedup_id` non-randomly and collide, they will observe "return_existing" responses unexpectedly; clients must treat dedup_id as unique per intended operation. **[Likely]**
-
+Rationale: deterministic operation-specific scopes avoid subtle differences in JSON serialization while documenting current REST/MCP behavior. **[Proven]**
 ### 5.4 Mention resolution strictness
 
 **Decision:** adopt the default strictness described in MCP spec as MUST for v0.1:

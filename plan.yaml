@@ -6409,6 +6409,55 @@ phases:
       - ✓ Tests work with new behavior
 
       - ✓ Guard passes'
+  - id: admin-token-validation-evidence-closure
+    name: Validation evidence closure for historical admin token red evidence
+    status: done
+    description: 'Validation-closure/disposition record only; no product-code work.
+      This step closes historical completed-evidence guard debt for admin_token_fix.s3-update-tests-that-relied-on-auth-disabled-admin-token-none-behavior
+      and admin_token_fix.r1-reverify-guard-manual-startup-smoke-test. Provenance:
+      historical completed evidence contained failed tests. Disposition: closed by
+      later admin token remediation, token persistence work, and finalization evidence;
+      no current blocker-class issue remains for remaining gates. Gate intersection:
+      finalization.gate is already OPEN/PASS and current acceptance is owned by later
+      remediation/finalization, so this historical red evidence must not reopen live
+      execution work.'
+    verification: local-check protecting plan validation only. Evidence must record
+      green/OPEN/gate_open_allowed=true disposition for both admin_token_fix historical
+      red steps and explain why historical failed-test evidence is closed by later
+      remediation/finalization without altering current finalization PASS meaning.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - steps: admin_token_fix.s3-update-tests-that-relied-on-auth-disabled-admin-token-none-behavior;
+      admin_token_fix.r1-reverify-guard-manual-startup-smoke-test
+
+      - disposition: historical failure evidence closed
+
+      - gate_intersection: later admin-token remediation/token persistence and finalization.gate
+      own current acceptance; no unresolved live blocker remains
+
+      - required marker: green/OPEN/gate_open_allowed=true'
+    depends_on:
+    - admin_token_fix.s3-update-tests-that-relied-on-auth-disabled-admin-token-none-behavior
+    - admin_token_fix.r1-reverify-guard-manual-startup-smoke-test
+    agent: gate-reviewer-tacit
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Historical Evidence Closure\n- closed_steps:\n  - admin_token_fix.s3-update-tests-that-relied-on-auth-disabled-admin-token-none-behavior\n\
+      \  - admin_token_fix.r1-reverify-guard-manual-startup-smoke-test\n- historical_signal:\
+      \ failed tests in completed evidence\n- provenance: historical completed-evidence\
+      \ guard debt, not a new product-code blocker\n- disposition: closed by subsequent\
+      \ admin_token_fix2/token_persistence/security_fix chains and the current finalization.gate\
+      \ OPEN/PASS record\n- gate_intersection_reasoning: any live admin-token startup/auth\
+      \ regression would intersect later admin-token remediation, security gates,\
+      \ full-plan verification, and finalization.gate; those later records are done\
+      \ and OPEN/PASS, so the historical red evidence is superseded for plan-validation\
+      \ purposes\n- current_acceptance_owner: admin_token_fix2, token_persistence,\
+      \ finalization.verify-full-plan, and finalization.gate\n- result: green/OPEN/gate_open_allowed=true\n\
+      \nNo product code changed."
 - id: web_fix2
   name: Web fix round 2 — gate review P1 items
   status: done

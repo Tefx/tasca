@@ -38566,7 +38566,7 @@ phases:
     agent: spec-verifier-tacit
   - id: finalization.deep-architecture-review
     name: Deep architecture and boundary review
-    status: pending
+    status: claimed
     description: 'step_type: review
 
       verification_scope: full-plan-check
@@ -38621,6 +38621,8 @@ phases:
     - retest-pp-invar-full-scan-final
     - finalization.retest-deep-wiring-table-metadata-contract
     agent: software-architect-tacit
+    claimed_by: software-architect-tacit
+    claimed_at: '2026-05-13T08:13:53.689760+00:00'
   - id: finalization.deep-contract-strength
     name: Deep contract-strength and closure review
     status: pending

@@ -38486,6 +38486,7 @@ phases:
       '
     depends_on:
     - finalization.deep-wiring-audit
+    - retest-pp-invar-full-scan
     agent: gate-reviewer-tacit
   - id: finalization.deep-black-box-verification
     name: Black-box verification of consolidated public surfaces

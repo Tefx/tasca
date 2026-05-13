@@ -40512,7 +40512,7 @@ phases:
       \ follow-up steps."
   - id: fix-pp-invar-mcp-proxy-budget-followup
     name: Residual Invar remediation — MCP proxy budget blocker
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -40688,6 +40688,42 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T03:40:36.462215+00:00'
+    done_at: '2026-05-13T04:01:09.801184+00:00'
+    evidence: "## refs Read Confirmation\n- src/tasca/shell/mcp/proxy.py — proxy owns\
+      \ local/remote state, upstream MCP sessions, JSON-RPC forwarding with auth and\
+      \ mcp-session-id, and upstream/network/JSON error translation.\n- tests/integration/test_mcp_proxy.py\
+      \ — E2E coverage requires local start, connect to upstream, remote table_list/table\
+      \ ops forwarding, local-only connect/status, disconnect, and unreachable-upstream\
+      \ failure.\n- tests/unit/mcp/test_proxy.py and test_proxy_middleware.py — unit\
+      \ coverage asserts request envelope, auth/session headers, no-token behavior,\
+      \ HTTP error mapping, JSON-RPC validation, local/remote middleware routing,\
+      \ and ToolResult error conversion.\n\n## MCP Proxy Budget Follow-up Evidence\n\
+      - Before: proxy.py escape_hatch_file_limit shell_result 2/2; project shell_result\
+      \ 12/5; weighted budget 76/15.\n- After worker: proxy file no longer reports\
+      \ escape_hatch_file_limit; project shell_result reduced to 10/5; weighted budget\
+      \ reduced to 70/15.\n- Mainline after merge: proxy-specific blocker remains\
+      \ closed; full guard still fails only on project-level debt handled by project-budget\
+      \ follow-up.\n\n## Proxy Surface Preservation Matrix\n- Local mode: proxy middleware\
+      \ local-mode tests pass; integration connection_status local mode preserved.\n\
+      - Remote forwarding: integration proxy table_list/table operations pass through\
+      \ upstream.\n- Local-only tools: connect and connection_status remain local\
+      \ in remote mode.\n- Auth/session headers: unit tests cover Authorization and\
+      \ mcp-session-id forwarding.\n- Error paths: unit/integration tests cover timeout/unreachable/401/403/500/invalid\
+      \ JSON/invalid JSON-RPC.\n\n## Verification\n- Worker verification: ruff/mypy\
+      \ over proxy/server passed; proxy tests passed (73 passed); guard proxy hatch\
+      \ fixed.\n- Mainline verification after squash merge:\n  - uvx invar-tools guard\
+      \ --all: proxy hatch fixed; full guard still fails on project-level file_size/shell_result/weighted\
+      \ budget and complexity debt.\n  - ./.venv/bin/python -m ruff check src/tasca/shell/mcp/proxy.py\
+      \ src/tasca/shell/mcp/server.py tests/unit/mcp/test_proxy.py tests/unit/mcp/test_proxy_middleware.py:\
+      \ PASS.\n  - ./.venv/bin/python -m mypy src/tasca/shell/mcp/proxy.py src/tasca/shell/mcp/server.py:\
+      \ PASS.\n  - ./.venv/bin/python -m pytest -q tests/unit/mcp/test_proxy.py tests/unit/mcp/test_proxy_middleware.py\
+      \ tests/integration/test_mcp_proxy.py: 73 passed.\n\n## Spec link\n- Step scope\
+      \ plus MCP proxy unit/integration tests as behavioral specs; AGENTS Invar shell\
+      \ Result policy.\n\n## Files changed\n- src/tasca/shell/mcp/proxy.py\n- src/tasca/shell/mcp/server.py\n\
+      - tests/unit/mcp/test_proxy.py\n- tests/unit/mcp/test_proxy_middleware.py\n\n\
+      ## Commits\n- af67fda: [vectl] step-fix-pp-invar-mcp-proxy-budget-followup completed\n\
+      \n## Residual blocker-class debt\n- None for proxy-specific blocker.\n- Remaining\
+      \ project-level debt is owned by fix-pp-invar-project-budget-followup."
   - id: fix-pp-invar-project-budget-followup
     name: Residual Invar remediation — project-level budget closure
     status: pending

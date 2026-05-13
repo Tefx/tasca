@@ -160,6 +160,7 @@ def prepare_table_update(table: Table, update: TableUpdate, now: datetime) -> Ta
 
     Doctests:
         >>> from datetime import datetime
+        >>> from tasca.core.domain.table import TableId, TableStatus
         >>> table = Table(
         ...     id=TableId("t1"),
         ...     question="Original",
@@ -243,6 +244,7 @@ def prepare_versioned_update(
 
     Doctests:
         >>> from datetime import datetime
+        >>> from tasca.core.domain.table import TableId, TableStatus
         >>> table = Table(
         ...     id=TableId("t1"),
         ...     question="Original",

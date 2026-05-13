@@ -38378,6 +38378,7 @@ phases:
       '
     depends_on:
     - finalization.deep-wiring-audit
+    - retest-pp-invar-full-scan
     agent: spec-verifier-tacit
   - id: finalization.deep-architecture-review
     name: Deep architecture and boundary review

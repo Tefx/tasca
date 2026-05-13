@@ -44573,7 +44573,7 @@ phases:
       - none"
   - id: finalization.retest-concurrent-review-blockers
     name: Retest concurrent finalization review blockers
-    status: claimed
+    status: done
     description: 'step_type: test
 
       step_intent: retest_green
@@ -44794,6 +44794,134 @@ phases:
     agent: integration-verifier-tacit
     claimed_by: integration-verifier-tacit
     claimed_at: '2026-05-13T09:11:23.626062+00:00'
+    done_at: '2026-05-13T09:21:08.161478+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: integration-verifier-tacit (independent of implementation)
+
+      **Scope**: concurrent finalization review blockers
+
+      **Independence Level**: L2
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      1. tests/unit/services/operations/test_table_control.py — test_normalizes_action_and_control_content
+      asserts build_control_content(...) returns Success and unwraps to canonical
+      CONTROL content; success test asserts outcome.control_content == "**CONTROL:
+      PAUSE**\n\nReason: brief pause".
+
+      2. tests/integration/test_rest_spec_conformance_remediation.py — test_rest_table_create_migrates_legacy_db_for_canonical_fields
+      creates a legacy tables table without canonical columns, POSTs REST create with
+      metadata/policy/board, then asserts response and stored JSON match; test_rest_table_control_replays_same_dedup_response
+      posts same dedup_id twice and asserts second.json() == first.json().
+
+      3. tests/unit/mcp/test_spec_conformance_remediation.py — test_creator_host_and_human_admin_authorization_paths
+      exercises MCP table_control through host and human-admin paths and verifies
+      table status/version.
+
+      4. src/tasca/shell/services/operations/table_control.py — build_control_content(...)
+      -> Result[str, TableControlOperationError] returns Success(content); execute_table_control(...)
+      unwraps it before atomic_control_table.
+
+      5. src/tasca/shell/api/routes/tables_control.py — _control_table_response checks
+      check_idempotency_key; cached hits return Success(TableControlResponse(**cached["data"]));
+      otherwise it executes control and stores {"data": response.model_dump(mode="json")}.
+
+      6. src/tasca/shell/api/routes/tables.py — TableCreateRequest includes metadata/policy/board/dedup_id;
+      _table_create_response returns canonical TableCreateResponse and caches same
+      response for dedup_id.
+
+      7. src/tasca/core/schema.py — create_tables_table_ddl includes creator_patron_id,
+      host_ids, metadata, policy, and board; idempotency_keys DDL defines primary
+      key (resource_key, tool_name, dedup_id).
+
+
+      ### Required Commands and Actual Outputs
+
+      - uv run invar guard: exit 0; status passed; static errors 0, warnings 0; doctest
+      passed; crosshair/property skipped because no changed files.
+
+      - uv run pytest tests/unit/mcp/test_spec_conformance_remediation.py tests/integration/test_rest_spec_conformance_remediation.py
+      tests/unit/services/operations/test_table_control.py -q: exit 0; collected 17
+      items; 17 passed in 1.83s.
+
+      - Targeted API/storage/control regression command for legacy DB migration, REST
+      same-dedup replay, and table_control return-shape: exit 0; collected 4 items;
+      4 passed in 0.61s.
+
+      - MCP control same-dedup parity probe: exit 0; created_ok true; final_status
+      closed; final_version 2; same_response true; sayings_count 1.
+
+
+      ### Blocker Family Retest Results
+
+      1. Architecture return-shape mismatch: PASS. Runtime tests prove build_control_content(...)
+      intentionally returns Success[str], and call sites unwrap before storage mutation.
+
+      2. REST legacy DB schema migration: PASS. Targeted REST integration test created
+      a legacy DB missing metadata/policy/board columns, POSTed create with those
+      fields, and verified columns plus persisted JSON.
+
+      3. HTTP control dedup_id: PASS. REST targeted test proves same-dedup retry returns
+      identical response. MCP probe proves same-dedup control returns identical data,
+      one saying, final closed version 2.
+
+      4. Focused conformance command: PASS. Required focused command collected 17
+      tests and all passed.
+
+
+      ### Mandatory Semantic Reporting
+
+      - step_intent: retest_green
+
+      - expected_result: green
+
+      - observed_result: pass — invar guard exit 0; focused pytest 17 passed; targeted
+      blocker pytest 4 passed; MCP parity probe successful.
+
+      - failure_alignment: no residual blocker observed in tested scope.
+
+      - verdict: PASS
+
+      - blockers: []
+
+      - product_files_modified: false
+
+      - commit_hashes: none — verify-only step with no repo mutations
+
+      - gate_open_allowed: true
+
+      - orchestrator_action_hint: COMPLETE
+
+
+      ### Behavioral Proof Register
+
+      - architecture_return_shape_mismatch: PROVEN; targeted unit test proves Success
+      return and canonical content unwrap; no closure path required; gate decision
+      PASS.
+
+      - rest_legacy_db_schema_migration: PROVEN; ASGI REST create against temp legacy
+      SQLite DB verifies response, columns, and stored JSON; no closure path required;
+      gate decision PASS.
+
+      - http_control_dedup_id: PROVEN; REST same-dedup test plus MCP same-dedup probe
+      show identical responses and no duplicate saying; no closure path required;
+      gate decision PASS.
+
+      - focused_conformance_command: PROVEN; required focused pytest command collected
+      nonzero tests and exited green; no closure path required; gate decision PASS.
+
+
+      ### Artifacts Modified
+
+      None. Git status had no modified/untracked file output in isolated worktree.
+
+
+      ### Verdict
+
+      PASS'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

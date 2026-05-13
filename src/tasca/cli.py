@@ -55,7 +55,6 @@ def _command_exit_code(command_result: object) -> Result[int, str]:
     return Success(cast(int, command_result))
 
 
-# @invar:allow shell_result: Helper function returns string for banner, not Result
 # @shell_orchestration: Socket I/O for LAN IP discovery (connect to public DNS)
 def get_lan_ip() -> str:
     """Get the LAN IP address for remote access.
@@ -77,7 +76,6 @@ def get_lan_ip() -> str:
         return "localhost"
 
 
-# @invar:allow shell_result: Raises RuntimeError on failure, CLI-entry pattern
 def create_table_directly(
     question: str,
     context: str | None,
@@ -227,7 +225,6 @@ def print_startup_banner(
     print()  # Trailing newline before server logs
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_complexity: 3 branches for server check logic (connect, port in use error, unexpected error)
 def is_server_running(base_url: str) -> bool:
     """Check if the Tasca server is already running.
@@ -248,7 +245,6 @@ def is_server_running(base_url: str) -> bool:
         return False
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_complexity: 5 branches for server startup (find module, start, wait, timeout, error)
 def start_server_background(host: str, port: int) -> subprocess.Popen[str]:
     """Start the Tasca server in background.
@@ -287,7 +283,6 @@ def start_server_background(host: str, port: int) -> subprocess.Popen[str]:
         raise SystemExit(1) from e
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_orchestration: Polling loop that calls is_server_running (which does HTTP I/O)
 def wait_for_server_ready(base_url: str, timeout: float = 30.0) -> bool:
     """Wait for the server to become ready.
@@ -348,7 +343,6 @@ signal.signal(signal.SIGTERM, _signal_handler)
 signal.signal(signal.SIGINT, _signal_handler)
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_complexity: 6 branches for HTTP error handling (connection, timeout, status codes)
 def create_table_via_rest(
     question: str,
@@ -402,7 +396,6 @@ def create_table_via_rest(
     return cast(dict[str, Any], response.json())
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_complexity: 12 branches for MCP protocol handling (init, tool call, error paths)
 # @invar:allow function_size: MCP protocol requires multi-step handshake and error handling
 def create_table_via_mcp(
@@ -529,7 +522,6 @@ def create_table_via_mcp(
         raise SystemExit(1) from e
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_orchestration: Start server in foreground, create table directly, print banner
 # @shell_complexity: 5 branches for table creation error handling, token selection, and server startup
 def cmd_new(args: argparse.Namespace) -> int:
@@ -614,9 +606,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
 # @shell_orchestration: Argument parsing and command dispatch is orchestration, not business logic
-# @invar:allow shell_result: CLI command, delegates to MCP server entry point
 def cmd_mcp(_args: argparse.Namespace) -> int:
     """Start the MCP stdio server."""
     from tasca.shell.mcp.server import run_mcp_server
@@ -625,14 +615,12 @@ def cmd_mcp(_args: argparse.Namespace) -> int:
     return 0
 
 
-# @invar:allow shell_result: CLI command, prints version string
 def cmd_version(_args: argparse.Namespace) -> int:
     """Print the Tasca version."""
     print(f"tasca {settings.version}")
     return 0
 
 
-# @invar:allow shell_result: CLI entry point, returns exit code int
 # @shell_complexity: 4 branches for error handling (table not found, DB error, write error)
 def cmd_export(args: argparse.Namespace) -> int:
     """Execute the 'export' subcommand.
@@ -711,7 +699,6 @@ def cmd_export(args: argparse.Namespace) -> int:
         conn.close()
 
 
-# @invar:allow shell_result: CLI argparse setup helper, returns None
 # @shell_orchestration: Argument parser configuration for CLI dispatch
 def _setup_new_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Setup the 'new' subcommand parser.
@@ -740,7 +727,6 @@ def _setup_new_subparser(subparsers: argparse._SubParsersAction[argparse.Argumen
     new_parser.set_defaults(func=cmd_new)
 
 
-# @invar:allow shell_result: CLI argparse setup helper, returns None
 # @shell_orchestration: Argument parser configuration for CLI dispatch
 def _setup_export_subparser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
@@ -769,7 +755,6 @@ def _setup_export_subparser(
     export_parser.set_defaults(func=cmd_export)
 
 
-# @invar:allow shell_result: CLI argparse setup helper, returns parser
 # @shell_orchestration: Argument parser configuration for CLI dispatch
 def _setup_skills_subparser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
@@ -803,7 +788,6 @@ def _setup_skills_subparser(
     return skills_parser
 
 
-# @invar:allow shell_result: CLI entry point, returns exit code int
 # @shell_orchestration: Argument parsing (argparse) and command dispatch to I/O handlers
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the Tasca CLI.

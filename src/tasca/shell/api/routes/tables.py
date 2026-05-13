@@ -11,7 +11,7 @@ import sqlite3
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
-from returns.result import Failure
+from returns.result import Failure, Result, Success
 
 from tasca.core.domain.table import Table, TableId, TableUpdate, Version
 from tasca.core.services.batch_delete_service import (
@@ -48,6 +48,11 @@ from tasca.shell.storage.table_repo import (
 router = APIRouter()
 router.include_router(tables_control.router)
 logger = get_logger(__name__)
+
+
+def _http_error(status_code: int, detail: object) -> HTTPException:
+    """Build an HTTPException for Result-returning route helpers."""
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 # =============================================================================
@@ -132,53 +137,22 @@ class BatchDeleteErrorResponse(BaseModel):
     details: list[BatchDeleteRejectionDetail]
 
 
-# =============================================================================
-# POST /tables - Create a new table (Admin required)
-# =============================================================================
-
-
-# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
-@router.post("", response_model=TableCreateResponse, status_code=status.HTTP_200_OK)
-async def create_table_endpoint(
+def _table_create_response(
+    conn: sqlite3.Connection,
     data: TableCreateRequest,
-    _auth: None = Depends(verify_admin_token),
-    conn: sqlite3.Connection = Depends(get_db),
-) -> TableCreateResponse:
-    """Create a new discussion table.
-
-    Requires admin authentication via Bearer token.
-
-    Args:
-        data: Table creation data with question and optional context.
-        _auth: Admin authentication (injected via dependency).
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        The created table with generated ID, version 1, and timestamps.
-
-    Raises:
-        HTTPException: 500 if database operation fails.
-    """
+    now: datetime,
+) -> Result[TableCreateResponse, HTTPException]:
+    """Create a table and return the REST response model."""
     if data.title is None and data.question is None:
-        raise_http_error(
-            status.HTTP_400_BAD_REQUEST,
-            "InvalidRequest",
-            "Either title or question is required",
-        )
+        return Failure(_http_error(status.HTTP_400_BAD_REQUEST, "Either title or question is required"))
     resource_key = "table_create"
-    now = datetime.now(UTC)
     if data.dedup_id is not None:
-        idempotency_result = check_idempotency_key(conn, resource_key, "table_create", data.dedup_id, now=now)
-        if isinstance(idempotency_result, Failure):
-            raise_http_error(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "StorageError",
-                f"Failed to check idempotency key: {idempotency_result.failure()}",
-            )
-        cached = idempotency_result.unwrap()
+        cached_result = check_idempotency_key(conn, resource_key, "table_create", data.dedup_id, now=now)
+        if isinstance(cached_result, Failure):
+            return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to check idempotency key: {cached_result.failure()}"))
+        cached = cached_result.unwrap()
         if cached is not None:
-            return TableCreateResponse(**cached["data"])
-
+            return Success(TableCreateResponse(**cached["data"]))
     result = create_discussion_table(
         conn,
         data.question,
@@ -192,21 +166,16 @@ async def create_table_endpoint(
         board=data.board,
         now=now,
     )
-
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableIdSelectionError):
-            raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", f"Failed to generate table ID: {error.cause}")
+            return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to generate table ID: {error.cause}"))
         if isinstance(error, TableCreateError):
-            raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", f"Failed to create table: {error.cause}")
-        raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", f"Failed to create table: {error}")
-
+            return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to create table: {error.cause}"))
+        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to create table: {error}"))
     outcome = result.unwrap()
     table = outcome.table
-
-    # Log table creation
     log_table_create(logger, table.id, "rest:admin")
-
     response = TableCreateResponse(
         table_id=table.id,
         invite_code=outcome.invite_code,
@@ -227,21 +196,103 @@ async def create_table_endpoint(
         updated_at=table.updated_at,
     )
     if data.dedup_id is not None:
-        store_result = store_idempotency_key(
-            conn,
-            resource_key,
-            "table_create",
-            data.dedup_id,
-            {"data": response.model_dump(mode="json")},
-            now=now,
-        )
+        store_result = store_idempotency_key(conn, resource_key, "table_create", data.dedup_id, {"data": response.model_dump(mode="json")}, now=now)
         if isinstance(store_result, Failure):
-            raise_http_error(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "StorageError",
-                f"Failed to store idempotency key: {store_result.failure()}",
-            )
-    return response
+            return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to store idempotency key: {store_result.failure()}"))
+    return Success(response)
+
+
+def _list_tables_response(conn: sqlite3.Connection) -> Result[list[Table], HTTPException]:
+    """List tables or return an HTTP storage failure."""
+    result = list_tables(conn)
+    if isinstance(result, Failure):
+        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to list tables: {result.failure()}"))
+    return Success(result.unwrap())
+
+
+def _get_table_response(conn: sqlite3.Connection, table_id: str) -> Result[Table, HTTPException]:
+    """Fetch one table or return an HTTP lookup failure."""
+    result = get_table(conn, TableId(table_id))
+    if isinstance(result, Failure):
+        error = result.failure()
+        if isinstance(error, TableNotFoundError):
+            return Failure(_http_error(status.HTTP_404_NOT_FOUND, f"Table not found: {table_id}"))
+        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to get table: {error}"))
+    return Success(result.unwrap())
+
+
+def _update_table_response(
+    conn: sqlite3.Connection,
+    table_id: str,
+    data: TableUpdate,
+    expected_version: int,
+    now: datetime,
+) -> Result[Table, HTTPException]:
+    """Update a table with optimistic concurrency semantics."""
+    current_result = _get_table_response(conn, table_id)
+    if isinstance(current_result, Failure):
+        return Failure(current_result.failure())
+    if data.status != current_result.unwrap().status:
+        return Failure(_http_error(status.HTTP_400_BAD_REQUEST, "status changes are not allowed via PUT. Use POST /tables/{table_id}/control instead."))
+    result = update_table(conn=conn, table_id=TableId(table_id), update=data, expected_version=Version(expected_version), now=now)
+    if isinstance(result, Failure):
+        error = result.failure()
+        if isinstance(error, TableNotFoundError):
+            return Failure(_http_error(status.HTTP_404_NOT_FOUND, f"Table not found: {table_id}"))
+        if isinstance(error, VersionConflictError):
+            return Failure(_http_error(status.HTTP_409_CONFLICT, error.to_json()))
+        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to update table: {error}"))
+    table = result.unwrap()
+    log_table_update(logger, table.id, table.version, "rest:admin")
+    return Success(table)
+
+
+def _delete_table_response(conn: sqlite3.Connection, table_id: str) -> Result[DeleteResponse, HTTPException]:
+    """Delete a table and return the REST confirmation."""
+    result = delete_table(conn, TableId(table_id))
+    if isinstance(result, Failure):
+        error = result.failure()
+        if isinstance(error, TableNotFoundError):
+            return Failure(_http_error(status.HTTP_404_NOT_FOUND, f"Table not found: {table_id}"))
+        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to delete table: {error}"))
+    log_table_delete(logger, table_id, "rest:admin")
+    return Success(DeleteResponse(status="deleted", table_id=table_id))
+
+
+def _batch_delete_tables_response(
+    conn: sqlite3.Connection,
+    ids: list[str],
+) -> Result[BatchDeleteResponse, HTTPException]:
+    """Batch-delete tables and return all-or-nothing REST response."""
+    delete_result = delete_tables_batch(conn, ids)
+    if isinstance(delete_result, Failure):
+        failure = delete_result.failure()
+        if failure.status == "invalid_request":
+            return Failure(_http_error(status.HTTP_422_UNPROCESSABLE_ENTITY, failure.error or f"ids must contain 1 to {failure.max_batch_size} table IDs."))
+        if failure.status == "precondition_failed":
+            return Failure(_http_error(status.HTTP_409_CONFLICT, {"error": "BATCH_PRECONDITION_FAILED", "details": failure.rejection_details}))
+        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to batch delete tables: {failure.error}"))
+    deleted_ids = delete_result.unwrap().deleted_ids
+    log_batch_table_delete(logger, deleted_ids, "rest:admin")
+    return Success(BatchDeleteResponse(deleted_count=len(deleted_ids), failed=[], deleted_ids=deleted_ids))
+
+
+# =============================================================================
+# POST /tables - Create a new table (Admin required)
+# =============================================================================
+
+
+@router.post("", response_model=TableCreateResponse, status_code=status.HTTP_200_OK)
+async def create_table_endpoint(
+    data: TableCreateRequest,
+    _auth: None = Depends(verify_admin_token),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> TableCreateResponse:
+    """Create a new discussion table."""
+    result = _table_create_response(conn, data, datetime.now(UTC))
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()
 
 
 # =============================================================================
@@ -249,28 +300,14 @@ async def create_table_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.get("", response_model=list[Table])
 async def list_tables_endpoint(
     conn: sqlite3.Connection = Depends(get_db),
 ) -> list[Table]:
-    """List all tables.
-
-    Args:
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        List of all tables ordered by creation date (newest first).
-    """
-    result = list_tables(conn)
-
+    """List all tables."""
+    result = _list_tables_response(conn)
     if isinstance(result, Failure):
-        error = result.failure()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list tables: {error}",
-        )
-
+        raise result.failure()
     return result.unwrap()
 
 
@@ -279,38 +316,15 @@ async def list_tables_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.get("/{table_id}", response_model=Table)
 async def get_table_endpoint(
     table_id: str,
     conn: sqlite3.Connection = Depends(get_db),
 ) -> Table:
-    """Get a table by ID.
-
-    Args:
-        table_id: The table identifier.
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        The requested table.
-
-    Raises:
-        HTTPException: 404 if table not found.
-    """
-    result = get_table(conn, TableId(table_id))
-
+    """Get a table by ID."""
+    result = _get_table_response(conn, table_id)
     if isinstance(result, Failure):
-        error = result.failure()
-        if isinstance(error, TableNotFoundError):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Table not found: {table_id}",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get table: {error}",
-        )
-
+        raise result.failure()
     return result.unwrap()
 
 
@@ -319,7 +333,6 @@ async def get_table_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.put("/{table_id}", response_model=Table)
 async def update_table_endpoint(
     table_id: str,
@@ -328,101 +341,11 @@ async def update_table_endpoint(
     _auth: None = Depends(verify_admin_token),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> Table:
-    """Update a table with optimistic concurrency control.
-
-    Uses replace-only semantics: all updatable fields must be provided.
-    Requires admin authentication via Bearer token.
-
-    **Full Replace Semantics:**
-    - ALL fields are required (question, context, status)
-    - To clear context: provide `context: null`
-    - To keep context: provide the current context value
-    - Omitting a field will cause a 422 validation error
-
-    Note: Status changes are NOT allowed via this endpoint.
-    Use POST /tables/{table_id}/control for status changes.
-
-    Optimistic Concurrency:
-    - Client must provide expected_version (the version they last saw)
-    - Server checks current version matches expected_version
-    - On conflict, returns 409 Conflict with version details
-
-    Args:
-        table_id: The table identifier.
-        data: Full replacement data - ALL fields required.
-        expected_version: Version the client expects (optimistic concurrency).
-        _auth: Admin authentication (injected via dependency).
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        The updated table with incremented version.
-
-    Raises:
-        HTTPException: 400 if status change attempted.
-        HTTPException: 404 if table not found.
-        HTTPException: 409 if version conflict (optimistic concurrency).
-        HTTPException: 422 if required fields missing.
-        HTTPException: 500 if database operation fails.
-    """
-    # First, fetch the current table to check status
-    current_result = get_table(conn, TableId(table_id))
-
-    if isinstance(current_result, Failure):
-        error = current_result.failure()
-        if isinstance(error, TableNotFoundError):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Table not found: {table_id}",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get table: {error}",
-        )
-
-    current_table = current_result.unwrap()
-
-    # Note: Optimistic concurrency (expected_version) provides the actual consistency
-    # guarantee; this check is an early rejection hint only.
-    # Pre-flight check: status changes are not allowed via PUT
-    if data.status != current_table.status:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="status changes are not allowed via PUT. Use POST /tables/{table_id}/control instead.",
-        )
-
-    now = datetime.now(UTC)
-
-    result = update_table(
-        conn=conn,
-        table_id=TableId(table_id),
-        update=data,
-        expected_version=Version(expected_version),
-        now=now,
-    )
-
+    """Update a table with optimistic concurrency control."""
+    result = _update_table_response(conn, table_id, data, expected_version, datetime.now(UTC))
     if isinstance(result, Failure):
-        error = result.failure()
-        if isinstance(error, TableNotFoundError):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Table not found: {table_id}",
-            )
-        if isinstance(error, VersionConflictError):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=error.to_json(),
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update table: {error}",
-        )
-
-    table = result.unwrap()
-
-    # Log table update
-    log_table_update(logger, table.id, table.version, "rest:admin")
-
-    return table
+        raise result.failure()
+    return result.unwrap()
 
 
 # =============================================================================
@@ -430,47 +353,17 @@ async def update_table_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: tables.py create_table_endpoint POST route with docstrings, type hints, and error handling
 @router.delete("/{table_id}", response_model=DeleteResponse)
 async def delete_table_endpoint(
     table_id: str,
     _auth: None = Depends(verify_admin_token),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> DeleteResponse:
-    """Delete a table by ID.
-
-    Requires admin authentication via Bearer token.
-
-    Args:
-        table_id: The table identifier.
-        _auth: Admin authentication (injected via dependency).
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        Confirmation of deletion.
-
-    Raises:
-        HTTPException: 404 if table not found.
-        HTTPException: 500 if database operation fails.
-    """
-    result = delete_table(conn, TableId(table_id))
-
+    """Delete a table by ID."""
+    result = _delete_table_response(conn, table_id)
     if isinstance(result, Failure):
-        error = result.failure()
-        if isinstance(error, TableNotFoundError):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Table not found: {table_id}",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete table: {error}",
-        )
-
-    # Log table deletion
-    log_table_delete(logger, table_id, "rest:admin")
-
-    return DeleteResponse(status="deleted", table_id=table_id)
+        raise result.failure()
+    return result.unwrap()
 
 
 # =============================================================================
@@ -478,61 +371,14 @@ async def delete_table_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: FastAPI route with validation + cascade delete orchestration
 @router.post("/actions/batch-delete", response_model=BatchDeleteResponse)
 async def batch_delete_tables_endpoint(
     data: BatchDeleteRequest,
     _auth: None = Depends(verify_admin_token),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> BatchDeleteResponse:
-    """Batch delete tables with all-or-nothing semantics.
-
-    All requested tables must exist and be in CLOSED status.
-    If any table fails validation, the entire batch is rejected.
-
-    Cascade: deletes associated seats and sayings in a single transaction.
-
-    Requires admin authentication via Bearer token.
-
-    Args:
-        data: Batch delete request with table IDs.
-        _auth: Admin authentication (injected via dependency).
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        BatchDeleteResponse with deleted_ids on success.
-
-    Raises:
-        HTTPException: 401 if not authenticated.
-        HTTPException: 409 if any table is not closed or not found.
-        HTTPException: 422 if ids list is empty or exceeds limit.
-        HTTPException: 500 if database operation fails.
-    """
-    delete_result = delete_tables_batch(conn, data.ids)
-
-    if isinstance(delete_result, Failure):
-        failure = delete_result.failure()
-        if failure.status == "invalid_request":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=failure.error or f"ids must contain 1 to {failure.max_batch_size} table IDs.",
-            )
-        if failure.status == "precondition_failed":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "error": "BATCH_PRECONDITION_FAILED",
-                    "details": failure.rejection_details,
-                },
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to batch delete tables: {failure.error}",
-        )
-
-    deleted_ids = delete_result.unwrap().deleted_ids
-
-    # Log batch deletion
-    log_batch_table_delete(logger, deleted_ids, "rest:admin")
-
-    return BatchDeleteResponse(deleted_count=len(deleted_ids), failed=[], deleted_ids=deleted_ids)
+    """Batch delete tables with all-or-nothing semantics."""
+    result = _batch_delete_tables_response(conn, data.ids)
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()

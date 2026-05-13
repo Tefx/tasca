@@ -10,6 +10,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from returns.result import Failure
+
 # FastAPI is a required runtime dependency for the API server. We use conditional
 # imports to allow static analysis and doctest collection in environments where
 # it's not installed (e.g., during guard runs or in minimal test environments).
@@ -123,7 +125,8 @@ class MCPBearerAuthMiddleware:
         token = auth_header[7:]  # Remove "Bearer " prefix
 
         # Use constant-time comparison to prevent timing attacks
-        if not validate_bearer_token(token, settings.admin_token):
+        validation = validate_bearer_token(token, settings.admin_token)
+        if isinstance(validation, Failure) or not validation.unwrap():
             await self._send_401(scope, send, "Invalid or missing token")
             return
 
@@ -301,7 +304,7 @@ def create_app() -> FastAPI:
         app.mount("/assets", StaticFiles(directory=_web_dist / "assets"), name="web-assets")
 
         @app.get("/{full_path:path}", include_in_schema=False)
-        async def serve_spa(full_path: str) -> Response:  # @invar:allow shell_result: SPA fallback
+        async def serve_spa(full_path: str) -> Response:
             # Exclude API paths from SPA fallback - they should 404 if not found
             # Note: MCP paths are handled by the mounted MCP app, not SPA fallback
             if full_path.startswith("api/"):

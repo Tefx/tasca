@@ -12,6 +12,8 @@ Escape Hatch Convention (shell_result):
 import hmac
 from typing import TYPE_CHECKING
 
+from returns.result import Failure, Result, Success
+
 # FastAPI is a required runtime dependency for the API server. We use conditional
 # imports to allow static analysis and doctest collection in environments where
 # it's not installed (e.g., during guard runs or in minimal test environments).
@@ -35,9 +37,8 @@ else:
 from tasca.config import settings
 
 
-# @invar:allow shell_result: auth.py - HTTP auth returns bool, not Result[T, E]
 # @shell_orchestration: Co-located with FastAPI dependency to keep auth flow and failure semantics together
-def validate_bearer_token(token: str | None, expected: str | None) -> bool:
+def validate_bearer_token(token: str | None, expected: str | None) -> Result[bool, str]:
     """Compare a Bearer token against the expected value using constant-time comparison.
 
     Uses ``hmac.compare_digest`` to prevent timing attacks.
@@ -52,45 +53,46 @@ def validate_bearer_token(token: str | None, expected: str | None) -> bool:
 
     Examples:
         >>> validate_bearer_token("secret", "secret")
-        True
+        <Success: True>
         >>> validate_bearer_token("wrong", "secret")
-        False
+        <Success: False>
         >>> validate_bearer_token("", "secret")
-        False
+        <Success: False>
         >>> validate_bearer_token("secret", "")
-        False
+        <Success: False>
         >>> validate_bearer_token(None, "secret")
-        False
+        <Success: False>
     """
     if token is None or expected is None:
-        return False
+        return Success(False)
 
     normalized_token = token.strip()
     normalized_expected = expected.strip()
     if not normalized_token or not normalized_expected:
-        return False
+        return Success(False)
 
-    return hmac.compare_digest(normalized_token, normalized_expected)
+    return Success(hmac.compare_digest(normalized_token, normalized_expected))
 
 
-# @invar:allow shell_result: auth.py - FastAPI security scheme instantiation returns HTTPBearer, not Result
-def _get_bearer_scheme() -> "HTTPBearer":
+def _get_bearer_scheme() -> Result["HTTPBearer", str]:
     """Lazy initialization of HTTPBearer to avoid import-time errors without fastapi."""
-    return HTTPBearer(
+    return Success(HTTPBearer(
         scheme_name="bearerAuth",
         description="Admin Bearer token authentication",
         auto_error=False,  # verify_admin_token shapes all auth failures consistently
-    )
+    ))
 
 
-# @invar:allow shell_result: auth.py - FastAPI security scheme instantiation returns HTTPBearer, not Result
 # Exposed as a callable for FastAPI Depends() - initializes on first use
-def bearer_scheme() -> "HTTPBearer":
+def bearer_scheme() -> Result["HTTPBearer", str]:
     """Get the HTTPBearer security scheme, initializing if needed."""
     global _bearer_scheme
     if _bearer_scheme is None:
-        _bearer_scheme = _get_bearer_scheme()
-    return _bearer_scheme
+        scheme_result = _get_bearer_scheme()
+        if isinstance(scheme_result, Failure):
+            return Failure(scheme_result.failure())
+        _bearer_scheme = scheme_result.unwrap()
+    return Success(_bearer_scheme)
 
 
 # Module-level sentinel - initialized lazily
@@ -100,7 +102,10 @@ _bearer_scheme: "HTTPBearer | None" = None
 # Source: Route dependencies use Depends(verify_admin_token), so this function
 # must declare how credentials are injected from Authorization header.
 if Depends is not None:
-    _credentials_dependency = Depends(bearer_scheme())
+    _scheme_result = bearer_scheme()
+    if isinstance(_scheme_result, Failure):
+        raise RuntimeError(_scheme_result.failure())
+    _credentials_dependency = Depends(_scheme_result.unwrap())
 else:
     _credentials_dependency = None
 
@@ -140,7 +145,8 @@ async def verify_admin_token(
     """
     # Validate token using constant-time comparison (never log or print the token value)
     token = credentials.credentials if credentials else None
-    if not validate_bearer_token(token, settings.admin_token):
+    validation = validate_bearer_token(token, settings.admin_token)
+    if isinstance(validation, Failure) or not validation.unwrap():
         from tasca.shell.api.errors import error_envelope
 
         raise HTTPException(

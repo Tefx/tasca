@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
-from returns.result import Failure
+from returns.result import Failure, Result, Success
 
 from tasca.core.domain.seat import Seat, SeatId
 from tasca.core.services.seat_service import (
@@ -71,17 +71,17 @@ class SeatListResponse(BaseModel):
 # =============================================================================
 
 
-# @invar:allow shell_result: Thin adapter - retrieves TTL from settings (env vars)
 # @shell_orchestration: Converts global settings to TTL value for use in routes
-def _get_seat_ttl() -> int:
+def _get_seat_ttl() -> Result[int, str]:
     """Get seat TTL from application settings."""
     # TODO: Make TTL configurable via settings
-    return DEFAULT_SEAT_TTL_SECONDS
+    return Success(DEFAULT_SEAT_TTL_SECONDS)
 
 
-# @invar:allow shell_result: _update_heartbeat helper raises HTTPException directly (no Result needed) in seats.py
 # @shell_orchestration: Database operation + HTTP error mapping
-def _update_heartbeat(conn: sqlite3.Connection, seat_id: str, now: datetime) -> Seat:
+def _update_heartbeat(
+    conn: sqlite3.Connection, seat_id: str, now: datetime
+) -> Result[Seat, HTTPException]:
     """Update seat heartbeat.
 
     Raises:
@@ -92,15 +92,16 @@ def _update_heartbeat(conn: sqlite3.Connection, seat_id: str, now: datetime) -> 
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, SeatNotFoundError):
-            raise HTTPException(status_code=404, detail=f"Seat not found: {seat_id}")
-        raise HTTPException(status_code=500, detail=f"Failed to update heartbeat: {error}")
+            return Failure(HTTPException(status_code=404, detail=f"Seat not found: {seat_id}"))
+        return Failure(HTTPException(status_code=500, detail=f"Failed to update heartbeat: {error}"))
 
-    return result.unwrap()
+    return Success(result.unwrap())
 
 
-# @invar:allow shell_result: _update_heartbeat helper raises HTTPException directly (no Result needed) in seats.py
 # @shell_orchestration: Database operation + HTTP error mapping
-def _list_seats_for_table(conn: sqlite3.Connection, table_id: str) -> list[Seat]:
+def _list_seats_for_table(
+    conn: sqlite3.Connection, table_id: str
+) -> Result[list[Seat], HTTPException]:
     """List all seats for a table.
 
     Raises:
@@ -109,9 +110,46 @@ def _list_seats_for_table(conn: sqlite3.Connection, table_id: str) -> list[Seat]
     result = find_seats_by_table(conn, table_id)
 
     if isinstance(result, Failure):
-        raise HTTPException(status_code=500, detail=f"Failed to list seats: {result.failure()}")
+        return Failure(HTTPException(status_code=500, detail=f"Failed to list seats: {result.failure()}"))
 
-    return result.unwrap()
+    return Success(result.unwrap())
+
+
+def _heartbeat_response(
+    conn: sqlite3.Connection,
+    seat_id: str,
+    now: datetime,
+) -> Result[HeartbeatResponse, HTTPException]:
+    """Update heartbeat and build the REST heartbeat response."""
+    seat_result = _update_heartbeat(conn, seat_id, now)
+    if isinstance(seat_result, Failure):
+        return Failure(seat_result.failure())
+    ttl_result = _get_seat_ttl()
+    if isinstance(ttl_result, Failure):
+        return Failure(HTTPException(status_code=500, detail=ttl_result.failure()))
+    seat = seat_result.unwrap()
+    expires_at = calculate_expiry_time(seat.last_heartbeat, ttl_result.unwrap())
+    return Success(HeartbeatResponse(seat=seat, expires_at=expires_at))
+
+
+def _seat_list_response(
+    conn: sqlite3.Connection,
+    table_id: str,
+    active_only: bool,
+    now: datetime,
+) -> Result[SeatListResponse, HTTPException]:
+    """List seats and compute the active seat count."""
+    ttl_result = _get_seat_ttl()
+    if isinstance(ttl_result, Failure):
+        return Failure(HTTPException(status_code=500, detail=ttl_result.failure()))
+    seats_result = _list_seats_for_table(conn, table_id)
+    if isinstance(seats_result, Failure):
+        return Failure(seats_result.failure())
+    ttl = ttl_result.unwrap()
+    all_seats = seats_result.unwrap()
+    seats = filter_active_seats(all_seats, ttl, now) if active_only else all_seats
+    active_count = len(filter_active_seats(all_seats, ttl, now))
+    return Success(SeatListResponse(seats=seats, active_count=active_count))
 
 
 # =============================================================================
@@ -119,7 +157,6 @@ def _list_seats_for_table(conn: sqlite3.Connection, table_id: str) -> list[Seat]
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: seats.py endpoints - heartbeat and list endpoints with docstrings, type hints, and error handling
 @router.post(
     "/{seat_id}/heartbeat",
     response_model=HeartbeatResponse,
@@ -131,10 +168,10 @@ async def heartbeat_seat_endpoint(
     conn: sqlite3.Connection = Depends(get_db),
 ) -> HeartbeatResponse:
     """Update a seat's heartbeat. Returns updated seat with expires_at."""
-    now = datetime.now(UTC)
-    seat = _update_heartbeat(conn, seat_id, now)
-    expires_at = calculate_expiry_time(seat.last_heartbeat, _get_seat_ttl())
-    return HeartbeatResponse(seat=seat, expires_at=expires_at)
+    result = _heartbeat_response(conn, seat_id, datetime.now(UTC))
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()
 
 
 # =============================================================================
@@ -142,7 +179,6 @@ async def heartbeat_seat_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: seats.py endpoints - heartbeat and list endpoints with docstrings, type hints, and error handling
 @router.get("", response_model=SeatListResponse)
 async def list_seats_endpoint(
     table_id: str,
@@ -150,14 +186,7 @@ async def list_seats_endpoint(
     conn: sqlite3.Connection = Depends(get_db),
 ) -> SeatListResponse:
     """List seats for a table, optionally filtering expired seats."""
-    now = datetime.now(UTC)
-    ttl = _get_seat_ttl()
-    seats = _list_seats_for_table(conn, table_id)
-
-    if active_only:
-        seats = filter_active_seats(seats, ttl, now)
-
-    all_seats = _list_seats_for_table(conn, table_id)
-    active_count = len(filter_active_seats(all_seats, ttl, now))
-
-    return SeatListResponse(seats=seats, active_count=active_count)
+    result = _seat_list_response(conn, table_id, active_only, datetime.now(UTC))
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()

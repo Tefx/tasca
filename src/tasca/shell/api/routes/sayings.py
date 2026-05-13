@@ -14,7 +14,7 @@ import sqlite3
 import time
 
 from pydantic import BaseModel, Field
-from returns.result import Failure
+from returns.result import Failure, Result, Success
 
 from tasca.config import settings
 from tasca.core.domain.saying import Saying
@@ -111,9 +111,8 @@ class LimitErrorResponse(BaseModel):
 # =============================================================================
 
 
-# @invar:allow shell_result: Thin adapter - retrieves config from settings (env vars)
 # @shell_orchestration: Converts global settings to LimitsConfig for use in routes
-def _get_limits_config() -> LimitsConfig:
+def _get_limits_config() -> Result[LimitsConfig, str]:
     """Get limits configuration from application settings.
 
     Returns:
@@ -121,18 +120,17 @@ def _get_limits_config() -> LimitsConfig:
     """
     config = settings_to_limits_config(settings)
     if config.max_content_length is None:
-        return LimitsConfig(
+        return Success(LimitsConfig(
             max_sayings_per_table=config.max_sayings_per_table,
             max_content_length=65536,
             max_bytes_per_table=config.max_bytes_per_table,
             max_mentions_per_saying=config.max_mentions_per_saying,
-        )
-    return config
+        ))
+    return Success(config)
 
 
-# @invar:allow shell_result: _get_table_or_404 helper raises HTTPException directly (no Result needed)
 # @shell_orchestration: Database lookup + HTTP error mapping
-def _get_table_or_404(conn: sqlite3.Connection, table_id: str) -> Table:
+def _get_table_or_404(conn: sqlite3.Connection, table_id: str) -> Result[Table, HTTPException]:
     """Get a table by ID or raise 404.
 
     Args:
@@ -150,19 +148,88 @@ def _get_table_or_404(conn: sqlite3.Connection, table_id: str) -> Table:
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableNotFoundError):
-            raise HTTPException(
+            return Failure(HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Table not found: {table_id}",
-            )
-        raise HTTPException(
+            ))
+        return Failure(HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get table: {error}",
-        )
+        ))
 
-    return result.unwrap()
+    return Success(result.unwrap())
 
 
-# @invar:allow shell_result: Maps service Result failures into existing HTTP response shapes.
+def _append_saying_response(
+    conn: sqlite3.Connection,
+    table_id: str,
+    data: SayingCreate,
+) -> Result[Saying, HTTPException]:
+    """Append a saying and return either the created saying or HTTP failure."""
+    limits_result = _get_limits_config()
+    if isinstance(limits_result, Failure):
+        return Failure(HTTPException(status_code=500, detail=limits_result.failure()))
+    speaker_kind = "agent" if data.patron_id is not None else "human"
+    result = append_saying_operation(
+        conn,
+        table_id=table_id,
+        content=data.content,
+        speaker_kind=speaker_kind,
+        patron_id=data.patron_id,
+        speaker_name=data.speaker_name,
+        limits=limits_result.unwrap(),
+    )
+    if isinstance(result, Failure):
+        try:
+            _raise_table_say_failure(result.failure())
+        except HTTPException as exc:
+            return Failure(exc)
+    saying = result.unwrap().saying
+    log_say(
+        logger,
+        table_id=saying.table_id,
+        sequence=saying.sequence,
+        speaker_kind=saying.speaker.kind.value,
+        speaker_name=saying.speaker.name,
+        patron_id=saying.speaker.patron_id,
+    )
+    return Success(saying)
+
+
+def _list_sayings_response(
+    conn: sqlite3.Connection,
+    table_id: str,
+    since_sequence: int,
+    limit: int,
+) -> Result[SayingListResponse, HTTPException]:
+    """List sayings and calculate last-seen next_sequence semantics."""
+    table_result = _get_table_or_404(conn, table_id)
+    if isinstance(table_result, Failure):
+        return Failure(table_result.failure())
+    max_seq_result = get_table_max_sequence(conn, table_id)
+    if isinstance(max_seq_result, Failure):
+        return Failure(HTTPException(status_code=500, detail=f"Failed to get table max sequence: {max_seq_result.failure()}"))
+    result = list_sayings_by_table(conn, table_id, since_sequence, limit)
+    if isinstance(result, Failure):
+        return Failure(HTTPException(status_code=500, detail=f"Failed to list sayings: {result.failure()}"))
+    sayings = result.unwrap()
+    next_sequence = max(s.sequence for s in sayings) if sayings else max_seq_result.unwrap()
+    return Success(SayingListResponse(sayings=sayings, next_sequence=next_sequence))
+
+
+def _wait_timeout_response(
+    conn: sqlite3.Connection,
+    table_id: str,
+    since_sequence: int,
+) -> Result[WaitResponse, HTTPException]:
+    """Build the empty timeout response for a wait request."""
+    max_seq_result = get_table_max_sequence(conn, table_id)
+    if isinstance(max_seq_result, Failure):
+        return Failure(HTTPException(status_code=500, detail=f"Failed to get table max sequence: {max_seq_result.failure()}"))
+    log_wait_timeout(logger, table_id, since_sequence)
+    return Success(WaitResponse(sayings=[], next_sequence=max_seq_result.unwrap(), timeout=True))
+
+
 # @shell_orchestration: Transport-local HTTP status/detail mapping only.
 # @shell_complexity: Maps each shared table_say failure family to public REST status/code.
 def _raise_table_say_failure(error: TableSayError) -> None:
@@ -198,7 +265,6 @@ def _raise_table_say_failure(error: TableSayError) -> None:
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: sayings.py append_saying_endpoint POST route with docstrings, type hints, and error handling
 @router.post("", response_model=Saying, status_code=status.HTTP_201_CREATED)
 async def append_saying_endpoint(
     table_id: str,
@@ -206,57 +272,11 @@ async def append_saying_endpoint(
     _auth: None = Depends(verify_admin_token),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> Saying:
-    """Append a new saying to a table.
-
-    Requires admin authentication via Bearer token.
-
-    Creates a new saying with automatically allocated sequence number.
-    Enforces server-side limits (content length, history count, bytes, mentions).
-    Enforces state machine guard: only OPEN or PAUSED tables can have sayings added.
-
-    Args:
-        table_id: The table identifier.
-        data: Saying creation data (speaker_name, content, optional patron_id).
-        _auth: Admin authentication (injected via dependency).
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        The created saying with assigned id and sequence.
-
-    Raises:
-        HTTPException: 401 if missing or invalid admin token.
-        HTTPException: 404 if table not found.
-        HTTPException: 403 if table state doesn't allow sayings.
-        HTTPException: 400 if limits exceeded.
-        HTTPException: 500 if database operation fails.
-    """
-    speaker_kind = "agent" if data.patron_id is not None else "human"
-    result = append_saying_operation(
-        conn,
-        table_id=table_id,
-        content=data.content,
-        speaker_kind=speaker_kind,
-        patron_id=data.patron_id,
-        speaker_name=data.speaker_name,
-        limits=_get_limits_config(),
-    )
-
+    """Append a new saying to a table."""
+    result = _append_saying_response(conn, table_id, data)
     if isinstance(result, Failure):
-        _raise_table_say_failure(result.failure())
-
-    saying = result.unwrap().saying
-
-    # Log saying append
-    log_say(
-        logger,
-        table_id=saying.table_id,
-        sequence=saying.sequence,
-        speaker_kind=saying.speaker.kind.value,
-        speaker_name=saying.speaker.name,
-        patron_id=saying.speaker.patron_id,
-    )
-
-    return saying
+        raise result.failure()
+    return result.unwrap()
 
 
 # =============================================================================
@@ -264,7 +284,6 @@ async def append_saying_endpoint(
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: sayings.py list_sayings_endpoint GET route with docstrings, type hints, and error handling
 @router.get("", response_model=SayingListResponse)
 async def list_sayings_endpoint(
     table_id: str,
@@ -276,68 +295,11 @@ async def list_sayings_endpoint(
     limit: int = Query(default=50, ge=1, le=200, description="Max sayings to return"),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> SayingListResponse:
-    """List sayings for a table.
-
-    Returns sayings ordered by sequence (ascending), with next_sequence
-    for the client to use when polling for new sayings.
-
-    next_sequence rules (last-seen semantics):
-    - If sayings returned: next_sequence = max(sequence in results)
-    - If no sayings in table: next_sequence = -1
-    - After filtering by since_sequence, if results empty but table has sayings:
-      next_sequence = max(sequence in table)
-    Pass next_sequence as since_sequence; server returns sequence > since_sequence.
-
-    Args:
-        table_id: The table identifier.
-        since_sequence: Get sayings with sequence > this value (-1 for all).
-        limit: Maximum number of sayings to return (1-200, default 50).
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        SayingListResponse with sayings and next_sequence.
-
-    Raises:
-        HTTPException: 404 if table not found.
-        HTTPException: 500 if database operation fails.
-    """
-    # Validate table exists
-    _get_table_or_404(conn, table_id)
-
-    # Get max sequence for the table (for next_sequence calculation)
-    max_seq_result = get_table_max_sequence(conn, table_id)
-    if isinstance(max_seq_result, Failure):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get table max sequence: {max_seq_result.failure()}",
-        )
-    table_max_sequence = max_seq_result.unwrap()
-
-    # List sayings
-    result = list_sayings_by_table(conn, table_id, since_sequence, limit)
-
+    """List sayings for a table."""
+    result = _list_sayings_response(conn, table_id, since_sequence, limit)
     if isinstance(result, Failure):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list sayings: {result.failure()}",
-        )
-
-    sayings = result.unwrap()
-
-    # next_sequence = last sequence seen (NOT +1).
-    # Clients pass it back as since_sequence; server returns sequence > since_sequence.
-    # So next_sequence must equal the last seen sequence for the next call to
-    # catch sequence (last+1). Using last+1 would require sequence > last+1,
-    # which skips the very next message.
-    if sayings:
-        next_sequence = max(s.sequence for s in sayings)
-    else:
-        # table_max_sequence is -1 when truly empty → client polls since_sequence=-1
-        # (sequence > -1 = all sayings, catches sequence=0).
-        # Otherwise equals the max sequence already seen by the client.
-        next_sequence = table_max_sequence
-
-    return SayingListResponse(sayings=sayings, next_sequence=next_sequence)
+        raise result.failure()
+    return result.unwrap()
 
 
 # =============================================================================
@@ -350,7 +312,6 @@ DEFAULT_WAIT_TIMEOUT = 30.0
 POLL_INTERVAL = 0.5
 
 
-# @invar:allow entry_point_too_thick: sayings.py wait_for_sayings_endpoint long-poll route with docstrings, type hints, and error handling
 @router.get("/wait", response_model=WaitResponse)
 async def wait_for_sayings_endpoint(
     table_id: str,
@@ -367,35 +328,10 @@ async def wait_for_sayings_endpoint(
     ),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> WaitResponse:
-    """Long-poll wait for new sayings.
-
-    Blocks until a new saying (sequence > since_sequence) is available,
-    or until timeout. Clients should use next_sequence from previous
-    list/wait response as since_sequence.
-
-    Args:
-        table_id: The table identifier.
-        since_sequence: Wait for sayings with sequence > this value.
-        timeout: Max wait time in seconds (0-120, default 30).
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        WaitResponse with:
-        - sayings: New sayings (empty if timed out)
-        - next_sequence: Updated next_sequence value
-        - timeout: True if wait timed out without new sayings
-
-    Raises:
-        HTTPException: 404 if table not found.
-        HTTPException: 500 if database operation fails.
-
-    Note:
-        This implementation uses simple polling with POLL_INTERVAL.
-        For higher scale, consider using SQLite NOTIFY/LISTEN or
-        a message queue for real-time notifications.
-    """
-    # Validate table exists
-    _get_table_or_404(conn, table_id)
+    """Long-poll wait for new sayings."""
+    table_result = _get_table_or_404(conn, table_id)
+    if isinstance(table_result, Failure):
+        raise table_result.failure()
 
     start_time = time.monotonic()
     end_time = start_time + timeout
@@ -438,20 +374,7 @@ async def wait_for_sayings_endpoint(
         if remaining > 0:
             await asyncio.sleep(min(POLL_INTERVAL, remaining))
 
-    # Timeout - return empty with current next_sequence
-    max_seq_result = get_table_max_sequence(conn, table_id)
-    if isinstance(max_seq_result, Failure):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get table max sequence: {max_seq_result.failure()}",
-        )
-    table_max_sequence = max_seq_result.unwrap()
-
-    # Log wait timeout
-    log_wait_timeout(logger, table_id, since_sequence)
-
-    return WaitResponse(
-        sayings=[],
-        next_sequence=table_max_sequence,
-        timeout=True,
-    )
+    timeout_result = _wait_timeout_response(conn, table_id, since_sequence)
+    if isinstance(timeout_result, Failure):
+        raise timeout_result.failure()
+    return timeout_result.unwrap()

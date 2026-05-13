@@ -10,12 +10,12 @@ import sqlite3
 from datetime import datetime
 
 from pydantic import BaseModel
-from returns.result import Failure
+from returns.result import Failure, Result, Success
 
 from tasca.core.domain.patron import PatronId
 from tasca.shell.api.deps import get_db
-from tasca.shell.api.errors import raise_http_error
-from tasca.shell.api.fastapi_compat import APIRouter, Depends, status
+from tasca.shell.api.errors import error_envelope, raise_http_error
+from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, status
 from tasca.shell.services.operations.patron_registration import (
     PatronCreateError,
     PatronIdempotencyError,
@@ -65,12 +65,13 @@ class PatronRegisterRequest(BaseModel):
 # =============================================================================
 
 
-# @invar:allow shell_result: FastAPI response model adapter, not reusable domain logic.
 # @shell_orchestration: HTTP response shaping for shared patron registration outcome.
-def _registration_outcome_to_response(outcome: PatronRegistrationOutcome) -> PatronRegisterResponse:
+def _registration_outcome_to_response(
+    outcome: PatronRegistrationOutcome,
+) -> Result[PatronRegisterResponse, str]:
     """Render a shared patron registration outcome as the REST response model."""
     patron = outcome.patron
-    return PatronRegisterResponse(
+    return Success(PatronRegisterResponse(
         patron_id=patron.id,
         display_name=patron.name,
         alias=patron.alias,
@@ -81,7 +82,7 @@ def _registration_outcome_to_response(outcome: PatronRegistrationOutcome) -> Pat
         kind=patron.kind,
         created_at=patron.created_at,
         is_new=outcome.is_new,
-    )
+    ))
 
 
 # @shell_orchestration: HTTP-layer mapping from shared operation failures to FastAPI exceptions.
@@ -94,34 +95,34 @@ def _raise_registration_error(error: object) -> None:
     raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", f"Failed to create patron: {error}")
 
 
-# @invar:allow entry_point_too_thick: patrons.py register_patron_endpoint POST route with docstrings, type hints, and error handling
-@router.post("", response_model=PatronRegisterResponse, status_code=status.HTTP_200_OK)
-async def register_patron_endpoint(
+def _registration_error_to_http(error: object) -> Result[HTTPException, str]:
+    """Map shared patron registration failures onto REST HTTP exceptions."""
+    if isinstance(error, PatronLookupError):
+        message = f"Failed to check for existing patron: {error.cause}"
+    elif isinstance(error, (PatronCreateError, PatronIdempotencyError)):
+        message = f"Failed to create patron: {error.cause}"
+    else:
+        message = f"Failed to create patron: {error}"
+    return Success(HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=error_envelope("StorageError", message),
+    ))
+
+
+def _register_patron_response(
+    conn: sqlite3.Connection,
     data: PatronRegisterRequest,
-    conn: sqlite3.Connection = Depends(get_db),
-) -> PatronRegisterResponse:
-    """Register a new patron with deduplication.
-
-    Deduplication is based on the patron display_name. If a patron with the same
-    display_name already exists, the existing patron is returned with is_new=False.
-
-    Args:
-        data: Patron creation data with display_name and optional kind.
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        The created or existing patron with is_new flag.
-
-    Raises:
-        HTTPException: 500 if database operation fails.
-    """
+) -> Result[PatronRegisterResponse, HTTPException]:
+    """Run patron registration and return the REST response model."""
     resolved_name = data.display_name or data.name
     if resolved_name is None:
-        raise_http_error(
-            status.HTTP_400_BAD_REQUEST,
-            "InvalidRequest",
-            "display_name (or name for backward compatibility) is required",
-        )
+        return Failure(HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_envelope(
+                "InvalidRequest",
+                "display_name (or name for backward compatibility) is required",
+            ),
+        ))
     result = register_patron(
         conn,
         resolved_name,
@@ -132,44 +133,34 @@ async def register_patron_endpoint(
         dedup_id=data.dedup_id,
     )
     if isinstance(result, Failure):
-        _raise_registration_error(result.failure())
-    return _registration_outcome_to_response(result.unwrap())
+        mapped = _registration_error_to_http(result.failure())
+        if isinstance(mapped, Failure):
+            return Failure(HTTPException(status_code=500, detail=mapped.failure()))
+        return Failure(mapped.unwrap())
+    return _registration_outcome_to_response(result.unwrap()).alt(
+        lambda error: HTTPException(status_code=500, detail=error)
+    )
 
 
-# =============================================================================
-# GET /patrons/{patron_id} - Get a patron by ID
-# =============================================================================
-
-
-# @invar:allow entry_point_too_thick: patrons.py get_patron_endpoint GET route with docstrings, type hints, and error handling
-@router.get("/{patron_id}")
-async def get_patron_endpoint(
+def _get_patron_response(
+    conn: sqlite3.Connection,
     patron_id: str,
-    conn: sqlite3.Connection = Depends(get_db),
-) -> dict[str, object]:
-    """Get a patron by ID.
-
-    Args:
-        patron_id: The patron identifier.
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        The requested patron.
-
-    Raises:
-        HTTPException: 404 if patron not found.
-        HTTPException: 500 if database operation fails.
-    """
+) -> Result[dict[str, object], HTTPException]:
+    """Fetch a patron and render the legacy REST response shape."""
     result = get_patron(conn, PatronId(patron_id))
-
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, PatronNotFoundError):
-            raise_http_error(status.HTTP_404_NOT_FOUND, "PatronNotFound", f"Patron not found: {patron_id}")
-        raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", f"Failed to get patron: {error}")
-
+            return Failure(HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_envelope("PatronNotFound", f"Patron not found: {patron_id}"),
+            ))
+        return Failure(HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_envelope("StorageError", f"Failed to get patron: {error}"),
+        ))
     patron = result.unwrap()
-    return {
+    return Success({
         "patron": {
             "patron_id": patron.id,
             "display_name": patron.name,
@@ -184,4 +175,33 @@ async def get_patron_endpoint(
         "name": patron.name,
         "kind": patron.kind,
         "created_at": patron.created_at,
-    }
+    })
+
+
+@router.post("", response_model=PatronRegisterResponse, status_code=status.HTTP_200_OK)
+async def register_patron_endpoint(
+    data: PatronRegisterRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+) -> PatronRegisterResponse:
+    """Register a new patron with deduplication."""
+    result = _register_patron_response(conn, data)
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()
+
+
+# =============================================================================
+# GET /patrons/{patron_id} - Get a patron by ID
+# =============================================================================
+
+
+@router.get("/{patron_id}")
+async def get_patron_endpoint(
+    patron_id: str,
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict[str, object]:
+    """Get a patron by ID."""
+    result = _get_patron_response(conn, patron_id)
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()

@@ -50,11 +50,6 @@ router.include_router(tables_control.router)
 logger = get_logger(__name__)
 
 
-def _http_error(status_code: int, detail: object) -> HTTPException:
-    """Build an HTTPException for Result-returning route helpers."""
-    return HTTPException(status_code=status_code, detail=detail)
-
-
 # =============================================================================
 # Response Models
 # =============================================================================
@@ -145,16 +140,16 @@ def _table_create_response(
     """Create a table and return the REST response model."""
     if data.title is None and data.question is None:
         return Failure(
-            _http_error(
-                status.HTTP_400_BAD_REQUEST,
-                error_envelope("InvalidRequest", "Either title or question is required"),
+            HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_envelope("InvalidRequest", "Either title or question is required"),
             )
         )
     resource_key = "table_create"
     if data.dedup_id is not None:
         cached_result = check_idempotency_key(conn, resource_key, "table_create", data.dedup_id, now=now)
         if isinstance(cached_result, Failure):
-            return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to check idempotency key: {cached_result.failure()}"))
+            return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to check idempotency key: {cached_result.failure()}"))
         cached = cached_result.unwrap()
         if cached is not None:
             return Success(TableCreateResponse(**cached["data"]))
@@ -174,10 +169,10 @@ def _table_create_response(
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableIdSelectionError):
-            return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to generate table ID: {error.cause}"))
+            return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to generate table ID: {error.cause}"))
         if isinstance(error, TableCreateError):
-            return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to create table: {error.cause}"))
-        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to create table: {error}"))
+            return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create table: {error.cause}"))
+        return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create table: {error}"))
     outcome = result.unwrap()
     table = outcome.table
     log_table_create(logger, table.id, "rest:admin")
@@ -203,7 +198,7 @@ def _table_create_response(
     if data.dedup_id is not None:
         store_result = store_idempotency_key(conn, resource_key, "table_create", data.dedup_id, {"data": response.model_dump(mode="json")}, now=now)
         if isinstance(store_result, Failure):
-            return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to store idempotency key: {store_result.failure()}"))
+            return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to store idempotency key: {store_result.failure()}"))
     return Success(response)
 
 
@@ -211,7 +206,7 @@ def _list_tables_response(conn: sqlite3.Connection) -> Result[list[Table], HTTPE
     """List tables or return an HTTP storage failure."""
     result = list_tables(conn)
     if isinstance(result, Failure):
-        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to list tables: {result.failure()}"))
+        return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to list tables: {result.failure()}"))
     return Success(result.unwrap())
 
 
@@ -221,8 +216,8 @@ def _get_table_response(conn: sqlite3.Connection, table_id: str) -> Result[Table
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableNotFoundError):
-            return Failure(_http_error(status.HTTP_404_NOT_FOUND, f"Table not found: {table_id}"))
-        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to get table: {error}"))
+            return Failure(HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Table not found: {table_id}"))
+        return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get table: {error}"))
     return Success(result.unwrap())
 
 
@@ -238,15 +233,15 @@ def _update_table_response(
     if isinstance(current_result, Failure):
         return Failure(current_result.failure())
     if data.status != current_result.unwrap().status:
-        return Failure(_http_error(status.HTTP_400_BAD_REQUEST, "status changes are not allowed via PUT. Use POST /tables/{table_id}/control instead."))
+        return Failure(HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status changes are not allowed via PUT. Use POST /tables/{table_id}/control instead."))
     result = update_table(conn=conn, table_id=TableId(table_id), update=data, expected_version=Version(expected_version), now=now)
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableNotFoundError):
-            return Failure(_http_error(status.HTTP_404_NOT_FOUND, f"Table not found: {table_id}"))
+            return Failure(HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Table not found: {table_id}"))
         if isinstance(error, VersionConflictError):
-            return Failure(_http_error(status.HTTP_409_CONFLICT, error.to_json()))
-        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to update table: {error}"))
+            return Failure(HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error.to_json()))
+        return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update table: {error}"))
     table = result.unwrap()
     log_table_update(logger, table.id, table.version, "rest:admin")
     return Success(table)
@@ -258,8 +253,8 @@ def _delete_table_response(conn: sqlite3.Connection, table_id: str) -> Result[De
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableNotFoundError):
-            return Failure(_http_error(status.HTTP_404_NOT_FOUND, f"Table not found: {table_id}"))
-        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to delete table: {error}"))
+            return Failure(HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Table not found: {table_id}"))
+        return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete table: {error}"))
     log_table_delete(logger, table_id, "rest:admin")
     return Success(DeleteResponse(status="deleted", table_id=table_id))
 
@@ -273,10 +268,10 @@ def _batch_delete_tables_response(
     if isinstance(delete_result, Failure):
         failure = delete_result.failure()
         if failure.status == "invalid_request":
-            return Failure(_http_error(status.HTTP_422_UNPROCESSABLE_ENTITY, failure.error or f"ids must contain 1 to {failure.max_batch_size} table IDs."))
+            return Failure(HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=failure.error or f"ids must contain 1 to {failure.max_batch_size} table IDs."))
         if failure.status == "precondition_failed":
-            return Failure(_http_error(status.HTTP_409_CONFLICT, {"error": "BATCH_PRECONDITION_FAILED", "details": failure.rejection_details}))
-        return Failure(_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to batch delete tables: {failure.error}"))
+            return Failure(HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": "BATCH_PRECONDITION_FAILED", "details": failure.rejection_details}))
+        return Failure(HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to batch delete tables: {failure.error}"))
     deleted_ids = delete_result.unwrap().deleted_ids
     log_batch_table_delete(logger, deleted_ids, "rest:admin")
     return Success(BatchDeleteResponse(deleted_count=len(deleted_ids), failed=[], deleted_ids=deleted_ids))

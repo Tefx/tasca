@@ -16,7 +16,7 @@ from tasca.config import settings
 from tasca.shell.api.app import create_app
 
 # CLI subcommands that should be delegated to the CLI handler
-CLI_COMMANDS = {"new", "mcp", "version", "skills"}
+CLI_COMMANDS = {"new", "mcp", "version", "export", "skills"}
 
 
 def main() -> None:
@@ -31,7 +31,8 @@ def main() -> None:
     if argv and argv[0] in CLI_COMMANDS:
         from tasca.cli import main as cli_main
 
-        sys.exit(cli_main(argv))
+        cli_result = cli_main(argv)
+        sys.exit(cli_result.value_or(1))
 
     # Parse flags for server mode
     verbose = "-v" in argv or "--verbose" in argv
@@ -65,7 +66,8 @@ def main() -> None:
     # Start the server (default behavior when no command)
     app = create_app()
 
-    lan_ip = get_lan_ip()
+    lan_ip_result = get_lan_ip()
+    lan_ip = lan_ip_result.value_or("localhost")
     port = settings.api_port
     token = settings.admin_token
 

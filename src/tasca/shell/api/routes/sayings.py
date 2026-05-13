@@ -230,6 +230,56 @@ def _wait_timeout_response(
     return Success(WaitResponse(sayings=[], next_sequence=max_seq_result.unwrap(), timeout=True))
 
 
+def _new_sayings_response(
+    conn: sqlite3.Connection,
+    table_id: str,
+    since_sequence: int,
+) -> Result[WaitResponse, HTTPException]:
+    """Return all currently available sayings newer than ``since_sequence``."""
+    full_result = list_sayings_by_table(conn, table_id, since_sequence, limit=100)
+    if isinstance(full_result, Failure):
+        return Failure(HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list sayings: {full_result.failure()}",
+        ))
+    full_sayings = full_result.unwrap()
+    log_wait_returned(logger, table_id, since_sequence, len(full_sayings))
+    return Success(WaitResponse(
+        sayings=full_sayings,
+        next_sequence=max(s.sequence for s in full_sayings),
+        timeout=False,
+    ))
+
+
+# @shell_complexity: Long-poll orchestration combines table existence, bounded polling, sleep, and timeout response semantics.
+async def _wait_for_sayings_response(
+    conn: sqlite3.Connection,
+    table_id: str,
+    since_sequence: int,
+    timeout: float,
+) -> Result[WaitResponse, HTTPException]:
+    """Poll for sayings newer than ``since_sequence`` until data is available or timeout expires."""
+    table_result = _get_table_or_404(conn, table_id)
+    if isinstance(table_result, Failure):
+        return Failure(table_result.failure())
+
+    end_time = time.monotonic() + timeout
+    while time.monotonic() < end_time:
+        result = list_sayings_by_table(conn, table_id, since_sequence, limit=1)
+        if isinstance(result, Failure):
+            return Failure(HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to check for sayings: {result.failure()}",
+            ))
+        if result.unwrap():
+            return _new_sayings_response(conn, table_id, since_sequence)
+        remaining = end_time - time.monotonic()
+        if remaining > 0:
+            await asyncio.sleep(min(POLL_INTERVAL, remaining))
+
+    return _wait_timeout_response(conn, table_id, since_sequence)
+
+
 # @shell_orchestration: Transport-local HTTP status/detail mapping only.
 # @shell_complexity: Maps each shared table_say failure family to public REST status/code.
 def _raise_table_say_failure(error: TableSayError) -> None:
@@ -315,66 +365,12 @@ POLL_INTERVAL = 0.5
 @router.get("/wait", response_model=WaitResponse)
 async def wait_for_sayings_endpoint(
     table_id: str,
-    since_sequence: int = Query(
-        ...,
-        ge=-1,
-        description="Wait for sayings with sequence > this value",
-    ),
-    timeout: float = Query(
-        default=DEFAULT_WAIT_TIMEOUT,
-        ge=0.0,
-        le=120.0,
-        description="Max wait time in seconds (0-120, default 30)",
-    ),
+    since_sequence: int = Query(..., ge=-1, description="Wait for sayings with sequence > this value"),
+    timeout: float = Query(default=DEFAULT_WAIT_TIMEOUT, ge=0.0, le=120.0, description="Max wait time in seconds (0-120, default 30)"),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> WaitResponse:
     """Long-poll wait for new sayings."""
-    table_result = _get_table_or_404(conn, table_id)
-    if isinstance(table_result, Failure):
-        raise table_result.failure()
-
-    start_time = time.monotonic()
-    end_time = start_time + timeout
-
-    while time.monotonic() < end_time:
-        # Check for new sayings
-        result = list_sayings_by_table(conn, table_id, since_sequence, limit=1)
-
-        if isinstance(result, Failure):
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to check for sayings: {result.failure()}",
-            )
-
-        sayings = result.unwrap()
-
-        if sayings:
-            # Found new saying(s) - return them
-            # Get full list (may be more than 1)
-            full_result = list_sayings_by_table(conn, table_id, since_sequence, limit=100)
-            if isinstance(full_result, Failure):
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to list sayings: {full_result.failure()}",
-                )
-            full_sayings = full_result.unwrap()
-            next_sequence = max(s.sequence for s in full_sayings)
-
-            # Log wait returned
-            log_wait_returned(logger, table_id, since_sequence, len(full_sayings))
-
-            return WaitResponse(
-                sayings=full_sayings,
-                next_sequence=next_sequence,
-                timeout=False,
-            )
-
-        # Wait before next poll
-        remaining = end_time - time.monotonic()
-        if remaining > 0:
-            await asyncio.sleep(min(POLL_INTERVAL, remaining))
-
-    timeout_result = _wait_timeout_response(conn, table_id, since_sequence)
-    if isinstance(timeout_result, Failure):
-        raise timeout_result.failure()
-    return timeout_result.unwrap()
+    result = await _wait_for_sayings_response(conn, table_id, since_sequence, timeout)
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()

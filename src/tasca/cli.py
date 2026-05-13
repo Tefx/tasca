@@ -56,7 +56,7 @@ def _command_exit_code(command_result: object) -> Result[int, str]:
 
 
 # @shell_orchestration: Socket I/O for LAN IP discovery (connect to public DNS)
-def get_lan_ip() -> str:
+def get_lan_ip() -> Result[str, str]:
     """Get the LAN IP address for remote access.
 
     Returns the first non-loopback IPv4 address, or 'localhost' if none found.
@@ -70,17 +70,17 @@ def get_lan_ip() -> str:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             # Connect to a public DNS server (doesn't send data)
             s.connect(("8.8.8.8", 80))
-            return cast(str, s.getsockname()[0])
+            return Success(cast(str, s.getsockname()[0]))
     except Exception:
         # Fallback to localhost if detection fails
-        return "localhost"
+        return Success("localhost")
 
 
 def create_table_directly(
     question: str,
     context: str | None,
     db_path: str,
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], str]:
     """Create a table directly in the database without HTTP server.
 
     Args:
@@ -109,7 +109,7 @@ def create_table_directly(
         # Generate table ID
         id_result = generate_table_id(conn)
         if isinstance(id_result, Failure):
-            raise RuntimeError(f"Failed to generate table ID: {id_result.failure()}")
+            return Failure(f"Failed to generate table ID: {id_result.failure()}")
 
         table_id = id_result.unwrap()
 
@@ -127,11 +127,11 @@ def create_table_directly(
 
         create_result = repo_create_table(conn, table)
         if isinstance(create_result, Failure):
-            raise RuntimeError(f"Failed to create table: {create_result.failure()}")
+            return Failure(f"Failed to create table: {create_result.failure()}")
 
         created = create_result.unwrap()
 
-        return {
+        return Success({
             "id": created.id,
             "question": created.question,
             "context": created.context,
@@ -139,7 +139,7 @@ def create_table_directly(
             "version": created.version,
             "created_at": created.created_at.isoformat(),
             "updated_at": created.updated_at.isoformat(),
-        }
+        })
     finally:
         conn.close()
 
@@ -160,7 +160,13 @@ def print_startup_banner(
         port: Server port.
         token_from_env: Whether token came from environment variable.
     """
-    lan_ip = get_lan_ip()
+    lan_ip_result = get_lan_ip()
+    if isinstance(lan_ip_result, Failure):
+        lan_ip = "localhost"
+    elif isinstance(lan_ip_result, Success):
+        lan_ip = lan_ip_result.unwrap()
+    else:
+        lan_ip = cast(str, lan_ip_result)
     table_id = table_data["id"]
     question = table_data["question"]
     status = table_data["status"].upper()
@@ -226,7 +232,7 @@ def print_startup_banner(
 
 
 # @shell_complexity: 3 branches for server check logic (connect, port in use error, unexpected error)
-def is_server_running(base_url: str) -> bool:
+def is_server_running(base_url: str) -> Result[bool, str]:
     """Check if the Tasca server is already running.
 
     Args:
@@ -238,15 +244,15 @@ def is_server_running(base_url: str) -> bool:
     try:
         with httpx.Client(timeout=2.0) as client:
             response = client.get(f"{base_url.rstrip('/')}/api/v1/health")
-            return response.status_code == 200
+            return Success(response.status_code == 200)
     except httpx.ConnectError:
-        return False
+        return Success(False)
     except httpx.TimeoutException:
-        return False
+        return Success(False)
 
 
 # @shell_complexity: 5 branches for server startup (find module, start, wait, timeout, error)
-def start_server_background(host: str, port: int) -> subprocess.Popen[str]:
+def start_server_background(host: str, port: int) -> Result[subprocess.Popen[str], str]:
     """Start the Tasca server in background.
 
     Args:
@@ -276,15 +282,13 @@ def start_server_background(host: str, port: int) -> subprocess.Popen[str]:
             text=True,
         )
         _started_server_process = process
-        return process
+        return Success(process)
     except FileNotFoundError as e:
-        print("Error: Cannot find 'tasca' command to start server", file=sys.stderr)
-        print("Make sure tasca is installed: pip install -e .", file=sys.stderr)
-        raise SystemExit(1) from e
+        return Failure(f"Cannot find 'tasca' command to start server: {e}")
 
 
 # @shell_orchestration: Polling loop that calls is_server_running (which does HTTP I/O)
-def wait_for_server_ready(base_url: str, timeout: float = 30.0) -> bool:
+def wait_for_server_ready(base_url: str, timeout: float = 30.0) -> Result[bool, str]:
     """Wait for the server to become ready.
 
     Args:
@@ -298,11 +302,14 @@ def wait_for_server_ready(base_url: str, timeout: float = 30.0) -> bool:
     poll_interval = 0.1
 
     while time.monotonic() - start_time < timeout:
-        if is_server_running(base_url):
-            return True
+        running_result = is_server_running(base_url)
+        if isinstance(running_result, Failure):
+            return Failure(running_result.failure())
+        if running_result.unwrap():
+            return Success(True)
         time.sleep(poll_interval)
 
-    return False
+    return Success(False)
 
 
 def stop_server() -> None:
@@ -349,7 +356,7 @@ def create_table_via_rest(
     context: str | None,
     base_url: str,
     admin_token: str | None,
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], str]:
     """Create a table via REST API.
 
     Args:
@@ -377,12 +384,9 @@ def create_table_via_rest(
         with httpx.Client(timeout=30.0) as client:
             response = client.post(url, json=payload, headers=headers)
     except httpx.ConnectError as e:
-        print(f"Error: Cannot connect to Tasca server at {base_url}", file=sys.stderr)
-        print("Make sure the server is running: tasca", file=sys.stderr)
-        raise SystemExit(1) from e
+        return Failure(f"Cannot connect to Tasca server at {base_url}: {e}")
     except httpx.TimeoutException as e:
-        print(f"Error: Request timed out connecting to {base_url}", file=sys.stderr)
-        raise SystemExit(1) from e
+        return Failure(f"Request timed out connecting to {base_url}: {e}")
 
     if response.status_code != 200:
         try:
@@ -390,10 +394,9 @@ def create_table_via_rest(
             detail = error_data.get("detail", response.text)
         except Exception:
             detail = response.text
-        print(f"Error: API returned {response.status_code}: {detail}", file=sys.stderr)
-        raise SystemExit(1)
+        return Failure(f"API returned {response.status_code}: {detail}")
 
-    return cast(dict[str, Any], response.json())
+    return Success(cast(dict[str, Any], response.json()))
 
 
 # @shell_complexity: 12 branches for MCP protocol handling (init, tool call, error paths)
@@ -401,7 +404,7 @@ def create_table_via_rest(
 def create_table_via_mcp(
     question: str,
     context: str | None,
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], str]:
     """Create a table via MCP stdio.
 
     Args:
@@ -462,15 +465,12 @@ def create_table_via_mcp(
         init_response_line = process.stdout.readline()
         if not init_response_line:
             stderr = process.stderr.read()
-            print("Error: MCP server did not respond", file=sys.stderr)
-            if stderr:
-                print(f"MCP stderr: {stderr}", file=sys.stderr)
-            raise SystemExit(1)
+            detail = f" MCP stderr: {stderr}" if stderr else ""
+            return Failure(f"MCP server did not respond.{detail}")
 
         init_response = json.loads(init_response_line)
         if "error" in init_response:
-            print(f"Error: MCP initialize failed: {init_response['error']}", file=sys.stderr)
-            raise SystemExit(1)
+            return Failure(f"MCP initialize failed: {init_response['error']}")
 
         # Send initialized notification
         initialized_notification = {
@@ -488,10 +488,8 @@ def create_table_via_mcp(
         response_line = process.stdout.readline()
         if not response_line:
             stderr = process.stderr.read()
-            print("Error: MCP server did not respond to tool call", file=sys.stderr)
-            if stderr:
-                print(f"MCP stderr: {stderr}", file=sys.stderr)
-            raise SystemExit(1)
+            detail = f" MCP stderr: {stderr}" if stderr else ""
+            return Failure(f"MCP server did not respond to tool call.{detail}")
 
         response = json.loads(response_line)
 
@@ -502,8 +500,7 @@ def create_table_via_mcp(
         if "error" in response:
             error_info = response["error"]
             message = error_info.get("message", str(error_info))
-            print(f"Error: MCP tool error: {message}", file=sys.stderr)
-            raise SystemExit(1)
+            return Failure(f"MCP tool error: {message}")
 
         # Parse the result
         result = response.get("result", {})
@@ -511,20 +508,18 @@ def create_table_via_mcp(
         if "content" in result:
             for content in result["content"]:
                 if content.get("type") == "text":
-                    return cast(dict[str, Any], json.loads(content["text"]))
-        return cast(dict[str, Any], result)
+                    return Success(cast(dict[str, Any], json.loads(content["text"])))
+        return Success(cast(dict[str, Any], result))
 
     except FileNotFoundError as e:
-        print("Error: Cannot find tasca-mcp server", file=sys.stderr)
-        raise SystemExit(1) from e
+        return Failure(f"Cannot find tasca-mcp server: {e}")
     except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON response from MCP server: {e}", file=sys.stderr)
-        raise SystemExit(1) from e
+        return Failure(f"Invalid JSON response from MCP server: {e}")
 
 
 # @shell_orchestration: Start server in foreground, create table directly, print banner
 # @shell_complexity: 5 branches for table creation error handling, token selection, and server startup
-def cmd_new(args: argparse.Namespace) -> int:
+def cmd_new(args: argparse.Namespace) -> Result[int, str]:
     """Execute the 'new' subcommand.
 
     Behavior per spec:
@@ -549,13 +544,14 @@ def cmd_new(args: argparse.Namespace) -> int:
 
     # Step 1: Create table directly in database
     try:
-        table_data = create_table_directly(question, context, db_path)
-    except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+        table_result = create_table_directly(question, context, db_path)
+        if isinstance(table_result, Failure):
+            print(f"Error: {table_result.failure()}", file=sys.stderr)
+            return Success(1)
+        table_data = table_result.unwrap() if isinstance(table_result, Success) else cast(dict[str, Any], table_result)
     except Exception as e:
         print(f"Error creating table: {e}", file=sys.stderr)
-        return 1
+        return Success(1)
 
     # Determine admin token: use env var if set, otherwise auto-generate
     if settings.admin_token_from_env:
@@ -601,28 +597,28 @@ def cmd_new(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         # Clean shutdown on Ctrl+C
         print("\nTasca server stopped.", file=sys.stderr)
-        return 0
+        return Success(0)
 
-    return 0
+    return Success(0)
 
 
 # @shell_orchestration: Argument parsing and command dispatch is orchestration, not business logic
-def cmd_mcp(_args: argparse.Namespace) -> int:
+def cmd_mcp(_args: argparse.Namespace) -> Result[int, str]:
     """Start the MCP stdio server."""
     from tasca.shell.mcp.server import run_mcp_server
 
     run_mcp_server()
-    return 0
+    return Success(0)
 
 
-def cmd_version(_args: argparse.Namespace) -> int:
+def cmd_version(_args: argparse.Namespace) -> Result[int, str]:
     """Print the Tasca version."""
     print(f"tasca {settings.version}")
-    return 0
+    return Success(0)
 
 
 # @shell_complexity: 4 branches for error handling (table not found, DB error, write error)
-def cmd_export(args: argparse.Namespace) -> int:
+def cmd_export(args: argparse.Namespace) -> Result[int, str]:
     """Execute the 'export' subcommand.
 
     Exports a table and its sayings to a file or stdout.
@@ -652,7 +648,7 @@ def cmd_export(args: argparse.Namespace) -> int:
                 print(f"Error: Table not found: {table_id}", file=sys.stderr)
             else:
                 print(f"Error: Failed to fetch table: {error}", file=sys.stderr)
-            return 1
+            return Success(1)
 
         table = table_result.unwrap()
 
@@ -665,7 +661,7 @@ def cmd_export(args: argparse.Namespace) -> int:
                 print(f"Error: {error_msg}", file=sys.stderr)
             else:
                 print(f"Error: Failed to fetch sayings: {error_msg}", file=sys.stderr)
-            return 1
+            return Success(1)
 
         sayings = sayings_result.unwrap()
 
@@ -690,11 +686,11 @@ def cmd_export(args: argparse.Namespace) -> int:
         else:
             print(content)
 
-        return 0
+        return Success(0)
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
-        return 1
+        return Success(1)
     finally:
         conn.close()
 
@@ -758,7 +754,7 @@ def _setup_export_subparser(
 # @shell_orchestration: Argument parser configuration for CLI dispatch
 def _setup_skills_subparser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
-) -> argparse.ArgumentParser:
+) -> Result[argparse.ArgumentParser, str]:
     """Setup the 'skills' subcommand group parser.
 
     Args:
@@ -785,11 +781,11 @@ def _setup_skills_subparser(
     install_parser.add_argument("--target", required=True, help="Target directory (required)")
     install_parser.set_defaults(func=cmd_skills_install)
 
-    return skills_parser
+    return Success(skills_parser)
 
 
 # @shell_orchestration: Argument parsing (argparse) and command dispatch to I/O handlers
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> Result[int, str]:
     """Main entry point for the Tasca CLI.
 
     Args:
@@ -816,22 +812,26 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("version", help="Show Tasca version").set_defaults(func=cmd_version)
 
     _setup_export_subparser(subparsers)
-    skills_parser = _setup_skills_subparser(subparsers)
+    skills_parser = _setup_skills_subparser(subparsers).unwrap()
 
     args = parser.parse_args(argv)
 
     if args.command is None:
         parser.print_help()
-        return 1
+        return Success(1)
     if args.command == "skills" and not hasattr(args, "func"):
         skills_parser.print_help()
-        return 1
+        return Success(1)
     exit_code_result = _command_exit_code(args.func(args))
     if isinstance(exit_code_result, Failure):
         print(exit_code_result.failure(), file=sys.stderr)
-        return 1
-    return exit_code_result.unwrap()
+        return Success(1)
+    return Success(exit_code_result.unwrap())
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main_result = main()
+    if isinstance(main_result, Failure):
+        print(main_result.failure(), file=sys.stderr)
+        sys.exit(1)
+    sys.exit(main_result.unwrap())

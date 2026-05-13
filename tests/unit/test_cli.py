@@ -25,6 +25,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import httpx
 import pytest
+from returns.result import Failure, Result
 
 from tasca.cli import (
     cmd_new,
@@ -39,6 +40,13 @@ from tasca.cli import (
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+
+
+def _unwrap_result(result: Result[object, str]) -> object:
+    """Unwrap CLI shell Results for unit assertions."""
+    if isinstance(result, Failure):
+        pytest.fail(result.failure())
+    return result.unwrap()
 
 
 # =============================================================================
@@ -80,14 +88,14 @@ class TestArgumentParsing:
     def test_parse_no_command_shows_help(self) -> None:
         """No command should show help and return 1."""
         with patch("sys.stdout", new_callable=io.StringIO):
-            result = main([])
+            result = _unwrap_result(main([]))
         assert result == 1  # No command -> help shown, exit 1
 
     def test_parse_new_minimal(self) -> None:
         """Parse 'new' with minimal required args."""
         with patch("tasca.cli.cmd_new") as mock_cmd_new:
             mock_cmd_new.return_value = 0
-            result = main(["new", "What is the best approach?"])
+            result = _unwrap_result(main(["new", "What is the best approach?"]))
             assert result == 0
             # Verify cmd_new was called with correct args
             call_args = mock_cmd_new.call_args
@@ -102,14 +110,14 @@ class TestArgumentParsing:
         """Parse 'new' with context option."""
         with patch("tasca.cli.cmd_new") as mock_cmd_new:
             mock_cmd_new.return_value = 0
-            result = main(
+            result = _unwrap_result(main(
                 [
                     "new",
                     "What is the best approach?",
                     "-c",
                     "Consider performance",
                 ]
-            )
+            ))
             assert result == 0
             call_args = mock_cmd_new.call_args
             assert call_args is not None
@@ -121,7 +129,7 @@ class TestArgumentParsing:
         """Parse 'new' with custom host and port."""
         with patch("tasca.cli.cmd_new") as mock_cmd_new:
             mock_cmd_new.return_value = 0
-            result = main(
+            result = _unwrap_result(main(
                 [
                     "new",
                     "What is the best approach?",
@@ -130,7 +138,7 @@ class TestArgumentParsing:
                     "--port",
                     "3000",
                 ]
-            )
+            ))
             assert result == 0
             call_args = mock_cmd_new.call_args
             assert call_args is not None
@@ -167,13 +175,13 @@ class TestGetLanIp:
 
     def test_returns_string(self) -> None:
         """Returns a string IP address."""
-        result = get_lan_ip()
+        result = _unwrap_result(get_lan_ip())
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_returns_valid_ip_or_localhost(self) -> None:
         """Returns either a valid IP or localhost."""
-        result = get_lan_ip()
+        result = _unwrap_result(get_lan_ip())
         # Should be either "localhost" or an IP address
         if result != "localhost":
             parts = result.split(".")
@@ -192,11 +200,11 @@ class TestCreateTableDirectly:
 
     def test_creates_table_successfully(self, temp_db: Path) -> None:
         """Creates a table directly in the database."""
-        result = create_table_directly(
+        result = _unwrap_result(create_table_directly(
             question="What is the best approach?",
             context="Consider performance",
             db_path=str(temp_db),
-        )
+        ))
 
         assert "id" in result
         assert result["question"] == "What is the best approach?"
@@ -207,11 +215,11 @@ class TestCreateTableDirectly:
 
     def test_creates_table_without_context(self, temp_db: Path) -> None:
         """Creates a table without context."""
-        result = create_table_directly(
+        result = _unwrap_result(create_table_directly(
             question="What is the best approach?",
             context=None,
             db_path=str(temp_db),
-        )
+        ))
 
         assert result["question"] == "What is the best approach?"
         assert result["context"] is None
@@ -219,20 +227,20 @@ class TestCreateTableDirectly:
     def test_creates_database_if_not_exists(self, temp_db: Path) -> None:
         """Creates the database file if it doesn't exist."""
         assert not temp_db.exists()
-        create_table_directly(
+        _unwrap_result(create_table_directly(
             question="Test question",
             context=None,
             db_path=str(temp_db),
-        )
+        ))
         assert temp_db.exists()
 
     def test_table_persists_in_database(self, temp_db: Path) -> None:
         """Table is persisted in the database."""
-        result = create_table_directly(
+        result = _unwrap_result(create_table_directly(
             question="Test question",
             context=None,
             db_path=str(temp_db),
-        )
+        ))
 
         # Verify table exists in database
         conn = sqlite3.connect(str(temp_db))
@@ -246,11 +254,11 @@ class TestCreateTableDirectly:
 
     def test_generates_human_readable_id(self, temp_db: Path) -> None:
         """Generates a human-readable table ID."""
-        result = create_table_directly(
+        result = _unwrap_result(create_table_directly(
             question="Test question",
             context=None,
             db_path=str(temp_db),
-        )
+        ))
 
         # ID should be human-readable (words-dashes format)
         table_id = result["id"]
@@ -457,7 +465,7 @@ class TestCmdNew:
                         "updated_at": "2024-01-01T00:00:00Z",
                     }
 
-                    result = cmd_new(args)
+                    result = _unwrap_result(cmd_new(args))
 
                     assert result == 0
                     mock_create.assert_called_once()
@@ -491,7 +499,7 @@ class TestCmdNew:
                             "status": "open",
                         }
 
-                        cmd_new(args)
+                        _unwrap_result(cmd_new(args))
 
                         # Check that banner was called with token_from_env=False
                         call_kwargs = mock_banner.call_args.kwargs
@@ -518,7 +526,7 @@ class TestCmdNew:
                     }
                     mock_uvicorn.side_effect = KeyboardInterrupt()
 
-                    result = cmd_new(args)
+                    result = _unwrap_result(cmd_new(args))
 
                     assert result == 0  # Clean exit
 
@@ -541,7 +549,7 @@ class TestCmdNew:
                         "status": "open",
                     }
 
-                    cmd_new(args)
+                    _unwrap_result(cmd_new(args))
 
                     # Check uvicorn.run was called with custom host/port
                     call_kwargs = mock_uvicorn.call_args.kwargs
@@ -560,7 +568,7 @@ class TestCmdNew:
         with patch("tasca.cli.create_table_directly") as mock_create:
             mock_create.side_effect = RuntimeError("Database error")
 
-            result = cmd_new(args)
+            result = _unwrap_result(cmd_new(args))
 
             assert result == 1
 
@@ -585,7 +593,7 @@ class TestIsServerRunning:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value = mock_client
 
-            result = is_server_running("http://localhost:8000")
+            result = _unwrap_result(is_server_running("http://localhost:8000"))
             assert result is True
             mock_client.get.assert_called_once_with("http://localhost:8000/api/v1/health")
 
@@ -598,7 +606,7 @@ class TestIsServerRunning:
             mock_client.get.side_effect = httpx.ConnectError("Connection refused")
             mock_client_class.return_value = mock_client
 
-            result = is_server_running("http://localhost:8000")
+            result = _unwrap_result(is_server_running("http://localhost:8000"))
             assert result is False
 
 
@@ -628,12 +636,12 @@ class TestCreateTableViaRest:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value = mock_client
 
-            result = create_table_via_rest(
+            result = _unwrap_result(create_table_via_rest(
                 question="What is the best approach?",
                 context="Consider performance",
                 base_url="http://localhost:8000",
                 admin_token="secret-token",
-            )
+            ))
 
             assert result["id"] == "test-table-123"
             mock_client.post.assert_called_once()
@@ -660,8 +668,8 @@ class TestCreateTableViaMcp:
         mock_process.stdout.readline.side_effect = [init_response, tool_response]
 
         with patch("subprocess.Popen", return_value=mock_process):
-            result = create_table_via_mcp(
+            result = _unwrap_result(create_table_via_mcp(
                 question="What is the best approach?",
                 context="Consider performance",
-            )
+            ))
             assert result.get("id") == "test-table-123" or result.get("ok") is True

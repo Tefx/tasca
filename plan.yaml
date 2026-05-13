@@ -39743,6 +39743,7 @@ phases:
     - fix-pp-invar-table-service-doctest
     - fix-pp-invar-shell-logging-doctest
     - fix-pp-invar-mcp-proxy-doctest
+    - fix-pp-invar-patron-repo-doctest
     agent: integration-verifier-tacit
   - id: fix-pp-invar-mcp-residual
     name: Residual Invar budget remediation — MCP residual seams only

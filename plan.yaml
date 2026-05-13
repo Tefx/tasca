@@ -40939,6 +40939,313 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T04:03:17.190786+00:00'
+  - id: fix-pp-invar-mcp-direct-residuals
+    name: Residual Invar remediation — MCP direct shell_result and entrypoint thickness
+      blockers
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+      closure_step: true
+
+
+      Batched implementation fix for ALL blocker-class direct residuals found by authoritative
+      `uvx invar-tools guard --all` after salvaged project-budget progress from `fix-pp-invar-project-budget-followup`
+      (commit `e97b044`).
+
+
+      ## Upstream state to preserve
+
+      The worker for `fix-pp-invar-project-budget-followup` made verified net-positive
+      progress and the orchestrator salvaged/merged it to main. Project-level budget
+      blockers are closed on main:
+
+      - shell_complexity_debt: 8 -> 4, limit 5, closed
+
+      - escape_hatch_project_limit file_size: 6 -> 3, limit 5, closed
+
+      - escape_hatch_project_limit shell_result: 10 -> 1, limit 5, closed
+
+      - escape_hatch_budget: 70 -> 12, limit 15, warning only under limit
+
+
+      Mainline verification after merge already passed:
+
+      - `uvx ruff check` on touched files
+
+      - `uv run mypy` on touched files
+
+      - focused storage/usercustomize pytest + CLI/API/MCP smoke
+
+
+      ## Remaining blocker fingerprints to fix (ALL of these, not just the first)
+
+      Authoritative full guard still fails with blocker-class direct residuals that
+      predictably block `retest-pp-invar-full-scan`:
+
+
+      ### B1: `src/tasca/shell/mcp/tool_contracts.py` shell_result direct blockers
+
+      - line 440, rule `shell_result`: Shell function `parameter_contract` should
+      return `Result[T, E]`
+
+      - line 455, rule `shell_result`: Shell function `tool_contract` should return
+      `Result[T, E]`
+
+      - line 464, rule `shell_result`: Shell function `parameter_default` should return
+      `Result[T, E]`
+
+      - line 475, rule `shell_result`: Shell function `parameter_field` should return
+      `Result[T, E]`
+
+
+      ### B2: `src/tasca/shell/mcp/entrypoint_logic.py` shell_result direct blockers
+
+      - line 179, rule `shell_result`: Shell function `_parse_patch_status` should
+      return `Result[T, E]`
+
+      - line 293, rule `shell_result`: Shell function `_silence_nudge` should return
+      `Result[T, E]`
+
+      - line 301, rule `shell_result`: Shell function `_silence_stall` should return
+      `Result[T, E]`
+
+      - line 312, rule `shell_result`: Shell function `_silence_last_chance` should
+      return `Result[T, E]`
+
+      - line 323, rule `shell_result`: Shell function `_silence_exit` should return
+      `Result[T, E]`
+
+
+      ### B3: `src/tasca/shell/mcp/entrypoint_logic.py` entry_point_too_thick direct
+      blockers
+
+      - line 76, rule `entry_point_too_thick`: entry point `build_table_dict` has
+      17 lines (max 15)
+
+      - line 130, rule `entry_point_too_thick`: entry point `validate_speaker_constraints`
+      has 18 lines (max 15)
+
+      - line 197, rule `entry_point_too_thick`: entry point `apply_table_patch` has
+      34 lines (max 15)
+
+      - line 235, rule `entry_point_too_thick`: entry point `build_say_response` has
+      30 lines (max 15)
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause: MCP shell seams and entrypoint helpers still expose non-`Result[T,
+      E]` shell-return contracts and overly thick entrypoint bodies after aggregate
+      project budgets were reduced.
+
+      - Symptom: full Invar static scan fails before downstream finalization can proceed,
+      even though project-level budgets are now under blocking thresholds.
+
+      - Why previous fix was insufficient: `fix-pp-invar-project-budget-followup`
+      was salvaged as a successful project-budget closure/reduction step; it did not
+      own these direct per-symbol MCP blockers.
+
+      - Why this fix is not surface-level: it must change real MCP shell return seams
+      to `Result[T, E]` and thin entrypoints through substantive helper extraction
+      while preserving behavior, not by suppressing guard output or moving warnings.
+
+
+      ## Required remediation constraints
+
+      - command_family_locked: `uvx invar-tools guard --all`.
+
+      - symbolic_testing: true.
+
+      - No suppressions, no owner-only exemptions, no `# noqa`, no budget-marker evasion,
+      and no placeholder/stub-only adapters.
+
+      - Convert real shell seams to `Result[T, E]`; callers/tests must handle success/error
+      envelopes explicitly where needed.
+
+      - Thin entrypoints with substantive helper extraction that preserves behavior
+      and reduces counted entrypoint body length below policy.
+
+      - Preserve existing MCP behavior, tool contracts, response envelopes, error
+      semantics, and tests.
+
+      - Search for sibling MCP shell seams before claiming completion; do not fix
+      only the listed line numbers if helper extraction reveals adjacent direct blockers.
+
+      - Do not modify completed plan steps or treat provenance (`pre-existing`, `out-of-step`)
+      as a disposition. Any remaining blocker that intersects `retest-pp-invar-full-scan`
+      must be listed as blocking with an owner.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION/closure step. Stub-only completion is NOT acceptable.
+      Each deliverable MUST contain substantive logic that processes its inputs and
+      produces outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
+
+
+      ## Evidence requirements
+
+      Evidence MUST include:
+
+      - A blocker closure register for every B1/B2/B3 item above with file, symbol,
+      original rule, change made, after-status, and disposition.
+
+      - A sibling-search register for MCP shell_result and entrypoint thickness patterns.
+
+      - A behavior preservation register for representative MCP tool contract and
+      entrypoint flows.
+
+      - A statement that no suppressions, owner-only exemptions, `# noqa`, or placeholder/stub-only
+      adapters were added.'
+    verification: '- Authoritative closure: `uvx invar-tools guard --all` is run exactly
+      and exits 0, or evidence lists any remaining blocker-class residual with owner
+      and keeps `retest-pp-invar-full-scan` blocked.
+
+      - Direct blocker closure: all listed `shell_result` blockers in `tool_contracts.py`
+      and `entrypoint_logic.py` are closed by real `Result[T, E]` shell seams, not
+      suppressions/exemptions/noqa.
+
+      - Entrypoint thickness closure: `build_table_dict`, `validate_speaker_constraints`,
+      `apply_table_patch`, and `build_say_response` are below the Invar max-line threshold
+      through substantive helper extraction while preserving behavior.
+
+      - Static smoke: ruff over touched files passes.
+
+      - Type smoke: mypy over touched files or the focused MCP package surface passes.
+
+      - Focused tests: relevant MCP unit/integration tests covering tool contracts,
+      entrypoint logic, response envelopes, and failure paths pass.
+
+      - Representative MCP smoke: at least one real MCP server/tool or entrypoint-path
+      smoke proves behavior remains reachable after the Result-envelope conversion.
+
+      - Evidence includes parseable blocker closure, sibling search, behavior preservation,
+      and no-suppression registers.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - `src/tasca/shell/mcp/tool_contracts.py` — key passage or "NOT READ: <reason>"
+
+      - `src/tasca/shell/mcp/entrypoint_logic.py` — key passage or "NOT READ: <reason>"
+
+      - `tests/unit/mcp` — key passage or "NOT READ: <reason>"
+
+      - `tests/integration/test_mcp.py` — key passage or "NOT READ: <reason>"
+
+      - `tests/integration/test_mcp_proxy.py` — key passage or "NOT READ: <reason>"
+
+
+      ## Blocker Closure Register
+
+      | Blocker | File | Symbol | Rule | Before | Change made | After status | Disposition
+      |
+
+      |---|---|---|---|---|---|---|---|
+
+
+      ## Sibling Search Register
+
+      - MCP shell_result sibling search command/output:
+
+      ```text
+
+      <paste command and output>
+
+      ```
+
+      - Entrypoint thickness sibling search command/output:
+
+      ```text
+
+      <paste command and output>
+
+      ```
+
+
+      ## Verification Commands and Actual Output
+
+      - `uvx invar-tools guard --all`:
+
+      ```text
+
+      <paste output summary and final status>
+
+      ```
+
+      - Ruff over touched files:
+
+      ```text
+
+      <paste output>
+
+      ```
+
+      - Mypy over touched MCP surface:
+
+      ```text
+
+      <paste output>
+
+      ```
+
+      - Focused MCP unit/integration tests:
+
+      ```text
+
+      <paste output>
+
+      ```
+
+      - Representative MCP smoke:
+
+      ```text
+
+      <paste command and output>
+
+      ```
+
+
+      ## Behavior Preservation Register
+
+      | Surface | Scenario | Expected behavior | Evidence ref | Status |
+
+      |---|---|---|---|---|
+
+
+      ## No-Suppression Attestation
+
+      - Suppressions added: NONE required
+
+      - Owner-only exemptions added: NONE required
+
+      - `# noqa` added: NONE required
+
+      - Placeholder/stub-only adapters added: NONE required
+
+
+      ## Headline
+
+      - verdict: PASS | FAIL
+
+      - remaining_blockers: []
+
+      - retest_ready: true | false'
+    depends_on:
+    - fix-pp-invar-project-budget-followup
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

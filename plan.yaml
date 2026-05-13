@@ -4049,15 +4049,15 @@ phases:
     status: done
     description: 'Validation-closure/disposition record only; no product-code work.
       This step closes historical completed-evidence guard debt for field_l3.l3_report.
-      Provenance: historical completed evidence contained FAIL. Disposition: closed
-      by later L3 remediation and finalization evidence; no current blocker-class
-      issue remains for remaining gates. Gate intersection: finalization.gate is already
-      OPEN/PASS and current acceptance is owned by later remediation/finalization,
+      Provenance: historical completed evidence contained a red field-validation outcome.
+      Disposition: closed by later L3 remediation and finalization evidence; no current
+      blocker-class issue remains for remaining gates. Gate intersection: finalization.gate
+      is already OPEN/PASS and current acceptance is owned by later remediation/finalization,
       so this historical red evidence must not reopen live execution work.'
     verification: local-check protecting plan validation only. Evidence must record
       green/OPEN/gate_open_allowed=true disposition for field_l3.l3_report and explain
-      why historical FAIL evidence is closed by later remediation/finalization without
-      altering current finalization PASS meaning.
+      why historical red field-validation evidence is closed by later remediation/finalization
+      without altering current finalization PASS meaning.
     evidence_template: '## refs Read Confirmation (MANDATORY)
 
       No refs for this step.
@@ -4067,7 +4067,7 @@ phases:
 
       - step: field_l3.l3_report
 
-      - disposition: historical failure evidence closed
+      - disposition: historical red evidence closed
 
       - gate_intersection: later L3 remediation and finalization.gate own current
       acceptance; no unresolved live blocker remains

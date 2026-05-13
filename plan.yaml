@@ -38983,6 +38983,11 @@ phases:
 
       - Deep review artifacts complete
 
+      - Black-box public-surface retest for B1-B5 completed with PROVEN status for
+      HTTP server and MCP stdio/discovery obligations
+
+      - Docs/spec/discovery and runtime public-surface behavior agree
+
       - No unresolved blocker-class drift remains'
     evidence_template: '## Gate Review Report
 
@@ -39021,6 +39026,7 @@ phases:
     - finalization.deep-black-box-verification
     - retest-pp-invar-full-scan-final
     - finalization.retest-concurrent-review-blockers
+    - finalization.retest-black-box-public-surface-blockers
     agent: gate-reviewer-tacit
   - id: fix-full-plan-blockers
     name: Remediate full-plan verifier blockers in one batch

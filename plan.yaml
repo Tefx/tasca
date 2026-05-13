@@ -40263,7 +40263,7 @@ phases:
       \ owned by remaining finalization residual steps."
   - id: fix-pp-invar-mcp-entrypoints-followup
     name: Residual Invar remediation — MCP entrypoint direct blockers
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -40473,6 +40473,43 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T03:40:27.877745+00:00'
+    done_at: '2026-05-13T04:00:00.860080+00:00'
+    evidence: "## refs Read Confirmation\n- src/tasca/shell/mcp/entrypoints.py — target\
+      \ functions returned raw MCP envelopes and centralized success/error envelope\
+      \ shape, idempotency, mention resolution, table wait/listen/control/update/say,\
+      \ and seat/proxy wrappers.\n- src/tasca/shell/mcp/entrypoint_session_tools.py\
+      \ — session tool public impl annotations needed explicit Result-returning seams.\n\
+      - src/tasca/shell/mcp/entrypoint_logic.py — deterministic envelope/payload builders\
+      \ remain the formatting source; no behavior changes made there.\n- src/tasca/shell/mcp/tool_contracts.py\
+      \ — runtime entrypoint names/defaults remain aligned with server wrappers.\n\
+      - tests/unit/mcp and tests/integration/test_mcp.py — executable MCP contract\
+      \ coverage for registration, defaults, envelopes, idempotency, permissions,\
+      \ mentions, table/seat flows, proxy-local tools, HTTP/STDIO transport, and failure\
+      \ paths.\n\n## MCP Entrypoint Follow-up Guard Evidence\n- Before: uvx invar-tools\
+      \ guard --all found 31 scoped shell_result errors in entrypoints.py and entrypoint_session_tools.py.\n\
+      - After worker: 0 findings in scoped target files; full guard still failed on\
+      \ out-of-scope project/proxy/storage/complexity debt.\n- Mainline after merge:\
+      \ target MCP entrypoint/session direct blockers remain cleared; full guard summary\
+      \ improved to remaining project/proxy/storage/complexity debt.\n\n## MCP Surface\
+      \ Preservation Matrix\n- patron_register/get, table_create/join/get/list/delete/export,\
+      \ table_say helpers, table_listen/wait, table_control/update, seat_heartbeat/list,\
+      \ connect/status, and server wrappers preserved by focused MCP unit/integration\
+      \ tests.\n- Response-envelope compatibility preserved by Result unwrap boundary\
+      \ and existing envelope tests.\n\n## Verification\n- Worker verification: ruff/mypy\
+      \ over entrypoints.py, entrypoint_session_tools.py, server.py passed; pytest\
+      \ tests/unit/mcp tests/integration/test_mcp.py: 227 passed.\n- Mainline verification\
+      \ after squash merge:\n  - uvx invar-tools guard --all: still fails on remaining\
+      \ out-of-scope debt, not scoped MCP entrypoint/session blockers.\n  - ./.venv/bin/python\
+      \ -m ruff check src/tasca/shell/mcp/entrypoints.py src/tasca/shell/mcp/entrypoint_session_tools.py\
+      \ src/tasca/shell/mcp/server.py: PASS.\n  - ./.venv/bin/python -m mypy same\
+      \ files: PASS.\n  - ./.venv/bin/python -m pytest -q tests/unit/mcp tests/integration/test_mcp.py:\
+      \ 227 passed.\n\n## Spec link\n- docs/tasca-mcp-interface-v0.1.md via tool_contracts.py\
+      \ runtime anchors; MCP unit/integration tests as behavioral specs.\n\n## Files\
+      \ changed\n- src/tasca/shell/mcp/entrypoints.py\n- src/tasca/shell/mcp/entrypoint_session_tools.py\n\
+      - src/tasca/shell/mcp/server.py\n\n## Commits\n- ce6850b: [vectl] step-fix-pp-invar-mcp-entrypoints-followup\
+      \ completed\n\n## Residual blocker-class debt\n- None for scoped MCP entrypoint/session\
+      \ direct blockers.\n- Remaining full-guard debt is owned by MCP proxy and project-budget\
+      \ follow-up steps."
   - id: fix-pp-invar-mcp-proxy-budget-followup
     name: Residual Invar remediation — MCP proxy budget blocker
     status: claimed

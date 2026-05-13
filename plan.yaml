@@ -45059,7 +45059,7 @@ phases:
       PASS'
   - id: finalization.fix-black-box-public-surface-blockers
     name: Batched fix for black-box public-surface blockers
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       agent: python-senior
@@ -45331,6 +45331,8 @@ phases:
     depends_on:
     - finalization.deep-black-box-verification
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-13T09:40:23.159401+00:00'
   - id: finalization.retest-black-box-public-surface-blockers
     name: Retest black-box public-surface blockers
     status: pending

@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable
+from functools import wraps
+from inspect import iscoroutinefunction
 from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeVar, cast
 
 # FastMCP is a required runtime dependency. We use conditional imports to allow
@@ -49,7 +51,7 @@ else:
         ToolResult = None  # type: ignore[misc,assignment]
 
 from mcp.types import TextContent
-from returns.result import Failure
+from returns.result import Failure, Result, Success
 
 from tasca.config import settings
 from tasca.shell.logging import (
@@ -73,6 +75,8 @@ from tasca.shell.mcp.tool_contracts import (  # noqa: E402
 # Transport types for MCP server
 TransportType = Literal["stdio", "http", "sse", "streamable-http"]
 F = TypeVar("F", bound=Callable[..., Any])
+McpEnvelope = dict[str, Any]
+McpResult = Result[McpEnvelope, McpEnvelope]
 
 # MCP Agent Protocol Instructions (~1KB)
 # This text guides agents in proper table participation behavior.
@@ -248,17 +252,54 @@ from tasca.shell.mcp import entrypoints as ep  # noqa: E402
 
 VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 
+# @invar:allow entry_point_too_thick: FastMCP adapter factory must preserve signatures while registering transport wrappers.
 # @shell:entry - FastMCP decorator adapter returns framework callable, not a domain Result.
 def _contract_tool(tool_name: str) -> Callable[[F], F]:
     """Register an MCP tool using centralized contract metadata."""
     contract = tool_contract(tool_name)
-    return cast(
-        Callable[[F], F],
-        mcp.tool(name=contract.tool_name, description=contract.description),
-    )
+
+    def decorator(func: F) -> F:
+        if iscoroutinefunction(func):
+
+            @wraps(func)
+            async def async_adapter(*args: Any, **kwargs: Any) -> McpEnvelope:
+                result = await func(*args, **kwargs)
+                return _to_mcp_response(result)
+
+            mcp.tool(name=contract.tool_name, description=contract.description)(async_adapter)
+
+            @wraps(func)
+            async def async_public(*args: Any, **kwargs: Any) -> McpEnvelope:
+                result = await func(*args, **kwargs)
+                return _to_mcp_response(result)
+
+            return cast(F, async_public)
+
+        @wraps(func)
+        def adapter(*args: Any, **kwargs: Any) -> McpEnvelope:
+            result = func(*args, **kwargs)
+            return _to_mcp_response(result)
+
+        mcp.tool(name=contract.tool_name, description=contract.description)(adapter)
+
+        @wraps(func)
+        def public(*args: Any, **kwargs: Any) -> McpEnvelope:
+            result = func(*args, **kwargs)
+            return _to_mcp_response(result)
+
+        return cast(F, public)
+
+    return decorator
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
+# @invar:allow shell_result: FastMCP boundary adapter unwraps Result envelopes for JSON serialization.
+def _to_mcp_response(result: McpResult) -> McpEnvelope:
+    """Convert internal MCP Result seams to transport envelope dictionaries."""
+    if isinstance(result, Failure):
+        return cast(McpEnvelope, result.failure())
+    return result.unwrap()
+
+
 @_contract_tool("patron_register")
 def patron_register(
     display_name: Annotated[
@@ -282,21 +323,19 @@ def patron_register(
     kind: Annotated[
         Literal["agent", "human"], parameter_field("patron_register", "kind")
     ] = parameter_default("patron_register", "kind"),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.patron_register(display_name, alias, meta, patron_id, dedup_id, name, kind)
+    return Success(ep.patron_register(display_name, alias, meta, patron_id, dedup_id, name, kind))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("patron_get")
 def patron_get(
     patron_id: Annotated[str, parameter_field("patron_get", "patron_id")],
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.patron_get(patron_id)
+    return Success(ep.patron_get(patron_id))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_create")
 def table_create(
     title: Annotated[str, parameter_field("table_create", "title")] = parameter_default(
@@ -329,9 +368,9 @@ def table_create(
     dedup_id: Annotated[str, parameter_field("table_create", "dedup_id")] = parameter_default(
         "table_create", "dedup_id"
     ),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_create(
+    return Success(ep.table_create(
         question=question,
         context=context,
         creator_patron_id=creator_patron_id,
@@ -342,10 +381,9 @@ def table_create(
         metadata=metadata,
         policy=policy,
         board=board,
-    )
+    ))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_join")
 def table_join(
     table_id: Annotated[str, parameter_field("table_join", "table_id")] = parameter_default(
@@ -363,53 +401,48 @@ def table_join(
     history_max_bytes: Annotated[
         int, parameter_field("table_join", "history_max_bytes")
     ] = parameter_default("table_join", "history_max_bytes"),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_join(table_id, patron_id, invite_code, history_limit, history_max_bytes)
+    return Success(ep.table_join(table_id, patron_id, invite_code, history_limit, history_max_bytes))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_get")
 def table_get(
     table_id: Annotated[str, parameter_field("table_get", "table_id")],
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_get(table_id)
+    return Success(ep.table_get(table_id))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_list")
 def table_list(
     status: Annotated[
         Literal["open", "closed", "paused", "all"], parameter_field("table_list", "status")
     ] = parameter_default("table_list", "status"),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_list(status)
+    return Success(ep.table_list(status))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_delete_batch")
 def table_delete_batch(
     ids: Annotated[list[str], parameter_field("table_delete_batch", "ids")],
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_delete_batch(ids)
+    return Success(ep.table_delete_batch(ids))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_export")
 def table_export(
     table_id: Annotated[str, parameter_field("table_export", "table_id")],
     format: Annotated[
         Literal["markdown", "jsonl"], parameter_field("table_export", "format")
     ] = parameter_default("table_export", "format"),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_export(table_id, format)
+    return Success(ep.table_export(table_id, format))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_say")
 def table_say(
     table_id: Annotated[str, parameter_field("table_say", "table_id")],
@@ -435,9 +468,9 @@ def table_say(
     dedup_id: Annotated[str, parameter_field("table_say", "dedup_id")] = parameter_default(
         "table_say", "dedup_id"
     ),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_say(
+    return Success(ep.table_say(
         table_id,
         content,
         speaker_kind,
@@ -447,10 +480,9 @@ def table_say(
         mentions,
         reply_to_sequence,
         dedup_id,
-    )
+    ))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_listen")
 def table_listen(
     table_id: Annotated[str, parameter_field("table_listen", "table_id")],
@@ -460,12 +492,11 @@ def table_listen(
     limit: Annotated[int, parameter_field("table_listen", "limit")] = parameter_default(
         "table_listen", "limit"
     ),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_listen(table_id, since_sequence, limit)
+    return Success(ep.table_listen(table_id, since_sequence, limit))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_control")
 def table_control(
     table_id: Annotated[str, parameter_field("table_control", "table_id")],
@@ -482,12 +513,11 @@ def table_control(
     dedup_id: Annotated[str, parameter_field("table_control", "dedup_id")] = parameter_default(
         "table_control", "dedup_id"
     ),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_control(table_id, action, speaker_name, patron_id, reason, dedup_id)
+    return Success(ep.table_control(table_id, action, speaker_name, patron_id, reason, dedup_id))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_update")
 def table_update(
     table_id: Annotated[str, parameter_field("table_update", "table_id")],
@@ -500,12 +530,11 @@ def table_update(
     dedup_id: Annotated[str, parameter_field("table_update", "dedup_id")] = parameter_default(
         "table_update", "dedup_id"
     ),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return ep.table_update(table_id, expected_version, patch, speaker_name, patron_id, dedup_id)
+    return Success(ep.table_update(table_id, expected_version, patch, speaker_name, patron_id, dedup_id))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("table_wait")
 async def table_wait(
     table_id: Annotated[str, parameter_field("table_wait", "table_id")],
@@ -521,12 +550,11 @@ async def table_wait(
     include_table: Annotated[
         bool, parameter_field("table_wait", "include_table")
     ] = parameter_default("table_wait", "include_table"),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return await ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table)
+    return Success(await ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table))
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("seat_heartbeat")
 def seat_heartbeat(
     table_id: Annotated[str, parameter_field("seat_heartbeat", "table_id")],
@@ -545,38 +573,35 @@ def seat_heartbeat(
     seat_id: Annotated[str, parameter_field("seat_heartbeat", "seat_id")] = parameter_default(
         "seat_heartbeat", "seat_id"
     ),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.seat_heartbeat(table_id, patron_id, state, ttl_ms, dedup_id, seat_id)
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("seat_list")
 def seat_list(
     table_id: Annotated[str, parameter_field("seat_list", "table_id")],
     active_only: Annotated[bool, parameter_field("seat_list", "active_only")] = parameter_default(
         "seat_list", "active_only"
     ),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.seat_list(table_id, active_only)
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("connect")
 async def connect(
     url: Annotated[str, parameter_field("connect", "url")] = parameter_default("connect", "url"),
     token: Annotated[str, parameter_field("connect", "token")] = parameter_default(
         "connect", "token"
     ),
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return await ep.connect(url, token)
 
 
-# @invar:allow shell_result: server.py - MCP tool returns protocol primitives, not Result[T, E]
 @_contract_tool("connection_status")
-def connection_status() -> dict[str, Any]:
+def connection_status() -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.connection_status()
 
@@ -757,9 +782,8 @@ class ProxyMiddleware(Middleware):
 mcp.add_middleware(ProxyMiddleware())
 
 
-# @invar:allow shell_result: server.py - entry point has no return value needed
 # @shell_orchestration: Server startup is orchestration, not business logic
-def run_mcp_server(transport: TransportType = "stdio") -> None:
+def run_mcp_server(transport: TransportType = "stdio") -> Result[None, str]:
     """Run the MCP server.
 
     Args:
@@ -767,5 +791,6 @@ def run_mcp_server(transport: TransportType = "stdio") -> None:
     """
     try:
         mcp.run(transport=transport)
+        return Success(None)
     finally:
         close_mcp_db()

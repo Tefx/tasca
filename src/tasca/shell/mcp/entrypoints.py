@@ -76,6 +76,9 @@ from tasca.shell.mcp.entrypoint_logic import (
     silence_next_action as _silence_next_action,
 )
 from tasca.shell.mcp.entrypoint_session_tools import (
+    McpResult,
+)
+from tasca.shell.mcp.entrypoint_session_tools import (
     connect_impl as _connect_impl,
 )
 from tasca.shell.mcp.entrypoint_session_tools import (
@@ -144,7 +147,6 @@ logger = get_logger(__name__)
 _loop_state: dict[str, dict[str, int]] = {}
 
 
-# @invar:allow shell_result: entrypoints.py - pure in-memory state, not I/O
 # @shell_orchestration: Session loop state is MCP runtime orchestration state.
 def _get_loop_state(table_id: str) -> dict[str, int]:
     """Implementation detail for MCP tool behavior."""
@@ -156,7 +158,6 @@ def _get_loop_state(table_id: str) -> dict[str, int]:
     return _loop_state[table_id]
 
 
-# @invar:allow shell_result: entrypoints.py - pure in-memory state, not I/O
 # @shell_orchestration: Session loop counters must remain in MCP shell state.
 def _record_wait_result(table_id: str, *, got_sayings: bool) -> dict[str, int]:
     """Implementation detail for MCP tool behavior."""
@@ -169,7 +170,6 @@ def _record_wait_result(table_id: str, *, got_sayings: bool) -> dict[str, int]:
     return state
 
 
-# @invar:allow shell_result: entrypoints.py - MCP settings adapter returns domain config, not Result
 # @shell_orchestration: Shell-local adapter from settings to MCP limits behavior.
 def _limits_config_from_settings() -> LimitsConfig:
     """Implementation detail for MCP tool behavior."""
@@ -186,7 +186,6 @@ def _limits_config_from_settings() -> LimitsConfig:
     return config
 
 
-# @invar:allow shell_result: MCP authorization preflight maps table state to protocol error envelopes.
 # @shell_orchestration: Permission preflight requires DB lookup before mutation in MCP adapter.
 # @shell_complexity: Auth, not-found, database, and denial branches are kept before mutation for atomicity.
 def _authorize_table_mutation(conn: Any, table_id: str, patron_id: str | None) -> dict[str, Any] | None:
@@ -215,7 +214,6 @@ def _authorize_table_mutation(conn: Any, table_id: str, patron_id: str | None) -
 
 
 # @shell_complexity: 10 branches for patron dedup check + create + idempotency store + error paths + backward compat
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def patron_register(
     display_name: str | None = None,
     alias: str | None = None,
@@ -260,7 +258,6 @@ def patron_register(
     return success_response(response_data)
 
 
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def patron_get(patron_id: str) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
@@ -299,7 +296,6 @@ def patron_get(patron_id: str) -> dict[str, Any]:
 
 
 # @shell_complexity: 5 branches for table creation + dedup store + idempotency + error handling
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_create(
     question: str | None = None,
     context: str | None = None,
@@ -395,7 +391,6 @@ DEFAULT_HISTORY_LIMIT = 10
 DEFAULT_HISTORY_MAX_BYTES = 65536  # 64 KiB
 
 
-# @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
 def _create_seat_for_join(
     conn: Any, table_id: str, patron_id: str
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -430,7 +425,6 @@ def _create_seat_for_join(
 
 
 # @shell_complexity: table lookup + can_join guard + seat creation + history fetch + error paths
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_join(
     table_id: str | None = None,
     patron_id: str | None = None,
@@ -520,7 +514,6 @@ def table_join(
     )
 
 
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_get(table_id: str) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
@@ -541,7 +534,6 @@ VALID_TABLE_STATUS_FILTERS = ("open", "closed", "paused", "all")
 
 
 # @shell_complexity: 5 branches for status validation + open-with-seats vs filtered-list dispatch + error paths
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
     if status not in VALID_TABLE_STATUS_FILTERS:
@@ -597,7 +589,6 @@ def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> d
 
 
 # @shell_complexity: 5 branches for input validation + per-ID fetch loop + validation gate + delete result + error paths
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_delete_batch(ids: list[str]) -> dict[str, Any]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
@@ -637,7 +628,6 @@ VALID_EXPORT_FORMATS = ("markdown", "jsonl")
 
 
 # @shell_complexity: 6 branches for format validation + table lookup + sayings fetch + format dispatch + error paths
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_export(
     table_id: str,
     format: str = "markdown",
@@ -670,7 +660,6 @@ def table_export(
     )
 
 
-# @invar:allow shell_result: entrypoints.py - MCP helper performs I/O, returns patron_id or None
 def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | None:
     """Implementation detail for MCP tool behavior."""
     auto_name = speaker_name or "Anonymous Agent"
@@ -697,7 +686,6 @@ def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | 
     return str(new_id)  # Use the generated ID even if store failed
 
 
-# @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
 # @shell_complexity: Centralized adapter maps each shared table_say failure family to public MCP codes.
 def _table_say_error_to_mcp_response(error: TableSayError) -> dict[str, Any]:
     """Map shared table_say errors to the legacy MCP response envelope."""
@@ -721,7 +709,6 @@ def _table_say_error_to_mcp_response(error: TableSayError) -> dict[str, Any]:
     return error_response("DATABASE_ERROR", error.message)
 
 
-# @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
 def _resolve_mentions_for_say(
     conn: Any, mentions: list[str] | None
 ) -> tuple[bool, list[str], list[str], dict[str, Any] | None]:
@@ -773,7 +760,6 @@ def _resolve_mentions_for_say(
     return mentions_all, mentions_resolved, mentions_unresolved, None
 
 
-# @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
 def _check_say_idempotency(
     conn: Any, resource_key: str, dedup_id: str | None, logger: Any
 ) -> tuple[dict[str, Any] | None, bool]:
@@ -804,7 +790,6 @@ def _check_say_idempotency(
 
 
 # @shell_complexity: MCP adapter keeps idempotency/mentions/response envelope around shared table_say operation.
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_say(
     table_id: str,
     content: str,
@@ -885,7 +870,6 @@ def table_say(
 
 
 # @shell_complexity: 5 branches for table lookup + long-poll loop + timeout + backoff + error handling
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_listen(
     table_id: str,
     since_sequence: int = -1,
@@ -954,7 +938,6 @@ MAX_WAIT_MS = 10000
 POLL_INTERVAL_MS = 500
 
 
-# @invar:allow shell_result: entrypoints.py - MCP helper returns dict responses, not Result
 # @shell_orchestration: CONTROL speaker construction is protocol-local shell wiring.
 def _create_control_speaker(speaker_name: str, patron_id: str | None) -> Speaker:
     """Implementation detail for MCP tool behavior."""
@@ -972,7 +955,6 @@ def _create_control_speaker(speaker_name: str, patron_id: str | None) -> Speaker
 
 
 # @shell_complexity: idempotency + shared atomic control dispatch + MCP error/envelope shaping
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_control(
     table_id: str,
     action: Literal["pause", "resume", "close"],
@@ -1039,7 +1021,6 @@ def table_control(
 
 
 # @shell_complexity: 8 branches for table lookup + version check + update + dedup + error paths
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def table_update(
     table_id: str,
     expected_version: int,
@@ -1130,7 +1111,6 @@ def table_update(
 
 
 # @shell_complexity: 10 branches for table lookup + long-poll loop + timeout + backoff + error handling
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 # Note: FastMCP supports async tools - using async def for blocking wait
 async def table_wait(
     table_id: str,
@@ -1224,7 +1204,6 @@ async def table_wait(
 # =============================================================================
 
 
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def seat_heartbeat(
     table_id: str,
     patron_id: str | None = None,
@@ -1232,16 +1211,15 @@ def seat_heartbeat(
     ttl_ms: int | None = None,
     dedup_id: str | None = None,
     seat_id: str | None = None,
-) -> dict[str, Any]:
+) -> McpResult:
     """Implementation detail for MCP tool behavior."""
     return _seat_heartbeat_impl(table_id, patron_id, state, ttl_ms, dedup_id, seat_id)
 
 
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
 def seat_list(
     table_id: str,
     active_only: bool = True,
-) -> dict[str, Any]:
+) -> McpResult:
     """Implementation detail for MCP tool behavior."""
     return _seat_list_impl(table_id, active_only)
 
@@ -1251,13 +1229,11 @@ def seat_list(
 # =============================================================================
 
 
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
-async def connect(url: str | None = None, token: str | None = None) -> dict[str, Any]:
+async def connect(url: str | None = None, token: str | None = None) -> McpResult:
     """Implementation detail for MCP tool behavior."""
     return await _connect_impl(url, token)
 
 
-# @invar:allow shell_result: entrypoints.py - MCP tool returns dict responses, not Result[T, E]
-def connection_status() -> dict[str, Any]:
+def connection_status() -> McpResult:
     """Implementation detail for MCP tool behavior."""
     return _connection_status_impl()

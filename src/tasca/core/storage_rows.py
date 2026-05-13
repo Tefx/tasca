@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import Any, cast
 
 import deal
 
@@ -67,7 +68,7 @@ def row_to_table(row: tuple[object, ...]) -> Table:
         question=str(row[1]),
         context=str(row[2]) if row[2] is not None else None,
         status=TableStatus(str(row[3])),
-        version=Version(int(row[4])),
+        version=Version(int(cast(Any, row[4]))),
         created_at=datetime.fromisoformat(str(row[5])),
         updated_at=datetime.fromisoformat(str(row[6])),
         creator_patron_id=str(row[7]) if len(row) > 7 and row[7] is not None else None,
@@ -89,7 +90,7 @@ def row_to_saying(row: tuple[object, ...]) -> Saying:
     return Saying(
         id=SayingId(str(row[0])),
         table_id=str(row[1]),
-        sequence=int(row[2]),
+        sequence=int(cast(Any, row[2])),
         speaker=Speaker(
             kind=SpeakerKind(str(row[3])),
             name=str(row[4]),

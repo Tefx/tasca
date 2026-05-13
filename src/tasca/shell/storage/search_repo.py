@@ -18,7 +18,8 @@ from typing import Any, NewType
 from returns.result import Failure, Result, Success
 
 from tasca.core.domain.saying import Saying
-from tasca.core.storage_rows import row_to_saying, truncate_snippet
+from tasca.core.storage_rows import row_to_saying
+from tasca.core.storage_rows import truncate_snippet as _truncate_snippet
 
 # Type for repository errors
 SearchError = NewType("SearchError", str)
@@ -139,10 +140,10 @@ def search_sayings(
 
         results: list[SearchResult] = []
         for row in rows:
-            row_result = _row_to_search_result(row)
-            if isinstance(row_result, Failure):
-                return row_result
-            results.append(row_result.unwrap())
+            try:
+                results.append(_row_to_search_result(row))
+            except (IndexError, TypeError, ValueError) as exc:
+                return Failure(SearchError(f"Malformed search result row: {exc}"))
         return Success(results)
 
     except sqlite3.Error as e:
@@ -229,26 +230,21 @@ def rebuild_fts_index(conn: sqlite3.Connection) -> Result[int, SearchError]:
 
 
 # @shell_orchestration: Private helper for DB row -> domain object conversion
-def _row_to_search_result(row: tuple[Any, ...]) -> Result[SearchResult, SearchError]:
+def _row_to_search_result(row: tuple[Any, ...]) -> SearchResult:
     """Convert a database row to a SearchResult.
 
     Args:
         row: Database row tuple with saying fields + rank + snippet.
 
     Returns:
-        Success with SearchResult, or Failure when persisted row data is malformed.
+        SearchResult with Saying, rank, and snippet.
     """
-    try:
-        saying = row_to_saying(row[:9])
-        return Success(
-            SearchResult(
-                saying=saying,
-                rank=float(row[9]),
-                snippet=str(row[10]) if row[10] else saying.content[:200],
-            )
-        )
-    except (IndexError, TypeError, ValueError) as exc:
-        return Failure(SearchError(f"Malformed search result row: {exc}"))
+    saying = row_to_saying(row[:9])
+    return SearchResult(
+        saying=saying,
+        rank=float(row[9]),
+        snippet=str(row[10]) if row[10] else saying.content[:200],
+    )
 
 
 # =============================================================================
@@ -306,10 +302,10 @@ def _rows_to_table_hits(rows: list[tuple[Any, ...]]) -> Result[list[TableSearchH
     """Convert SQL rows to table hits, preserving first malformed-row failure."""
     hits: list[TableSearchHit] = []
     for row in rows:
-        hit_result = _row_to_table_hit(row)
-        if isinstance(hit_result, Failure):
-            return hit_result
-        hits.append(hit_result.unwrap())
+        try:
+            hits.append(_row_to_table_hit(row))
+        except (IndexError, TypeError, ValueError) as exc:
+            return Failure(SearchError(f"Malformed table search row: {exc}"))
     return Success(hits)
 
 
@@ -385,7 +381,7 @@ def _build_like_hit(row: tuple[Any, ...], query_param: str) -> Result[TableSearc
     if match is None:
         return Success(None)
     match_type, source_text = match
-    snippet = truncate_snippet(source_text, query_param)
+    snippet = _truncate_snippet(source_text, query_param)
 
     return Success(TableSearchHit(
         table_id=str(row[0]),
@@ -591,18 +587,18 @@ def count_table_search_results(
 
 
 # @shell_orchestration: Private helper for DB row format conversion
-def _row_to_table_hit(row: tuple[Any, ...]) -> Result[TableSearchHit, SearchError]:
+def _row_to_table_hit(row: tuple[Any, ...]) -> TableSearchHit:
     """Convert a database row to a TableSearchHit.
 
     Args:
         row: Database row tuple with table fields + rank + snippet + match_type.
 
     Returns:
-        Success with TableSearchHit, or Failure for malformed persisted data.
+        TableSearchHit with all fields populated.
     """
     question = str(row[1] or "")
     snippet = str(row[5] or question[:200])
-    return Success(TableSearchHit(
+    return TableSearchHit(
         table_id=str(row[0]),
         question=question,
         context=str(row[2]) if row[2] is not None else None,
@@ -612,4 +608,4 @@ def _row_to_table_hit(row: tuple[Any, ...]) -> Result[TableSearchHit, SearchErro
         match_type=str(row[6]),
         created_at=str(row[7]),
         updated_at=str(row[8]),
-    ))
+    )

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from returns.result import Result, Success, Failure
+from returns.result import Failure, Result, Success
 
 
 def _get_version_result() -> Result[str, str]:

@@ -39687,7 +39687,7 @@ phases:
     agent: integration-verifier-tacit
   - id: fix-pp-invar-mcp-residual
     name: Residual Invar budget remediation — MCP residual seams only
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -39875,6 +39875,8 @@ phases:
     depends_on:
     - retest-full-plan-blockers
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-13T02:56:26.611103+00:00'
   - id: fix-pp-invar-storage-config-residual
     name: Residual Invar budget remediation — storage/config/services
     status: done

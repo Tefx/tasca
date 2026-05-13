@@ -43579,7 +43579,7 @@ phases:
       none (verify-only step).'
   - id: finalization.fix-deep-wiring-table-metadata-contract
     name: fix-deep-wiring-table-metadata-contract
-    status: pending
+    status: claimed
     description: "step_type: implementation\nverification_scope: full-plan-check remediation\n\
       agent: python-senior\npriority: HIGH\nsymbolic_testing: false\n\nBatched remediation\
       \ for failed broad wiring audit step `finalization.deep-wiring-audit`.\n\n##\
@@ -43725,6 +43725,8 @@ phases:
     depends_on:
     - finalization.deep-wiring-audit
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-13T06:18:04.175698+00:00'
   - id: finalization.retest-deep-wiring-table-metadata-contract
     name: retest-deep-wiring-table-metadata-contract
     status: pending

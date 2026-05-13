@@ -98,7 +98,7 @@ def seat_heartbeat_impl(
     ttl_ms: int | None = None,
     dedup_id: str | None = None,
     seat_id: str | None = None,
-) -> McpResult:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Heartbeat implementation shared by MCP entrypoint wrapper."""
     conn = next(get_mcp_db())
 
@@ -156,7 +156,7 @@ def seat_heartbeat_impl(
     return Success(success_response(response_data))
 
 
-def seat_list_impl(table_id: str, active_only: bool = True) -> McpResult:
+def seat_list_impl(table_id: str, active_only: bool = True) -> Result[McpEnvelope, McpEnvelope]:
     """Seat list implementation shared by MCP entrypoint wrapper."""
     conn = next(get_mcp_db())
     now = datetime.now(UTC)
@@ -192,7 +192,7 @@ def seat_list_impl(table_id: str, active_only: bool = True) -> McpResult:
 
 
 # @shell_complexity: Boundary glue branches by local/remote mode and preserves MCP error envelope shape.
-async def connect_impl(url: str | None = None, token: str | None = None) -> McpResult:
+async def connect_impl(url: str | None = None, token: str | None = None) -> Result[McpEnvelope, McpEnvelope]:
     """Proxy mode switch implementation shared by MCP entrypoint wrapper."""
     if url is not None:
         from tasca.shell.mcp.proxy import switch_to_remote_with_session
@@ -227,7 +227,7 @@ async def connect_impl(url: str | None = None, token: str | None = None) -> McpR
     ))
 
 
-def connection_status_impl() -> McpResult:
+def connection_status_impl() -> Result[McpEnvelope, McpEnvelope]:
     """Proxy status implementation shared by MCP entrypoint wrapper."""
     from tasca.shell.mcp.proxy import get_upstream_config
 

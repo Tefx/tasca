@@ -325,7 +325,7 @@ def patron_register(
     ] = parameter_default("patron_register", "kind"),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.patron_register(display_name, alias, meta, patron_id, dedup_id, name, kind))
+    return ep.patron_register(display_name, alias, meta, patron_id, dedup_id, name, kind)
 
 
 @_contract_tool("patron_get")
@@ -333,7 +333,7 @@ def patron_get(
     patron_id: Annotated[str, parameter_field("patron_get", "patron_id")],
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.patron_get(patron_id))
+    return ep.patron_get(patron_id)
 
 
 @_contract_tool("table_create")
@@ -370,7 +370,7 @@ def table_create(
     ),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_create(
+    return ep.table_create(
         question=question,
         context=context,
         creator_patron_id=creator_patron_id,
@@ -381,7 +381,7 @@ def table_create(
         metadata=metadata,
         policy=policy,
         board=board,
-    ))
+    )
 
 
 @_contract_tool("table_join")
@@ -403,7 +403,7 @@ def table_join(
     ] = parameter_default("table_join", "history_max_bytes"),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_join(table_id, patron_id, invite_code, history_limit, history_max_bytes))
+    return ep.table_join(table_id, patron_id, invite_code, history_limit, history_max_bytes)
 
 
 @_contract_tool("table_get")
@@ -411,7 +411,7 @@ def table_get(
     table_id: Annotated[str, parameter_field("table_get", "table_id")],
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_get(table_id))
+    return ep.table_get(table_id)
 
 
 @_contract_tool("table_list")
@@ -421,7 +421,7 @@ def table_list(
     ] = parameter_default("table_list", "status"),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_list(status))
+    return ep.table_list(status)
 
 
 @_contract_tool("table_delete_batch")
@@ -429,7 +429,7 @@ def table_delete_batch(
     ids: Annotated[list[str], parameter_field("table_delete_batch", "ids")],
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_delete_batch(ids))
+    return ep.table_delete_batch(ids)
 
 
 @_contract_tool("table_export")
@@ -440,7 +440,7 @@ def table_export(
     ] = parameter_default("table_export", "format"),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_export(table_id, format))
+    return ep.table_export(table_id, format)
 
 
 @_contract_tool("table_say")
@@ -470,7 +470,7 @@ def table_say(
     ),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_say(
+    return ep.table_say(
         table_id,
         content,
         speaker_kind,
@@ -480,7 +480,7 @@ def table_say(
         mentions,
         reply_to_sequence,
         dedup_id,
-    ))
+    )
 
 
 @_contract_tool("table_listen")
@@ -494,7 +494,7 @@ def table_listen(
     ),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_listen(table_id, since_sequence, limit))
+    return ep.table_listen(table_id, since_sequence, limit)
 
 
 @_contract_tool("table_control")
@@ -515,7 +515,7 @@ def table_control(
     ),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_control(table_id, action, speaker_name, patron_id, reason, dedup_id))
+    return ep.table_control(table_id, action, speaker_name, patron_id, reason, dedup_id)
 
 
 @_contract_tool("table_update")
@@ -532,7 +532,7 @@ def table_update(
     ),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(ep.table_update(table_id, expected_version, patch, speaker_name, patron_id, dedup_id))
+    return ep.table_update(table_id, expected_version, patch, speaker_name, patron_id, dedup_id)
 
 
 @_contract_tool("table_wait")
@@ -552,7 +552,7 @@ async def table_wait(
     ] = parameter_default("table_wait", "include_table"),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
-    return Success(await ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table))
+    return await ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table)
 
 
 @_contract_tool("seat_heartbeat")

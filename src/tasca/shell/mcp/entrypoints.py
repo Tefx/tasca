@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from returns.result import Failure, Success
+from returns.result import Failure, Result, Success
 
 from tasca.core.domain.patron import Patron, PatronId
 from tasca.core.domain.saying import Speaker, SpeakerKind
@@ -76,9 +76,6 @@ from tasca.shell.mcp.entrypoint_logic import (
     silence_next_action as _silence_next_action,
 )
 from tasca.shell.mcp.entrypoint_session_tools import (
-    McpResult,
-)
-from tasca.shell.mcp.entrypoint_session_tools import (
     connect_impl as _connect_impl,
 )
 from tasca.shell.mcp.entrypoint_session_tools import (
@@ -140,6 +137,7 @@ from tasca.shell.storage.table_repo import (
 )
 
 logger = get_logger(__name__)
+McpEnvelope = dict[str, Any]
 
 # Per-session loop state tracking.
 # MCP server runs per-agent (stdio) or per-session (HTTP), so module-level state
@@ -148,64 +146,65 @@ _loop_state: dict[str, dict[str, int]] = {}
 
 
 # @shell_orchestration: Session loop state is MCP runtime orchestration state.
-def _get_loop_state(table_id: str) -> dict[str, int]:
+def _get_loop_state(table_id: str) -> Result[dict[str, int], McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     if table_id not in _loop_state:
         _loop_state[table_id] = {
             "consecutive_empty_waits": 0,
             "total_iterations": 0,
         }
-    return _loop_state[table_id]
+    return Success(_loop_state[table_id])
 
 
 # @shell_orchestration: Session loop counters must remain in MCP shell state.
-def _record_wait_result(table_id: str, *, got_sayings: bool) -> dict[str, int]:
+def _record_wait_result(table_id: str, *, got_sayings: bool) -> Result[dict[str, int], McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
-    state = _get_loop_state(table_id)
+    state_result = _get_loop_state(table_id)
+    state = state_result.unwrap()
     state["total_iterations"] += 1
     if got_sayings:
         state["consecutive_empty_waits"] = 0
     else:
         state["consecutive_empty_waits"] += 1
-    return state
+    return Success(state)
 
 
 # @shell_orchestration: Shell-local adapter from settings to MCP limits behavior.
-def _limits_config_from_settings() -> LimitsConfig:
+def _limits_config_from_settings() -> Result[LimitsConfig, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     from tasca.config import settings as _settings  # Lazy import for test monkeypatching
 
     config = settings_to_limits_config(_settings)
     if config.max_content_length is None:
-        return LimitsConfig(
+        return Success(LimitsConfig(
             max_sayings_per_table=config.max_sayings_per_table,
             max_content_length=65536,
             max_bytes_per_table=config.max_bytes_per_table,
             max_mentions_per_saying=config.max_mentions_per_saying,
-        )
-    return config
+        ))
+    return Success(config)
 
 
 # @shell_orchestration: Permission preflight requires DB lookup before mutation in MCP adapter.
 # @shell_complexity: Auth, not-found, database, and denial branches are kept before mutation for atomicity.
-def _authorize_table_mutation(conn: Any, table_id: str, patron_id: str | None) -> dict[str, Any] | None:
+def _authorize_table_mutation(conn: Any, table_id: str, patron_id: str | None) -> Result[None, McpEnvelope]:
     """Allow table creator or human-admin (no patron_id) to control/update a table."""
     if patron_id is None:
-        return None
+        return Success(None)
     table_result = get_table(conn, TableId(table_id))
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return Failure(error_response("NOT_FOUND", f"Table not found: {table_id}"))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get table: {error}"))
     table = table_result.unwrap()
     if table.creator_patron_id == patron_id or patron_id in table.host_ids:
-        return None
-    return error_response(
+        return Success(None)
+    return Failure(error_response(
         "PERMISSION_DENIED",
         "Actor is not authorized to control or update this table",
         {"table_id": table_id, "patron_id": patron_id},
-    )
+    ))
 
 
 # =============================================================================
@@ -223,15 +222,15 @@ def patron_register(
     # Backward compatibility: accept 'name' as alias for display_name
     name: str | None = None,
     kind: str = "agent",
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     # Backward compatibility: fall back to 'name' if display_name not provided
     resolved_name = display_name or name
     if resolved_name is None:
-        return error_response(
+        return Failure(error_response(
             "INVALID_REQUEST",
             "display_name (or name for backward compat) is required",
-        )
+        ))
 
     conn = next(get_mcp_db())
     now = datetime.now(UTC)
@@ -248,17 +247,17 @@ def patron_register(
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, PatronIdempotencyError | PatronLookupError | PatronCreateError):
-            return error_response("DATABASE_ERROR", str(error))
-        return error_response("DATABASE_ERROR", f"Failed to register patron: {error}")
+            return Failure(error_response("DATABASE_ERROR", str(error)))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to register patron: {error}"))
 
     outcome = result.unwrap()
     if dedup_id is not None and not outcome.is_new:
         log_dedup_hit(logger, "patron_register", "patron_register", dedup_id)
     response_data = _build_patron_response_data(outcome.patron, is_new=outcome.is_new)
-    return success_response(response_data)
+    return Success(success_response(response_data))
 
 
-def patron_get(patron_id: str) -> dict[str, Any]:
+def patron_get(patron_id: str) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
     result = get_patron(conn, PatronId(patron_id))
@@ -266,11 +265,11 @@ def patron_get(patron_id: str) -> dict[str, Any]:
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, PatronNotFoundError):
-            return error_response("NOT_FOUND", f"Patron not found: {patron_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+            return Failure(error_response("NOT_FOUND", f"Patron not found: {patron_id}"))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get patron: {error}"))
 
     patron = result.unwrap()
-    return success_response(
+    return Success(success_response(
         {
             # Spec-compliant nested structure
             "patron": {
@@ -287,7 +286,7 @@ def patron_get(patron_id: str) -> dict[str, Any]:
             "meta": patron.meta,
             "created_at": patron.created_at.isoformat(),
         }
-    )
+    ))
 
 
 # =============================================================================
@@ -308,7 +307,7 @@ def table_create(
     metadata: dict[str, Any] | None = None,
     policy: dict[str, Any] | None = None,
     board: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
 
@@ -320,14 +319,14 @@ def table_create(
         idempotency_result = check_idempotency_key(conn, resource_key, "table_create", dedup_id)
         if isinstance(idempotency_result, Failure):
             error = idempotency_result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+            return Failure(error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}"))
 
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
             # Log dedup hit
             log_dedup_hit(logger, "table_create", resource_key, dedup_id)
             # Return cached response (return_existing semantics)
-            return success_response(cached_response["data"])
+            return Success(success_response(cached_response["data"]))
 
     now = datetime.now(UTC)
     result = create_discussion_table(
@@ -345,7 +344,7 @@ def table_create(
     )
     if isinstance(result, Failure):
         error = result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to create table: {error}")
+        return Failure(error_response("DATABASE_ERROR", f"Failed to create table: {error}"))
 
     outcome = result.unwrap()
     created = outcome.table
@@ -383,7 +382,7 @@ def table_create(
             {"data": response_data},
             now=now,
         )
-    return success_response(response_data)
+    return Success(success_response(response_data))
 
 
 # Spec defaults for table.join
@@ -393,14 +392,14 @@ DEFAULT_HISTORY_MAX_BYTES = 65536  # 64 KiB
 
 def _create_seat_for_join(
     conn: Any, table_id: str, patron_id: str
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+) -> Result[dict[str, Any], McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     patron_result = get_patron(conn, PatronId(patron_id))
     if isinstance(patron_result, Failure):
         error = patron_result.failure()
         if isinstance(error, PatronNotFoundError):
-            return None, error_response("NOT_FOUND", f"Patron not found: {patron_id}")
-        return None, error_response("DATABASE_ERROR", f"Failed to get patron: {error}")
+            return Failure(error_response("NOT_FOUND", f"Patron not found: {patron_id}"))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get patron: {error}"))
 
     now = datetime.now(UTC)
     seat_id = SeatId(str(uuid.uuid4()))
@@ -417,11 +416,11 @@ def _create_seat_for_join(
     seat_result = create_seat(conn, seat)
     if isinstance(seat_result, Failure):
         error = seat_result.failure()
-        return None, error_response("DATABASE_ERROR", f"Failed to create seat: {error}")
+        return Failure(error_response("DATABASE_ERROR", f"Failed to create seat: {error}"))
 
     created_seat = seat_result.unwrap()
     expires_at = calculate_expiry_time(created_seat.last_heartbeat, DEFAULT_SEAT_TTL_SECONDS)
-    return _build_seat_dict(created_seat, expires_at), None
+    return Success(_build_seat_dict(created_seat, expires_at))
 
 
 # @shell_complexity: table lookup + can_join guard + seat creation + history fetch + error paths
@@ -431,41 +430,41 @@ def table_join(
     invite_code: str | None = None,
     history_limit: int | None = DEFAULT_HISTORY_LIMIT,
     history_max_bytes: int | None = DEFAULT_HISTORY_MAX_BYTES,
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
 
     # Resolve table identifier: prefer invite_code, fall back to table_id
     resolved_table_id = invite_code or table_id
     if resolved_table_id is None:
-        return error_response(
+        return Failure(error_response(
             "INVALID_REQUEST",
             "Either invite_code or table_id must be provided",
-        )
+        ))
 
     # Verify table exists
     table_result = get_table(conn, TableId(resolved_table_id))
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {resolved_table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return Failure(error_response("NOT_FOUND", f"Table not found: {resolved_table_id}"))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get table: {error}"))
 
     table = table_result.unwrap()
 
     # Check state machine guard: only OPEN tables can be joined
     if not can_join(table.status):
-        return error_response(
+        return Failure(error_response(
             "OPERATION_NOT_ALLOWED",
             f"Cannot join table with status '{table.status.value}'. Only OPEN tables accept new joins.",
             {"table_status": table.status.value},
-        )
+        ))
 
     # Get max sequence for sequence_latest
     max_seq_result = get_table_max_sequence(conn, resolved_table_id)
     if isinstance(max_seq_result, Failure):
         error = max_seq_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to get table sequence: {error}")
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get table sequence: {error}"))
     sequence_latest = max_seq_result.unwrap()
 
     # Get initial history window (apply defaults if agent passed null)
@@ -478,7 +477,7 @@ def table_join(
     )
     if isinstance(history_result, Failure):
         error = history_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to get history: {error}")
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get history: {error}"))
 
     history_sayings, history_sequence, has_more_history = history_result.unwrap()
 
@@ -494,11 +493,12 @@ def table_join(
     # Create seat if patron_id provided (optional - allows human join without seat)
     seat_data = None
     if patron_id is not None:
-        seat_data, seat_error = _create_seat_for_join(conn, resolved_table_id, patron_id)
-        if seat_error is not None:
-            return seat_error
+        seat_result = _create_seat_for_join(conn, resolved_table_id, patron_id)
+        if isinstance(seat_result, Failure):
+            return seat_result
+        seat_data = seat_result.unwrap()
 
-    return success_response(
+    return Success(success_response(
         {
             "table": _build_table_dict(table),
             "sequence_latest": sequence_latest,
@@ -511,10 +511,10 @@ def table_join(
             **({"seat": seat_data} if seat_data is not None else {}),
             "_next_action": _build_join_next_action(bool(history_sayings), next_sequence),
         }
-    )
+    ))
 
 
-def table_get(table_id: str) -> dict[str, Any]:
+def table_get(table_id: str) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
     result = get_table(conn, TableId(table_id))
@@ -522,11 +522,11 @@ def table_get(table_id: str) -> dict[str, Any]:
     if isinstance(result, Failure):
         error = result.failure()
         if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return Failure(error_response("NOT_FOUND", f"Table not found: {table_id}"))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get table: {error}"))
 
     table = result.unwrap()
-    return success_response(_build_table_dict(table))
+    return Success(success_response(_build_table_dict(table)))
 
 
 # Valid status filters for table_list
@@ -534,14 +534,14 @@ VALID_TABLE_STATUS_FILTERS = ("open", "closed", "paused", "all")
 
 
 # @shell_complexity: 5 branches for status validation + open-with-seats vs filtered-list dispatch + error paths
-def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> dict[str, Any]:
+def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     if status not in VALID_TABLE_STATUS_FILTERS:
-        return error_response(
+        return Failure(error_response(
             "INVALID_REQUEST",
             f"Invalid status filter: '{status}'. Supported values: {', '.join(VALID_TABLE_STATUS_FILTERS)}.",
             {"status": status, "supported": list(VALID_TABLE_STATUS_FILTERS)},
-        )
+        ))
 
     conn = next(get_mcp_db())
 
@@ -553,17 +553,17 @@ def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> d
 
         if isinstance(result, Failure):
             error = result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to list tables: {error}")
+            return Failure(error_response("DATABASE_ERROR", f"Failed to list tables: {error}"))
 
         tables = result.unwrap()
-        return success_response({"tables": tables, "total": len(tables)})
+        return Success(success_response({"tables": tables, "total": len(tables)}))
 
     # For other statuses, use list_tables and filter
     table_result = list_tables(conn)
 
     if isinstance(table_result, Failure):
         error = table_result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to list tables: {error}")
+        return Failure(error_response("DATABASE_ERROR", f"Failed to list tables: {error}"))
 
     all_tables = table_result.unwrap()
 
@@ -585,24 +585,24 @@ def table_list(status: Literal["open", "closed", "paused", "all"] = "open") -> d
         for t in filtered
     ]
 
-    return success_response({"tables": tables_data, "total": len(tables_data)})
+    return Success(success_response({"tables": tables_data, "total": len(tables_data)}))
 
 
 # @shell_complexity: 5 branches for input validation + per-ID fetch loop + validation gate + delete result + error paths
-def table_delete_batch(ids: list[str]) -> dict[str, Any]:
+def table_delete_batch(ids: list[str]) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
     result = delete_tables_batch(conn, ids)
     if isinstance(result, Failure):
         failure = result.failure()
         if failure.status == "invalid_request":
-            return error_response(
+            return Failure(error_response(
                 "INVALID_REQUEST",
                 failure.error or f"ids must contain 1 to {failure.max_batch_size} table IDs.",
                 {"count": len(ids), "max": failure.max_batch_size},
-            )
+            ))
         if failure.status == "precondition_failed":
-            return error_response(
+            return Failure(error_response(
                 "BATCH_PRECONDITION_FAILED",
                 "One or more tables cannot be deleted.",
                 {
@@ -610,17 +610,17 @@ def table_delete_batch(ids: list[str]) -> dict[str, Any]:
                         {"id": r.table_id, "reason": r.reason} for r in failure.rejections
                     ],
                 },
-            )
-        return error_response(
+            ))
+        return Failure(error_response(
             "DATABASE_ERROR",
             failure.error or "Failed to batch delete tables.",
-        )
+        ))
 
     deleted_ids = result.unwrap().deleted_ids
 
     log_batch_table_delete(logger, deleted_ids, "mcp")
 
-    return success_response({"deleted_count": len(deleted_ids), "failed": [], "deleted_ids": deleted_ids})
+    return Success(success_response({"deleted_count": len(deleted_ids), "failed": [], "deleted_ids": deleted_ids}))
 
 
 # Valid export formats
@@ -631,43 +631,43 @@ VALID_EXPORT_FORMATS = ("markdown", "jsonl")
 def table_export(
     table_id: str,
     format: str = "markdown",
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
     result = export_table(conn, table_id, format, exported_at=datetime.now(UTC).isoformat())
     if isinstance(result, Failure):
         error = result.failure()
         if error.status == "invalid_format":
-            return error_response(
+            return Failure(error_response(
                 "INVALID_REQUEST",
                 error.error or f"Unknown format: {format}. Supported formats: markdown, jsonl",
                 {"format": format, "supported": list(VALID_EXPORT_FORMATS)},
-            )
+            ))
         if error.status == "not_found":
-            return error_response("NOT_FOUND", error.error or f"Table not found: {table_id}")
+            return Failure(error_response("NOT_FOUND", error.error or f"Table not found: {table_id}"))
         if error.status == "limit_exceeded":
-            return error_response("LIMIT_EXCEEDED", error.error or "Export size exceeded", {"table_id": table_id})
-        return error_response("DATABASE_ERROR", error.error or "Failed to export table")
+            return Failure(error_response("LIMIT_EXCEEDED", error.error or "Export size exceeded", {"table_id": table_id}))
+        return Failure(error_response("DATABASE_ERROR", error.error or "Failed to export table"))
 
     export_result = result.unwrap()
 
-    return success_response(
+    return Success(success_response(
         {
             "content": export_result.content,
             "format": format,
             "table_id": table_id,
         }
-    )
+    ))
 
 
-def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | None:
+def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> Result[str, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     auto_name = speaker_name or "Anonymous Agent"
     existing_result = find_patron_by_name(conn, auto_name)
     if isinstance(existing_result, Success):
         existing_patron = existing_result.unwrap()
         if existing_patron is not None:
-            return str(existing_patron.id)
+            return Success(str(existing_patron.id))
     # Create new patron
     new_id = PatronId(str(uuid.uuid4()))
     now = datetime.now(UTC)
@@ -682,43 +682,43 @@ def _auto_register_patron_for_say(conn: Any, speaker_name: str | None) -> str | 
     create_result = create_patron(conn, patron)
     if isinstance(create_result, Success):
         created = create_result.unwrap()
-        return str(created.id)
-    return str(new_id)  # Use the generated ID even if store failed
+        return Success(str(created.id))
+    return Success(str(new_id))  # Use the generated ID even if store failed
 
 
 # @shell_complexity: Centralized adapter maps each shared table_say failure family to public MCP codes.
-def _table_say_error_to_mcp_response(error: TableSayError) -> dict[str, Any]:
+def _table_say_error_to_mcp_response(error: TableSayError) -> Result[McpEnvelope, McpEnvelope]:
     """Map shared table_say errors to the legacy MCP response envelope."""
     if error.kind == TableSayErrorKind.TABLE_NOT_FOUND:
-        return error_response("NOT_FOUND", error.message)
+        return Failure(error_response("NOT_FOUND", error.message))
     if error.kind == TableSayErrorKind.OPERATION_NOT_ALLOWED:
-        return error_response(
+        return Failure(error_response(
             "OPERATION_NOT_ALLOWED",
             error.message,
             {"table_status": error.table_status},
-        )
+        ))
     if error.kind == TableSayErrorKind.INVALID_SPEAKER:
         speaker_details: dict[str, Any] = {"speaker_kind": error.speaker_kind}
         if error.patron_id is not None:
             speaker_details["patron_id"] = error.patron_id
-        return error_response("INVALID_REQUEST", error.message, speaker_details)
+        return Failure(error_response("INVALID_REQUEST", error.message, speaker_details))
     if error.kind == TableSayErrorKind.PATRON_NOT_FOUND:
-        return error_response("NOT_FOUND", error.message)
+        return Failure(error_response("NOT_FOUND", error.message))
     if error.kind == TableSayErrorKind.LIMIT_EXCEEDED and error.limit_error is not None:
-        return _limit_error_to_response(error.limit_error)
-    return error_response("DATABASE_ERROR", error.message)
+        return Failure(_limit_error_to_response(error.limit_error))
+    return Failure(error_response("DATABASE_ERROR", error.message))
 
 
 def _resolve_mentions_for_say(
     conn: Any, mentions: list[str] | None
-) -> tuple[bool, list[str], list[str], dict[str, Any] | None]:
+) -> Result[tuple[bool, list[str], list[str]], McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     mentions_all = False
     mentions_resolved: list[str] = []
     mentions_unresolved: list[str] = []
 
     if not mentions:
-        return mentions_all, mentions_resolved, mentions_unresolved, None
+        return Success((mentions_all, mentions_resolved, mentions_unresolved))
 
     patrons_result = list_patrons(conn)
     if isinstance(patrons_result, Failure):
@@ -726,7 +726,7 @@ def _resolve_mentions_for_say(
             "Failed to fetch patrons for mention resolution",
             extra={"error": str(patrons_result.failure())},
         )
-        return mentions_all, mentions_resolved, mentions_unresolved, None
+        return Success((mentions_all, mentions_resolved, mentions_unresolved))
 
     patrons = patrons_result.unwrap()
     patron_matches = [
@@ -735,10 +735,7 @@ def _resolve_mentions_for_say(
     mentions_result = resolve_mentions(mentions, patron_matches)
 
     if has_ambiguous_mentions(mentions_result):
-        return (
-            mentions_all,
-            mentions_resolved,
-            mentions_unresolved,
+        return Failure(
             error_response(
                 "AMBIGUOUS_MENTION",
                 "Multiple patrons match the provided mention handle(s)",
@@ -751,29 +748,28 @@ def _resolve_mentions_for_say(
                         for am in mentions_result.ambiguous
                     ],
                 },
-            ),
+            )
         )
 
     mentions_all = mentions_result.mentions_all
     mentions_resolved = [r.patron_id for r in mentions_result.resolved]
     mentions_unresolved = [u.handle for u in mentions_result.unresolved]
-    return mentions_all, mentions_resolved, mentions_unresolved, None
+    return Success((mentions_all, mentions_resolved, mentions_unresolved))
 
 
 def _check_say_idempotency(
     conn: Any, resource_key: str, dedup_id: str | None, logger: Any
-) -> tuple[dict[str, Any] | None, bool]:
+) -> Result[McpEnvelope | None, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     if dedup_id is None:
-        return None, False
+        return Success(None)
 
     idempotency_result = check_idempotency_key(conn, resource_key, "table_say", dedup_id)
     if isinstance(idempotency_result, Failure):
-        return (
+        return Failure(
             error_response(
                 "DATABASE_ERROR", f"Failed to check idempotency key: {idempotency_result.failure()}"
-            ),
-            True,
+            )
         )
 
     cached_response = idempotency_result.unwrap()
@@ -784,9 +780,9 @@ def _check_say_idempotency(
             "Already sent (dedup). IMMEDIATELY call tasca.table_wait. "
             "Your response = tool_call, not text."
         )
-        return success_response(cached_data), True
+        return Success(success_response(cached_data))
 
-    return None, False
+    return Success(None)
 
 
 # @shell_complexity: MCP adapter keeps idempotency/mentions/response envelope around shared table_say operation.
@@ -800,7 +796,7 @@ def table_say(
     mentions: list[str] | None = None,
     reply_to_sequence: int | None = None,
     dedup_id: str | None = None,
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
     table_say_compat_metadata = _build_table_say_compat_metadata(saying_type, reply_to_sequence)
@@ -822,16 +818,22 @@ def table_say(
     resource_key = f"saying:{table_id}:{speaker_key}"
 
     # Check idempotency key if provided
-    cached_response, should_return = _check_say_idempotency(conn, resource_key, dedup_id, logger)
-    if should_return and cached_response is not None:
-        return cached_response
+    cached_result = _check_say_idempotency(conn, resource_key, dedup_id, logger)
+    if isinstance(cached_result, Failure):
+        return cached_result
+    cached_response = cached_result.unwrap()
+    if cached_response is not None:
+        return Success(cached_response)
 
     # Resolve mentions before append so ambiguity cannot persist a saying.
-    mentions_all, mentions_resolved, mentions_unresolved, mentions_error = (
-        _resolve_mentions_for_say(conn, mentions)
-    )
-    if mentions_error is not None:
-        return mentions_error
+    mentions_result = _resolve_mentions_for_say(conn, mentions)
+    if isinstance(mentions_result, Failure):
+        return mentions_result
+    mentions_all, mentions_resolved, mentions_unresolved = mentions_result.unwrap()
+
+    limits_result = _limits_config_from_settings()
+    if isinstance(limits_result, Failure):
+        return limits_result
 
     result = append_saying_operation(
         conn,
@@ -840,7 +842,7 @@ def table_say(
         speaker_kind=actual_speaker_kind,
         patron_id=patron_id,
         speaker_name=speaker_name,
-        limits=_limits_config_from_settings(),
+        limits=limits_result.unwrap(),
     )
 
     if isinstance(result, Failure):
@@ -866,7 +868,7 @@ def table_say(
     # Store in idempotency cache if dedup_id provided
     if dedup_id is not None:
         store_idempotency_key(conn, resource_key, "table_say", dedup_id, {"data": response_data})
-    return success_response(response_data)
+    return Success(success_response(response_data))
 
 
 # @shell_complexity: 5 branches for table lookup + long-poll loop + timeout + backoff + error handling
@@ -874,7 +876,7 @@ def table_listen(
     table_id: str,
     since_sequence: int = -1,
     limit: int = 50,
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
 
@@ -883,8 +885,8 @@ def table_listen(
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return Failure(error_response("NOT_FOUND", f"Table not found: {table_id}"))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get table: {error}"))
 
     # List sayings
     # TODO(async-db): sync DB call in async loop — acceptable for v1, consider asyncio DB driver in future
@@ -892,13 +894,13 @@ def table_listen(
 
     if isinstance(result, Failure):
         error = result.failure()
-        return error_response("DATABASE_ERROR", f"Failed to list sayings: {error}")
+        return Failure(error_response("DATABASE_ERROR", f"Failed to list sayings: {error}"))
 
     sayings = result.unwrap()
 
     next_sequence = _compute_next_sequence(sayings, since_sequence)
 
-    return success_response(
+    return Success(success_response(
         {
             "sayings": [
                 {
@@ -922,7 +924,7 @@ def table_listen(
                 "Your response = tool_call, not text."
             ),
         }
-    )
+    ))
 
 
 # =============================================================================
@@ -939,19 +941,19 @@ POLL_INTERVAL_MS = 500
 
 
 # @shell_orchestration: CONTROL speaker construction is protocol-local shell wiring.
-def _create_control_speaker(speaker_name: str, patron_id: str | None) -> Speaker:
+def _create_control_speaker(speaker_name: str, patron_id: str | None) -> Result[Speaker, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     if patron_id is not None:
-        return Speaker(
+        return Success(Speaker(
             kind=SpeakerKind.AGENT,
             name=speaker_name,
             patron_id=PatronId(patron_id),
-        )
-    return Speaker(
+        ))
+    return Success(Speaker(
         kind=SpeakerKind.HUMAN,
         name=speaker_name,
         patron_id=None,
-    )
+    ))
 
 
 # @shell_complexity: idempotency + shared atomic control dispatch + MCP error/envelope shaping
@@ -962,12 +964,12 @@ def table_control(
     patron_id: str | None = None,
     reason: str | None = None,
     dedup_id: str | None = None,
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
     auth_error = _authorize_table_mutation(conn, table_id, patron_id)
-    if auth_error is not None:
-        return auth_error
+    if isinstance(auth_error, Failure):
+        return Failure(auth_error.failure())
 
     # Resource key for idempotency scope: {table_id, action}
     resource_key = f"control:{table_id}"
@@ -977,31 +979,34 @@ def table_control(
         idempotency_result = check_idempotency_key(conn, resource_key, "table_control", dedup_id)
         if isinstance(idempotency_result, Failure):
             error = idempotency_result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+            return Failure(error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}"))
 
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
             log_dedup_hit(logger, "table_control", resource_key, dedup_id)
-            return success_response(cached_response["data"])
+            return Success(success_response(cached_response["data"]))
 
-    speaker = _create_control_speaker(speaker_name, patron_id)
+    speaker_result = _create_control_speaker(speaker_name, patron_id)
+    if isinstance(speaker_result, Failure):
+        return speaker_result
+    speaker = speaker_result.unwrap()
     now = datetime.now(UTC)
     control_result = execute_table_control(conn, table_id, action, speaker, reason, now)
     if isinstance(control_result, Failure):
         error = control_result.failure()
         if error.code == TableControlErrorCode.TABLE_NOT_FOUND:
-            return error_response("NOT_FOUND", error.message)
+            return Failure(error_response("NOT_FOUND", error.message))
         if error.code == TableControlErrorCode.VERSION_CONFLICT:
-            return error_response(
+            return Failure(error_response(
                 "VERSION_CONFLICT",
                 error.message,
                 {"expected_version": error.expected_version, "actual_version": error.actual_version},
-            )
+            ))
         if error.code == TableControlErrorCode.INVALID_ACTION:
-            return error_response("INVALID_ACTION", error.message)
+            return Failure(error_response("INVALID_ACTION", error.message))
         if error.code == TableControlErrorCode.INVALID_TRANSITION:
-            return error_response("OPERATION_NOT_ALLOWED", error.message, {"table_status": error.current_status.value if error.current_status else None})
-        return error_response("DATABASE_ERROR", error.message)
+            return Failure(error_response("OPERATION_NOT_ALLOWED", error.message, {"table_status": error.current_status.value if error.current_status else None}))
+        return Failure(error_response("DATABASE_ERROR", error.message))
 
     outcome = control_result.unwrap()
     response_data = _build_control_response(outcome.table.status, outcome.control_saying.sequence)
@@ -1017,7 +1022,7 @@ def table_control(
             now=now,
         )
 
-    return success_response(response_data)
+    return Success(success_response(response_data))
 
 
 # @shell_complexity: 8 branches for table lookup + version check + update + dedup + error paths
@@ -1028,13 +1033,13 @@ def table_update(
     speaker_name: str,
     patron_id: str | None = None,
     dedup_id: str | None = None,
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
     table_update_actor_metadata = _build_table_update_actor_metadata(speaker_name, patron_id)
     auth_error = _authorize_table_mutation(conn, table_id, patron_id)
-    if auth_error is not None:
-        return auth_error
+    if isinstance(auth_error, Failure):
+        return Failure(auth_error.failure())
 
     # Resource key for idempotency scope
     resource_key = f"update:{table_id}"
@@ -1044,27 +1049,27 @@ def table_update(
         idempotency_result = check_idempotency_key(conn, resource_key, "table_update", dedup_id)
         if isinstance(idempotency_result, Failure):
             error = idempotency_result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}")
+            return Failure(error_response("DATABASE_ERROR", f"Failed to check idempotency key: {error}"))
 
         cached_response = idempotency_result.unwrap()
         if cached_response is not None:
             log_dedup_hit(logger, "table_update", resource_key, dedup_id)
-            return success_response(cached_response["data"])
+            return Success(success_response(cached_response["data"]))
 
     # Get current table
     table_result = get_table(conn, TableId(table_id))
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return Failure(error_response("NOT_FOUND", f"Table not found: {table_id}"))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get table: {error}"))
 
     current_table = table_result.unwrap()
 
     # Apply patch to create update (only supported fields)
     table_update, patch_error = _apply_table_patch(current_table, patch)
     if patch_error is not None:
-        return patch_error
+        return Failure(patch_error)
 
     # Perform optimistic concurrency update
     now = datetime.now(UTC)
@@ -1079,9 +1084,9 @@ def table_update(
     if isinstance(update_result, Failure):
         error = update_result.failure()
         if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
+            return Failure(error_response("NOT_FOUND", f"Table not found: {table_id}"))
         if isinstance(error, VersionConflictError):
-            return error_response(
+            return Failure(error_response(
                 "VERSION_CONFLICT",
                 "Table version conflict",
                 {
@@ -1089,8 +1094,8 @@ def table_update(
                     "actual_version": error.current_version,
                     "table": _build_table_dict(current_table),
                 },
-            )
-        return error_response("DATABASE_ERROR", f"Failed to update table: {error}")
+            ))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to update table: {error}"))
 
     updated_table = update_result.unwrap()
     response_data = {"table": _build_table_dict(updated_table)}
@@ -1107,7 +1112,7 @@ def table_update(
             now=now,
         )
 
-    return success_response(response_data)
+    return Success(success_response(response_data))
 
 
 # @shell_complexity: 10 branches for table lookup + long-poll loop + timeout + backoff + error handling
@@ -1118,7 +1123,7 @@ async def table_wait(
     wait_ms: int = DEFAULT_WAIT_MS,
     limit: int = 50,
     include_table: bool = False,
-) -> dict[str, Any]:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
 
@@ -1127,8 +1132,8 @@ async def table_wait(
     if isinstance(table_result, Failure):
         error = table_result.failure()
         if isinstance(error, TableNotFoundError):
-            return error_response("NOT_FOUND", f"Table not found: {table_id}")
-        return error_response("DATABASE_ERROR", f"Failed to get table: {error}")
+            return Failure(error_response("NOT_FOUND", f"Table not found: {table_id}"))
+        return Failure(error_response("DATABASE_ERROR", f"Failed to get table: {error}"))
 
     table = table_result.unwrap()
 
@@ -1147,14 +1152,15 @@ async def table_wait(
 
         if isinstance(result, Failure):
             error = result.failure()
-            return error_response("DATABASE_ERROR", f"Failed to list sayings: {error}")
+            return Failure(error_response("DATABASE_ERROR", f"Failed to list sayings: {error}"))
 
         sayings = result.unwrap()
 
         if sayings:
             # Found new sayings - return them
             next_sequence = _compute_next_sequence(sayings, since_sequence)
-            loop = _record_wait_result(table_id, got_sayings=True)
+            loop_result = _record_wait_result(table_id, got_sayings=True)
+            loop = loop_result.unwrap()
 
             response_data: dict[str, Any] = {
                 "sayings": [_format_saying_dict(s) for s in sayings],
@@ -1173,7 +1179,7 @@ async def table_wait(
                 "Do not emit text."
             )
 
-            return success_response(response_data)
+            return Success(success_response(response_data))
 
         # Wait before next poll
         remaining = end_time - time.monotonic()
@@ -1182,7 +1188,8 @@ async def table_wait(
 
     # Timeout - return empty with current next_sequence (same shape as table_listen)
     next_sequence = _compute_next_sequence([], since_sequence)
-    loop = _record_wait_result(table_id, got_sayings=False)
+    loop_result = _record_wait_result(table_id, got_sayings=False)
+    loop = loop_result.unwrap()
     empty = loop["consecutive_empty_waits"]
 
     response_data = {
@@ -1196,7 +1203,7 @@ async def table_wait(
     if include_table:
         response_data["table"] = _build_table_dict(table)
 
-    return success_response(response_data)
+    return Success(success_response(response_data))
 
 
 # =============================================================================
@@ -1211,7 +1218,7 @@ def seat_heartbeat(
     ttl_ms: int | None = None,
     dedup_id: str | None = None,
     seat_id: str | None = None,
-) -> McpResult:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     return _seat_heartbeat_impl(table_id, patron_id, state, ttl_ms, dedup_id, seat_id)
 
@@ -1219,7 +1226,7 @@ def seat_heartbeat(
 def seat_list(
     table_id: str,
     active_only: bool = True,
-) -> McpResult:
+) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     return _seat_list_impl(table_id, active_only)
 
@@ -1229,11 +1236,11 @@ def seat_list(
 # =============================================================================
 
 
-async def connect(url: str | None = None, token: str | None = None) -> McpResult:
+async def connect(url: str | None = None, token: str | None = None) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     return await _connect_impl(url, token)
 
 
-def connection_status() -> McpResult:
+def connection_status() -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     return _connection_status_impl()

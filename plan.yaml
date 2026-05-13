@@ -38568,7 +38568,7 @@ phases:
     claimed_at: '2026-05-13T08:14:15.588209+00:00'
   - id: finalization.deep-architecture-review
     name: Deep architecture and boundary review
-    status: claimed
+    status: done
     description: 'step_type: review
 
       verification_scope: full-plan-check
@@ -38625,6 +38625,44 @@ phases:
     agent: software-architect-tacit
     claimed_by: software-architect-tacit
     claimed_at: '2026-05-13T08:13:53.689760+00:00'
+    done_at: '2026-05-13T08:44:36.664574+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Architecture Review\n- Boundary violations found:\n  - Static import inspection\
+      \ found no REST/MCP transport imports in src/tasca/shell/services/**.\n  - Static\
+      \ import inspection found no API/MCP/service imports in src/tasca/shell/storage/**;\
+      \ storage owns atomic_control_table.\n  - src/tasca/shell/services/operations/table_control.py\
+      \ is transport-neutral and delegates all-or-nothing mutation to storage atomic_control_table.\n\
+      \  - src/tasca/shell/mcp/tool_contracts.py remains centralized MCP tool metadata\
+      \ owner; server.py consumes it via parameter_field/parameter_default.\n- Dependency\
+      \ direction issues:\n  - No blocking dependency inversion found in reviewed\
+      \ ownership paths.\n  - Residual direct storage access remains in REST/MCP routes\
+      \ for non-consolidated/read/session/idempotency flows; not classified as a new\
+      \ blocker for specified consolidation surfaces.\n- Split-truth paths:\n  - No\
+      \ new split-truth found for table control, batch delete, table creation, patron\
+      \ registration, or saying append ownership in static inspection.\n  - BLOCKER:\
+      \ targeted architecture test run failed in tests/unit/services/operations/test_table_control.py::test_normalizes_action_and_control_content.\
+      \ The test expects build_control_content(...) to return a plain string while\
+      \ implementation returns Success(...). This is a shared shell-application contract\
+      \ mismatch and prevents clean gate closure.\n- Verdict: FAIL; blocker-class\
+      \ issue captured into remediation path.\n\n## Closure fields\nverdict: FAIL\n\
+      blockers:\n- Targeted architecture boundary test failure: tests/unit/services/operations/test_table_control.py::test_normalizes_action_and_control_content\
+      \ expected str, got returns.result.Success.\ngate_open_allowed: false\norchestrator_action_hint:\
+      \ DO_NOT_COMPLETE until remediation ownership exists\nproduct_files_modified:\
+      \ false\nCommit hash(es): none — review-only step with no repo mutations\n\n\
+      ## Behavioral proof register\n- Confirmed required worktree and branch with\
+      \ pwd && git status --short --branch.\n- Searched docs/evidence for architecture\
+      \ basis and ownership terms.\n- Read docs/tasca-technical-design-v0.1.md, docs/repo-structure-v0.1.md,\
+      \ and evidence/dup_guardrails-parity-contract-capture.md for ownership constraints.\n\
+      - Inspected table_control.py, table_creation.py, patron_registration.py, batch_delete.py,\
+      \ limited_saying_service.py, tool_contracts.py, entrypoints.py, and routes/tables_control.py.\n\
+      - Ran static import searches for transport leakage into shell services and service/API/MCP\
+      \ leakage into storage.\n- Ran targeted tests with cache disabled: PYTHONDONTWRITEBYTECODE=1\
+      \ .venv/bin/python -m pytest -p no:cacheprovider tests/unit/storage/test_control_repo.py\
+      \ tests/unit/services/operations/test_table_control.py tests/unit/services/test_registration_creation_operations.py\
+      \ tests/unit/mcp/test_mcp_server.py tests/unit/api/test_tables_routes.py tests/unit/api/test_sayings_routes.py\
+      \ — result: 213 passed, 1 failed.\n\n## Remediation created\n- finalization.fix-concurrent-review-blockers\n\
+      - finalization.retest-concurrent-review-blockers\nDownstream finalization black-box\
+      \ verification and final gate were blocked on the new retest."
   - id: finalization.deep-contract-strength
     name: Deep contract-strength and closure review
     status: done

@@ -42668,7 +42668,7 @@ phases:
       - Blockers if CLOSED: none'
   - id: fix-pp-invar-final-retest-blockers
     name: Batched fix for PP Invar final retest blockers
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -42936,6 +42936,122 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T05:31:43.223645+00:00'
+    done_at: '2026-05-13T05:45:20.298383+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      - `src/tasca/core/storage_rows.py` — Read. Key passage: `row_to_table` had only
+      `@deal.pre(lambda row: len(row) >= 7)` while implementation immediately did
+      `TableStatus(str(row[3]))`, so `status=None` satisfied the contract and failed
+      during enum conversion.
+
+      - `src/tasca/cli.py` — Read. Key passage: CLI runtime commands existed for `new`,
+      `mcp`, `version`, `export`, and `skills`, but legacy helpers expected by tests
+      (`create_table_via_mcp`, `create_table_via_rest`, `is_server_running`) were
+      absent.
+
+      - `tests/unit/test_cli.py` — Read. Key passage: module imports `create_table_via_mcp`,
+      `create_table_via_rest`, and `is_server_running` from `tasca.cli` and includes
+      behavioral tests for HTTP health, REST table creation, and MCP stdio table creation.
+
+      - `tests/unit` — Read. Key passage: unit suite includes CLI plus storage/API/MCP/service
+      surfaces; no existing test was deleted, skipped, xfailed, or weakened.
+
+      - `INVAR.md` — Read. Key passage: Core functions require `@pre`, `@post`, and
+      doctests before implementation; Shell code should return `Result[T, E]`.
+
+
+      ## Batched Fix Evidence
+
+
+      **symbolic_testing**: true
+
+      **command_family_locked**: `uvx invar-tools guard --all`
+
+
+      ### Blocker Closure Register
+
+      | Blocker | Root cause | Files changed | Fix summary | Symptom-only patch avoided
+      how? | Status |
+
+      |---|---|---|---|---|---|
+
+      | B1 row_to_table property failure | `row_to_table` contract only required row
+      length, so generated rows with `status=None` satisfied `@pre` and failed at
+      `TableStatus(str(row[3]))`. | `src/tasca/core/storage_rows.py`, `tests/unit/test_storage_rows.py`
+      | Tightened Core preconditions for valid table status, integer version, and
+      ISO datetimes; added contracted/doctested helper validators and regression tests
+      for `status=None` rejection plus valid conversion. | Closed the input-domain
+      seam instead of catching/suppressing enum failures; generated inputs satisfying
+      the contract now have valid status/version/datetime values. | PASS |
+
+      | B2 tasca.cli create_table_via_mcp import surface | CLI public/test compatibility
+      surface was stale: tests and external callers expected legacy helpers exported
+      from `tasca.cli`, but implementation no longer exposed them. | `src/tasca/cli.py`,
+      `src/tasca/shell/cli_legacy.py` | Restored `tasca.cli` exports via substantive
+      Shell implementations for server health, REST table creation, and MCP stdio
+      table creation. | Added real `Result`-returning helper behavior, not no-op placeholders;
+      focused CLI tests exercise the restored REST/MCP behavior. | PASS |
+
+
+      ### Forbidden Actions Confirmation
+
+      - Suppressions/skips/xfails added: NO
+
+      - Tests deleted or weakened: NO
+
+      - Doctests/contracts weakened: NO
+
+      - Placeholder/no-op compatibility shim added: NO
+
+
+      ### Verification Commands
+
+      - Worker commit: `886d0de` — `fix invar row contracts and CLI legacy exports`.
+
+      - Main merge commit: `dce2be0` — `[vectl] step-fix-pp-invar-final-retest-blockers
+      completed`.
+
+      - `uvx invar-tools guard --all`: PASS. Static passed with 0 errors; doctest
+      passed; CrossHair verified/cached without failures; property tests passed (`functions_tested=120`,
+      `functions_passed=120`, `functions_failed=0`, `total_examples=10300`); `non_suppressible:
+      []`.
+
+      - Focused row_to_table/property and CLI pytest: `uv run pytest tests/unit/test_storage_rows.py
+      tests/unit/test_cli.py` — PASS (`31 passed`). Includes `row_to_table` status=None
+      PreContractError regression and valid SQLite table-row conversion; `tests/unit/test_cli.py`
+      collection/import surface passed.
+
+      - Ruff touched files: `uv run ruff check src/tasca/core/storage_rows.py src/tasca/cli.py
+      src/tasca/shell/cli_legacy.py tests/unit/test_storage_rows.py tests/unit/test_cli.py`
+      — PASS (`All checks passed!`).
+
+      - Mypy source: `uv run mypy src/tasca` — PASS (`Success: no issues found in
+      82 source files`).
+
+      - CLI help/skills smoke: `uv run python -m tasca.cli new --help`, `mcp --help`,
+      `version`, `export --help`, `skills --help`, `skills show tasca-moderation`
+      — PASS; commands produced expected usage/version/skill output.
+
+
+      ### Files changed
+
+      - `src/tasca/core/storage_rows.py` — tightened `row_to_table` Core contract
+      and added contracted/doctested validation helpers.
+
+      - `src/tasca/cli.py` — restored public legacy helper exports.
+
+      - `src/tasca/shell/cli_legacy.py` — added real `Result`-returning Shell implementations
+      for legacy CLI helper behavior.
+
+      - `tests/unit/test_storage_rows.py` — added regression tests for invalid `status=None`
+      and valid table-row conversion.
+
+
+      ### Final retest readiness
+
+      - `retest-pp-invar-full-scan-final`: OPEN
+
+      - Blockers if CLOSED: none'
   - id: retest-pp-invar-full-scan-final
     name: Final retest after PP Invar final blockers fix
     status: pending

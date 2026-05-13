@@ -8,11 +8,12 @@ handle JSON-RPC request forwarding.
 from __future__ import annotations
 
 import json
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from returns.result import Success
+from returns.result import Failure, Result, Success
 
 from tasca.shell.mcp.proxy import (
     UpstreamConfig,
@@ -53,6 +54,15 @@ def _make_echo_post(extra_fields: dict | None = None) -> AsyncMock:
         return mock_response
 
     return AsyncMock(side_effect=_post)
+
+
+def _unwrap_forward_result(result: Result[dict[str, Any], dict[str, Any]]) -> dict[str, Any]:
+    """Return either a forwarded JSON-RPC response or proxy error envelope."""
+    if isinstance(result, Success):
+        return result.unwrap()
+    if isinstance(result, Failure):
+        return result.failure()
+    raise AssertionError(f"unexpected Result type: {type(result)!r}")
 
 
 # =============================================================================
@@ -277,8 +287,10 @@ class TestForwardJsonrpcRequestSuccess:
             mock_client.post = _make_echo_post({"result": {"ok": True, "data": {"items": []}}})
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(
-                config, "tools/call", {"name": "table_list", "arguments": {}}
+            result = _unwrap_forward_result(
+                await forward_jsonrpc_request(
+                    config, "tools/call", {"name": "table_list", "arguments": {}}
+                )
             )
 
         # Verify HTTP call
@@ -311,13 +323,31 @@ class TestForwardJsonrpcRequestSuccess:
             mock_client.post = _make_echo_post()
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/list", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/list", {}))
 
         # Verify Authorization header is not set
         call_args = mock_client.post.call_args
         headers = call_args[1]["headers"]
         assert "Authorization" not in headers
 
+        assert result["jsonrpc"] == "2.0"
+
+    @pytest.mark.asyncio
+    async def test_request_includes_session_id_header(self) -> None:
+        """forward_jsonrpc_request includes MCP session header when configured."""
+        config = UpstreamConfig(url="http://api.example.com/mcp", session_id="session-123")
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.post = _make_echo_post()
+            mock_client_class.return_value = mock_client
+
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/list", {}))
+
+        headers = mock_client.post.call_args[1]["headers"]
+        assert headers["mcp-session-id"] == "session-123"
         assert result["jsonrpc"] == "2.0"
 
 
@@ -336,7 +366,7 @@ class TestForwardJsonrpcRequestErrors:
             mock_client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_UNREACHABLE"
@@ -354,7 +384,7 @@ class TestForwardJsonrpcRequestErrors:
             mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("Request timed out"))
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_TIMEOUT"
@@ -376,7 +406,7 @@ class TestForwardJsonrpcRequestErrors:
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_AUTH_FAILED"
@@ -398,7 +428,7 @@ class TestForwardJsonrpcRequestErrors:
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_AUTH_FAILED"
@@ -419,7 +449,7 @@ class TestForwardJsonrpcRequestErrors:
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_ERROR"
@@ -430,7 +460,7 @@ class TestForwardJsonrpcRequestErrors:
         """No URL configured returns UPSTREAM_UNREACHABLE error."""
         config = UpstreamConfig()  # No URL
 
-        result = await forward_jsonrpc_request(config, "tools/call", {})
+        result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_UNREACHABLE"
@@ -693,7 +723,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
@@ -717,7 +747,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
@@ -741,7 +771,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
@@ -770,7 +800,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
             mock_client.post = AsyncMock(side_effect=_post_missing_payload)
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
@@ -790,7 +820,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
             )
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         assert result["ok"] is False
         assert result["error"]["code"] == "UPSTREAM_INVALID_RESPONSE"
@@ -808,7 +838,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
             mock_client.post = _make_echo_post({"result": {"ok": True, "data": {"items": []}}})
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         # Should pass through unchanged
         assert result["jsonrpc"] == "2.0"
@@ -828,7 +858,7 @@ class TestForwardJsonrpcRequestInvalidResponse:
             )
             mock_client_class.return_value = mock_client
 
-            result = await forward_jsonrpc_request(config, "tools/call", {})
+            result = _unwrap_forward_result(await forward_jsonrpc_request(config, "tools/call", {}))
 
         # Should pass through unchanged
         assert result["jsonrpc"] == "2.0"

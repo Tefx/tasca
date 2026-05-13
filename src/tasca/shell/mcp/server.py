@@ -658,10 +658,15 @@ class ProxyMiddleware(Middleware):
             )
 
             # Build JSON-RPC request for tools/call
-            response = await forward_jsonrpc_request(
+            proxy_result = await forward_jsonrpc_request(
                 config=upstream,
                 method="tools/call",
                 params={"name": tool_name, "arguments": arguments},
+            )
+            response = (
+                proxy_result.unwrap()
+                if isinstance(proxy_result, Success)
+                else proxy_result.failure()
             )
 
             # Convert response back to ToolResult

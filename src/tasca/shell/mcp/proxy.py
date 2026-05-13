@@ -15,9 +15,9 @@ MCP HTTP Transport Session Management:
     - The session_id is stored in UpstreamConfig
     - All forwarded requests include the mcp-session-id header
 
-Escape Hatch Convention (shell_result):
-    MCP proxy helpers return primitive dicts or use MCP protocol patterns.
-    See server.py module docstring for MCP protocol rationale.
+Result boundary:
+    MCP proxy helpers return Result envelopes internally; the FastMCP server
+    boundary unwraps them into JSON-serializable protocol payloads.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from returns.result import Failure, Result, Success
@@ -352,9 +352,10 @@ def get_upstream_config() -> Result[UpstreamConfig, ProxyConfigError]:
     return Success(_config)
 
 
-# @invar:allow shell_result: MCP protocol
 # @shell_orchestration: Switches module-level runtime state shared by MCP route handlers
-def switch_to_remote(url: str, token: str | None = None) -> None:
+def switch_to_remote(
+    url: str, token: str | None = None
+) -> Result[UpstreamConfig, ProxyConfigError]:
     """Switch the global config to remote upstream mode.
 
     Args:
@@ -369,6 +370,7 @@ def switch_to_remote(url: str, token: str | None = None) -> None:
         >>> switch_to_local()  # Reset for other tests
     """
     _config.switch_to_remote(url, token)
+    return Success(_config)
 
 
 # @shell_orchestration: Switches module-level runtime state shared by MCP route handlers
@@ -431,10 +433,9 @@ async def switch_to_remote_with_session(
 
 
 # @shell_complexity: Upstream proxying requires distinct branches for auth, HTTP status mapping, and network failures
-# @invar:allow shell_result: MCP protocol
 async def forward_jsonrpc_request(
     config: UpstreamConfig, method: str, params: dict[str, Any]
-) -> dict[str, Any]:
+) -> Result[dict[str, Any], dict[str, Any]]:
     """Send a JSON-RPC request to the upstream MCP endpoint via httpx.
 
     Args:
@@ -443,15 +444,15 @@ async def forward_jsonrpc_request(
         params: Parameters for the JSON-RPC method.
 
     Returns:
-        Parsed JSON response dict on success, or error_response envelope on failure.
+        Success with parsed JSON response dict, or Failure with error_response envelope.
 
     Examples:
         >>> # Success case (requires actual upstream)
         >>> # result = await forward_jsonrpc_request(config, "tools/list", {})
-        >>> # result["ok"]  # True on success
+        >>> # isinstance(result, Success)  # True on success
     """
     if not config.url:
-        return error_response("UPSTREAM_UNREACHABLE", "No upstream URL configured")
+        return Failure(error_response("UPSTREAM_UNREACHABLE", "No upstream URL configured"))
 
     # Build JSON-RPC request envelope
     request_id = str(uuid.uuid4())
@@ -483,18 +484,22 @@ async def forward_jsonrpc_request(
 
             # Check for authentication failures
             if response.status_code in (401, 403):
-                return error_response(
-                    "UPSTREAM_AUTH_FAILED",
-                    f"Authentication failed with status {response.status_code}",
-                    {"status_code": response.status_code},
+                return Failure(
+                    error_response(
+                        "UPSTREAM_AUTH_FAILED",
+                        f"Authentication failed with status {response.status_code}",
+                        {"status_code": response.status_code},
+                    )
                 )
 
             # Check for other HTTP errors
             if response.status_code >= 400:
-                return error_response(
-                    "UPSTREAM_ERROR",
-                    f"Upstream returned status {response.status_code}",
-                    {"status_code": response.status_code},
+                return Failure(
+                    error_response(
+                        "UPSTREAM_ERROR",
+                        f"Upstream returned status {response.status_code}",
+                        {"status_code": response.status_code},
+                    )
                 )
 
             # Parse response (may be SSE or plain JSON from FastMCP)
@@ -503,36 +508,43 @@ async def forward_jsonrpc_request(
             except (json.JSONDecodeError, Exception) as e:
                 # Catches both json.JSONDecodeError and deal.PreContractError
                 # (which wraps contract violations from @deal.pre decorators)
-                return error_response(
-                    "UPSTREAM_INVALID_RESPONSE",
-                    "Upstream returned invalid JSON",
-                    {
-                        "error": str(e),
-                        "raw_preview": response.text[:200] if response.text else None,
-                    },
+                return Failure(
+                    error_response(
+                        "UPSTREAM_INVALID_RESPONSE",
+                        "Upstream returned invalid JSON",
+                        {
+                            "error": str(e),
+                            "raw_preview": response.text[:200] if response.text else None,
+                        },
+                    )
                 )
 
             # Validate JSON-RPC 2.0 response shape
             validation_error = _validate_jsonrpc_response(data, request_id)
             if validation_error is not None:
-                return error_response(
-                    "UPSTREAM_INVALID_RESPONSE",
-                    f"Upstream response has invalid JSON-RPC shape: {validation_error['reason']}",
-                    {"field": validation_error["field"], "response_preview": str(data)[:200]},
+                return Failure(
+                    error_response(
+                        "UPSTREAM_INVALID_RESPONSE",
+                        f"Upstream response has invalid JSON-RPC shape: {validation_error['reason']}",
+                        {"field": validation_error["field"], "response_preview": str(data)[:200]},
+                    )
                 )
 
-            # Type ignore: Validated as dict above, MCP endpoints return dict
-            return data  # type: ignore[no-any-return]
+            return Success(cast(dict[str, Any], data))
 
         except httpx.ConnectError as e:
-            return error_response(
-                "UPSTREAM_UNREACHABLE",
-                f"Cannot connect to upstream at {config.url}",
-                {"error": str(e)},
+            return Failure(
+                error_response(
+                    "UPSTREAM_UNREACHABLE",
+                    f"Cannot connect to upstream at {config.url}",
+                    {"error": str(e)},
+                )
             )
         except httpx.TimeoutException as e:
-            return error_response(
-                "UPSTREAM_TIMEOUT",
-                "Request to upstream timed out",
-                {"timeout_seconds": 30.0, "error": str(e)},
+            return Failure(
+                error_response(
+                    "UPSTREAM_TIMEOUT",
+                    "Request to upstream timed out",
+                    {"timeout_seconds": 30.0, "error": str(e)},
+                )
             )

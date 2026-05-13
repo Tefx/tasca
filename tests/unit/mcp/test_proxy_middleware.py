@@ -12,7 +12,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from returns.result import Success
+from returns.result import Failure, Success
 
 from tasca.shell.mcp.proxy import UpstreamConfig
 from tasca.shell.mcp.server import LOCAL_ONLY_TOOLS, ProxyMiddleware
@@ -166,7 +166,7 @@ class TestProxyMiddlewareRemoteMode:
             mock_config.return_value = Success(
                 UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
-            mock_forward.return_value = success_tool_result
+            mock_forward.return_value = Success(success_tool_result)
 
             result = await middleware.on_call_tool(mock_context, mock_call_next)
 
@@ -260,7 +260,7 @@ class TestProxyMiddlewareResponseConversion:
             mock_config.return_value = Success(
                 UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
-            mock_forward.return_value = success_tool_result
+            mock_forward.return_value = Success(success_tool_result)
 
             result = await middleware.on_call_tool(mock_context, mock_call_next)
 
@@ -292,7 +292,7 @@ class TestProxyMiddlewareResponseConversion:
             mock_config.return_value = Success(
                 UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
-            mock_forward.return_value = error_tool_result
+            mock_forward.return_value = Success(error_tool_result)
 
             result = await middleware.on_call_tool(mock_context, mock_call_next)
 
@@ -331,7 +331,7 @@ class TestProxyMiddlewareResponseConversion:
             mock_config.return_value = Success(
                 UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
-            mock_forward.return_value = proxy_error
+            mock_forward.return_value = Failure(proxy_error)
 
             result = await middleware.on_call_tool(mock_context, mock_call_next)
 
@@ -368,7 +368,7 @@ class TestProxyMiddlewareRequestMethod:
             mock_config.return_value = Success(
                 UpstreamConfig(url="http://upstream.example.com", token="test-token")
             )
-            mock_forward.return_value = success_tool_result
+            mock_forward.return_value = Success(success_tool_result)
 
             await middleware.on_call_tool(mock_context, mock_call_next)
 
@@ -405,7 +405,7 @@ class TestProxyMiddlewareRequestMethod:
                 mock_config.return_value = Success(
                     UpstreamConfig(url="http://upstream.example.com", token="test-token")
                 )
-                mock_forward.return_value = success_tool_result
+                mock_forward.return_value = Success(success_tool_result)
 
                 await middleware.on_call_tool(context, mock_call_next)
 

@@ -39870,6 +39870,13 @@ phases:
       ### Headline
 
       PASS | PASS_WITH_RESIDUAL | FAIL'
+    refs:
+    - src/tasca/shell/mcp/entrypoint_logic.py
+    - src/tasca/shell/mcp/entrypoint_session_tools.py
+    - src/tasca/shell/mcp/entrypoints.py
+    - src/tasca/shell/mcp/proxy.py
+    - src/tasca/shell/mcp/server.py
+    - src/tasca/shell/mcp/tool_contracts.py
     depends_on:
     - retest-full-plan-blockers
     agent: python-senior

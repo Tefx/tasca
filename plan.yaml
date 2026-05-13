@@ -42852,6 +42852,191 @@ phases:
     depends_on:
     - retest-pp-invar-full-scan
     agent: python-senior
+  - id: retest-pp-invar-full-scan-final
+    name: Final retest after PP Invar final blockers fix
+    status: pending
+    description: "step_type: test\nstep_intent: retest_green\nexpected_result: green\n\
+      verification_scope: full-plan-check\nwork_type: technical_debt_remediation\n\
+      priority: HIGH\nagent: integration-verifier-tacit\nsymbolic_testing: true\n\
+      command_family_locked: uvx invar-tools guard --all\n\nAs an INDEPENDENT TESTER,\
+      \ retest the failed `retest-pp-invar-full-scan` closure path after the batched\
+      \ fix step `fix-pp-invar-final-retest-blockers`.\n\nThis retest covers the two\
+      \ blocker families from the failed retest and verifies that all previously positive\
+      \ retest surfaces remain green.\n\n## Required blocker coverage\n1. B1 — Core\
+      \ property blocker from authoritative guard:\n   - `src/tasca/core/storage_rows.py::row_to_table`\
+      \ must no longer raise `'None' is not a valid TableStatus` for generated inputs\
+      \ satisfying the active Core contracts.\n   - The authoritative guard property\
+      \ stage must pass without suppressions.\n2. B2 — CLI test-surface blocker:\n\
+      \   - Focused CLI pytest including `tests/unit/test_cli.py` must collect and\
+      \ run without import failure for `create_table_via_mcp` from `tasca.cli`.\n\
+      \   - CLI public/test surface compatibility must be intentionally reconciled;\
+      \ do not accept deleted/skipped/xfail tests as closure.\n\n## Previously positive\
+      \ evidence to preserve\n- Ruff changed/source surfaces.\n- Mypy full source:\
+      \ expected `Success: no issues found in 81 source files` or equivalent current\
+      \ source count success.\n- API unit/integration smoke: expected `79 passed`\
+      \ or documented equivalent current API count success.\n- MCP unit/integration/proxy\
+      \ smoke: expected `211 passed` or documented equivalent current MCP count success.\n\
+      - CLI runtime help/skills smoke for `{new,mcp,version,export,skills}` and `tasca-moderation`.\n\
+      - Guard static/doctest/CrossHair advancement and `non_suppressible: []`.\n\n\
+      ## Closure fields (MANDATORY)\nEvidence MUST include parseable fields:\n- `verdict`:\
+      \ PASS or FAIL\n- `blockers`: list of remaining blocker ids, empty only when\
+      \ closed\n- `gate_open_allowed`: true only when `uvx invar-tools guard --all`\
+      \ passes and focused regression smoke shows no reopened ruff/mypy/pytest/CLI\
+      \ blocker\n- `blocker_closure_register`: table for B1 and B2 with command, result,\
+      \ disposition\n- `surface_preservation_register`: ruff/mypy/API/MCP/CLI matrix\n\
+      \n## Behavioral proof register\nFor B1 and B2 include:\n- `requirement_ref`\n\
+      - `behavior_claim`\n- `runtime_proof_expected`\n- `evidence_ref`\n- `status`:\
+      \ PROVEN | NEEDS_TEST | UNPROVEN | UNCERTAIN_BLOCKING\n- `closure_path`\n- `gate_decision_basis`\n\
+      \n`NEEDS_TEST`, `UNPROVEN`, and `UNCERTAIN_BLOCKING` MUST keep `gate_open_allowed:\
+      \ false` unless explicit non-intersection evidence is recorded."
+    verification: '- expected_result: green.
+
+      - `uvx invar-tools guard --all` exits 0 and reaches/passes property tests without
+      suppressions.
+
+      - Focused `row_to_table` property/pytest regression passes or the evidence names
+      the narrow substitute used for the generated invalid status failure path.
+
+      - Focused CLI pytest including `tests/unit/test_cli.py` collects and passes
+      without deleting/skipping/xfailing compatibility tests.
+
+      - Ruff over touched files passes.
+
+      - Mypy over touched source files or `src/tasca` passes.
+
+      - API unit/integration smoke remains green.
+
+      - MCP unit/integration/proxy smoke remains green.
+
+      - CLI help/skills smoke covering `{new,mcp,version,export,skills}` and `tasca-moderation`
+      remains green.
+
+      - Evidence includes parseable `verdict`, `blockers`, `gate_open_allowed`, `blocker_closure_register`,
+      `surface_preservation_register`, and behavioral proof register; downstream finalization
+      may open only with `verdict: PASS`, `blockers: []`, `gate_open_allowed: true`.'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier-tacit (independent of implementation)
+
+      **Scope**: final PP Invar blocker retest after `fix-pp-invar-final-retest-blockers`
+
+      **Independence Level**: L1
+
+      **Timestamp**: <ISO 8601>
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - `src/tasca/core/storage_rows.py` — key passage or "NOT READ: <reason>"
+
+      - `src/tasca/cli.py` — key passage or "NOT READ: <reason>"
+
+      - `tests/unit/test_cli.py` — key passage or "NOT READ: <reason>"
+
+      - `tests/unit` — key passage or "NOT READ: <reason>"
+
+      - `INVAR.md` — key passage or "NOT READ: <reason>"
+
+
+      ### Required Commands
+
+      Paste exact commands and key output for:
+
+      - `uvx invar-tools guard --all`
+
+      - focused `row_to_table` property/pytest regression or closest focused substitute
+
+      - focused CLI pytest including `tests/unit/test_cli.py`
+
+      - ruff over touched files
+
+      - mypy over touched source files or `src/tasca`
+
+      - API unit/integration smoke
+
+      - MCP unit/integration/proxy smoke
+
+      - CLI help/skills smoke for `{new,mcp,version,export,skills}` and `tasca-moderation`
+
+
+      ### Parseable Closure Fields
+
+      ```yaml
+
+      verdict: PASS|FAIL
+
+      blockers: []
+
+      gate_open_allowed: true|false
+
+      ```
+
+
+      ### Blocker Closure Register
+
+      | Blocker | Command | Expected | Actual | Disposition |
+
+      |---|---|---|---|---|
+
+      | B1 row_to_table property failure | `uvx invar-tools guard --all` plus focused
+      row_to_table regression | property passes |  | PROVEN/NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING
+      |
+
+      | B2 CLI import compatibility | focused pytest including `tests/unit/test_cli.py`
+      | collection and tests pass |  | PROVEN/NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING
+      |
+
+
+      ### Surface Preservation Register
+
+      | Surface | Command | Expected | Actual | Status |
+
+      |---|---|---|---|---|
+
+      | ruff touched/source |  | pass |  |  |
+
+      | mypy source |  | pass |  |  |
+
+      | API smoke |  | pass |  |  |
+
+      | MCP smoke |  | pass |  |  |
+
+      | CLI help/skills |  | pass |  |  |
+
+      | guard non_suppressible | `uvx invar-tools guard --all` | `non_suppressible:
+      []` |  |  |
+
+
+      ### Behavioral Proof Register
+
+      For B1 and B2 include:
+
+      - `requirement_ref`
+
+      - `behavior_claim`
+
+      - `runtime_proof_expected`
+
+      - `evidence_ref`
+
+      - `status`: PROVEN | NEEDS_TEST | UNPROVEN | UNCERTAIN_BLOCKING
+
+      - `closure_path`
+
+      - `gate_decision_basis`
+
+
+      ### Headline
+
+      - [ ] PASS: no blocking issues found and `gate_open_allowed: true`
+
+      - [ ] FAIL: blocking issues or blocking proof gaps remain'
+    depends_on:
+    - fix-pp-invar-final-retest-blockers
+    agent: integration-verifier-tacit
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

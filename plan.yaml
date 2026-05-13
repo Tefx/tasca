@@ -38248,7 +38248,7 @@ phases:
     claimed_at: '2026-05-13T05:52:49.485031+00:00'
   - id: finalization.deep-wiring-audit
     name: Deep wiring audit after consolidation
-    status: claimed
+    status: pending
     description: 'step_type: verification
 
       verification_scope: full-plan-check
@@ -38317,8 +38317,6 @@ phases:
     depends_on:
     - retest-pp-invar-full-scan-final
     agent: wiring-auditor
-    claimed_by: wiring-auditor
-    claimed_at: '2026-05-13T05:53:24.226032+00:00'
   - id: finalization.deep-spec-conformance
     name: Deep cross-surface spec conformance audit
     status: pending

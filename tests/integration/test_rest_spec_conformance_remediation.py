@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import sqlite3
 import uuid
 
+import httpx
 import pytest
 
 from tests.integration.conftest import TEST_ADMIN_TOKEN
@@ -96,3 +99,87 @@ async def test_rest_table_create_shape_and_dedup(http_client) -> None:
     assert data["policy"] == payload["policy"]
     assert data["board"] == payload["board"]
     assert data["id"] == data["table_id"]  # compatibility only
+
+
+def _create_legacy_db_without_canonical_table_columns(db_path) -> None:
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """CREATE TABLE tables (
+                id TEXT PRIMARY KEY,
+                question TEXT NOT NULL,
+                context TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )"""
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@pytest.mark.asyncio
+async def test_rest_table_create_migrates_legacy_db_for_canonical_fields(tmp_path, monkeypatch) -> None:
+    import tasca.config as config_module
+    from tasca.shell.api.app import create_app
+
+    db_path = tmp_path / "legacy.db"
+    _create_legacy_db_without_canonical_table_columns(db_path)
+    monkeypatch.setattr(config_module.settings, "db_path", str(db_path))
+
+    app = create_app()
+    transport = httpx.ASGITransport(app=app)
+    suffix = uuid.uuid4().hex
+    payload = {
+        "title": f"Legacy REST table {suffix}",
+        "created_by": f"legacy-creator-{suffix}",
+        "metadata": {"migrated": True},
+        "policy": {"mode": "review", "params": {}, "custom": {}},
+        "board": {"agenda": ["migration"]},
+    }
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/v1/tables", json=payload, headers=_auth())
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["metadata"] == payload["metadata"]
+    assert data["policy"] == payload["policy"]
+    assert data["board"] == payload["board"]
+
+    conn = sqlite3.connect(db_path)
+    try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(tables)").fetchall()}
+        stored = conn.execute(
+            "SELECT metadata, policy, board FROM tables WHERE id = ?",
+            (data["table_id"],),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert {"creator_patron_id", "host_ids", "metadata", "policy", "board"} <= columns
+    assert stored is not None
+    assert json.loads(stored[0]) == payload["metadata"]
+    assert json.loads(stored[1]) == payload["policy"]
+    assert json.loads(stored[2]) == payload["board"]
+
+
+@pytest.mark.asyncio
+async def test_rest_table_control_replays_same_dedup_response(http_client) -> None:
+    suffix = uuid.uuid4().hex
+    create_response = await http_client.post(
+        "/api/v1/tables",
+        json={"title": f"REST control dedup {suffix}", "created_by": f"creator-{suffix}"},
+        headers=_auth(),
+    )
+    assert create_response.status_code == 200
+    table_id = create_response.json()["table_id"]
+    payload = {"action": "close", "speaker_name": "Admin", "dedup_id": f"close-dedup-{suffix}"}
+
+    first = await http_client.post(f"/api/v1/tables/{table_id}/control", json=payload, headers=_auth())
+    second = await http_client.post(f"/api/v1/tables/{table_id}/control", json=payload, headers=_auth())
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json() == first.json()

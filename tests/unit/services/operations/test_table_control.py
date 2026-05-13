@@ -50,10 +50,12 @@ def _speaker() -> Speaker:
 
 def test_normalizes_action_and_control_content() -> None:
     assert normalize_control_action(" PAUSE ").unwrap() == TableControlAction.PAUSE
-    assert build_control_content(TableControlAction.PAUSE, "  maintenance  ") == (
+    pause_content = build_control_content(TableControlAction.PAUSE, "  maintenance  ")
+    assert isinstance(pause_content, Success)
+    assert pause_content.unwrap() == (
         "**CONTROL: PAUSE**\n\nReason: maintenance"
     )
-    assert build_control_content(TableControlAction.RESUME, "  ") == "**CONTROL: RESUME**"
+    assert build_control_content(TableControlAction.RESUME, "  ").unwrap() == "**CONTROL: RESUME**"
 
 
 def test_invalid_action_is_typed_without_storage_mutation(db_conn: sqlite3.Connection) -> None:

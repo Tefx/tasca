@@ -26,6 +26,7 @@ from tasca.shell.services.operations.table_control import (
     TableControlOperationError,
     execute_table_control,
 )
+from tasca.shell.storage.idempotency_repo import check_idempotency_key, store_idempotency_key
 
 router = APIRouter()
 
@@ -87,6 +88,7 @@ def _control_error_to_http(
     ))
 
 
+# @shell_complexity: HTTP control combines idempotency replay, shared operation dispatch, and cache persistence.
 def _control_table_response(
     conn: sqlite3.Connection,
     table_id: str,
@@ -94,15 +96,42 @@ def _control_table_response(
     now: datetime,
 ) -> Result[TableControlResponse, HTTPException]:
     """Execute table control and build the HTTP response envelope."""
+    resource_key = f"control:{table_id}"
+    if data.dedup_id is not None:
+        cached_result = check_idempotency_key(conn, resource_key, "table_control", data.dedup_id, now=now)
+        if isinstance(cached_result, Failure):
+            return Failure(HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to check idempotency key: {cached_result.failure()}",
+            ))
+        cached = cached_result.unwrap()
+        if cached is not None:
+            return Success(TableControlResponse(**cached["data"]))
+
     speaker = Speaker(kind=SpeakerKind.HUMAN, name=data.speaker_name)
     result = execute_table_control(conn, table_id, data.action, speaker, data.reason, now)
     if isinstance(result, Failure):
         return Failure(_control_error_to_http(table_id, data.action, result.failure()).unwrap())
     outcome = result.unwrap()
-    return Success(TableControlResponse(
+    response = TableControlResponse(
         table_status=outcome.table.status.value,
         control_saying_sequence=outcome.control_saying.sequence,
-    ))
+    )
+    if data.dedup_id is not None:
+        store_result = store_idempotency_key(
+            conn,
+            resource_key,
+            "table_control",
+            data.dedup_id,
+            {"data": response.model_dump(mode="json")},
+            now=now,
+        )
+        if isinstance(store_result, Failure):
+            return Failure(HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to store idempotency key: {store_result.failure()}",
+            ))
+    return Success(response)
 
 
 # =============================================================================

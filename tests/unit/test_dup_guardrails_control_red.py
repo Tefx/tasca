@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from returns.result import Failure
+from returns.result import Failure, Success
 
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.shell.api.deps import get_db
@@ -120,7 +120,8 @@ def test_mcp_control_rolls_back_control_saying_when_status_update_fails(
         dedup_id="atomicity-red-1",
     )
 
-    assert result["ok"] is False
+    assert isinstance(result, Failure)
+    assert result.failure()["ok"] is False
     rows = conn.execute(
         "SELECT content FROM sayings WHERE table_id = ?",
         ("mcp-atomicity-table",),
@@ -168,7 +169,8 @@ def test_rest_and_mcp_control_reason_format_converges_on_canonical_rule(
         reason="Completed",
         dedup_id="format-red-1",
     )
-    assert mcp_response["ok"] is True
+    assert isinstance(mcp_response, Success)
+    assert mcp_response.unwrap()["ok"] is True
 
     rows = conn.execute(
         "SELECT table_id, content FROM sayings WHERE table_id IN (?, ?) ORDER BY table_id",

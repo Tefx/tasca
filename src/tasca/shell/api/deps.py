@@ -10,6 +10,8 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING
 
+from returns.result import Failure
+
 from tasca.config import settings
 
 if TYPE_CHECKING:
@@ -33,7 +35,7 @@ def get_db() -> Generator[sqlite3.Connection]:
     """
     from pathlib import Path
 
-    from tasca.core.schema import get_all_fts_ddl, get_all_index_ddl, get_all_table_ddl
+    from tasca.shell.storage.database import apply_schema
 
     db_path = Path(settings.db_path)
 
@@ -57,10 +59,11 @@ def get_db() -> Generator[sqlite3.Connection]:
         # Enable foreign key constraints
         conn.execute("PRAGMA foreign_keys=ON")
 
-        # Apply schema (tables, indexes, and FTS5 virtual tables/triggers)
-        for stmt in get_all_table_ddl() + get_all_index_ddl() + get_all_fts_ddl():
-            conn.execute(stmt)
-        conn.commit()
+        # Apply schema and migrations through the storage-owned schema path.
+        # CREATE TABLE IF NOT EXISTS alone does not add columns for legacy DBs.
+        schema_result = apply_schema(conn)
+        if isinstance(schema_result, Failure):
+            raise sqlite3.DatabaseError(schema_result.failure())
 
         yield conn
     finally:

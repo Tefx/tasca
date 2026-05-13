@@ -41600,7 +41600,7 @@ phases:
   - id: fix-pp-invar-table-service-doctest
     name: Residual Invar remediation — table_service prepare_table_update doctest
       blocker
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -41734,6 +41734,8 @@ phases:
     depends_on:
     - fix-pp-invar-mcp-direct-residuals
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-13T04:50:08.552409+00:00'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

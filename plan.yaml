@@ -40727,7 +40727,7 @@ phases:
       \ project-level debt is owned by fix-pp-invar-project-budget-followup."
   - id: fix-pp-invar-project-budget-followup
     name: Residual Invar remediation — project-level budget closure
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -40940,6 +40940,174 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T04:03:17.190786+00:00'
+    done_at: '2026-05-13T04:31:15.048810+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+
+      - src/tasca/cli.py — CLI owned direct DB table creation/startup and had unused
+      REST/MCP/background helpers flagged as dead exports; obsolete helpers removed
+      while preserving `new`, `mcp`, `version`, `export`, and `skills` command paths.
+
+      - src/tasca/shell/api/routes/sayings.py — Saying routes delegate append/list/wait
+      through Result-returning helper seams; explicit shell-complexity justifications
+      added for HTTP boundary adapters.
+
+      - src/tasca/shell/api/routes/tables.py — Table create/update/delete routes map
+      service/storage failures to HTTP exceptions; explicit complexity ownership added
+      for create response mapping.
+
+      - src/tasca/shell/mcp/entrypoints.py — MCP entrypoints unwrap shared operations
+      and use module-level logger/session state; logger Result seam and table_say
+      validation Result handling updated.
+
+      - src/tasca/shell/mcp/entrypoint_session_tools.py — Seat/proxy session helpers
+      share logger and MCP response envelopes; logger Result seam updated.
+
+      - src/tasca/shell/mcp/proxy.py — Proxy preserves remote/local mode and session
+      initialization; read for MCP preservation, not directly changed.
+
+      - src/tasca/config.py — Settings normalize admin token and CSP/limit values;
+      read for config boundary, not directly changed.
+
+      - src/tasca/shell/storage/search_repo.py — Search repo combined saying and table
+      search, driving file-size budget pressure; split table search into `table_search_repo.py`
+      and re-exported compatibility symbols.
+
+      - src/tasca/shell/storage/table_repo.py — Table repo has Result storage seams
+      and batch delete transaction; obsolete escape hatch marker removed.
+
+
+      ## Project Budget Closure Evidence
+
+      command_family_locked: uvx invar-tools guard --all
+
+      symbolic_testing: true
+
+
+      ### Project Residual Register
+
+      | Project blocker | Limit | Before | After | Disposition |
+
+      | --- | ---: | ---: | ---: | --- |
+
+      | shell_complexity_debt | 5 | 8 | 4 | closed |
+
+      | escape_hatch_project_limit file_size | 5 | 6 | 3 | closed |
+
+      | escape_hatch_project_limit shell_result | 5 | 10 | 1 | closed |
+
+      | escape_hatch_budget | 15 | 70 | 12 | closed as warning-only under limit |
+
+
+      ### Remaining Project-Budget Contributor Map
+
+      - src/tasca/core/services/mention_service.py file_size — remaining accepted
+      contributor; under project budget and does not itself block retest by project-budget
+      policy.
+
+      - src/tasca/shell/mcp/server.py file_size — remaining accepted contributor;
+      under project budget and does not itself block retest by project-budget policy.
+
+      - src/tasca/shell/mcp/entrypoints.py file_size — remaining accepted contributor;
+      under project budget and does not itself block retest by project-budget policy.
+
+      - src/tasca/shell/api/app.py shell_result — remaining accepted contributor;
+      under project budget and does not itself block retest by project-budget policy.
+
+
+      ### Direct Residual Regression Guard
+
+      - CLI/API direct residuals: not regressed by mainline smoke (`uv run python
+      -m tasca.cli --help`, `create_app()` -> FastAPI) and touched-file ruff/mypy.
+
+      - MCP entrypoint direct residuals: not regressed by mainline smoke (`connection_status().unwrap()["data"]["mode"]
+      == "local"`) and touched-file ruff/mypy.
+
+      - MCP proxy direct residuals: proxy read only; no proxy file changed.
+
+      - Storage/config direct residuals: search storage tests passed; config read
+      only.
+
+
+      ### Verification
+
+      - Worker commit: d667ca6 — Reduce project guard budget debt.
+
+      - Main salvage merge commit: e97b044 — `[vectl] salvage partial progress from
+      step-fix-pp-invar-project-budget-followup`.
+
+      - `uvx ruff check` on touched files after merge: PASS (`All checks passed!`).
+
+      - `uv run mypy` on touched files after merge: PASS (`Success: no issues found
+      in 21 source files`).
+
+      - `uv run pytest tests/unit/storage/test_search_repo.py tests/unit/test_usercustomize.py`:
+      PASS (46 passed).
+
+      - Representative smoke after merge: `uv run python -m tasca.cli --help` PASS
+      and lists `new,mcp,version,export,skills`; `create_app()` PASS -> FastAPI; `connection_status()`
+      PASS -> local.
+
+      - `uvx invar-tools guard --all`: FAIL, but only on direct residual blockers
+      outside project-budget closure. Project-level budget blockers are closed: escape_hatch_budget
+      12/15 warning; no project-limit file_size/shell_result errors; no shell_complexity_debt
+      project error.
+
+
+      ### Broad Verifier Disposition Pass
+
+      - `src/tasca/shell/mcp/tool_contracts.py` shell_result blockers (`parameter_contract`,
+      `tool_contract`, `parameter_default`, `parameter_field`) => `batched_fix`.
+
+      - `src/tasca/shell/mcp/entrypoint_logic.py` shell_result blockers (`_parse_patch_status`,
+      `_silence_nudge`, `_silence_stall`, `_silence_last_chance`, `_silence_exit`)
+      => `batched_fix`.
+
+      - `src/tasca/shell/mcp/entrypoint_logic.py` entry_point_too_thick blockers (`build_table_dict`,
+      `validate_speaker_constraints`, `apply_table_patch`, `build_say_response`) =>
+      `batched_fix`.
+
+      - Plan remediation created by planner: `fix-pp-invar-mcp-direct-residuals`,
+      depending on this step, with `retest-pp-invar-full-scan` updated to depend on
+      that fix.
+
+
+      ### Files changed
+
+      - src/tasca/cli.py — removed obsolete dead REST/MCP/background helper paths
+      and stale hatches.
+
+      - src/tasca/shell/storage/search_repo.py — reduced to saying search plus compatibility
+      re-exports.
+
+      - src/tasca/shell/storage/table_search_repo.py — new table-search storage module.
+
+      - src/tasca/shell/storage/{patron_repo,seat_repo,dedup_repo,database,table_repo}.py
+      — converted/remediated private Result seams or obsolete hatches.
+
+      - src/tasca/shell/api/routes/{sayings,tables,tables_control,search}.py — reduced
+      route thickness/complexity budget pressure.
+
+      - src/tasca/shell/mcp/{server,entrypoints,entrypoint_session_tools}.py — Result/logger
+      seam adjustments.
+
+      - src/tasca/shell/{logging,invar_runtime_policy}.py — Result-returning shell
+      seams.
+
+      - src/tasca/shell/services/limited_saying_service.py — Result-returning validation
+      seam.
+
+      - src/tasca/core/services/{limits_service,table_service}.py — reduced file-size/contract
+      budget pressure.
+
+
+      ### Final retest readiness
+
+      - `retest-pp-invar-full-scan`: CLOSED until `fix-pp-invar-mcp-direct-residuals`
+      completes.
+
+      - Blockers if CLOSED: direct MCP residual blockers now owned by `fix-pp-invar-mcp-direct-residuals`;
+      project-budget blockers are closed.'
   - id: fix-pp-invar-mcp-direct-residuals
     name: Residual Invar remediation — MCP direct shell_result and entrypoint thickness
       blockers

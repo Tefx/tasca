@@ -42186,6 +42186,204 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T05:04:24.876339+00:00'
+  - id: fix-pp-invar-patron-repo-doctest
+    name: Residual Invar remediation — patron_repo create_patron doctest missing UTC
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+      provenance: downstream full-guard doctest blocker after commit 4ea1fbf
+
+
+      Focused implementation fix for the new downstream full-guard doctest blocker
+      in `src/tasca/shell/storage/patron_repo.py::tasca.shell.storage.patron_repo.create_patron`.
+
+
+      ## Exact failure context
+
+      The orchestrator reports that mainline `uvx invar-tools guard --all` now passes
+      static with `errors=0` and the MCP proxy doctests pass, but exits nonzero on
+      a downstream storage doctest blocker:
+
+      - doctest target: `src/tasca/shell/storage/patron_repo.py::tasca.shell.storage.patron_repo.create_patron`
+
+      - doctest imports `apply_schema`
+
+      - doctest runs `conn = sqlite3.connect(":memory:")`
+
+      - doctest runs `_ = apply_schema(conn)`
+
+      - doctest constructs `patron = Patron(...)`
+
+      - exception: `NameError("name ''UTC'' is not defined")`
+
+      - reported location: `src/tasca/shell/storage/patron_repo.py`, doctest line
+      99
+
+
+      ## Required remediation
+
+      Fix the doctest/import/name issue properly at the patron repository seam:
+
+      - Ensure the doctest has the correct in-scope name for `UTC` or uses the repository''s
+      established datetime/timezone pattern.
+
+      - Preserve existing storage behavior and all `Result` contracts for patron repository
+      functions.
+
+      - Do NOT add suppressions, skips, xfail markers, placeholders, or guards that
+      hide the doctest failure.
+
+      - Do NOT weaken doctests, contracts, examples, or Result semantics to force
+      a green run.
+
+      - Keep the fix focused to the missing `UTC` doctest/name blocker unless the
+      focused storage tests prove a behavior-preserving adjacent import/doc example
+      correction is required.
+
+
+      ## Scope guardrails
+
+      - Do not modify completed plan steps.
+
+      - Do not broaden this into unrelated storage refactoring or budget cleanup.
+
+      - If behavior code changes are required, preserve schema/application behavior
+      and patron persistence semantics exactly; record why the doctest/name fix alone
+      was insufficient.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. The
+      deliverable MUST be a real doctest/import/name correction or behavior-preserving
+      implementation correction that makes the documented example executable. Suppressions,
+      skips, xfail, placeholders, or weakened contracts do not satisfy this step.'
+    verification: '- Run the authoritative full guard exactly: `uvx invar-tools guard
+      --all`; it must advance past this patron_repo doctest blocker.
+
+      - Run the focused doctest/pytest target for `src/tasca/shell/storage/patron_repo.py::tasca.shell.storage.patron_repo.create_patron`
+      or the closest available patron_repo doctest invocation; the `UTC` NameError
+      must be gone.
+
+      - Run ruff over touched files.
+
+      - Run mypy over touched files or the smallest supported package target covering
+      `src/tasca/shell/storage/patron_repo.py`.
+
+      - If behavior code changed beyond doctest/import/name scope, run focused patron
+      storage tests and include the exact commands/output.
+
+      - Evidence must prove no suppressions/skips/xfail/placeholders were introduced
+      and no doctests/contracts/Result contracts were weakened.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - src/tasca/shell/storage/patron_repo.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/storage/schema.py — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Fix Evidence
+
+
+      **Failure reproduced/understood**:
+
+      - Target: `src/tasca/shell/storage/patron_repo.py::tasca.shell.storage.patron_repo.create_patron`
+
+      - Original blocker: `NameError("name ''UTC'' is not defined")` while constructing
+      `Patron(...)` in the doctest.
+
+
+      **Change summary**:
+
+      - Files changed:
+
+      - Doctest/import/name fix applied:
+
+      - Behavior code changed? yes/no; if yes, explain why doctest-only correction
+      was insufficient.
+
+
+      **Contract preservation**:
+
+      - Storage behavior preserved:
+
+      - `Result` contracts preserved:
+
+      - No suppressions/skips/xfail/placeholders introduced:
+
+      - Doctests/contracts not weakened:
+
+
+      **Commands executed and actual output excerpts**:
+
+      ```text
+
+      uvx invar-tools guard --all
+
+      <actual output excerpt>
+
+      ```
+
+      ```text
+
+      <focused patron_repo doctest/pytest invocation>
+
+      <actual output excerpt>
+
+      ```
+
+      ```text
+
+      <ruff over touched files>
+
+      <actual output excerpt>
+
+      ```
+
+      ```text
+
+      <mypy over touched files or smallest package target>
+
+      <actual output excerpt>
+
+      ```
+
+      ```text
+
+      <focused storage tests if behavior touched, or "NOT RUN: behavior not touched">
+
+      <actual output excerpt or reason>
+
+      ```
+
+
+      ## Closure
+
+      - verdict: PASS | FAIL
+
+      - remaining_blockers: [] or list
+
+      - gate_open_note: Whether `retest-pp-invar-full-scan` can now retest the full
+      guard closure.'
+    depends_on:
+    - fix-pp-invar-mcp-proxy-doctest
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

@@ -219,6 +219,35 @@ class TestGetTable:
         assert data["status"] == "open"
         assert data["version"] == 1
 
+    def test_create_then_get_preserves_table_metadata_policy_board(
+        self, admin_client: TestClient
+    ) -> None:
+        """REST create response and later GET agree on metadata/policy/board."""
+        payload = {
+            "title": "Spec-backed table",
+            "created_by": "patron-rest-1",
+            "host_ids": ["patron-rest-1", "patron-rest-2"],
+            "metadata": {"space": "rest"},
+            "policy": {"mode": "critique", "params": {"rounds": 2}},
+            "board": {"notes": ["pin"]},
+        }
+        create_response = admin_client.post("/tables", json=payload)
+
+        assert create_response.status_code == 200
+        created = create_response.json()
+        table_id = created["id"]
+        assert created["metadata"] == payload["metadata"]
+        assert created["policy"] == payload["policy"]
+        assert created["board"] == payload["board"]
+
+        get_response = admin_client.get(f"/tables/{table_id}")
+        assert get_response.status_code == 200
+        fetched = get_response.json()
+        assert fetched["metadata"] == payload["metadata"]
+        assert fetched["policy"] == payload["policy"]
+        assert fetched["board"] == payload["board"]
+        assert fetched["host_ids"] == ["patron-rest-1", "patron-rest-2"]
+
 
 # =============================================================================
 # PUT /tables/{table_id} - Update Tests

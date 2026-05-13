@@ -174,7 +174,10 @@ def prepare_table_update(table: Table, update: TableUpdate, now: datetime) -> Ta
         ...     question="Updated",
         ...     context="New context",
         ...     status=TableStatus.OPEN,
-        ...     host_ids=["host-1"]
+        ...     host_ids=["host-1"],
+        ...     metadata={"topic": "ops"},
+        ...     policy={"mode": "critique"},
+        ...     board={"notes": ["pin"]}
         ... )
         >>> result = prepare_table_update(table, update, datetime(2024, 1, 2, 12, 0))
         >>> result.question
@@ -187,6 +190,8 @@ def prepare_table_update(table: Table, update: TableUpdate, now: datetime) -> Ta
         True
         >>> result.created_at == table.created_at  # created_at preserved
         True
+        >>> result.metadata
+        {'topic': 'ops'}
     """
     new_version = increment_version(table.version)
 
@@ -200,6 +205,9 @@ def prepare_table_update(table: Table, update: TableUpdate, now: datetime) -> Ta
         updated_at=now,
         creator_patron_id=table.creator_patron_id,
         host_ids=update.host_ids,
+        metadata=update.metadata,
+        policy=update.policy,
+        board=update.board,
     )
 
 

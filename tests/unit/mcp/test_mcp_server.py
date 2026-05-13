@@ -310,6 +310,84 @@ class TestTableGet:
         assert result["data"]["id"] == table_id
         assert result["data"]["question"] == "Test question"
 
+    def test_create_then_get_and_join_preserve_metadata_policy_board(self) -> None:
+        """MCP create/readback surfaces persist table metadata fields."""
+        created = table_create(
+            title="Metadata table",
+            created_by="patron-mcp-1",
+            metadata={"space": "mcp"},
+            policy={"mode": "critique", "params": {"rounds": 2}},
+            board={"notes": ["pin"]},
+        )
+        assert created["ok"] is True
+        table_id = created["data"]["id"]
+
+        fetched = table_get(table_id)
+        assert fetched["ok"] is True
+        assert fetched["data"]["metadata"] == {"space": "mcp"}
+        assert fetched["data"]["policy"] == {"mode": "critique", "params": {"rounds": 2}}
+        assert fetched["data"]["board"] == {"notes": ["pin"]}
+
+        joined = table_join(table_id=table_id)
+        assert joined["ok"] is True
+        assert joined["data"]["table"]["metadata"] == {"space": "mcp"}
+        assert joined["data"]["table"]["policy"] == {"mode": "critique", "params": {"rounds": 2}}
+        assert joined["data"]["table"]["board"] == {"notes": ["pin"]}
+
+    def test_table_update_persists_metadata_policy_board_and_null_clears(self) -> None:
+        """MCP table_update replaces metadata fields instead of silently dropping them."""
+        patron = patron_register(name=unique_name("Host"))
+        patron_id = patron["data"]["id"]
+        created = table_create(
+            title="Mutable metadata table",
+            created_by=patron_id,
+            metadata={"space": "initial"},
+            policy={"mode": "initial"},
+            board={"notes": ["initial"]},
+        )
+        table_id = created["data"]["id"]
+
+        updated = table_update(
+            table_id=table_id,
+            expected_version=created["data"]["version"],
+            patch={
+                "metadata": {"space": "updated"},
+                "policy": None,
+                "board": {"notes": ["updated"]},
+            },
+            speaker_name="Host",
+            patron_id=patron_id,
+        )
+
+        assert updated["ok"] is True
+        table = updated["data"]["table"]
+        assert table["metadata"] == {"space": "updated"}
+        assert table["policy"] == {}
+        assert table["board"] == {"notes": ["updated"]}
+
+        fetched = table_get(table_id)
+        assert fetched["data"]["metadata"] == {"space": "updated"}
+        assert fetched["data"]["policy"] == {}
+        assert fetched["data"]["board"] == {"notes": ["updated"]}
+
+    def test_table_update_rejects_non_object_metadata_fields(self) -> None:
+        """MCP table_update rejects bad metadata shapes explicitly."""
+        patron = patron_register(name=unique_name("Host"))
+        patron_id = patron["data"]["id"]
+        created = table_create(title="Invalid metadata table", created_by=patron_id)
+
+        updated = table_update(
+            table_id=created["data"]["id"],
+            expected_version=created["data"]["version"],
+            patch={"metadata": ["not", "an", "object"]},
+            speaker_name="Host",
+            patron_id=patron_id,
+        )
+
+        assert updated["ok"] is False
+        assert updated["error"]["code"] == "INVALID_REQUEST"
+        assert "metadata" in updated["error"]["message"]
+
 
 class TestTableList:
     """Tests for table_list MCP tool."""
@@ -2252,6 +2330,30 @@ class TestTableWait:
         # Saying data also present
         found = any(s["content"] == "Saying triggering hit path" for s in data["sayings"])
         assert found, "Expected saying content not found in wait response"
+
+    @pytest.mark.asyncio
+    async def test_table_wait_include_table_preserves_metadata_policy_board(self) -> None:
+        """include_table=True snapshots include persisted table metadata fields."""
+        table_result = table_create(
+            title="Wait metadata table",
+            metadata={"space": "wait"},
+            policy={"mode": "observe"},
+            board={"notes": ["wait"]},
+        )
+        table_id = table_result["data"]["id"]
+
+        result = await table_wait(
+            table_id=table_id,
+            since_sequence=-1,
+            wait_ms=1,
+            include_table=True,
+        )
+
+        assert result["ok"] is True
+        table_snapshot = result["data"]["table"]
+        assert table_snapshot["metadata"] == {"space": "wait"}
+        assert table_snapshot["policy"] == {"mode": "observe"}
+        assert table_snapshot["board"] == {"notes": ["wait"]}
 
     @pytest.mark.asyncio
     async def test_table_wait_caps_wait_ms(self) -> None:

@@ -239,6 +239,9 @@ def atomic_control_table(
                 updated_at=now,
                 creator_patron_id=current_table.creator_patron_id,
                 host_ids=current_table.host_ids,
+                metadata=current_table.metadata,
+                policy=current_table.policy,
+                board=current_table.board,
             )
 
             return Success((saying, updated_table))

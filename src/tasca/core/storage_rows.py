@@ -16,6 +16,8 @@ from tasca.core.domain.patron import PatronId
 from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 
+JsonObject = dict[str, object]
+
 
 @deal.pre(lambda raw: isinstance(raw, str))
 @deal.post(lambda result: isinstance(result, bool))
@@ -79,6 +81,61 @@ def encode_host_ids(host_ids: list[str]) -> str:
     return json.dumps(host_ids)
 
 
+@deal.post(lambda result: isinstance(result, bool))
+def _is_json_serializable_value(value: object) -> bool:
+    """Return whether a value fits SQLite JSON object storage.
+
+    Examples:
+        >>> _is_json_serializable_value({"a": [1, None, True]})
+        True
+        >>> _is_json_serializable_value({"bad": object()})
+        False
+    """
+    if value is None or isinstance(value, str | int | float | bool):
+        return True
+    if isinstance(value, list):
+        return all(_is_json_serializable_value(item) for item in value)
+    if isinstance(value, dict):
+        return all(isinstance(key, str) and _is_json_serializable_value(item) for key, item in value.items())
+    return False
+
+
+@deal.pre(lambda value: isinstance(value, dict) and _is_json_serializable_value(value))
+@deal.post(lambda result: isinstance(result, str))
+def encode_table_json_object(value: JsonObject) -> str:
+    """Encode table metadata-like JSON objects for SQLite storage.
+
+    Examples:
+        >>> encode_table_json_object({"a": 1})
+        '{"a": 1}'
+    """
+    return json.dumps(value)
+
+
+@deal.pre(lambda raw: raw is None or isinstance(raw, str))
+@deal.post(lambda result: isinstance(result, dict))
+def decode_table_json_object(raw: str | None) -> JsonObject:
+    """Decode table metadata-like JSON, falling back to empty for legacy rows.
+
+    Examples:
+        >>> decode_table_json_object(None)
+        {}
+        >>> decode_table_json_object('{"a": 1}')
+        {'a': 1}
+        >>> decode_table_json_object('["not", "an", "object"]')
+        {}
+    """
+    if not raw:
+        return {}
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(decoded, dict) or not _is_json_serializable_value(decoded):
+        return {}
+    return decoded
+
+
 @deal.pre(lambda raw: raw is None or isinstance(raw, str))
 @deal.post(lambda result: all(isinstance(item, str) for item in result))
 def decode_host_ids(raw: str | None) -> list[str]:
@@ -133,6 +190,9 @@ def row_to_table(row: tuple[object, ...]) -> Table:
         updated_at=datetime.fromisoformat(str(row[6])),
         creator_patron_id=str(row[7]) if len(row) > 7 and row[7] is not None else None,
         host_ids=decode_host_ids(str(row[8]) if len(row) > 8 and row[8] is not None else None),
+        metadata=decode_table_json_object(str(row[9]) if len(row) > 9 and row[9] is not None else None),
+        policy=decode_table_json_object(str(row[10]) if len(row) > 10 and row[10] is not None else None),
+        board=decode_table_json_object(str(row[11]) if len(row) > 11 and row[11] is not None else None),
     )
 
 

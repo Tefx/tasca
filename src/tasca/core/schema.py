@@ -49,6 +49,12 @@ def create_tables_table_ddl(table_name: str = "tables") -> str:
     True
     >>> "host_ids TEXT" in create_tables_table_ddl()
     True
+    >>> "metadata TEXT" in create_tables_table_ddl()
+    True
+    >>> "policy TEXT" in create_tables_table_ddl()
+    True
+    >>> "board TEXT" in create_tables_table_ddl()
+    True
     """
     return f"""CREATE TABLE IF NOT EXISTS {table_name} (
     id TEXT PRIMARY KEY,
@@ -59,7 +65,10 @@ def create_tables_table_ddl(table_name: str = "tables") -> str:
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     creator_patron_id TEXT,
-    host_ids TEXT
+    host_ids TEXT,
+    metadata TEXT,
+    policy TEXT,
+    board TEXT
 )"""
 
 

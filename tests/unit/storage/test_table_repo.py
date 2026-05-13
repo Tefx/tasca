@@ -17,6 +17,7 @@ from tasca.shell.storage.seat_repo import create_seat, create_seats_table
 from tasca.shell.storage.table_repo import (
     create_table,
     create_tables_table,
+    get_table,
     list_tables_with_seat_counts,
 )
 
@@ -196,6 +197,55 @@ class TestListTablesWithSeatCounts:
         assert isinstance(result, Success)
         tables = result.unwrap()
         assert tables[0]["active_count"] == 0
+
+    def test_create_get_round_trips_metadata_policy_board(self, db_conn: sqlite3.Connection) -> None:
+        """Repository persists and reads table metadata JSON fields."""
+        table = create_test_table("table-metadata", "Question")
+        table.metadata = {"space": "storage"}
+        table.policy = {"mode": "review"}
+        table.board = {"notes": ["pin"]}
+
+        create_result = create_table(db_conn, table)
+        assert isinstance(create_result, Success)
+
+        get_result = get_table(db_conn, TableId("table-metadata"))
+        assert isinstance(get_result, Success)
+        fetched = get_result.unwrap()
+        assert fetched.metadata == {"space": "storage"}
+        assert fetched.policy == {"mode": "review"}
+        assert fetched.board == {"notes": ["pin"]}
+
+    def test_legacy_rows_without_metadata_columns_fallback_to_empty_objects(self) -> None:
+        """Legacy table rows decode without crashing or inventing metadata."""
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            """
+            CREATE TABLE tables (
+                id TEXT PRIMARY KEY,
+                question TEXT NOT NULL,
+                context TEXT,
+                status TEXT NOT NULL DEFAULT 'open',
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                creator_patron_id TEXT,
+                host_ids TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO tables (id, question, status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ("legacy", "Legacy?", "open", 1, "2024-01-01T12:00:00", "2024-01-01T12:00:00"),
+        )
+        conn.commit()
+
+        get_result = get_table(conn, TableId("legacy"))
+        assert isinstance(get_result, Success)
+        fetched = get_result.unwrap()
+        assert fetched.metadata == {}
+        assert fetched.policy == {}
+        assert fetched.board == {}
+        conn.close()
 
     def test_returned_dict_structure(self, db_conn: sqlite3.Connection) -> None:
         """Returned dict has all required fields."""

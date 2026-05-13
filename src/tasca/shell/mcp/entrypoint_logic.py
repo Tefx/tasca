@@ -75,6 +75,7 @@ def build_patron_response_data(patron: Patron, *, is_new: bool) -> dict[str, Any
 
 @deal.pre(lambda table: table is not None)
 @deal.post(lambda result: "id" in result and "status" in result)
+# @invar:allow entry_point_too_thick: MCP table payload has required compatibility aliases plus persisted metadata fields.
 def build_table_dict(table: Table) -> dict[str, Any]:
     """Build MCP table payload."""
     identity_payload = _table_identity_payload(table)
@@ -88,6 +89,9 @@ def build_table_dict(table: Table) -> dict[str, Any]:
         "created_at": table.created_at.isoformat(),
         "updated_at": table.updated_at.isoformat(),
         "host_ids": table.host_ids,
+        "metadata": table.metadata,
+        "policy": table.policy,
+        "board": table.board,
     }
 
 
@@ -217,13 +221,14 @@ def _parse_patch_status(
 
 @deal.pre(lambda current_table, patch: current_table is not None and patch is not None)
 @deal.post(lambda result: len(result) == 2)
+# @invar:allow entry_point_too_thick: Patch adapter validates all documented table_update fields before a single storage update.
 def apply_table_patch(current_table: Table, patch: dict[str, Any]) -> PatchApplyResult:
     """Apply supported table patch fields and validate status transitions."""
     new_status, status_error = _parse_patch_status(current_table, patch).unwrap()
     if status_error is not None:
         return _patch_error_result(current_table, status_error)
     new_question = patch.get("question", current_table.question)
-    new_context = cast(str, patch.get("context", current_table.context))
+    new_context = cast(str | None, patch.get("context", current_table.context))
     host_ids_result = _parse_patch_host_ids(patch, current_table.host_ids)
     if isinstance(host_ids_result, Failure):
         return _patch_error_result(
@@ -231,7 +236,24 @@ def apply_table_patch(current_table: Table, patch: dict[str, Any]) -> PatchApply
             host_ids_result.failure(),
         )
     new_host_ids = host_ids_result.unwrap()
-    return _patch_success_result(new_question, new_context, new_status, new_host_ids)
+    metadata_result = _parse_patch_json_object(patch, "metadata", current_table.metadata)
+    if isinstance(metadata_result, Failure):
+        return _patch_error_result(current_table, metadata_result.failure())
+    policy_result = _parse_patch_json_object(patch, "policy", current_table.policy)
+    if isinstance(policy_result, Failure):
+        return _patch_error_result(current_table, policy_result.failure())
+    board_result = _parse_patch_json_object(patch, "board", current_table.board)
+    if isinstance(board_result, Failure):
+        return _patch_error_result(current_table, board_result.failure())
+    return _patch_success_result(
+        new_question,
+        new_context,
+        new_status,
+        new_host_ids,
+        metadata_result.unwrap(),
+        policy_result.unwrap(),
+        board_result.unwrap(),
+    )
 
 
 def _parse_patch_host_ids(
@@ -244,8 +266,28 @@ def _parse_patch_host_ids(
     return Success(host_ids)
 
 
+def _parse_patch_json_object(
+    patch: dict[str, Any], key: str, current_value: dict[str, object]
+) -> Result[dict[str, object], dict[str, Any]]:
+    """Parse optional metadata/policy/board patch fields.
+
+    Omitted keys preserve the current value. Explicit null clears to an empty
+    object. Dict values replace the old value (last-writer-wins after version
+    check).
+    """
+    if key not in patch:
+        return Success(current_value)
+    value = patch[key]
+    if value is None:
+        return Success({})
+    if not isinstance(value, dict):
+        return Failure(error_response("INVALID_REQUEST", f"{key} must be a JSON object or null"))
+    return Success(cast(dict[str, object], value))
+
+
 @deal.pre(lambda current_table, error: current_table is not None and error is not None)
 @deal.post(lambda result: len(result) == 2 and result[1] is not None)
+# @invar:allow entry_point_too_thick: Error result must preserve all replace-only table fields.
 def _patch_error_result(
     current_table: Table,
     error: dict[str, Any],
@@ -257,18 +299,30 @@ def _patch_error_result(
             context=current_table.context,
             status=current_table.status,
             host_ids=current_table.host_ids,
+            metadata=current_table.metadata,
+            policy=current_table.policy,
+            board=current_table.board,
         ),
         error,
     )
 
 
-@deal.pre(lambda question, context, status, host_ids: isinstance(host_ids, list))
+@deal.pre(
+    lambda question, context, status, host_ids, metadata, policy, board: isinstance(host_ids, list)
+    and isinstance(metadata, dict)
+    and isinstance(policy, dict)
+    and isinstance(board, dict)
+)
 @deal.post(lambda result: len(result) == 2 and result[1] is None)
+# @invar:allow entry_point_too_thick: Success result enumerates all replace-only table fields explicitly.
 def _patch_success_result(
     question: str,
-    context: str,
+    context: str | None,
     status: TableStatus,
     host_ids: list[str],
+    metadata: dict[str, object],
+    policy: dict[str, object],
+    board: dict[str, object],
 ) -> tuple[TableUpdate, None]:
     """Build a validated table update tuple."""
     return TableUpdate(
@@ -276,6 +330,9 @@ def _patch_success_result(
         context=context,
         status=status,
         host_ids=host_ids,
+        metadata=metadata,
+        policy=policy,
+        board=board,
     ), None
 
 

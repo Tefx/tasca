@@ -19,7 +19,7 @@ from tasca.core.services.table_service import (
     VersionMismatchError,
     prepare_versioned_update,
 )
-from tasca.core.storage_rows import encode_host_ids, row_to_table
+from tasca.core.storage_rows import encode_host_ids, encode_table_json_object, row_to_table
 
 # =============================================================================
 # Error Types
@@ -98,6 +98,37 @@ class TableDatabaseError(TableError):
 # =============================================================================
 
 
+_TABLE_ROW_COLUMNS = (
+    "id",
+    "question",
+    "context",
+    "status",
+    "version",
+    "created_at",
+    "updated_at",
+    "creator_patron_id",
+    "host_ids",
+    "metadata",
+    "policy",
+    "board",
+)
+
+
+def _table_select_projection(conn: sqlite3.Connection) -> Result[str, TableError]:
+    """Build a table SELECT projection with NULL fallbacks for legacy columns."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(tables)")
+        existing = {str(row[1]) for row in cursor.fetchall()}
+        return Success(
+            ", ".join(
+                column if column in existing else f"NULL AS {column}"
+                for column in _TABLE_ROW_COLUMNS
+            )
+        )
+    except sqlite3.Error as e:
+        return Failure(TableDatabaseError(f"Failed to inspect tables schema: {e}"))
+
+
 def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableError]:
     """Create a new table in the database.
 
@@ -111,8 +142,8 @@ def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableE
     try:
         conn.execute(
             """
-            INSERT INTO tables (id, question, context, status, version, created_at, updated_at, creator_patron_id, host_ids)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tables (id, question, context, status, version, created_at, updated_at, creator_patron_id, host_ids, metadata, policy, board)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 table.id,
@@ -124,13 +155,18 @@ def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableE
                 table.updated_at.isoformat(),
                 table.creator_patron_id,
                 encode_host_ids(table.host_ids),
+                encode_table_json_object(getattr(table, "metadata", {})),
+                encode_table_json_object(getattr(table, "policy", {})),
+                encode_table_json_object(getattr(table, "board", {})),
             ),
         )
         conn.commit()
         return Success(table)
     except sqlite3.IntegrityError as e:
+        conn.rollback()
         return Failure(TableError(f"Table already exists or constraint violation: {e}"))
     except sqlite3.Error as e:
+        conn.rollback()
         return Failure(TableDatabaseError(f"Failed to create table: {e}"))
 
 
@@ -145,11 +181,12 @@ def get_table(conn: sqlite3.Connection, table_id: TableId) -> Result[Table, Tabl
         Success with Table, or Failure with TableNotFoundError or TableDatabaseError.
     """
     try:
+        projection_result = _table_select_projection(conn)
+        if isinstance(projection_result, Failure):
+            return projection_result
+        projection = projection_result.unwrap()
         cursor = conn.execute(
-            """
-            SELECT id, question, context, status, version, created_at, updated_at, creator_patron_id, host_ids
-            FROM tables WHERE id = ?
-            """,
+            f"SELECT {projection} FROM tables WHERE id = ?",  # noqa: S608 - projection is fixed internal column list
             (table_id,),
         )
         row = cursor.fetchone()
@@ -216,7 +253,7 @@ def update_table(
         cursor = conn.execute(
             """
             UPDATE tables
-            SET question = ?, context = ?, status = ?, version = ?, updated_at = ?, host_ids = ?
+            SET question = ?, context = ?, status = ?, version = ?, updated_at = ?, host_ids = ?, metadata = ?, policy = ?, board = ?
             WHERE id = ? AND version = ?
             """,
             (
@@ -226,6 +263,9 @@ def update_table(
                 updated_table.version,
                 updated_table.updated_at.isoformat(),
                 encode_host_ids(updated_table.host_ids),
+                encode_table_json_object(updated_table.metadata),
+                encode_table_json_object(updated_table.policy),
+                encode_table_json_object(updated_table.board),
                 table_id,
                 expected_version,  # Extra safety: only update if version matches
             ),
@@ -246,6 +286,7 @@ def update_table(
 
         return Success(updated_table)
     except sqlite3.Error as e:
+        conn.rollback()
         return Failure(TableDatabaseError(f"Failed to update table: {e}"))
 
 
@@ -259,12 +300,12 @@ def list_tables(conn: sqlite3.Connection) -> Result[list[Table], TableError]:
         Success with list of tables (may be empty), or Failure with TableError.
     """
     try:
+        projection_result = _table_select_projection(conn)
+        if isinstance(projection_result, Failure):
+            return projection_result
+        projection = projection_result.unwrap()
         cursor = conn.execute(
-            """
-            SELECT id, question, context, status, version, created_at, updated_at, creator_patron_id, host_ids
-            FROM tables
-            ORDER BY created_at DESC
-            """
+            f"SELECT {projection} FROM tables ORDER BY created_at DESC"  # noqa: S608 - projection is fixed internal column list
         )
         rows = cursor.fetchall()
         tables = [row_to_table(row) for row in rows]
@@ -475,7 +516,10 @@ def create_tables_table(conn: sqlite3.Connection) -> Result[None, TableError]:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 creator_patron_id TEXT,
-                host_ids TEXT
+                host_ids TEXT,
+                metadata TEXT,
+                policy TEXT,
+                board TEXT
             )
         """)
         conn.commit()

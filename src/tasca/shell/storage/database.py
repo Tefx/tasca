@@ -187,6 +187,15 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     if "host_ids" not in table_columns:
         conn.execute("ALTER TABLE tables ADD COLUMN host_ids TEXT")
 
+    if "metadata" not in table_columns:
+        conn.execute("ALTER TABLE tables ADD COLUMN metadata TEXT")
+
+    if "policy" not in table_columns:
+        conn.execute("ALTER TABLE tables ADD COLUMN policy TEXT")
+
+    if "board" not in table_columns:
+        conn.execute("ALTER TABLE tables ADD COLUMN board TEXT")
+
     conn.commit()
 
 

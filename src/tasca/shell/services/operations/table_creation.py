@@ -8,6 +8,7 @@ auth, idempotency caches, logging, and response/error envelope shaping.
 from __future__ import annotations
 
 import sqlite3
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -80,9 +81,9 @@ def create_discussion_table(
         creator_patron_id: Legacy creator identity alias.
         created_by: MCP-spec creator identity; preferred over ``creator_patron_id``.
         host_ids: MCP-spec host list; defaults to the creator when present.
-        metadata: MCP-spec arbitrary metadata; currently response-owned in foundation.
-        policy: MCP-spec policy object; currently response-owned in foundation.
-        board: MCP-spec board object; currently response-owned in foundation.
+        metadata: MCP-spec arbitrary metadata persisted with the table.
+        policy: MCP-spec policy object persisted with the table.
+        board: MCP-spec board object persisted with the table.
         now: Optional timestamp injection for deterministic tests/callers.
 
     Returns:
@@ -140,6 +141,9 @@ def create_discussion_table(
         updated_at=timestamp,
         creator_patron_id=resolved_creator,
         host_ids=effective_host_ids,
+        metadata=metadata if metadata is not None else {},
+        policy=policy if policy is not None else deepcopy(DEFAULT_TABLE_POLICY),
+        board=board if board is not None else {},
     )
     create_result = create_table(conn, table)
     if isinstance(create_result, Failure):
@@ -151,7 +155,7 @@ def create_discussion_table(
         invite_code=created.id,
         web_url=f"/tables/{created.id}",
         host_ids=created.host_ids,
-        metadata=metadata if metadata is not None else {},
-        policy=policy if policy is not None else DEFAULT_TABLE_POLICY.copy(),
-        board=board if board is not None else {},
+        metadata=created.metadata,
+        policy=created.policy,
+        board=created.board,
     ))

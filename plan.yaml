@@ -38242,7 +38242,7 @@ phases:
 
       '
     depends_on:
-    - retest-full-plan-blockers
+    - retest-pp-invar-full-scan
     agent: doc-reviewer-tacit
   - id: finalization.deep-wiring-audit
     name: Deep wiring audit after consolidation

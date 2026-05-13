@@ -40206,6 +40206,216 @@ phases:
       \n### Residual blocker-class debt\n- Owned storage/config/service shell_result\
       \ targets: NONE.\n- Full guard remains blocked by sibling/project budget debt\
       \ owned by remaining finalization residual steps."
+  - id: fix-pp-invar-mcp-entrypoints-followup
+    name: Residual Invar remediation — MCP entrypoint direct blockers
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+      reduction_step: true
+
+      followup_reason: `fix-pp-invar-mcp-residual` is complete and immutable, but
+      fresh authoritative guard output after commit `cceec3e` proves MCP direct shell_result
+      blockers remain in `entrypoints.py` and `entrypoint_session_tools.py`. This
+      is a required follow-up remediation, not an edit to the completed step.
+
+
+      Bounded MCP follow-up for direct shell_result blockers in MCP tool/session entrypoints
+      only.
+
+
+      ## Target residual inventory (this step owns exactly this MCP entrypoint surface)
+
+      - `src/tasca/shell/mcp/entrypoints.py` shell_result direct errors at: `_get_loop_state`,
+      `_record_wait_result`, `_limits_config_from_settings`, `_authorize_table_mutation`,
+      `patron_register`, `patron_get`, `table_create`, `_create_seat_for_join`, `table_join`,
+      `table_get`, `table_list`, `table_delete_batch`, `table_export`, `_auto_register_patron_for_say`,
+      `_table_say_error_to_mcp_response`, `_resolve_mentions_for_say`, `_check_say_idempotency`,
+      `table_say`, `table_listen`, `_create_control_speaker`, `table_control`, `table_update`,
+      `table_wait`, `seat_heartbeat`, `seat_list`, `connect`, `connection_status`.
+
+      - `src/tasca/shell/mcp/entrypoint_session_tools.py` shell_result direct errors
+      at: `seat_heartbeat_impl`, `seat_list_impl`, `connect_impl`, `connection_status_impl`.
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause: MCP entrypoint functions still directly perform transport/session
+      shell behavior instead of delegating to Result-returning shell seams and keeping
+      JSON/framework coercion at the outermost MCP adapter.
+
+      - Symptom: full guard reports direct `shell_result` blockers in the listed entrypoint/session
+      functions even though focused MCP ruff/mypy/pytest passed after `cceec3e`.
+
+      - Why previous fix failed: `fix-pp-invar-mcp-residual` closed or reduced prior
+      MCP counts but its completion evidence was over-optimistic; the fresh full scan
+      is authoritative and shows direct blockers remain.
+
+      - Why this fix is not surface-level: it must change the seam shape and direct
+      shell ownership, not add guard suppressions, owner-only exemptions, or cosmetic
+      wrappers.
+
+
+      ## Required remediation constraints
+
+      - command_family_locked: `uvx invar-tools guard --all`.
+
+      - symbolic_testing: true.
+
+      - No suppressions, owner-only exemptions, `# noqa` budget evasion, placeholder
+      adapters, or stub-only implementations.
+
+      - Preserve MCP deployability and runtime semantics: tool registration, session
+      tool behavior, idempotency, mention resolution, table wait/listen/control/update/say
+      behavior, remote connect/status behavior, and documented MCP response envelopes
+      must remain intact.
+
+      - Any new Core helper MUST include meaningful `@pre`/`@post` contracts and at
+      least one doctest before implementation logic.
+
+      - Do not modify proxy budget issues here except if an unavoidable import/interface
+      change is required; proxy residual ownership belongs to `fix-pp-invar-mcp-proxy-budget-followup`.
+
+
+      ## MCP Surface Preservation evidence requirements
+
+      Evidence MUST include a matrix for each changed MCP tool/helper showing:
+
+      - tool/helper name
+
+      - before/after behavior claim
+
+      - direct blocker before/after status
+
+      - focused MCP test or smoke evidence for happy path and highest-risk failure
+      path
+
+      - response-envelope compatibility proof
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
+
+
+      ## Residual ownership semantics
+
+      This bounded follow-up owns the listed MCP entrypoint direct blockers. Remaining
+      proxy/project-wide budget debt is owned by sibling residual steps and the final
+      retest; do not roll back mergeable entrypoint progress because project-level
+      budgets remain open.'
+    verification: '- Command lock: run/use `uvx invar-tools guard --all` as the authoritative
+      command family; do not substitute `uv run`, partial guard, suppressions, or
+      owner-only exemptions as closure evidence.
+
+      - Before/after residual inventory: evidence lists every target MCP entrypoint/session
+      function above with pre-change status, post-change status, budget/disposition,
+      and direct blocker closure proof.
+
+      - Direct blocker closure: all listed direct `shell_result` blockers in `entrypoints.py`
+      and `entrypoint_session_tools.py` are closed or explicitly listed with downstream
+      residual owner and why they remain.
+
+      - MCP surface preservation: focused MCP tests/smoke cover happy paths and failure
+      paths for changed tool/session seams and prove response envelopes remain documented/compatible.
+
+      - Regression smoke: ruff and mypy over touched MCP files pass; focused pytest
+      covering `tests/unit/mcp` and `tests/integration/test_mcp.py` passes or any
+      failure is dispositioned as blocker-class residual.
+
+      - Salvage preservation: evidence confirms previously closed `entrypoint_logic.py`
+      and `tool_contracts.py` guard counts do not regress.
+
+      - Files/commits: evidence lists files changed and commit ids produced by the
+      worker.
+
+      - Residual disposition: unresolved MCP entrypoint blocker-class obligations
+      keep `retest-pp-invar-full-scan` closed until owned by a follow-up step.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - src/tasca/shell/mcp/entrypoints.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/entrypoint_session_tools.py — key passage or "NOT READ:
+      <reason>"
+
+      - src/tasca/shell/mcp/entrypoint_logic.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/mcp/tool_contracts.py — key passage or "NOT READ: <reason>"
+
+      - tests/unit/mcp — key passage or "NOT READ: <reason>"
+
+      - tests/integration/test_mcp.py — key passage or "NOT READ: <reason>"
+
+
+      ## MCP Entrypoint Follow-up Guard Evidence
+
+      command_family_locked: uvx invar-tools guard --all
+
+      symbolic_testing: true
+
+
+      ### Before/After Residual Inventory
+
+      | File | Function/Rule | Before | After | Disposition |
+
+      |---|---|---:|---:|---|
+
+
+      ### MCP Surface Preservation Matrix
+
+      | Tool/helper | Behavior preserved | Happy-path evidence | Failure-path evidence
+      | Envelope proof |
+
+      |---|---|---|---|---|
+
+
+      ### Salvage Preservation
+
+      | File | Closed count from prior work | Current count | Regressed? |
+
+      |---|---:|---:|---|
+
+
+      ### Verification Commands and Outputs
+
+      - `uvx invar-tools guard --all`: <output summary>
+
+      - ruff/mypy: <commands and outputs>
+
+      - pytest smoke: <commands and outputs>
+
+
+      ### Files Changed
+
+      - <path>
+
+
+      ### Commits
+
+      - <commit>: <message>
+
+
+      ### Residual Blocker Disposition
+
+      - <none or file/rule/count/reason/owner/closure path>'
+    depends_on:
+    - fix-pp-invar-mcp-residual
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

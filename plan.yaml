@@ -44420,6 +44420,227 @@ phases:
     - finalization.deep-architecture-review
     - finalization.deep-spec-conformance
     agent: python-senior
+  - id: finalization.retest-concurrent-review-blockers
+    name: Retest concurrent finalization review blockers
+    status: pending
+    description: 'step_type: test
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: full-plan-check
+
+      agent: integration-verifier-tacit
+
+
+      Independent retest after `finalization.fix-concurrent-review-blockers`. This
+      step protects downstream finalization gates: `finalization.deep-black-box-verification`
+      and `finalization.gate` must not proceed until this retest is green.
+
+
+      Retest ALL blocker families from the concurrent failed reviews:
+
+      1. Architecture return-shape mismatch: `build_control_content(...)` and `tests/unit/services/operations/test_table_control.py::test_normalizes_action_and_control_content`
+      are aligned with the intended shell Result contract.
+
+      2. REST legacy DB schema migration: API table create succeeds on a legacy DB
+      missing metadata/policy/board columns and persists canonical fields.
+
+      3. HTTP control `dedup_id`: same-dedup retry replays the original REST control
+      response or the spec is explicitly changed and conformance tests reflect that
+      authority.
+
+      4. Focused conformance command: stale `Success`/`Failure` vs dict assumptions
+      and REST create/control integration regressions are green.
+
+
+      ## Required regression commands
+
+      Run and paste actual outputs for:
+
+
+      ```bash
+
+      uv run invar guard
+
+      ```
+
+
+      ```bash
+
+      uv run pytest tests/unit/mcp/test_spec_conformance_remediation.py tests/integration/test_rest_spec_conformance_remediation.py
+      tests/unit/services/operations/test_table_control.py -q
+
+      ```
+
+
+      Run targeted API/MCP/storage/control tests covering:
+
+      - legacy DB migration before REST table create with metadata/policy/board
+
+      - REST control same-`dedup_id` retry replay / MCP parity
+
+      - table_control return-shape contract around `build_control_content(...)`
+
+
+      If the focused conformance pytest paths are intentionally corrected by the fix,
+      use the corrected paths and state exactly why they replace the failed spec-verifier
+      command. Do not silently omit any failure family.
+
+
+      ## Behavioral proof register required
+
+      For each blocker family, include: `requirement_ref`, `behavior_claim`, `runtime_proof_expected`,
+      `evidence_ref`, `status`, `closure_path`, and `gate_decision_basis`. `NEEDS_TEST`,
+      `UNPROVEN`, or `UNCERTAIN_BLOCKING` statuses must identify a blocking follow-up
+      path.'
+    verification: '- `uv run invar guard` exits green
+
+      - Focused conformance pytest command exits green, or corrected equivalent paths
+      are justified and green
+
+      - Targeted regression proves legacy DB migration closes metadata/policy/board
+      500
+
+      - Targeted regression proves REST control same-dedup retry semantics are aligned
+      with documented/MCP behavior
+
+      - Targeted regression proves table_control return-shape contract is intentionally
+      Result-unwrapped or string-returning per authoritative contract
+
+      - Behavioral proof register marks all four blocker families PROVEN or supplies
+      explicit blocking remediation ownership'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: integration-verifier-tacit (independent of implementation)
+
+      **Scope**: concurrent finalization review blockers
+
+      **Independence Level**: L2
+
+      **Timestamp**: <ISO 8601>
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - tests/unit/services/operations/test_table_control.py — key passage or "NOT
+      READ: <reason>"
+
+      - tests/integration/test_rest_spec_conformance_remediation.py — key passage
+      or "NOT READ: <reason>"
+
+      - tests/unit/mcp/test_spec_conformance_remediation.py — key passage or "NOT
+      READ: <reason>"
+
+      - src/tasca/shell/services/operations/table_control.py — key passage or "NOT
+      READ: <reason>"
+
+      - src/tasca/shell/api/routes/tables_control.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/api/routes/tables.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/core/schema.py — key passage or "NOT READ: <reason>"
+
+
+      ### Required Commands and Actual Output
+
+
+      **Invar guard**:
+
+      ```bash
+
+      uv run invar guard
+
+      ```
+
+      ```text
+
+      <paste actual output>
+
+      ```
+
+
+      **Focused conformance command**:
+
+      ```bash
+
+      uv run pytest tests/unit/mcp/test_spec_conformance_remediation.py tests/integration/test_rest_spec_conformance_remediation.py
+      tests/unit/services/operations/test_table_control.py -q
+
+      ```
+
+      ```text
+
+      <paste actual output>
+
+      ```
+
+
+      **Targeted API/MCP/storage/control regressions**:
+
+      ```bash
+
+      <paste exact command(s) covering legacy DB migration, REST control dedup retry,
+      and table_control contract>
+
+      ```
+
+      ```text
+
+      <paste actual output>
+
+      ```
+
+
+      ### Behavioral Proof Register
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      |---|---|---|---|---|---|---|
+
+      | A1 architecture return shape | <claim> | <proof> | <output/test> | PROVEN/NEEDS_TEST/UNPROVEN
+      | <path> | <OPEN/BLOCK basis> |
+
+      | B1 REST legacy DB migration | <claim> | <proof> | <output/test> | PROVEN/NEEDS_TEST/UNPROVEN
+      | <path> | <OPEN/BLOCK basis> |
+
+      | B2 REST control dedup_id | <claim> | <proof> | <output/test> | PROVEN/NEEDS_TEST/UNPROVEN
+      | <path> | <OPEN/BLOCK basis> |
+
+      | B3 focused conformance | <claim> | <proof> | <output/test> | PROVEN/NEEDS_TEST/UNPROVEN
+      | <path> | <OPEN/BLOCK basis> |
+
+
+      ### Issues Found
+
+      Finding issues is a successful verifier outcome, but unresolved blocker-class
+      findings must be routed before finalization gate.
+
+
+      | Severity | Description | Location | Reproduction |
+
+      |---|---|---|---|
+
+      | blocker/should_fix/suggestion/tech_debt | <issue or none> | <file:line/test>
+      | <steps> |
+
+
+      ### Headline
+
+      - [ ] PASS: All four blocker families proven closed
+
+      - [ ] FAIL: Blocking issue or blocking proof gap remains
+
+
+      **Confidence**: high/medium/low'
+    depends_on:
+    - finalization.fix-concurrent-review-blockers
+    agent: integration-verifier-tacit
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

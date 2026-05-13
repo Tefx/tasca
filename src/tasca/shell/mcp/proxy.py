@@ -364,27 +364,40 @@ def switch_to_remote(
 
     Examples:
         >>> from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
-        >>> switch_to_remote("http://api.example.com", "secret")
+        >>> result = switch_to_remote("http://api.example.com", "secret")
+        >>> isinstance(result, Success)
+        True
+        >>> result.unwrap().url
+        'http://api.example.com'
         >>> get_upstream_config().unwrap().is_remote
         True
-        >>> switch_to_local()  # Reset for other tests
+        >>> reset_result = switch_to_local()  # Reset for other tests
+        >>> isinstance(reset_result, Success)
+        True
     """
     _config.switch_to_remote(url, token)
     return Success(_config)
 
 
 # @shell_orchestration: Switches module-level runtime state shared by MCP route handlers
-def switch_to_local() -> None:
+def switch_to_local() -> Result[UpstreamConfig, ProxyConfigError]:
     """Switch the global config to local mode.
 
     Examples:
         >>> from tasca.shell.mcp.proxy import get_upstream_config, switch_to_remote, switch_to_local
-        >>> switch_to_remote("http://api.example.com")
-        >>> switch_to_local()
+        >>> remote_result = switch_to_remote("http://api.example.com")
+        >>> isinstance(remote_result, Success)
+        True
+        >>> local_result = switch_to_local()
+        >>> isinstance(local_result, Success)
+        True
+        >>> local_result.unwrap().url is None
+        True
         >>> get_upstream_config().unwrap().is_remote
         False
     """
     _config.switch_to_local()
+    return Success(_config)
 
 
 async def switch_to_remote_with_session(

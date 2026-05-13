@@ -44287,7 +44287,7 @@ phases:
       PASS'
   - id: finalization.fix-concurrent-review-blockers
     name: Batched fix for concurrent finalization review blockers
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       agent: python-senior
@@ -44510,6 +44510,67 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T08:50:15.887109+00:00'
+    done_at: '2026-05-13T09:10:32.698023+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\n- tests/unit/services/operations/test_table_control.py\
+      \ — test_normalizes_action_and_control_content compared build_control_content(...)\
+      \ directly to a string while the module imports Success/Failure Result types.\n\
+      - tests/integration/test_rest_spec_conformance_remediation.py — test_rest_table_create_shape_and_dedup\
+      \ posts metadata, policy, board, and dedup_id, then asserts canonical fields\
+      \ round-trip.\n- tests/unit/mcp/test_spec_conformance_remediation.py — tests\
+      \ call public tasca.shell.mcp.server wrappers and assert dict envelopes like\
+      \ result[\"ok\"].\n- src/tasca/shell/services/operations/table_control.py —\
+      \ build_control_content(...) -> Result[str, TableControlOperationError] doctests\
+      \ unwrap Success, and execute_table_control unwraps content_result.\n- src/tasca/shell/api/routes/tables_control.py\
+      \ — TableControlRequest accepted dedup_id, but _control_table_response previously\
+      \ called execute_table_control without idempotency lookup/store.\n- src/tasca/shell/api/routes/tables.py\
+      \ — REST table create already used check_idempotency_key/store_idempotency_key\
+      \ and forwarded metadata/policy/board into create_discussion_table.\n- src/tasca/core/schema.py\
+      \ — canonical tables DDL includes host_ids, metadata, policy, and board.\n\n\
+      ## Batched Remediation Evidence\n\n**Architecture return-shape closure**:\n\
+      - Root cause: stale unit test expectation. The shell helper intentionally returns\
+      \ Result[str, TableControlOperationError].\n- Files changed: tests/unit/services/operations/test_table_control.py\n\
+      - Proof shell Result semantics are preserved where applicable: test now asserts\
+      \ Success and unwraps; service contract was not collapsed.\n\n**REST legacy\
+      \ DB schema migration closure**:\n- Root cause: get_db() duplicated raw CREATE\
+      \ TABLE/INDEX/FTS application and skipped storage migrations.\n- Files changed:\
+      \ src/tasca/shell/api/deps.py, tests/integration/test_rest_spec_conformance_remediation.py\n\
+      - Legacy DB regression proof: added explicit legacy DB fixture missing canonical\
+      \ table columns; REST create succeeds and stored JSON for metadata/policy/board\
+      \ is verified.\n\n**REST control dedup_id closure**:\n- Root cause: HTTP control\
+      \ request accepted dedup_id but route ignored idempotency repository plumbing.\n\
+      - Files changed: src/tasca/shell/api/routes/tables_control.py, tests/integration/test_rest_spec_conformance_remediation.py\n\
+      - Same-dedup replay proof: added REST control close replay test using same scope\
+      \ semantics as MCP: resource_key=\"control:{table_id}\", tool_name=\"table_control\"\
+      .\n\n**Focused conformance command closure**:\n- Root cause: stale guardrail\
+      \ tests called MCP entrypoints directly while assuming public wrapper dict shape.\n\
+      - Tests changed: tests/unit/test_dup_guardrails_control_red.py\n- Command result:\
+      \ focused conformance command passed: 30 passed.\n\n## Boundary preservation\n\
+      - shell services transport import check: grep tasca\\.shell\\.(api|mcp) src/tasca/shell/services\
+      \ returned no files.\n- storage upward import check: grep tasca\\.shell\\.(api|mcp|services)\
+      \ src/tasca/shell/storage returned no files.\n\n## Verification\n- Worker: invar_guard(changed=True)\
+      \ passed; 0 errors, 0 warnings, 0 infos.\n- Worker: focused conformance pytest\
+      \ command => 30 passed.\n- Worker: targeted regression tests => 6 passed.\n\
+      - Worker: ruff changed-files => All checks passed.\n- Mainline final-state verification\
+      \ after squash merge:\n  - git diff --check HEAD~1..HEAD: passed (no output)\n\
+      \  - uv run invar guard: passed with 0 errors, 0 warnings; doctest passed; crosshair/property\
+      \ skipped because no changed files\n  - uv run pytest tests/unit/test_dup_guardrails_control_red.py\
+      \ tests/unit/mcp/test_spec_conformance_remediation.py tests/unit/mcp/test_tool_contracts.py\
+      \ tests/integration/test_rest_spec_conformance_remediation.py tests/unit/api/test_export_routes.py::TestExportJSONL::test_export_jsonl_with_sayings\
+      \ tests/unit/api/test_tables_routes.py::TestBatchDeleteTables -q: 30 passed\
+      \ in 0.73s\n  - uv run pytest tests/unit/services/operations/test_table_control.py::test_normalizes_action_and_control_content\
+      \ tests/integration/test_rest_spec_conformance_remediation.py -q: 6 passed in\
+      \ 0.74s\n  - uv run ruff check changed files: All checks passed\n\n## Files\
+      \ Changed\n- src/tasca/shell/api/deps.py — centralize API schema initialization\
+      \ on storage apply_schema() so legacy DB migrations run.\n- src/tasca/shell/api/routes/tables_control.py\
+      \ — add REST table-control idempotency lookup/store.\n- tests/integration/test_rest_spec_conformance_remediation.py\
+      \ — add legacy DB migration and REST control same-dedup replay regressions.\n\
+      - tests/unit/services/operations/test_table_control.py — align helper test with\
+      \ Result-returning shell contract.\n- tests/unit/test_dup_guardrails_control_red.py\
+      \ — unwrap direct MCP entrypoint Result values.\n\n## Commit hash(es)\n- Worktree:\
+      \ da29d90 fix REST control and legacy table schema conformance\n- Main merge:\
+      \ 990cbff [vectl] step-finalization.fix-concurrent-review-blockers completed\n\
+      \n## Spec link\n- finalization.fix-concurrent-review-blockers\n\n## Gaps/Notes\n\
+      - none"
   - id: finalization.retest-concurrent-review-blockers
     name: Retest concurrent finalization review blockers
     status: pending

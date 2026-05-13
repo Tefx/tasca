@@ -24,6 +24,7 @@ from tasca.config import settings
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 from tasca.core.export_service import generate_jsonl, generate_markdown
 from tasca.core.schema import create_tables_table_ddl
+from tasca.shell.cli_legacy import create_table_via_mcp, create_table_via_rest, is_server_running
 from tasca.shell.services.table_id_generator import generate_table_id
 from tasca.shell.skills_cli import cmd_skills_install, cmd_skills_list, cmd_skills_show
 from tasca.shell.storage.saying_repo import list_all_sayings_by_table
@@ -34,6 +35,12 @@ from tasca.shell.storage.table_repo import (
 from tasca.shell.storage.table_repo import (
     create_table as repo_create_table,
 )
+
+__all__ = [
+    "create_table_via_mcp",
+    "create_table_via_rest",
+    "is_server_running",
+]
 
 
 def _command_exit_code(command_result: object) -> Result[int, str]:

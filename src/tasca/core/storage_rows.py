@@ -17,6 +17,56 @@ from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 
 
+@deal.pre(lambda raw: isinstance(raw, str))
+@deal.post(lambda result: isinstance(result, bool))
+def _is_table_status(raw: object) -> bool:
+    """Return whether a raw database value is a valid table status.
+
+    Examples:
+        >>> _is_table_status("open")
+        True
+        >>> _is_table_status("missing")
+        False
+    """
+    return raw in {status.value for status in TableStatus}
+
+
+@deal.pre(lambda raw: isinstance(raw, str | int))
+@deal.post(lambda result: isinstance(result, bool))
+def _is_sqlite_int(raw: object) -> bool:
+    """Return whether a raw database value can be decoded as an integer.
+
+    Examples:
+        >>> _is_sqlite_int("12")
+        True
+        >>> _is_sqlite_int("not-an-int")
+        False
+    """
+    try:
+        int(cast(Any, raw))
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+@deal.pre(lambda raw: isinstance(raw, str | datetime))
+@deal.post(lambda result: isinstance(result, bool))
+def _is_iso_datetime(raw: object) -> bool:
+    """Return whether a raw database value can be decoded as an ISO datetime.
+
+    Examples:
+        >>> _is_iso_datetime("2026-01-01T00:00:00")
+        True
+        >>> _is_iso_datetime("not-a-date")
+        False
+    """
+    try:
+        datetime.fromisoformat(str(raw))
+    except ValueError:
+        return False
+    return True
+
+
 @deal.pre(lambda host_ids: all(isinstance(item, str) for item in host_ids))
 @deal.post(lambda result: isinstance(result, str))
 def encode_host_ids(host_ids: list[str]) -> str:
@@ -53,7 +103,17 @@ def decode_host_ids(raw: str | None) -> list[str]:
     return [item for item in decoded if isinstance(item, str)]
 
 
-@deal.pre(lambda row: len(row) >= 7)
+@deal.pre(
+    lambda row: len(row) >= 7
+    and isinstance(row[3], str)
+    and _is_table_status(row[3])
+    and isinstance(row[4], str | int)
+    and _is_sqlite_int(row[4])
+    and isinstance(row[5], str | datetime)
+    and _is_iso_datetime(row[5])
+    and isinstance(row[6], str | datetime)
+    and _is_iso_datetime(row[6])
+)
 @deal.post(lambda result: isinstance(result, Table))
 def row_to_table(row: tuple[object, ...]) -> Table:
     """Convert a table database row to a domain object.

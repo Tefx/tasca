@@ -45059,7 +45059,7 @@ phases:
       PASS'
   - id: finalization.fix-black-box-public-surface-blockers
     name: Batched fix for black-box public-surface blockers
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       agent: python-senior
@@ -45333,6 +45333,67 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T09:40:23.159401+00:00'
+    done_at: '2026-05-13T10:05:45.815116+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Black-Box Public Surface Fix Evidence\n\n**Blockers fixed**: B1, B2, B3, B4,\
+      \ B5 (ALL required)\n\nSource: finalization.fix-black-box-public-surface-blockers;\
+      \ docs/tasca-http-api-v0.1.md; docs/tasca-mcp-interface-v0.1.md; runtime probes.\n\
+      Change: Implemented documented HTTP join route, fixed HTTP wait immediate-data\
+      \ semantics, changed closed-table HTTP saying failures to 409/TableClosed, aligned\
+      \ MCP table_join to data.initial with empty cursors 0, and wrapped MCP table_get\
+      \ under data.table.\nValidation: Targeted tests, MCP/REST suites, ruff, invar_guard,\
+      \ and real HTTP/MCP stdio probes passed.\nNot Done / Blockers: None.\n\n###\
+      \ HTTP public server probes\n**Server launch/invocation path**:\nTASCA_API_HOST=127.0.0.1\
+      \ TASCA_API_PORT=8765 TASCA_DB_PATH=<temp.db> TASCA_ADMIN_TOKEN=probe-token\
+      \ .venv/bin/tasca\n\n**B1 join route probe**:\nPOST /api/v1/tables with {\"\
+      title\":\"probe table\"} returned 200 and table_id=\"keen-goat-moves\". POST\
+      \ /api/v1/tables/join with invite_code/history limits returned 200 and body\
+      \ with history_sequence:0, initial:{has_more_history:false,next_sequence:0,sayings:[]},\
+      \ seat:null, sequence_latest:0, and table status open.\n\n**B2 wait cursor probe**:\n\
+      After POST /api/v1/tables/keen-goat-moves/sayings returned 201 sequence=0, GET\
+      \ /api/v1/tables/keen-goat-moves/sayings/wait?since_sequence=-1&timeout=0 returned\
+      \ 200 with timeout:false, sayings including the existing saying, and next_sequence:0.\n\
+      \n**B3 post-close saying error probe**:\nAfter closing the table via POST /control,\
+      \ authenticated post-close POST /sayings returned 409 with error code TableClosed\
+      \ and details table_status closed.\n\n### MCP stdio/discovery probes\n**MCP\
+      \ invocation path**:\nTASCA_DB_PATH=<temp.db> TASCA_ADMIN_TOKEN=probe-token\
+      \ .venv/bin/tasca-mcp; JSON-RPC over stdio initialize/tools/list/tools/call.\n\
+      \n**B4 table_join shape/cursor probe**:\ntools/list included table_create/table_join/table_get.\
+      \ table_create returned table_id. table_join returned ok true and data containing\
+      \ sequence_latest:0, history_sequence:0, initial:{has_more_history:false,next_sequence:0,sayings:[]},\
+      \ and table:{table_id,status:open}; data did not contain initial_sayings.\n\n\
+      **B5 table_get wrapper probe**:\ntable_get returned ok true and body {\"data\"\
+      :{\"table\":{...}},\"ok\":true}.\n\n### Docs/runtime agreement\n- Docs/spec\
+      \ changed: docs/tasca-http-api-v0.1.md documents join response, wait immediate-data\
+      \ semantics, and TableClosed HTTP error.\n- Runtime changed: HTTP routes in\
+      \ tables.py/sayings.py; MCP shapes in entrypoints.py.\n- Tests changed: REST\
+      \ public surface regression tests; MCP integration/unit shape expectations.\n\
+      \n### Verification\n- Worker: .venv/bin/python -m pytest tests/unit/mcp tests/integration/test_mcp.py\
+      \ tests/integration/test_rest_spec_conformance_remediation.py -q → 241 passed.\n\
+      - Worker: .venv/bin/python -m ruff check <changed files> → All checks passed.\n\
+      - Worker: invar_guard(changed=true) → passed; warnings only pre-existing/accepted\
+      \ file-size warning and existing _update_table_response complexity info.\n-\
+      \ Worker: real HTTP server probe via .venv/bin/tasca → B1/B2/B3 passed.\n- Worker:\
+      \ real MCP stdio probe via .venv/bin/tasca-mcp → B4/B5 passed.\n- Mainline final-state\
+      \ verification after squash merge:\n  - git diff --check HEAD~1..HEAD: passed\
+      \ (no output)\n  - uv run invar guard: passed with 0 errors, 0 warnings; doctest\
+      \ passed; crosshair/property skipped because no changed files\n  - uv run pytest\
+      \ tests/unit/mcp tests/integration/test_mcp.py tests/integration/test_rest_spec_conformance_remediation.py\
+      \ -q: 241 passed in 5.32s\n  - uv run ruff check changed files: All checks passed\n\
+      \n### Files Changed\n- docs/tasca-http-api-v0.1.md — documented join response,\
+      \ wait immediate-data semantics, and TableClosed HTTP error.\n- src/tasca/shell/api/routes/sayings.py\
+      \ — fixed timeout=0 immediate wait check and closed-table error mapping.\n-\
+      \ src/tasca/shell/api/routes/tables.py — added POST /api/v1/tables/join public\
+      \ route and response shaping.\n- src/tasca/shell/mcp/entrypoints.py — changed\
+      \ table_join/table_get public response shapes.\n- tests/integration/test_mcp.py\
+      \ — added/updated MCP public shape coverage.\n- tests/integration/test_rest_spec_conformance_remediation.py\
+      \ — added B1/B2/B3 REST regressions.\n- tests/unit/mcp/test_mcp_server.py —\
+      \ updated MCP unit shape expectations.\n- tests/unit/mcp/test_spec_conformance_remediation.py\
+      \ — updated table_get wrapper expectations.\n\n### Commit hash(es)\n- Worktree:\
+      \ 0685b98 fix public HTTP and MCP surface drift\n- Main merge: 3623514 [vectl]\
+      \ step-finalization.fix-black-box-public-surface-blockers completed\n\n### Spec\
+      \ link\n- finalization.fix-black-box-public-surface-blockers\n\n### Gaps/Notes\n\
+      - None."
   - id: finalization.retest-black-box-public-surface-blockers
     name: Retest black-box public-surface blockers
     status: pending

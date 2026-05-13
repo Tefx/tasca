@@ -39308,7 +39308,7 @@ phases:
       \ instability; no product fixes were made by this verification-only step."
   - id: fix-pp-invar-full-scan
     name: Residual Invar remediation — CLI/API direct blockers
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -39542,6 +39542,53 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T03:40:22.110251+00:00'
+    done_at: '2026-05-13T03:58:41.283566+00:00'
+    evidence: "## refs Read Confirmation\n- src/tasca/cli.py — CLI helpers/commands\
+      \ were direct-return shell functions; main dispatches argparse funcs and normalizes\
+      \ legacy int command results.\n- src/tasca/shell/api/routes/sayings.py — wait_for_sayings_endpoint\
+      \ contained inline table lookup, polling, sleep, response, and error mapping.\n\
+      - src/tasca/shell/api/routes/tables.py — _http_error only wrapped HTTPException(status_code,\
+      \ detail).\n- tests/unit/test_cli.py — asserts CLI parsing, LAN IP, direct DB\
+      \ table creation, cmd_new, REST/MCP helper behavior.\n- tests/unit/api — in-memory\
+      \ FastAPI clients cover sayings wait/list/append and tables CRUD/error envelopes.\n\
+      - tests/integration/test_api.py — ASGI harness verifies real REST routing/auth\
+      \ and mounted MCP endpoint without external server.\n\n## CLI/API Residual Guard\
+      \ Evidence\n- Before: uvx invar-tools guard --all failed with CLI shell_result\
+      \ direct errors for all requested CLI functions, sayings wait_for_sayings_endpoint\
+      \ entry_point_too_thick, and tables _http_error shell_result.\n- After worker:\
+      \ requested shell_result, entry_point_too_thick, and _http_error blocker findings\
+      \ cleared; remaining full-guard failures are out-of-scope project/MCP/search/storage\
+      \ debt.\n- Mainline after merge: full guard still fails on remaining non-CLI/API\
+      \ project debt; target CLI/API direct blockers remain cleared.\n\n## CLI Surface\
+      \ Preservation Matrix\n- tasca --help: usage/server config printed, exit 0.\n\
+      - tasca version: `tasca 0.1.29`, exit 0.\n- tasca new --help: question/context/host/port\
+      \ help printed, exit 0.\n- tasca export --help: export format/output help printed,\
+      \ exit 0.\n- tasca skills --help and skills list: list/show/install surfaced\
+      \ and tasca-moderation listed, exit 0.\n- CLI helper behavior: tests/unit/test_cli.py\
+      \ passed with Result unwrap assertions.\n\n## API Surface Preservation Matrix\n\
+      - sayings wait timeout/immediate/new/not-found/closed behavior preserved by\
+      \ unit API tests.\n- tables error envelopes preserved by unit tables tests including\
+      \ invalid request/version conflict/batch delete.\n- integration REST/MCP app\
+      \ routes preserved by tests/integration/test_api.py.\n\n## Verification\n- Worker\
+      \ verification: ruff/mypy over touched CLI/API files passed; pytest `tests/unit/test_cli.py\
+      \ tests/unit/api tests/integration/test_api.py` passed (178 passed); CLI smoke\
+      \ passed.\n- Mainline verification after squash merge:\n  - uvx invar-tools\
+      \ guard --all: fails only on remaining out-of-scope project/MCP/search/storage\
+      \ debt, not requested CLI/API direct blockers.\n  - ./.venv/bin/python -m ruff\
+      \ check src/tasca/cli.py src/tasca/main.py src/tasca/shell/api/routes/sayings.py\
+      \ src/tasca/shell/api/routes/tables.py tests/unit/test_cli.py: PASS.\n  - ./.venv/bin/python\
+      \ -m mypy src/tasca/cli.py src/tasca/main.py src/tasca/shell/api/routes/sayings.py\
+      \ src/tasca/shell/api/routes/tables.py: PASS.\n  - ./.venv/bin/python -m pytest\
+      \ -q tests/unit/test_cli.py tests/unit/api tests/integration/test_api.py: 178\
+      \ passed.\n  - CLI help/version/new/export/skills smoke: PASS.\n\n## Spec link\n\
+      - Step scope and refs: src/tasca/cli.py, src/tasca/shell/api/routes/sayings.py,\
+      \ src/tasca/shell/api/routes/tables.py, tests/unit/test_cli.py, tests/unit/api,\
+      \ tests/integration/test_api.py.\n\n## Files changed\n- src/tasca/cli.py\n-\
+      \ src/tasca/main.py\n- src/tasca/shell/api/routes/sayings.py\n- src/tasca/shell/api/routes/tables.py\n\
+      - tests/unit/test_cli.py\n\n## Commits\n- a4daca5: [vectl] step-fix-pp-invar-full-scan\
+      \ completed\n\n## Residual blocker-class debt\n- None for requested CLI/API\
+      \ direct blocker IDs.\n- Remaining full-guard blockers are owned by MCP follow-up\
+      \ and project-budget follow-up steps."
   - id: retest-pp-invar-full-scan
     name: Retest PP-invar-full-scan after residual Invar remediation
     status: pending

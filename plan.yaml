@@ -39884,7 +39884,7 @@ phases:
     claimed_at: '2026-05-13T02:23:04.052247+00:00'
   - id: fix-pp-invar-storage-config-residual
     name: Residual Invar budget remediation — storage/config/services
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -40117,6 +40117,54 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T02:23:18.957877+00:00'
+    done_at: '2026-05-13T02:51:27.041890+00:00'
+    evidence: "## refs Read Confirmation\n- src/tasca/config.py — package version\
+      \ fallback and TASCA_ADMIN_TOKEN clear/null fallback semantics preserved.\n\
+      - src/tasca/shell/services/operations/table_control.py — action validation,\
+      \ current-table read, and atomic mutation/conflict precedence preserved.\n-\
+      \ src/tasca/shell/skills_cli.py — list/show/install are CLI seams with recoverable\
+      \ resource/write failures.\n- src/tasca/shell/storage/saying_repo.py — append\
+      \ remains atomic via BEGIN IMMEDIATE; export byte-limit failure remains Result-based.\n\
+      - src/tasca/shell/storage/search_repo.py — FTS-first + LIKE fallback ordering/dedup/pagination\
+      \ semantics preserved.\n- src/tasca/shell/storage/table_repo.py — update remains\
+      \ replace-only with optimistic CAS; legacy host_ids decode falls back to empty.\n\
+      \n## Residual Invar Budget Evidence — Storage/Config/Services\nsalvage_commit_acknowledged:\
+      \ fbdf04b\ncommand_family_locked: uvx invar-tools guard --all\nsymbolic_testing:\
+      \ true\n\n### Target Inventory Before/After\n- src/tasca/config.py shell_result:\
+      \ 2 -> 0 (closed)\n- src/tasca/shell/services/operations/table_control.py shell_result:\
+      \ 2 -> 0 (closed)\n- src/tasca/shell/skills_cli.py shell_result: 3 -> 0 (closed)\n\
+      - src/tasca/shell/storage/saying_repo.py shell_result: 2 -> 0 (closed)\n- src/tasca/shell/storage/search_repo.py\
+      \ shell_result: 12 -> 0 (closed)\n- src/tasca/shell/storage/table_repo.py shell_result:\
+      \ 3 -> 0 (closed)\n\n### Root-Cause Changes\n- Added contracted Core storage\
+      \ row helpers and moved row/JSON/snippet normalization out of shell where appropriate.\n\
+      - Converted config, skills CLI, table control, and storage seams toward Result-returning\
+      \ wrappers while preserving persistence/config semantics.\n- CLI dispatch now\
+      \ normalizes Result-returning skills commands without dropping legacy int handling.\n\
+      \n### Verification\n- Worker verification: target shell_result inventory closed;\
+      \ focused repository/config/service smoke passed; CLI surface preservation matrix\
+      \ passed for top-level skills/list/show/install.\n- Mainline verification after\
+      \ squash merge initially failed on ruff import ordering, mypy int(object), and\
+      \ _truncate_snippet compatibility; repaired on branch and resolved merge conflicts\
+      \ in main.\n- Final mainline verification after conflict resolution:\n  - uvx\
+      \ invar-tools guard --all: still fails on sibling/project budget debt, not on\
+      \ this owned storage/config/service shell_result inventory.\n  - ./.venv/bin/python\
+      \ -m ruff check src/tasca/config.py src/tasca/cli.py src/tasca/core/storage_rows.py\
+      \ src/tasca/shell/services/operations/table_control.py src/tasca/shell/skills_cli.py\
+      \ src/tasca/shell/storage/saying_repo.py src/tasca/shell/storage/search_repo.py\
+      \ src/tasca/shell/storage/table_repo.py: PASS.\n  - ./.venv/bin/python -m mypy\
+      \ same 8 source files: PASS.\n  - ./.venv/bin/python -m pytest -q tests/unit/test_cli.py\
+      \ tests/unit/test_skills_cli.py tests/unit/storage/test_search_repo.py tests/unit/storage/test_batch_delete_repo.py\
+      \ tests/unit/storage/test_control_repo.py tests/unit/test_table_version.py:\
+      \ 136 passed.\n  - ./.venv/bin/python -m tasca.cli --help, skills --help, skills\
+      \ list: PASS.\n\n### Files changed\n- src/tasca/config.py\n- src/tasca/cli.py\n\
+      - src/tasca/core/storage_rows.py\n- src/tasca/shell/services/operations/table_control.py\n\
+      - src/tasca/shell/skills_cli.py\n- src/tasca/shell/storage/saying_repo.py\n\
+      - src/tasca/shell/storage/search_repo.py\n- src/tasca/shell/storage/table_repo.py\n\
+      \n### Commits\n- fc027be: [vectl] step-fix-pp-invar-storage-config-residual\
+      \ completed\n- 2445d92: [vectl] fix storage residual verification regressions\n\
+      \n### Residual blocker-class debt\n- Owned storage/config/service shell_result\
+      \ targets: NONE.\n- Full guard remains blocked by sibling/project budget debt\
+      \ owned by remaining finalization residual steps."
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

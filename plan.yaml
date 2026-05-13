@@ -38187,7 +38187,7 @@ phases:
       \ was verification-only."
   - id: finalization.doc-sync
     name: Sync documentation with consolidated transport behavior
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -38246,6 +38246,37 @@ phases:
     agent: doc-reviewer-tacit
     claimed_by: doc-reviewer-tacit
     claimed_at: '2026-05-13T05:57:16.839833+00:00'
+    done_at: '2026-05-13T06:13:14.217663+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Doc Sync Report\n- Docs updated: docs/tasca-http-api-v0.1.md; docs/tasca-mcp-interface-v0.1.md;\
+      \ docs/tasca-technical-design-v0.1.md; docs/spec-conformance-note-v0.1.md; docs/tasca-web-uiux-v0.1.md;\
+      \ docs/terminology-mapping-v0.1.md; docs/repo-structure-v0.1.md\n- Stale text\
+      \ removed: thin-wrapper HTTP framing; stale PATCH update references; REST wait_ms/include_table\
+      \ wording; stale spec-conformance deviations claiming table_update only supports\
+      \ question/context/status and CONTROL saying_type is missing.\n- Behavior/ownership\
+      \ sections aligned: shared-operation ownership for patron registration, table\
+      \ creation, atomic table control, saying append/limits, batch delete, and export;\
+      \ transport-local HTTP/MCP response/auth/idempotency/envelope/guidance responsibilities;\
+      \ MCP centralized tool contracts/defaults/signatures.\n\n## Evidence Links\n\
+      - HTTP behavior refs used: src/tasca/shell/api/routes/patrons.py, tables.py,\
+      \ tables_control.py, sayings.py, export.py\n- MCP contract refs used: src/tasca/shell/mcp/tool_contracts.py,\
+      \ server.py, entrypoints.py\n- Shared operation refs used: src/tasca/shell/services/operations/patron_registration.py,\
+      \ table_creation.py, table_control.py, batch_delete.py, table_export.py; src/tasca/shell/services/limited_saying_service.py\n\
+      \n## Implementation Evidence\n- Spec link: finalization.doc-sync\n- Worktree\
+      \ commit: fcb8764 (docs: sync transport ownership contracts)\n- Main merge commit:\
+      \ d076b7d ([vectl] step-finalization.doc-sync completed)\n- Files changed: 7\
+      \ documentation files only.\n- Worker verification: git diff --check passed;\
+      \ invar_guard(changed=true) passed; .venv/bin/python -m pytest tests/unit/mcp/test_tool_contracts.py\
+      \ passed (8 passed); targeted stale-text grep found no blocker stale text, with\
+      \ remaining wait_ms/include_table mentions MCP-specific or explicit REST-vs-MCP\
+      \ deviations.\n- Mainline final-state verification after squash merge:\n  -\
+      \ git diff --check HEAD~1..HEAD: passed (no output)\n  - uv run invar guard:\
+      \ passed with 0 errors, 0 warnings; crosshair/property skipped because no changed\
+      \ files\n  - uv run pytest tests/unit/mcp/test_tool_contracts.py: 8 passed in\
+      \ 0.52s\n- Gaps/Notes: Worker observed broader exploratory pytest including\
+      \ tests/unit/services/operations/test_table_control.py had 1 pre-existing unrelated\
+      \ failure: build_control_content(...) returns Success(...) while test expected\
+      \ raw string."
   - id: finalization.deep-wiring-audit
     name: Deep wiring audit after consolidation
     status: claimed

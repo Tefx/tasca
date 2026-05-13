@@ -39307,7 +39307,7 @@ phases:
       \ security debt.\n  - Invar failure is authoritative from CLI after wrapper\
       \ instability; no product fixes were made by this verification-only step."
   - id: fix-pp-invar-full-scan
-    name: Residual Invar budget remediation — CLI and API routes
+    name: Residual Invar remediation — CLI/API direct blockers
     status: pending
     description: 'step_type: implementation
 
@@ -39323,63 +39323,97 @@ phases:
 
       reduction_step: true
 
-      salvage_context: commit fbdf04b closed the direct shell_result/missing_contract
-      blockers and removed non-suppressible dead_export/missing_contract hatches;
-      do NOT redo those closed items unless regression evidence shows they reopened.
+      salvage_context: Mainline targeted CLI/API verification after commits `957524c`
+      and `270d62c` passed (ruff/mypy for CLI/API files, pytest `tests/unit/test_cli.py
+      tests/unit/api tests/integration/test_api.py` with 178 passed, and CLI help
+      smoke), but authoritative `uvx invar-tools guard --all` still reports the direct
+      CLI/API blockers listed below. Do NOT redo closed storage/config/MCP partial-progress
+      items unless fresh guard evidence shows they regressed.
 
 
-      Bounded residual remediation for CLI and API route budget blockers remaining
-      after salvaged partial progress from `fix-pp-invar-full-scan`.
+      Bounded residual remediation for ONLY the remaining CLI/API direct blockers
+      from the current full-guard output.
 
 
-      ## Target residual inventory (this step owns exactly this surface)
+      ## Target residual inventory (this step owns exactly this CLI/API surface)
 
-      - `src/tasca/cli.py` shell_result 16/2
+      - `src/tasca/cli.py` shell_result direct errors at: `get_lan_ip`, `create_table_directly`,
+      `is_server_running`, `start_server_background`, `wait_for_server_ready`, `create_table_via_rest`,
+      `create_table_via_mcp`, `cmd_new`, `cmd_mcp`, `cmd_version`, `cmd_export`, `_setup_skills_subparser`,
+      `main`.
 
-      - `src/tasca/shell/api/app.py` shell_result 2/2
+      - `src/tasca/shell/api/routes/sayings.py` entry_point_too_thick at `wait_for_sayings_endpoint`.
 
-      - `src/tasca/shell/api/auth.py` shell_result 3/2
-
-      - `src/tasca/shell/api/routes/export.py` entry_point_too_thick 2/2 and shell_result
-      2/2
-
-      - `src/tasca/shell/api/routes/patrons.py` entry_point_too_thick 2/2
-
-      - `src/tasca/shell/api/routes/sayings.py` entry_point_too_thick 3/2 and shell_result
-      3/2
-
-      - `src/tasca/shell/api/routes/seats.py` entry_point_too_thick 2/2 and shell_result
-      3/2
-
-      - `src/tasca/shell/api/routes/tables.py` entry_point_too_thick 6/2
+      - `src/tasca/shell/api/routes/tables.py` shell_result direct error at `_http_error`.
 
 
-      ## Root-cause constraints
+      ## Explicit non-scope / immutable completed work
 
-      - Reduce `shell_result` by introducing actual `Result[T, E]` shell seams/wrappers
-      or converting raw shell logic into Core helpers that carry real `@pre`/`@post`
+      - `fix-pp-invar-storage-config-residual` is complete and immutable; do not edit
+      or rely on changing it.
+
+      - `fix-pp-invar-mcp-residual` is complete; remaining MCP direct blockers are
+      owned by new follow-up steps, not by this CLI/API step.
+
+      - The quarantined stash `vectl-quarantine-misdirected-cli-api-changes` is NOT
+      an input to this step; do not require or use it.
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause: CLI/API entrypoint functions still directly contain shell-style
+      side effects, process/transport adaptation, or thick route behavior instead
+      of routing through Result-returning shell seams or contracted Core/service helpers.
+
+      - Symptom: full guard reports direct `shell_result`/`entry_point_too_thick`
+      blockers for the exact functions above.
+
+      - Why previous partial progress was insufficient: commits `957524c` and `270d62c`
+      salvaged targeted CLI/API behavior and tests but did not close every remaining
+      direct guard blocker under the authoritative full scan.
+
+      - Why this fix is not surface-level: it must move behavior into proper Result-returning
+      shell seams or contracted pure helpers while preserving CLI/API runtime behavior,
+      not add suppressions or owner-only exemptions.
+
+
+      ## Required remediation constraints
+
+      - command_family_locked: `uvx invar-tools guard --all`.
+
+      - symbolic_testing: true.
+
+      - No suppressions, owner-only exemptions, `# noqa` budget evasion, or placeholder/stub-only
+      wrappers.
+
+      - Reduce direct CLI/API blockers by introducing real `Result[T, E]` shell seams/wrappers
+      where recoverable shell behavior exists, and by extracting pure route/format/validation
+      logic into Core helpers only when those helpers have meaningful `@pre`/`@post`
       contracts and doctests.
 
-      - Reduce `entry_point_too_thick` by thinning route/CLI entrypoints into contracted
-      Core or service helpers while preserving FastAPI/CLI runtime behavior.
+      - Preserve CLI Surface semantics: every existing command/subcommand, help output,
+      exit-code convention, table creation path (direct/REST/MCP), MCP command path,
+      version/export behavior, server startup/wait behavior, and LAN IP fallback behavior
+      must remain reachable and behaviorally compatible.
 
-      - Do NOT add new suppressions, owner-only project exemptions, or framework-only
-      escape hatches to make budgets look better.
-
-      - Keep CLI and API deployability semantics intact: commands/routes must remain
-      registered and reachable.
+      - Preserve API Surface semantics: `wait_for_sayings_endpoint` must keep its
+      documented polling/timeout response behavior and `_http_error` must keep documented
+      FastAPI error response shape.
 
 
-      ## Known closed items not in scope
+      ## CLI Surface Preservation evidence requirements
 
-      - Direct `shell_result` errors in `src/tasca/shell/api/errors.py` and `src/tasca/shell/mcp/server.py`
-      were addressed in salvage commit `fbdf04b`.
+      Evidence MUST include a matrix for each changed CLI command/helper showing:
 
-      - Direct Core `missing_contract` blockers in table/limits services were addressed
-      in salvage commit `fbdf04b`.
+      - public invocation or internal helper path
 
-      - Non-suppressible `dead_export` / `missing_contract` hatches were absent in
-      the final salvaged guard inventory (`non_suppressible: []`).
+      - before/after behavior claim
+
+      - exact smoke command or focused test proving reachability
+
+      - stdout/stderr or test output excerpt
+
+      - exit-code expectation
 
 
       ## Completion Criteria (stub exclusion)
@@ -39392,149 +39426,117 @@ phases:
 
       ## Residual ownership semantics
 
-      This is a bounded reduction step. It succeeds by producing verified non-regressive
-      budget reductions for the target CLI/API inventory above. Remaining MCP or storage/config/service
-      residual debt is owned by sibling residual steps and the final retest, not by
-      rolling back mergeable CLI/API progress.'
-    verification: '- Command lock: use `uvx invar-tools guard --all` as the authoritative
-      command family; do not substitute `uv run`, partial guard, or suppressions.
+      This is a bounded residual/closure step for the listed CLI/API direct blockers
+      only. It succeeds by closing or materially reducing those direct blockers with
+      verified non-regression. Remaining MCP or project-level budget debt is owned
+      by sibling follow-up steps and the final retest, not by rolling back mergeable
+      CLI/API progress.'
+    verification: '- Command lock: run/use `uvx invar-tools guard --all` as the authoritative
+      command family; do not substitute `uv run`, partial guard, suppressions, or
+      owner-only exemptions as closure evidence.
 
-      - Before/after accounting: evidence lists pre-change and post-change counts
-      for every target file in the CLI/API residual inventory and explains any count
-      that remains above budget.
+      - Before/after residual inventory: evidence lists every target function/file
+      above with pre-change status, post-change status, budget/disposition, and direct
+      blocker closure proof.
 
-      - Main path: CLI command smoke and focused API route/error pytest smoke pass
-      for touched seams.
+      - Direct blocker closure: all listed CLI/API direct `shell_result` and `entry_point_too_thick`
+      blockers are either closed or explicitly listed with a downstream residual owner
+      and why they remain.
 
-      - Failure path: FastAPI error/route behavior still returns the documented response
-      shape after entrypoint thinning or Core extraction.
+      - CLI surface preservation: focused CLI smoke includes help/version/export/new/MCP/server-start
+      or equivalent reachable-path evidence for every touched CLI surface, with command
+      output snippets and exit-code expectations.
 
-      - Regression guard: `non_suppressible` remains empty and direct errors closed
-      by commit `fbdf04b` do not reappear.
+      - API surface preservation: focused API tests cover `wait_for_sayings_endpoint`
+      timeout/polling behavior and `_http_error` response shape after thinning/wrapping.
 
-      - Residual disposition: any remaining blocker-class count in this surface is
-      listed with file, rule, count, reason it remains, and closure path for retest
-      or a follow-up residual step.'
+      - Regression smoke: ruff and mypy over touched CLI/API files pass; focused pytest
+      including `tests/unit/test_cli.py`, `tests/unit/api`, and `tests/integration/test_api.py`
+      passes or any failure is dispositioned as blocker-class residual.
+
+      - Files/commits: evidence lists files changed and commit ids produced by the
+      worker.
+
+      - Residual disposition: evidence explicitly states whether any remaining blocker
+      intersects `retest-pp-invar-full-scan`; unresolved blocker-class obligations
+      keep the retest gate closed.'
     evidence_template: '## refs Read Confirmation (MANDATORY)
 
 
       For each ref in this step:
 
-      - <filename> — key passage or "NOT READ: <reason>"
+      - src/tasca/cli.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/api/routes/sayings.py — key passage or "NOT READ: <reason>"
+
+      - src/tasca/shell/api/routes/tables.py — key passage or "NOT READ: <reason>"
+
+      - tests/unit/test_cli.py — key passage or "NOT READ: <reason>"
+
+      - tests/unit/api — key passage or "NOT READ: <reason>"
+
+      - tests/integration/test_api.py — key passage or "NOT READ: <reason>"
 
 
-      If no refs were provided, state: "No refs for this step."
+      ## CLI/API Residual Guard Evidence
+
+      command_family_locked: uvx invar-tools guard --all
+
+      symbolic_testing: true
 
 
-      ## Residual Invar Budget Evidence — CLI/API
+      ### Before/After Residual Inventory
+
+      | File | Function/Rule | Before | After | Disposition |
+
+      |---|---|---:|---:|---|
 
 
-      **salvage_commit_acknowledged**: fbdf04b
+      ### CLI Surface Preservation Matrix
 
-      **command_family_locked**: uvx invar-tools guard --all
+      | Surface | Invocation/helper path | Behavior preserved | Command/test evidence
+      | Exit code |
 
-      **symbolic_testing**: true
+      |---|---|---|---|---|
 
 
-      ### Target Inventory Before/After
+      ### API Surface Preservation Matrix
 
-      | File | Rule | Before | After | Budget | Disposition |
+      | Route/helper | Behavior preserved | Command/test evidence | Response-shape
+      evidence |
 
-      | --- | --- | ---: | ---: | ---: | --- |
+      |---|---|---|---|
 
-      | src/tasca/cli.py | shell_result | 16 | <after> | 2 | <closed/reduced/residual>
-      |
 
-      | src/tasca/shell/api/app.py | shell_result | 2 | <after> | 2 | <closed/reduced/residual>
-      |
+      ### Verification Commands and Outputs
 
-      | src/tasca/shell/api/auth.py | shell_result | 3 | <after> | 2 | <closed/reduced/residual>
-      |
+      - `uvx invar-tools guard --all`: <output summary>
 
-      | src/tasca/shell/api/routes/export.py | entry_point_too_thick | 2 | <after>
-      | 2 | <closed/reduced/residual> |
+      - ruff/mypy: <commands and outputs>
 
-      | src/tasca/shell/api/routes/export.py | shell_result | 2 | <after> | 2 | <closed/reduced/residual>
-      |
-
-      | src/tasca/shell/api/routes/patrons.py | entry_point_too_thick | 2 | <after>
-      | 2 | <closed/reduced/residual> |
-
-      | src/tasca/shell/api/routes/sayings.py | entry_point_too_thick | 3 | <after>
-      | 2 | <closed/reduced/residual> |
-
-      | src/tasca/shell/api/routes/sayings.py | shell_result | 3 | <after> | 2 | <closed/reduced/residual>
-      |
-
-      | src/tasca/shell/api/routes/seats.py | entry_point_too_thick | 2 | <after>
-      | 2 | <closed/reduced/residual> |
-
-      | src/tasca/shell/api/routes/seats.py | shell_result | 3 | <after> | 2 | <closed/reduced/residual>
-      |
-
-      | src/tasca/shell/api/routes/tables.py | entry_point_too_thick | 6 | <after>
-      | 2 | <closed/reduced/residual> |
+      - pytest smoke: <commands and outputs>
 
 
       ### Files Changed
 
-      - <path>: <Result wrapper / entrypoint thinning / Core extraction with contracts
-      / tests>
+      - <path>
 
 
-      ### Commands and Output
+      ### Commits
 
-      ```bash
-
-      uvx invar-tools guard --all
-
-      <actual output summary including static_passed, errors, warnings, infos, budgets,
-      and non_suppressible>
-
-      ```
+      - <commit>: <message>
 
 
-      ```bash
+      ### Residual Blocker Disposition
 
-      <ruff/mypy/focused pytest smoke commands for touched CLI/API seams>
-
-      <actual output>
-
-      ```
-
-
-      ### Regression Smoke
-
-      - CLI smoke: <command/output or NOT RUN reason>
-
-      - API route/error smoke: <test names/output>
-
-      - Direct blocker regression check: non_suppressible remains empty and salvaged
-      direct blockers did not reappear.
-
-
-      ### Residual Closure Path
-
-      - Remaining CLI/API residual blockers: <empty or exact file/rule/count/closure
-      path>
-
-      - Remaining non-CLI/API residual blockers owned by sibling steps: <summary>
-
-
-      ### Headline
-
-      PASS | PASS_WITH_RESIDUAL | FAIL'
+      - <none or file/rule/count/reason/owner/closure path>'
     refs:
     - src/tasca/cli.py
-    - src/tasca/shell/api/app.py
-    - src/tasca/shell/api/auth.py
-    - src/tasca/shell/api/routes/export.py
-    - src/tasca/shell/api/routes/patrons.py
     - src/tasca/shell/api/routes/sayings.py
-    - src/tasca/shell/api/routes/seats.py
     - src/tasca/shell/api/routes/tables.py
-    - src/tasca/core/services/http_error_service.py
-    - src/tasca/shell/api/errors.py
+    - tests/unit/test_cli.py
+    - tests/unit/api
+    - tests/integration/test_api.py
     depends_on:
     - retest-full-plan-blockers
     agent: python-senior

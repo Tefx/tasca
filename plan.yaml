@@ -39678,6 +39678,206 @@ phases:
     depends_on:
     - fix-pp-invar-full-scan
     agent: integration-verifier-tacit
+  - id: fix-pp-invar-mcp-residual
+    name: Residual Invar budget remediation — MCP entrypoints
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+      reduction_step: true
+
+      salvage_context: commit fbdf04b closed the direct shell_result/missing_contract
+      blockers and removed non-suppressible dead_export/missing_contract hatches;
+      do NOT redo those closed items unless regression evidence shows they reopened.
+
+
+      Bounded residual remediation for MCP entrypoint/server budget blockers remaining
+      after salvaged partial progress from `fix-pp-invar-full-scan`.
+
+
+      ## Target residual inventory (this step owns exactly this surface)
+
+      - `src/tasca/shell/mcp/entrypoint_logic.py` entry_point_too_thick 4/2 and shell_result
+      5/2
+
+      - `src/tasca/shell/mcp/entrypoint_session_tools.py` shell_result 7/2
+
+      - `src/tasca/shell/mcp/entrypoints.py` shell_result 27/2
+
+      - `src/tasca/shell/mcp/proxy.py` shell_result 2/2
+
+      - `src/tasca/shell/mcp/server.py` shell_result 18/2
+
+      - `src/tasca/shell/mcp/tool_contracts.py` shell_result 4/2
+
+
+      ## Root-cause constraints
+
+      - Reduce `shell_result` by using real `Result[T, E]` shell wrappers at MCP seams
+      and by keeping framework adaptation at the narrow outer boundary.
+
+      - Reduce `entry_point_too_thick` by moving reusable decision logic into contracted
+      Core/service helpers with meaningful `@pre`/`@post` contracts and doctests.
+
+      - Preserve MCP server deployability and runtime semantics: server startup, tool
+      registration, proxy mode, session tool behavior, and documented request/response
+      behavior must remain intact.
+
+      - Do NOT add suppressions, owner-only project exemptions, or placeholder adapters
+      to satisfy budgets.
+
+
+      ## Known closed items not in scope
+
+      - Direct `_contract_tool` shell_result remediation and direct Core missing-contract
+      blockers were salvaged in commit `fbdf04b`; verify they do not regress, but
+      do not spend this step re-solving already-closed direct errors unless they reappear.
+
+      - Final salvaged guard inventory had `non_suppressible: []`; this step must
+      preserve that.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
+
+
+      ## Residual ownership semantics
+
+      This is a bounded reduction step. It succeeds by producing verified non-regressive
+      budget reductions for the target MCP inventory above. Remaining CLI/API or storage/config/service
+      residual debt is owned by sibling residual steps and the final retest, not by
+      rolling back mergeable MCP progress.'
+    verification: '- Command lock: use `uvx invar-tools guard --all` as the authoritative
+      command family; do not substitute `uv run`, partial guard, or suppressions.
+
+      - Before/after accounting: evidence lists pre-change and post-change counts
+      for every target file in the MCP residual inventory and explains any count that
+      remains above budget.
+
+      - Main path: focused MCP smoke proves server/tool/proxy/session seams still
+      run through real MCP entrypoint paths after thinning.
+
+      - Failure path: MCP error and session failure behavior still returns documented
+      Result/error behavior at the shell boundary.
+
+      - Regression guard: `non_suppressible` remains empty and direct errors closed
+      by commit `fbdf04b` do not reappear.
+
+      - Residual disposition: any remaining blocker-class count in this surface is
+      listed with file, rule, count, reason it remains, and closure path for retest
+      or a follow-up residual step.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Residual Invar Budget Evidence — MCP
+
+
+      **salvage_commit_acknowledged**: fbdf04b
+
+      **command_family_locked**: uvx invar-tools guard --all
+
+      **symbolic_testing**: true
+
+
+      ### Target Inventory Before/After
+
+      | File | Rule | Before | After | Budget | Disposition |
+
+      | --- | --- | ---: | ---: | ---: | --- |
+
+      | src/tasca/shell/mcp/entrypoint_logic.py | entry_point_too_thick | 4 | <after>
+      | 2 | <closed/reduced/residual> |
+
+      | src/tasca/shell/mcp/entrypoint_logic.py | shell_result | 5 | <after> | 2 |
+      <closed/reduced/residual> |
+
+      | src/tasca/shell/mcp/entrypoint_session_tools.py | shell_result | 7 | <after>
+      | 2 | <closed/reduced/residual> |
+
+      | src/tasca/shell/mcp/entrypoints.py | shell_result | 27 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/mcp/proxy.py | shell_result | 2 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/mcp/server.py | shell_result | 18 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/mcp/tool_contracts.py | shell_result | 4 | <after> | 2 | <closed/reduced/residual>
+      |
+
+
+      ### Files Changed
+
+      - <path>: <Result wrapper / entrypoint thinning / Core extraction with contracts
+      / tests>
+
+
+      ### Commands and Output
+
+      ```bash
+
+      uvx invar-tools guard --all
+
+      <actual output summary including static_passed, errors, warnings, infos, budgets,
+      and non_suppressible>
+
+      ```
+
+
+      ```bash
+
+      <ruff/mypy/focused pytest smoke commands for touched MCP seams>
+
+      <actual output>
+
+      ```
+
+
+      ### Regression Smoke
+
+      - MCP server startup/tool smoke: <command or test/output>
+
+      - MCP proxy/session smoke: <command or test/output>
+
+      - Direct blocker regression check: non_suppressible remains empty and salvaged
+      direct blockers did not reappear.
+
+
+      ### Residual Closure Path
+
+      - Remaining MCP residual blockers: <empty or exact file/rule/count/closure path>
+
+      - Remaining non-MCP residual blockers owned by sibling steps: <summary>
+
+
+      ### Headline
+
+      PASS | PASS_WITH_RESIDUAL | FAIL'
+    depends_on:
+    - retest-full-plan-blockers
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

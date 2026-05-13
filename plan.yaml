@@ -41112,7 +41112,7 @@ phases:
   - id: fix-pp-invar-mcp-direct-residuals
     name: Residual Invar remediation — MCP direct shell_result and entrypoint thickness
       blockers
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -41418,6 +41418,185 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T04:31:59.600396+00:00'
+    done_at: '2026-05-13T04:49:42.469182+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+
+      - `src/tasca/shell/mcp/tool_contracts.py` — runtime MCP registration metadata
+      helpers (`parameter_contract`, `tool_contract`, `parameter_default`, `parameter_field`)
+      were direct shell seams returning raw values and used by `server.py` signatures;
+      converted to Result-returning seams.
+
+      - `src/tasca/shell/mcp/entrypoint_logic.py` — direct residuals were concentrated
+      in patch-status parsing, silence guidance helpers, and oversized response/patch
+      payload builders; converted residual shell helpers to Result seams and thinned
+      entrypoints.
+
+      - `tests/unit/mcp` — unit tests assert centralized tool contracts, FastMCP registration
+      schema defaults/descriptions, response envelopes, and MCP server tool behavior;
+      focused MCP tests pass.
+
+      - `tests/integration/test_mcp.py` — integration tests exercise HTTP MCP auth/init/tool
+      call envelopes and full MCP tool flows through `tools/call`; included in focused
+      verification.
+
+      - `tests/integration/test_mcp_proxy.py` — proxy tests verify local/remote switching
+      and table operation forwarding through the MCP proxy boundary; included in focused
+      verification.
+
+
+      ## Blocker Closure Register
+
+      | Blocker | File | Symbol | Rule | Before | Change made | After status | Disposition
+      |
+
+      |---|---|---|---|---|---|---|---|
+
+      | B1 | `src/tasca/shell/mcp/tool_contracts.py` | `parameter_contract` | `shell_result`
+      | raw `ParameterContract` / `KeyError` | returns `Result[ParameterContract,
+      str]`; callers unwrap explicitly | static guard no longer reports | CLOSED |
+
+      | B1 | `src/tasca/shell/mcp/tool_contracts.py` | `tool_contract` | `shell_result`
+      | raw `ToolContract` / `KeyError` | returns `Result[ToolContract, str]`; `_contract_tool`
+      unwraps | static guard no longer reports | CLOSED |
+
+      | B1 | `src/tasca/shell/mcp/tool_contracts.py` | `parameter_default` | `shell_result`
+      | raw default value | returns `Result[Any, str]`; server defaults unwrap explicitly
+      | static guard no longer reports | CLOSED |
+
+      | B1 | `src/tasca/shell/mcp/tool_contracts.py` | `parameter_field` | `shell_result`
+      | raw `FieldInfo` | returns `Result[FieldInfo, str]`; annotations/tests unwrap
+      explicitly | static guard no longer reports | CLOSED |
+
+      | B2 | `src/tasca/shell/mcp/entrypoint_logic.py` | `_parse_patch_status` | `shell_result`
+      | raw tuple | returns `Result[tuple[TableStatus, dict | None], str]`; patch
+      caller unwraps | static guard no longer reports | CLOSED |
+
+      | B2 | `src/tasca/shell/mcp/entrypoint_logic.py` | `_silence_nudge` | `shell_result`
+      | raw string | returns `Result[str, str]`; silence dispatcher unwraps | static
+      guard no longer reports | CLOSED |
+
+      | B2 | `src/tasca/shell/mcp/entrypoint_logic.py` | `_silence_stall` | `shell_result`
+      | raw string | returns `Result[str, str]`; silence dispatcher unwraps | static
+      guard no longer reports | CLOSED |
+
+      | B2 | `src/tasca/shell/mcp/entrypoint_logic.py` | `_silence_last_chance` |
+      `shell_result` | raw string | returns `Result[str, str]`; silence dispatcher
+      unwraps | static guard no longer reports | CLOSED |
+
+      | B2 | `src/tasca/shell/mcp/entrypoint_logic.py` | `_silence_exit` | `shell_result`
+      | raw string | returns `Result[str, str]`; silence dispatcher unwraps | static
+      guard no longer reports | CLOSED |
+
+      | B3 | `src/tasca/shell/mcp/entrypoint_logic.py` | `build_table_dict` | `entry_point_too_thick`
+      | 17 lines | extracted `_table_identity_payload` | static guard no longer reports
+      | CLOSED |
+
+      | B3 | `src/tasca/shell/mcp/entrypoint_logic.py` | `validate_speaker_constraints`
+      | `entry_point_too_thick` | 18 lines | extracted `_speaker_constraint_error`
+      | static guard no longer reports | CLOSED |
+
+      | B3 | `src/tasca/shell/mcp/entrypoint_logic.py` | `apply_table_patch` | `entry_point_too_thick`
+      | 34 lines | extracted host-id parsing and patch result builders | static guard
+      no longer reports | CLOSED |
+
+      | B3 | `src/tasca/shell/mcp/entrypoint_logic.py` | `build_say_response` | `entry_point_too_thick`
+      | 30 lines | extracted compatibility/speaker/next-action/payload helpers | static
+      guard no longer reports | CLOSED |
+
+
+      ## Sibling Search Register
+
+      - MCP shell_result sibling search: worker scanned `src/tasca/shell/mcp/*.py`
+      for Result seams; targeted MCP direct shell_result residuals are now Result-returning
+      and mainline final guard static phase reports 0 errors.
+
+      - Entrypoint thickness sibling search: worker AST scan found `src/tasca/shell/mcp/entrypoint_logic.py:299:_say_response_payload:21`;
+      this is a Result-returning shell helper, not a decorated Invar entrypoint; mainline
+      final guard reports 0 `entry_point_too_thick` errors.
+
+
+      ## Behavior Preservation Register
+
+      - Tool contracts: `tests/unit/mcp/test_tool_contracts.py` passes after updating
+      direct helper assertions to unwrap Result envelopes; FastMCP runtime registration
+      test still passes for centralized descriptions/defaults.
+
+      - Entrypoint logic: focused MCP unit/integration suite passed, including table_say
+      validation/failure paths, table_update patch behavior, response envelopes, and
+      proxy forwarding.
+
+      - MCP smoke: `connection_status()` and `table_list(''open'')` returned `dict
+      True local` and `dict True True` on main after merge.
+
+
+      ## Verification Commands and Actual Output
+
+      - Worker commit: `85b41e1` — `mcp: close invar residual shell seams`.
+
+      - Main salvage merge commit: `ddec67e` — `[vectl] salvage partial progress from
+      step-fix-pp-invar-mcp-direct-residuals`.
+
+      - `uv run ruff check src/tasca/shell/mcp/tool_contracts.py src/tasca/shell/mcp/entrypoint_logic.py
+      src/tasca/shell/mcp/server.py src/tasca/core/services/seat_service.py tests/unit/mcp/test_tool_contracts.py`:
+      PASS (`All checks passed!`).
+
+      - `uv run mypy src/tasca/shell/mcp/tool_contracts.py src/tasca/shell/mcp/entrypoint_logic.py
+      src/tasca/shell/mcp/server.py src/tasca/core/services/seat_service.py`: PASS
+      (`Success: no issues found in 4 source files`).
+
+      - `uv run pytest tests/unit/mcp/test_tool_contracts.py tests/unit/mcp/test_mcp_server.py
+      tests/unit/mcp/test_spec_conformance_remediation.py tests/integration/test_mcp.py
+      tests/integration/test_mcp_proxy.py -q`: PASS (`165 passed`).
+
+      - Representative MCP smoke: PASS (`connection_status()` local; `table_list(''open'')`
+      ok).
+
+      - `uvx invar-tools guard --all`: FAIL only because doctest fails in `src/tasca/core/services/table_service.py::prepare_table_update`
+      with `NameError: name ''TableId'' is not defined`; static phase passed with
+      errors=0 and the listed MCP direct blockers are absent.
+
+
+      ## Broad Verifier Disposition Pass
+
+      - `src/tasca/core/services/table_service.py::prepare_table_update` doctest `NameError:
+      TableId not defined` => `batched_fix` / focused remediation owner `fix-pp-invar-table-service-doctest`.
+
+      - `retest-pp-invar-full-scan` is kept blocked until `fix-pp-invar-table-service-doctest`
+      completes.
+
+
+      ## No-suppression Statement
+
+      - No suppressions, owner-only exemptions, `# noqa`, or placeholder/stub-only
+      adapters were added. Existing comments were not used to evade guard.
+
+
+      ## Files changed
+
+      - `src/tasca/shell/mcp/tool_contracts.py` — converted metadata lookup helpers
+      to `Result[T, str]`.
+
+      - `src/tasca/shell/mcp/server.py` — explicitly unwraps contract Result helpers
+      at MCP registration/signature construction boundaries.
+
+      - `src/tasca/shell/mcp/entrypoint_logic.py` — converted residual shell helpers
+      to Result seams and extracted payload/patch helpers to close entrypoint thickness.
+
+      - `tests/unit/mcp/test_tool_contracts.py` — updated contract helper test to
+      unwrap Result.
+
+      - `src/tasca/core/services/seat_service.py` — added missing `SeatId` doctest
+      imports encountered during full guard.
+
+
+      ## Final retest readiness
+
+      - `retest-pp-invar-full-scan`: CLOSED until `fix-pp-invar-table-service-doctest`
+      completes.
+
+      - Blockers if CLOSED: table_service doctest missing `TableId` import, now owned
+      by `fix-pp-invar-table-service-doctest`.'
   - id: fix-pp-invar-table-service-doctest
     name: Residual Invar remediation — table_service prepare_table_update doctest
       blocker

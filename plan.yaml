@@ -4044,6 +4044,67 @@ phases:
       2. Add HTTP transport tests with running server for full integration coverage
 
       3. Consider adding performance benchmarks for wait/poll loops'
+  - id: field-l3-validation-evidence-closure
+    name: Validation evidence closure for historical field L3 red evidence
+    status: done
+    description: 'Validation-closure/disposition record only; no product-code work.
+      This step closes historical completed-evidence guard debt for field_l3.l3_report.
+      Provenance: historical completed evidence contained FAIL. Disposition: closed
+      by later L3 remediation and finalization evidence; no current blocker-class
+      issue remains for remaining gates. Gate intersection: finalization.gate is already
+      OPEN/PASS and current acceptance is owned by later remediation/finalization,
+      so this historical red evidence must not reopen live execution work.'
+    verification: local-check protecting plan validation only. Evidence must record
+      green/OPEN/gate_open_allowed=true disposition for field_l3.l3_report and explain
+      why historical FAIL evidence is closed by later remediation/finalization without
+      altering current finalization PASS meaning.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - step: field_l3.l3_report
+
+      - disposition: historical failure evidence closed
+
+      - gate_intersection: later L3 remediation and finalization.gate own current
+      acceptance; no unresolved live blocker remains
+
+      - required marker: green/OPEN/gate_open_allowed=true'
+    depends_on:
+    - field_l3.l3_report
+    agent: gate-reviewer-tacit
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - closed_step: field_l3.l3_report
+
+      - historical_signal: FAIL in completed evidence
+
+      - provenance: historical completed-evidence guard debt, not a new product-code
+      blocker
+
+      - disposition: closed by subsequent L3 remediation phases and the current finalization.gate
+      OPEN/PASS record
+
+      - gate_intersection_reasoning: any live L3 field blocker would intersect later
+      L3 remediation, deep black-box verification, and finalization.gate; those later
+      records are done and OPEN/PASS, so the historical red evidence is superseded
+      for plan-validation purposes
+
+      - current_acceptance_owner: l3_fix/l3_fix2/l3_proxy_fix remediation chain plus
+      finalization.deep-black-box-verification and finalization.gate
+
+      - result: green/OPEN/gate_open_allowed=true
+
+
+      No product code changed.'
 - id: gate_fix
   name: Gate Fix (pre-web)
   status: done

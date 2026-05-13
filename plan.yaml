@@ -15912,6 +15912,68 @@ phases:
       fix-step creation could not be confirmed (planner call failure).
 
       - This completion records gate outcome and outstanding remediation requirement.'
+  - id: close-notify-validation-evidence-closure
+    name: Validation evidence closure for historical close_notify_fix gate red evidence
+    status: done
+    description: 'Validation-closure/disposition record only; no product-code work.
+      This step closes historical completed-evidence guard debt for close_notify_fix.gate.
+      Provenance: historical completed evidence contained FAIL. Disposition: closed
+      by later close-notify follow-up, post-notify hardening, and finalization evidence;
+      no current blocker-class issue remains for remaining gates. Gate intersection:
+      finalization.gate is already OPEN/PASS and current acceptance is owned by later
+      remediation/finalization, so this historical red evidence must not reopen live
+      execution work.'
+    verification: phase-check protecting downstream and final gates. Evidence must
+      record green/OPEN/gate_open_allowed=true disposition for close_notify_fix.gate
+      and explain why historical FAIL evidence is closed by later close-notify remediation/finalization
+      without altering current finalization PASS meaning.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - step: close_notify_fix.gate
+
+      - disposition: historical failure evidence closed
+
+      - gate_intersection: later close-notify follow-up/post-notify hardening and
+      finalization.gate own current acceptance; no unresolved live blocker remains
+
+      - required marker: green/OPEN/gate_open_allowed=true'
+    depends_on:
+    - close_notify_fix.gate
+    agent: gate-reviewer-tacit
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - closed_step: close_notify_fix.gate
+
+      - historical_signal: FAIL in completed evidence
+
+      - provenance: historical completed-evidence guard debt, not a new product-code
+      blocker
+
+      - disposition: closed by subsequent close_notify_fix_followup, close-notify-fix-gate-fix,
+      post-notify-hardening, and the current finalization.gate OPEN/PASS record
+
+      - gate_intersection_reasoning: any live close-notify behavior blocker would
+      intersect later close-notify follow-up gates, post-notify hardening, UX/finalization
+      reviews, and finalization.gate; those later records are done and OPEN/PASS,
+      so the historical red evidence is superseded for plan-validation purposes
+
+      - current_acceptance_owner: close_notify_fix_followup, close-notify-fix-gate-fix,
+      post-notify-hardening, finalization.verify-full-plan, and finalization.gate
+
+      - result: green/OPEN/gate_open_allowed=true
+
+
+      No product code changed.'
 - id: skills_packaging
   name: Skills packaging — bundle tasca-moderation SKILL.md and CLI commands
   status: done

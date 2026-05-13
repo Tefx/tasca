@@ -38625,7 +38625,7 @@ phases:
     claimed_at: '2026-05-13T08:13:53.689760+00:00'
   - id: finalization.deep-contract-strength
     name: Deep contract-strength and closure review
-    status: pending
+    status: claimed
     description: 'step_type: review
 
       verification_scope: full-plan-check
@@ -38676,6 +38676,8 @@ phases:
     - retest-pp-invar-full-scan-final
     - finalization.retest-deep-wiring-table-metadata-contract
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-13T08:14:02.520124+00:00'
   - id: finalization.deep-black-box-verification
     name: Black-box verification of consolidated public surfaces
     status: pending

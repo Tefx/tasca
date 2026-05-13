@@ -42050,7 +42050,7 @@ phases:
       - Blockers if CLOSED: MCP proxy `switch_to_local` doctest Result-output mismatch.'
   - id: fix-pp-invar-mcp-proxy-doctest
     name: Residual Invar remediation — MCP proxy switch doctest Result mismatch
-    status: pending
+    status: claimed
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       priority: HIGH\nagent: python-senior\nsymbolic_testing: true\ncommand_family_locked:\
       \ uvx invar-tools guard --all\n\nFocused downstream full-guard blocker after\
@@ -42184,6 +42184,8 @@ phases:
     depends_on:
     - fix-pp-invar-shell-logging-doctest
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-05-13T05:04:24.876339+00:00'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

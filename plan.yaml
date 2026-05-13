@@ -38500,7 +38500,7 @@ phases:
       - Downstream finalization review steps were blocked on the retest before progression.'
   - id: finalization.deep-spec-conformance
     name: Deep cross-surface spec conformance audit
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: full-plan-check
@@ -38566,6 +38566,54 @@ phases:
     agent: spec-verifier-tacit
     claimed_by: spec-verifier-tacit
     claimed_at: '2026-05-13T08:14:15.588209+00:00'
+    done_at: '2026-05-13T08:46:30.663942+00:00'
+    evidence: "Headline: FAIL\nBlocking Status: OPEN\nProof-Gap Status: BLOCKING\n\
+      Verdict: FAIL\nBlockers: B1, B2, B3\nOrchestrator Action Hint: DO_NOT_COMPLETE\
+      \ until remediation ownership exists\n\n## Spec Conformance Report\n\n### refs\
+      \ Read Confirmation (MANDATORY)\nNo refs for this step.\n\n### Mandatory Semantic\
+      \ Reporting\n- step_intent: verification/full-plan-check\n- expected_result:\
+      \ green\n- observed_result: fail — blocker-class cross-surface drift found in\
+      \ REST schema migration path, REST control idempotency, and focused regression\
+      \ test execution.\n- failure_alignment:\n  - B1: REST API table creation with\
+      \ canonical metadata/policy/board can fail against an existing legacy DB because\
+      \ get_db() applies CREATE TABLE IF NOT EXISTS but does not run migrations, while\
+      \ table_repo.create_table() always inserts metadata/policy/board.\n  - B2: HTTP\
+      \ POST /tables/{table_id}/control accepts documented dedup_id but ignores it,\
+      \ diverging from idempotent retry/closed-terminal semantics proven on MCP.\n\
+      \  - B3: Focused conformance regression command fails 3 tests, including REST\
+      \ table-create shape/dedup integration test and stale entrypoint call assumptions.\n\
+      - verdict: FAIL\n- blockers:\n  - B1: REST schema/migration drift for canonical\
+      \ table fields.\n  - B2: REST control dedup_id is accepted but not honored.\n\
+      \  - B3: Focused conformance suite is red.\n- product_files_modified: false\n\
+      - gate_open_allowed: false\n- Commit hash(es): none — verify-only step with\
+      \ no repo mutations\n\n## Evidence Summary\n- R2/R3 DIVERGES: HTTP table.control\
+      \ dedup_id ignored; retry with same dedup_id after close returns 409 instead\
+      \ of original response.\n- R6 DIVERGES: REST table create canonical metadata/policy/board\
+      \ fails against existing DB because API dependency does not run table-column\
+      \ migrations.\n- NEEDS_TEST: shared control atomicity through public REST/MCP\
+      \ wrappers after stale tests are corrected to call server wrapper or unwrap\
+      \ entrypoint Result.\n- PROVEN: MCP control dedup/terminal behavior, batch delete\
+      \ all-or-nothing, export ordered JSONL, tool contract centralization, HTTP admin\
+      \ auth envelope.\n\n## Commands / Runtime Evidence\n- Focused pytest command:\
+      \ .venv/bin/python -m pytest tests/unit/test_dup_guardrails_control_red.py tests/unit/mcp/test_spec_conformance_remediation.py\
+      \ tests/unit/mcp/test_tool_contracts.py tests/integration/test_rest_spec_conformance_remediation.py\
+      \ tests/unit/api/test_export_routes.py::TestExportJSONL::test_export_jsonl_with_sayings\
+      \ tests/unit/api/test_tables_routes.py::TestBatchDeleteTables -q — result: 25\
+      \ passed, 3 failed.\n- REST create failure reproduction: POST /api/v1/tables\
+      \ with metadata/policy/board returned 500 with StorageError no column named\
+      \ metadata.\n- HTTP control dedup probe: first close 200; second close with\
+      \ same dedup_id 409 Cannot close table with status 'closed'.\n- MCP control\
+      \ dedup probe: first close and second same dedup_id both ok with control_saying_sequence\
+      \ 0; third different dedup_id rejected OPERATION_NOT_ALLOWED.\n- git status\
+      \ --short: clean after verification.\n\n## Top Risks\n1. REST canonical table\
+      \ create can fail in real installations with legacy DB files; blocks cross-surface\
+      \ create parity.\n2. REST control retry safety is not idempotent despite accepting\
+      \ dedup_id.\n3. Focused guardrail tests include stale entrypoint call assumptions,\
+      \ reducing reliability of conformance suite as gate.\n4. Migration logic is\
+      \ split: apply_schema() runs migrations but API get_db() does not.\n\n## Remediation\
+      \ created\n- finalization.fix-concurrent-review-blockers\n- finalization.retest-concurrent-review-blockers\n\
+      Downstream finalization black-box verification and final gate were blocked on\
+      \ the new retest."
   - id: finalization.deep-architecture-review
     name: Deep architecture and boundary review
     status: done

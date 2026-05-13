@@ -12,47 +12,53 @@ from pathlib import Path
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from returns.result import Result, Success, Failure
 
 
-# @invar:allow shell_result: Metadata lookup is expected to fail gracefully in dev/test environments
-def _get_version() -> str:
-    """Get package version, falling back to '0.0.0' if not installed."""
+def _get_version_result() -> Result[str, str]:
+    """Get package version as a typed shell Result.
+
+    Missing package metadata is a recoverable development/test condition.
+
+    Examples:
+        >>> isinstance(_get_version_result().unwrap(), str) or _get_version_result().failure()
+        True
+    """
     try:
-        return _pkg_version("tasca")
-    except PackageNotFoundError:
-        return "0.0.0"
+        return Success(_pkg_version("tasca"))
+    except PackageNotFoundError as exc:
+        return Failure(str(exc))
 
 
 _ADMIN_TOKEN_CLEAR_SENTINELS = {"null", "none", "clear"}
 
 
-# @invar:allow shell_result: Configuration normalization helper for auth env precedence
-def _normalize_admin_token(raw: str | None) -> str | None:
+def _normalize_admin_token(raw: str | None) -> Result[str | None, str]:
     """Normalize TASCA_ADMIN_TOKEN input from environment.
 
     Explicit clear/null sentinels are treated as unset for safe fallback.
 
     Examples:
-        >>> _normalize_admin_token(None) is None
+        >>> _normalize_admin_token(None).unwrap() is None
         True
-        >>> _normalize_admin_token("  tk_secret  ")
+        >>> _normalize_admin_token("  tk_secret  ").unwrap()
         'tk_secret'
-        >>> _normalize_admin_token("") is None
+        >>> _normalize_admin_token("").unwrap() is None
         True
-        >>> _normalize_admin_token(" null ") is None
+        >>> _normalize_admin_token(" null ").unwrap() is None
         True
     """
     if raw is None:
-        return None
+        return Success(None)
 
     normalized = raw.strip()
     if not normalized:
-        return None
+        return Success(None)
 
     if normalized.lower() in _ADMIN_TOKEN_CLEAR_SENTINELS:
-        return None
+        return Success(None)
 
-    return normalized
+    return Success(normalized)
 
 
 class Settings(BaseSettings):
@@ -66,7 +72,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    version: str = Field(default_factory=_get_version)
+    version: str = Field(default_factory=lambda: _get_version_result().value_or("0.0.0"))
     debug: bool = False
     environment: str = "development"  # "development" or "production"
 
@@ -93,7 +99,7 @@ class Settings(BaseSettings):
         3) If resolved token is empty, generate a secure default token.
         """
         raw_env_token = os.getenv("TASCA_ADMIN_TOKEN")
-        normalized_env_token = _normalize_admin_token(raw_env_token)
+        normalized_env_token = _normalize_admin_token(raw_env_token).unwrap()
 
         if normalized_env_token is not None:
             self.admin_token = normalized_env_token

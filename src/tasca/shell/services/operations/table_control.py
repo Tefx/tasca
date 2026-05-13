@@ -97,21 +97,20 @@ def normalize_control_action(action: str) -> Result[TableControlAction, TableCon
         )
 
 
-# @invar:allow shell_result: Pure canonical formatting helper, not an I/O shell boundary.
 # @shell_orchestration: Canonical audit content is owned with the table.control shell operation.
-def build_control_content(action: TableControlAction, reason: str | None) -> str:
+def build_control_content(action: TableControlAction, reason: str | None) -> Result[str, TableControlOperationError]:
     """Build canonical CONTROL saying content.
 
-    >>> build_control_content(TableControlAction.PAUSE, None)
+    >>> build_control_content(TableControlAction.PAUSE, None).unwrap()
     '**CONTROL: PAUSE**'
-    >>> build_control_content(TableControlAction.CLOSE, 'Done').splitlines()
+    >>> build_control_content(TableControlAction.CLOSE, 'Done').unwrap().splitlines()
     ['**CONTROL: CLOSE**', '', 'Reason: Done']
     """
     content = f"**CONTROL: {action.value.upper()}**"
     normalized_reason = reason.strip() if reason is not None else ""
     if normalized_reason:
         content = f"{content}\n\nReason: {normalized_reason}"
-    return content
+    return Success(content)
 
 
 def _transition_for_action(
@@ -137,22 +136,21 @@ def _transition_for_action(
     return Success(transition(current_status))
 
 
-# @invar:allow shell_result: Pure error mapper returns typed operation error, not a shell boundary.
 # @shell_orchestration: Maps storage failures into operation-owned typed errors for transports.
-def _storage_error(
+def _storage_failure(
     table_id: str,
     action: TableControlAction,
     error: TableError | ControlError,
-) -> TableControlOperationError:
+) -> Result[TableControlOutcome, TableControlOperationError]:
     if isinstance(error, TableNotFoundError):
-        return TableControlOperationError(
+        return Failure(TableControlOperationError(
             code=TableControlErrorCode.TABLE_NOT_FOUND,
             message=f"Table not found: {table_id}",
             table_id=table_id,
             action=action.value,
-        )
+        ))
     if isinstance(error, ControlVersionConflictError):
-        return TableControlOperationError(
+        return Failure(TableControlOperationError(
             code=TableControlErrorCode.VERSION_CONFLICT,
             message="Table version conflict during control operation.",
             table_id=table_id,
@@ -161,14 +159,14 @@ def _storage_error(
             actual_version=error.actual_version,
             current_status=error.actual_status,
             storage_error=str(error),
-        )
-    return TableControlOperationError(
+        ))
+    return Failure(TableControlOperationError(
         code=TableControlErrorCode.STORAGE_ERROR,
         message="Failed to execute table control operation.",
         table_id=table_id,
         action=action.value,
         storage_error=str(error),
-    )
+    ))
 
 
 # @shell_complexity: This is the shared application transaction boundary adapter for table.control.
@@ -202,7 +200,7 @@ def execute_table_control(
 
     current_result = get_table(conn, TableId(table_id))
     if isinstance(current_result, Failure):
-        return Failure(_storage_error(table_id, control_action, current_result.failure()))
+        return _storage_failure(table_id, control_action, current_result.failure())
     current_table = current_result.unwrap()
 
     transition_result = _transition_for_action(control_action, current_table.status)
@@ -220,7 +218,10 @@ def execute_table_control(
     new_status = transition_result.unwrap()
 
     operation_time = now if now is not None else datetime.now(UTC)
-    control_content = build_control_content(control_action, reason)
+    content_result = build_control_content(control_action, reason)
+    if isinstance(content_result, Failure):
+        return content_result
+    control_content = content_result.unwrap()
     control_result = atomic_control_table(
         conn=conn,
         table_id=table_id,
@@ -231,7 +232,7 @@ def execute_table_control(
         now=operation_time,
     )
     if isinstance(control_result, Failure):
-        return Failure(_storage_error(table_id, control_action, control_result.failure()))
+        return _storage_failure(table_id, control_action, control_result.failure())
 
     control_saying, updated_table = control_result.unwrap()
     return Success(

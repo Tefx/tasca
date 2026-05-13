@@ -8,18 +8,18 @@ Shell layer - handles I/O (database operations) and returns Result[T, E].
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from datetime import datetime
 from typing import Any
 
 from returns.result import Failure, Result, Success
 
-from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
+from tasca.core.domain.table import Table, TableId, TableUpdate, Version
 from tasca.core.services.table_service import (
     VersionMismatchError,
     prepare_versioned_update,
 )
+from tasca.core.storage_rows import encode_host_ids, row_to_table
 
 # =============================================================================
 # Error Types
@@ -98,45 +98,6 @@ class TableDatabaseError(TableError):
 # =============================================================================
 
 
-# @invar:allow shell_result: Private helper - pure data transformation, not a shell operation
-# @shell_orchestration: Helper for row-to-domain mapping, used internally by repo functions
-def _row_to_table(row: tuple[Any, ...]) -> Table:
-    """Convert a database row to a Table object."""
-    return Table(
-        id=TableId(row[0]),
-        question=row[1],
-        context=row[2],
-        status=TableStatus(row[3]),
-        version=Version(row[4]),
-        created_at=datetime.fromisoformat(row[5]),
-        updated_at=datetime.fromisoformat(row[6]),
-        creator_patron_id=row[7] if len(row) > 7 else None,
-        host_ids=_decode_host_ids(row[8] if len(row) > 8 else None),
-    )
-
-
-# @invar:allow shell_result: Private JSON adapter for persisted host_ids column.
-# @shell_orchestration: SQLite boundary adapter keeps host_ids encoding next to table row persistence.
-def _encode_host_ids(host_ids: list[str]) -> str:
-    """Encode host IDs for SQLite storage."""
-    return json.dumps(host_ids)
-
-
-# @invar:allow shell_result: Private JSON adapter for persisted host_ids column.
-# @shell_orchestration: SQLite boundary adapter keeps legacy-row decoding next to table row hydration.
-def _decode_host_ids(raw: str | None) -> list[str]:
-    """Decode host IDs from SQLite storage, treating missing legacy values as empty."""
-    if not raw:
-        return []
-    try:
-        decoded = json.loads(raw)
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(decoded, list):
-        return []
-    return [item for item in decoded if isinstance(item, str)]
-
-
 def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableError]:
     """Create a new table in the database.
 
@@ -162,7 +123,7 @@ def create_table(conn: sqlite3.Connection, table: Table) -> Result[Table, TableE
                 table.created_at.isoformat(),
                 table.updated_at.isoformat(),
                 table.creator_patron_id,
-                _encode_host_ids(table.host_ids),
+                encode_host_ids(table.host_ids),
             ),
         )
         conn.commit()
@@ -195,7 +156,7 @@ def get_table(conn: sqlite3.Connection, table_id: TableId) -> Result[Table, Tabl
         if row is None:
             return Failure(TableNotFoundError(table_id))
 
-        return Success(_row_to_table(row))
+        return Success(row_to_table(row))
     except sqlite3.Error as e:
         return Failure(TableDatabaseError(f"Failed to get table: {e}"))
 
@@ -264,7 +225,7 @@ def update_table(
                 updated_table.status.value,
                 updated_table.version,
                 updated_table.updated_at.isoformat(),
-                _encode_host_ids(updated_table.host_ids),
+                encode_host_ids(updated_table.host_ids),
                 table_id,
                 expected_version,  # Extra safety: only update if version matches
             ),
@@ -306,7 +267,7 @@ def list_tables(conn: sqlite3.Connection) -> Result[list[Table], TableError]:
             """
         )
         rows = cursor.fetchall()
-        tables = [_row_to_table(row) for row in rows]
+        tables = [row_to_table(row) for row in rows]
         return Success(tables)
     except sqlite3.Error as e:
         return Failure(TableDatabaseError(f"Failed to list tables: {e}"))

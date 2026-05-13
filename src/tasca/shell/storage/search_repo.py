@@ -13,13 +13,12 @@ Escape Hatch Convention (shell_result):
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, NewType
 
 from returns.result import Failure, Result, Success
 
-from tasca.core.domain.patron import PatronId
-from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
+from tasca.core.domain.saying import Saying
+from tasca.core.storage_rows import row_to_saying, truncate_snippet
 
 # Type for repository errors
 SearchError = NewType("SearchError", str)
@@ -68,7 +67,6 @@ class TableSearchHit:
     updated_at: str
 
 
-# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 # @shell_complexity: 4 branches for FTS query with optional table_id filter + error handling
 def search_sayings(
     conn: sqlite3.Connection,
@@ -139,7 +137,12 @@ def search_sayings(
         cursor = conn.execute(sql, params)
         rows = cursor.fetchall()
 
-        results = [_row_to_search_result(row) for row in rows]
+        results: list[SearchResult] = []
+        for row in rows:
+            row_result = _row_to_search_result(row)
+            if isinstance(row_result, Failure):
+                return row_result
+            results.append(row_result.unwrap())
         return Success(results)
 
     except sqlite3.Error as e:
@@ -150,7 +153,6 @@ def search_sayings(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 # @shell_complexity: 4 branches for count query with optional table_id filter + error handling
 def count_search_results(
     conn: sqlite3.Connection,
@@ -197,7 +199,6 @@ def count_search_results(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 def rebuild_fts_index(conn: sqlite3.Connection) -> Result[int, SearchError]:
     """Rebuild the FTS5 index from the sayings table.
 
@@ -227,53 +228,27 @@ def rebuild_fts_index(conn: sqlite3.Connection) -> Result[int, SearchError]:
         return Failure(SearchError(f"Failed to rebuild FTS index: {e}"))
 
 
-# @invar:allow shell_result: search_repo.py - repo helper returns raw rows for search
 # @shell_orchestration: Private helper for DB row -> domain object conversion
-def _row_to_search_result(row: tuple[Any, ...]) -> SearchResult:
+def _row_to_search_result(row: tuple[Any, ...]) -> Result[SearchResult, SearchError]:
     """Convert a database row to a SearchResult.
 
     Args:
         row: Database row tuple with saying fields + rank + snippet.
 
     Returns:
-        SearchResult with Saying, rank, and snippet.
+        Success with SearchResult, or Failure when persisted row data is malformed.
     """
-    (
-        saying_id,
-        table_id,
-        sequence,
-        speaker_kind,
-        speaker_name,
-        patron_id,
-        content,
-        pinned,
-        created_at_str,
-        rank,
-        snippet,
-    ) = row
-
-    # Parse the ISO format datetime string
-    created_at = datetime.fromisoformat(created_at_str)
-
-    saying = Saying(
-        id=SayingId(saying_id),
-        table_id=table_id,
-        sequence=sequence,
-        speaker=Speaker(
-            kind=SpeakerKind(speaker_kind),
-            name=speaker_name,
-            patron_id=PatronId(patron_id) if patron_id else None,
-        ),
-        content=content,
-        pinned=bool(pinned),
-        created_at=created_at,
-    )
-
-    return SearchResult(
-        saying=saying,
-        rank=float(rank),
-        snippet=snippet or content[:200],
-    )
+    try:
+        saying = row_to_saying(row[:9])
+        return Success(
+            SearchResult(
+                saying=saying,
+                rank=float(row[9]),
+                snippet=str(row[10]) if row[10] else saying.content[:200],
+            )
+        )
+    except (IndexError, TypeError, ValueError) as exc:
+        return Failure(SearchError(f"Malformed search result row: {exc}"))
 
 
 # =============================================================================
@@ -283,12 +258,11 @@ def _row_to_search_result(row: tuple[Any, ...]) -> SearchResult:
 # LIKE ordering and snippet selection semantics shared by search/count paths.
 
 
-# @invar:allow shell_result: search_repo.py - repo helper orchestrates raw row retrieval for search_tables
 def _execute_fts_search(
     conn: sqlite3.Connection,
     query_param: str,
     status: str | None,
-) -> list[TableSearchHit]:
+) -> Result[list[TableSearchHit], SearchError]:
     """Execute FTS5 search on saying content.
 
     Args:
@@ -297,7 +271,7 @@ def _execute_fts_search(
         status: Optional status filter.
 
     Returns:
-        List of TableSearchHit from FTS5 matches.
+        Success with TableSearchHit values from FTS5 matches, or Failure.
     """
     fts_status_clause = "AND t.status = ?" if status else ""
     fts_sql = f"""
@@ -320,17 +294,30 @@ def _execute_fts_search(
     """
 
     params = (query_param, status) if status else (query_param,)
-    rows = conn.execute(fts_sql, params).fetchall()
+    try:
+        rows = conn.execute(fts_sql, params).fetchall()
+    except sqlite3.Error as exc:
+        return Failure(SearchError(f"Database error: {exc}"))
 
-    return [_row_to_table_hit(row) for row in rows]
+    return _rows_to_table_hits(rows)
 
 
-# @invar:allow shell_result: search_repo.py - repo helper executes SQL and returns raw rows
+def _rows_to_table_hits(rows: list[tuple[Any, ...]]) -> Result[list[TableSearchHit], SearchError]:
+    """Convert SQL rows to table hits, preserving first malformed-row failure."""
+    hits: list[TableSearchHit] = []
+    for row in rows:
+        hit_result = _row_to_table_hit(row)
+        if isinstance(hit_result, Failure):
+            return hit_result
+        hits.append(hit_result.unwrap())
+    return Success(hits)
+
+
 def _execute_like_query(
     conn: sqlite3.Connection,
     query_param: str,
     status: str | None,
-) -> list[tuple[Any, ...]]:
+) -> Result[list[tuple[Any, ...]], SearchError]:
     """Execute LIKE SQL for question/context matching.
 
     Args:
@@ -339,7 +326,7 @@ def _execute_like_query(
         status: Optional status filter.
 
     Returns:
-        Database rows for matching tables ordered by created_at DESC.
+        Success with database rows for matching tables ordered by created_at DESC.
     """
     like_status_clause = "AND status = ?" if status else ""
     like_pattern = f"%{query_param}%"
@@ -361,12 +348,14 @@ def _execute_like_query(
     """
 
     params = (like_pattern, like_pattern, status) if status else (like_pattern, like_pattern)
-    return conn.execute(like_sql, params).fetchall()
+    try:
+        return Success(conn.execute(like_sql, params).fetchall())
+    except sqlite3.Error as exc:
+        return Failure(SearchError(f"Database error: {exc}"))
 
 
-# @invar:allow shell_result: search_repo.py - repo helper computes match_type/snippet without extra I/O
 # @shell_orchestration: Row-shape normalization stays near SQL fallback path to preserve ordering semantics
-def _build_like_hit(row: tuple[Any, ...], query_param: str) -> TableSearchHit | None:
+def _build_like_hit(row: tuple[Any, ...], query_param: str) -> Result[TableSearchHit | None, SearchError]:
     """Build LIKE-based hit if row still semantically matches the query.
 
     Args:
@@ -374,43 +363,49 @@ def _build_like_hit(row: tuple[Any, ...], query_param: str) -> TableSearchHit | 
         query_param: Search query string used for case-insensitive matching.
 
     Returns:
-        TableSearchHit for question/context match, or None when no match applies.
+        Success with TableSearchHit for question/context match, or None.
     """
-    question = row[1] or ""
-    context = row[2] or ""
+    question = str(row[1]) if row[1] is not None else ""
+    context = str(row[2]) if row[2] is not None else ""
     query_lower = query_param.lower()
     question_lower = question.lower()
     context_lower = context.lower()
 
-    if query_lower in question_lower:
-        match_type = "question"
-        snippet = _truncate_snippet(question, query_param)
-    elif context and query_lower in context_lower:
-        match_type = "context"
-        snippet = _truncate_snippet(context, query_param)
-    else:
-        return None
+    match = next(
+        (
+            (match_type, source_text)
+            for match_type, source_text, matched in (
+                ("question", question, query_lower in question_lower),
+                ("context", context, bool(context) and query_lower in context_lower),
+            )
+            if matched
+        ),
+        None,
+    )
+    if match is None:
+        return Success(None)
+    match_type, source_text = match
+    snippet = truncate_snippet(source_text, query_param)
 
-    return TableSearchHit(
-        table_id=row[0],
+    return Success(TableSearchHit(
+        table_id=str(row[0]),
         question=question,
         context=context,
-        status=row[3],
+        status=str(row[3]),
         rank=0.0,
         snippet=snippet,
         match_type=match_type,
-        created_at=row[7],
-        updated_at=row[8],
-    )
+        created_at=str(row[7]),
+        updated_at=str(row[8]),
+    ))
 
 
-# @invar:allow shell_result: search_repo.py - repo helper orchestrates LIKE fallback for search_tables
 def _execute_like_search(
     conn: sqlite3.Connection,
     query_param: str,
     status: str | None,
     seen_tables: set[str],
-) -> list[TableSearchHit]:
+) -> Result[list[TableSearchHit], SearchError]:
     """Execute LIKE search on table question and context.
 
     Args:
@@ -420,27 +415,38 @@ def _execute_like_search(
         seen_tables: Set of already-seen table IDs (for deduplication).
 
     Returns:
-        List of TableSearchHit from LIKE matches (excluding already seen).
+        Success with TableSearchHit values from LIKE matches (excluding already seen).
     """
-    rows = _execute_like_query(conn, query_param, status)
+    rows_result = _execute_like_query(conn, query_param, status)
+    if isinstance(rows_result, Failure):
+        return rows_result
+    rows = rows_result.unwrap()
 
+    return _collect_like_hits(rows, query_param, seen_tables)
+
+
+def _collect_like_hits(
+    rows: list[tuple[Any, ...]],
+    query_param: str,
+    seen_tables: set[str],
+) -> Result[list[TableSearchHit], SearchError]:
+    """Build deduplicated LIKE hits and update seen-table state."""
     hits: list[TableSearchHit] = []
     for row in rows:
         table_id = row[0]
         if table_id in seen_tables:
             continue
 
-        hit = _build_like_hit(row, query_param)
+        hit = _build_like_hit(row, query_param).unwrap()
         if hit is None:
             continue
 
         hits.append(hit)
         seen_tables.add(table_id)
 
-    return hits
+    return Success(hits)
 
 
-# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 # @shell_complexity: FTS query + LIKE fallback + status filter + pagination
 def search_tables(
     conn: sqlite3.Connection,
@@ -478,7 +484,10 @@ def search_tables(
         query_param = query.strip()
 
         # Priority 1: FTS5 search on saying content (BM25 ranking)
-        fts_hits = _execute_fts_search(conn, query_param, status)
+        fts_result = _execute_fts_search(conn, query_param, status)
+        if isinstance(fts_result, Failure):
+            return fts_result
+        fts_hits = fts_result.unwrap()
 
         # Deduplicate FTS hits (same table may have multiple matching sayings)
         seen_tables: set[str] = set()
@@ -489,7 +498,10 @@ def search_tables(
                 seen_tables.add(hit.table_id)
 
         # Priority 2 & 3: LIKE search for question and context
-        like_hits = _execute_like_search(conn, query_param, status, seen_tables)
+        like_result = _execute_like_search(conn, query_param, status, seen_tables)
+        if isinstance(like_result, Failure):
+            return like_result
+        like_hits = like_result.unwrap()
 
         # Combine: FTS hits first (have rank), then LIKE hits
         hits = unique_fts_hits + like_hits
@@ -507,7 +519,6 @@ def search_tables(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: search_repo.py - repo I/O returns domain objects, not Result
 # @shell_complexity: 8 branches for count query with FTS + LIKE + status filter
 def count_table_search_results(
     conn: sqlite3.Connection,
@@ -579,72 +590,26 @@ def count_table_search_results(
         return Failure(SearchError(f"Database error: {e}"))
 
 
-# @invar:allow shell_result: search_repo.py - repo helper returns raw rows for search
 # @shell_orchestration: Private helper for DB row format conversion
-def _row_to_table_hit(row: tuple[Any, ...]) -> TableSearchHit:
+def _row_to_table_hit(row: tuple[Any, ...]) -> Result[TableSearchHit, SearchError]:
     """Convert a database row to a TableSearchHit.
 
     Args:
         row: Database row tuple with table fields + rank + snippet + match_type.
 
     Returns:
-        TableSearchHit with all fields populated.
+        Success with TableSearchHit, or Failure for malformed persisted data.
     """
-    (
-        table_id,
-        question,
-        context,
-        status,
-        rank,
-        snippet,
-        match_type,
-        created_at,
-        updated_at,
-    ) = row
-
-    return TableSearchHit(
-        table_id=table_id,
+    question = str(row[1] or "")
+    snippet = str(row[5] or question[:200])
+    return Success(TableSearchHit(
+        table_id=str(row[0]),
         question=question,
-        context=context,
-        status=status,
-        rank=float(rank),
-        snippet=snippet or (question[:200] if question else ""),
-        match_type=match_type,
-        created_at=created_at,
-        updated_at=updated_at,
-    )
-
-
-# @invar:allow shell_result: search_repo.py - repo helper returns raw rows for search
-# @shell_orchestration: Private helper for snippet truncation
-# @shell_complexity: 4 branches for text truncation logic
-def _truncate_snippet(text: str, query: str, max_len: int = 200) -> str:
-    """Truncate text around query match for snippet display.
-
-    Args:
-        text: Full text to truncate.
-        query: Search query to find in text.
-        max_len: Maximum snippet length.
-
-    Returns:
-        Truncated snippet with ellipsis if needed.
-    """
-    if len(text) <= max_len:
-        return text
-
-    # Find the matching portion
-    idx = text.lower().find(query.lower())
-    if idx < 0:
-        return text[:max_len] + "..."
-
-    # Show context around the match
-    start = max(0, idx - 50)
-    end = min(len(text), idx + len(query) + 50)
-
-    result = text[start:end]
-    if start > 0:
-        result = "..." + result
-    if end < len(text):
-        result = result + "..."
-
-    return result
+        context=str(row[2]) if row[2] is not None else None,
+        status=str(row[3]),
+        rank=float(row[4]),
+        snippet=snippet,
+        match_type=str(row[6]),
+        created_at=str(row[7]),
+        updated_at=str(row[8]),
+    ))

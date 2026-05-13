@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 import httpx
-from returns.result import Failure
+from returns.result import Failure, Result, Success
 
 from tasca.config import settings
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
@@ -44,6 +44,15 @@ from tasca.shell.storage.table_repo import (
 
 # Track if we started the server (for cleanup)
 _started_server_process: subprocess.Popen[str] | None = None
+
+
+def _command_exit_code(command_result: object) -> Result[int, str]:
+    """Normalize legacy int commands and Result-based shell commands."""
+    if isinstance(command_result, Failure):
+        return Failure(str(command_result.failure()))
+    if isinstance(command_result, Success):
+        return Success(cast(int, command_result.unwrap()))
+    return Success(cast(int, command_result))
 
 
 # @invar:allow shell_result: Helper function returns string for banner, not Result
@@ -833,7 +842,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "skills" and not hasattr(args, "func"):
         skills_parser.print_help()
         return 1
-    return cast(int, args.func(args))
+    exit_code_result = _command_exit_code(args.func(args))
+    if isinstance(exit_code_result, Failure):
+        print(exit_code_result.failure(), file=sys.stderr)
+        return 1
+    return exit_code_result.unwrap()
 
 
 if __name__ == "__main__":

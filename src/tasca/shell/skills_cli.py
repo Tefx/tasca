@@ -10,11 +10,11 @@ from __future__ import annotations
 import argparse
 import importlib.resources
 import pathlib
-import sys
+
+from returns.result import Failure, Result, Success
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
-def cmd_skills_list(_args: argparse.Namespace) -> int:
+def cmd_skills_list(_args: argparse.Namespace) -> Result[int, str]:
     """List all bundled skill names.
 
     Enumerates subdirectories of tasca.skills that contain a SKILL.md file,
@@ -24,9 +24,12 @@ def cmd_skills_list(_args: argparse.Namespace) -> int:
         _args: Parsed command-line arguments (unused).
 
     Returns:
-        Exit code (0 for success).
+        Success(0) for success, or Failure with a printable error.
     """
-    skills_pkg = importlib.resources.files("tasca.skills")
+    try:
+        skills_pkg = importlib.resources.files("tasca.skills")
+    except (ModuleNotFoundError, OSError) as exc:
+        return Failure(f"Error: cannot list bundled skills: {exc}")
     for entry in skills_pkg.iterdir():
         try:
             skill_md = entry / "SKILL.md"
@@ -34,11 +37,10 @@ def cmd_skills_list(_args: argparse.Namespace) -> int:
         except (FileNotFoundError, NotADirectoryError, IsADirectoryError, AttributeError, OSError):
             continue
         print(entry.name)
-    return 0
+    return Success(0)
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
-def cmd_skills_show(args: argparse.Namespace) -> int:
+def cmd_skills_show(args: argparse.Namespace) -> Result[int, str]:
     """Print the SKILL.md content for a named skill to stdout.
 
     Uses importlib.resources to read the bundled skill file. If the skill
@@ -48,20 +50,18 @@ def cmd_skills_show(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments (args.name).
 
     Returns:
-        Exit code (0 for success, 1 if skill not found).
+        Success(0) for success, or Failure with a printable error.
     """
     try:
         skill_md = importlib.resources.files("tasca.skills") / args.name / "SKILL.md"
         content = skill_md.read_text(encoding="utf-8")
         print(content, end="")
-        return 0
+        return Success(0)
     except FileNotFoundError:
-        print(f"Error: skill '{args.name}' not found", file=sys.stderr)
-        return 1
+        return Failure(f"Error: skill '{args.name}' not found")
 
 
-# @invar:allow shell_result: CLI entry points use SystemExit for errors, not Result[T, E]
-def cmd_skills_install(args: argparse.Namespace) -> int:
+def cmd_skills_install(args: argparse.Namespace) -> Result[int, str]:
     """Install a bundled skill's SKILL.md to a user-specified target directory.
 
     Reads the skill via importlib.resources and writes it to
@@ -72,14 +72,13 @@ def cmd_skills_install(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments (args.name, args.target).
 
     Returns:
-        Exit code (0 for success, 1 on error).
+        Success(0) for success, or Failure with a printable error.
     """
     try:
         skill_md = importlib.resources.files("tasca.skills") / args.name / "SKILL.md"
         content = skill_md.read_text(encoding="utf-8")
     except FileNotFoundError:
-        print(f"Error: skill '{args.name}' not found", file=sys.stderr)
-        return 1
+        return Failure(f"Error: skill '{args.name}' not found")
 
     dest_dir = pathlib.Path(args.target) / args.name
     try:
@@ -87,7 +86,6 @@ def cmd_skills_install(args: argparse.Namespace) -> int:
         dest_file = dest_dir / "SKILL.md"
         dest_file.write_text(content, encoding="utf-8")
         print(f"Installed: {args.name} -> {dest_file}")
-        return 0
+        return Success(0)
     except OSError as e:
-        print(f"Error: cannot write to '{args.target}': {e}", file=sys.stderr)
-        return 1
+        return Failure(f"Error: cannot write to '{args.target}': {e}")

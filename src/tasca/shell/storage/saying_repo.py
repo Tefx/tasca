@@ -12,13 +12,13 @@ All database operations use Result[T, E] for error handling.
 import sqlite3
 import uuid
 from datetime import UTC, datetime
-from typing import Any, NewType
+from typing import NewType
 
 from returns.result import Failure, Result, Success
 
-from tasca.core.domain.patron import PatronId
-from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
+from tasca.core.domain.saying import Saying, SayingId, Speaker
 from tasca.core.services.saying_service import compute_next_sequence
+from tasca.core.storage_rows import row_to_saying
 
 # Type for repository errors
 SayingError = NewType("SayingError", str)
@@ -173,7 +173,7 @@ def get_saying_by_id(
         if not row:
             return Success(None)
 
-        saying = _row_to_saying(row)
+        saying = row_to_saying(row)
         return Success(saying)
 
     except sqlite3.Error as e:
@@ -208,7 +208,7 @@ def get_saying_by_sequence(
         if not row:
             return Success(None)
 
-        saying = _row_to_saying(row)
+        saying = row_to_saying(row)
         return Success(saying)
 
     except sqlite3.Error as e:
@@ -247,7 +247,7 @@ def list_sayings_by_table(
         )
         rows = cursor.fetchall()
 
-        sayings = [_row_to_saying(row) for row in rows]
+        sayings = [row_to_saying(row) for row in rows]
         return Success(sayings)
 
     except sqlite3.Error as e:
@@ -300,7 +300,7 @@ def get_recent_sayings(
         sayings: list[Saying] = []
         total_bytes = 0
         for row in rows[:limit]:  # Only consider up to limit
-            saying = _row_to_saying(row)
+            saying = row_to_saying(row)
             content_bytes = len(saying.content.encode("utf-8"))
 
             if total_bytes + content_bytes > max_bytes and sayings:
@@ -344,7 +344,6 @@ DEFAULT_EXPORT_MAX_BYTES = 100 * 1024 * 1024  # 100 MiB
 
 
 # @shell_complexity: 4 branches for byte check + database query + error handling
-# @invar:allow shell_result: saying_repo.py - shell layer performs database I/O, returns Result
 def list_all_sayings_by_table(
     conn: sqlite3.Connection,
     table_id: str,
@@ -401,7 +400,7 @@ def list_all_sayings_by_table(
         )
         rows = cursor.fetchall()
 
-        sayings = [_row_to_saying(row) for row in rows]
+        sayings = [row_to_saying(row) for row in rows]
         return Success(sayings)
 
     except sqlite3.Error as e:
@@ -494,44 +493,3 @@ def get_table_content_bytes(conn: sqlite3.Connection, table_id: str) -> Result[i
 
     except sqlite3.Error as e:
         return Failure(SayingError(f"Database error: {e}"))
-
-
-# @invar:allow shell_result: saying_repo.py - private helper converts DB row to domain object, not Result
-# @shell_orchestration: Helper for row-to-domain conversion within repository
-def _row_to_saying(row: tuple[Any, ...]) -> Saying:
-    """Convert a database row to a Saying domain object.
-
-    Args:
-        row: Database row tuple.
-
-    Returns:
-        Saying domain object.
-    """
-    (
-        saying_id,
-        table_id,
-        sequence,
-        speaker_kind,
-        speaker_name,
-        patron_id,
-        content,
-        pinned,
-        created_at_str,
-    ) = row
-
-    # Parse the ISO format datetime string
-    created_at = datetime.fromisoformat(created_at_str)
-
-    return Saying(
-        id=SayingId(saying_id),
-        table_id=table_id,
-        sequence=sequence,
-        speaker=Speaker(
-            kind=SpeakerKind(speaker_kind),
-            name=speaker_name,
-            patron_id=PatronId(patron_id) if patron_id else None,
-        ),
-        content=content,
-        pinned=bool(pinned),
-        created_at=created_at,
-    )

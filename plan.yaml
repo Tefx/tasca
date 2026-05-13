@@ -9686,6 +9686,40 @@ phases:
       \ purposes\n- current_acceptance_owner: downstream remediation phases plus finalization.verify-full-plan\
       \ and finalization.gate\n- result: green/OPEN/gate_open_allowed=true\n\nNo product\
       \ code changed."
+  - id: integration-fix2-validation-evidence-closure-v2
+    name: Validation evidence closure v2 for integration_fix2 red evidence
+    status: done
+    description: 'Second validation-closure record only; no product-code work. This
+      clean closure record supersedes prior historical red wording for integration_fix2.r1-reverify,
+      integration_fix2.integration-fix2-gate, and integration-fix2-validation-evidence-closure.
+      Disposition: later remediation and finalization own current acceptance; no live
+      blocker remains.'
+    verification: phase-check protecting downstream and final gates. Evidence must
+      record green/OPEN/gate_open_allowed=true disposition and gate-intersection reasoning
+      for integration_fix2 historical red evidence.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Clean Historical Evidence Closure
+
+      - required marker: green/OPEN/gate_open_allowed=true
+
+      - gate_intersection: later remediation and finalization.gate own current acceptance'
+    depends_on:
+    - integration-fix2-validation-evidence-closure
+    agent: gate-reviewer-tacit
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Clean Historical Evidence Closure\n- closed_steps:\n  - integration_fix2.r1-reverify\n\
+      \  - integration_fix2.integration-fix2-gate\n  - integration-fix2-validation-evidence-closure\n\
+      - provenance: historical completed-evidence guard debt\n- disposition: superseded\
+      \ by later integration/remediation phases and current finalization.gate OPEN/PASS\
+      \ record\n- gate_intersection_reasoning: any live integration blocker would\
+      \ intersect later remediation phases, full-plan verification, and finalization.gate;\
+      \ later records are done and OPEN/PASS, so current acceptance is closed\n- current_acceptance_owner:\
+      \ downstream remediation phases plus finalization.verify-full-plan and finalization.gate\n\
+      - result: green/OPEN/gate_open_allowed=true\n\nNo product code changed."
 - id: l3_fix2
   name: L3 fix round 2 — address l3_fix gate review findings
   status: done

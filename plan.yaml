@@ -44573,7 +44573,7 @@ phases:
       - none"
   - id: finalization.retest-concurrent-review-blockers
     name: Retest concurrent finalization review blockers
-    status: pending
+    status: claimed
     description: 'step_type: test
 
       step_intent: retest_green
@@ -44792,6 +44792,8 @@ phases:
     depends_on:
     - finalization.fix-concurrent-review-blockers
     agent: integration-verifier-tacit
+    claimed_by: integration-verifier-tacit
+    claimed_at: '2026-05-13T09:11:23.626062+00:00'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

@@ -101,6 +101,94 @@ async def test_rest_table_create_shape_and_dedup(http_client) -> None:
     assert data["id"] == data["table_id"]  # compatibility only
 
 
+@pytest.mark.asyncio
+async def test_rest_table_join_route_returns_documented_initial_block(http_client) -> None:
+    suffix = uuid.uuid4().hex
+    create_response = await http_client.post(
+        "/api/v1/tables",
+        json={"title": f"REST join {suffix}", "created_by": f"creator-{suffix}"},
+        headers=_auth(),
+    )
+    assert create_response.status_code == 200
+    table_id = create_response.json()["table_id"]
+
+    join_response = await http_client.post(
+        "/api/v1/tables/join",
+        json={"invite_code": table_id, "history_limit": 10, "history_max_bytes": 65536},
+    )
+
+    assert join_response.status_code == 200
+    data = join_response.json()
+    assert data["table"]["table_id"] == table_id
+    assert data["sequence_latest"] == 0
+    assert data["history_sequence"] == 0
+    assert data["initial"] == {
+        "sayings": [],
+        "next_sequence": 0,
+        "has_more_history": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_rest_wait_timeout_zero_returns_existing_sayings(http_client) -> None:
+    suffix = uuid.uuid4().hex
+    create_response = await http_client.post(
+        "/api/v1/tables",
+        json={"title": f"REST wait {suffix}"},
+        headers=_auth(),
+    )
+    assert create_response.status_code == 200
+    table_id = create_response.json()["table_id"]
+    say_response = await http_client.post(
+        f"/api/v1/tables/{table_id}/sayings",
+        json={"speaker_name": "Tester", "content": "existing saying"},
+        headers=_auth(),
+    )
+    assert say_response.status_code == 201
+
+    wait_response = await http_client.get(
+        f"/api/v1/tables/{table_id}/sayings/wait?since_sequence=-1&timeout=0"
+    )
+
+    assert wait_response.status_code == 200
+    data = wait_response.json()
+    assert data["timeout"] is False
+    assert len(data["sayings"]) == 1
+    assert data["sayings"][0]["content"] == "existing saying"
+    assert data["next_sequence"] == data["sayings"][0]["sequence"]
+
+
+@pytest.mark.asyncio
+async def test_rest_post_close_saying_returns_state_error_not_permission(http_client) -> None:
+    suffix = uuid.uuid4().hex
+    create_response = await http_client.post(
+        "/api/v1/tables",
+        json={"title": f"REST closed {suffix}"},
+        headers=_auth(),
+    )
+    assert create_response.status_code == 200
+    table_id = create_response.json()["table_id"]
+    close_response = await http_client.post(
+        f"/api/v1/tables/{table_id}/control",
+        json={"action": "close", "speaker_name": "Admin"},
+        headers=_auth(),
+    )
+    assert close_response.status_code == 200
+
+    say_response = await http_client.post(
+        f"/api/v1/tables/{table_id}/sayings",
+        json={"speaker_name": "Tester", "content": "should fail"},
+        headers=_auth(),
+    )
+
+    assert say_response.status_code == 409
+    assert say_response.json()["error"] == {
+        "code": "TableClosed",
+        "message": "Cannot add saying to table with status 'closed'. Table must be OPEN or PAUSED.",
+        "details": {"table_status": "closed"},
+    }
+
+
 def _create_legacy_db_without_canonical_table_columns(db_path) -> None:
     conn = sqlite3.connect(db_path)
     try:

@@ -320,6 +320,38 @@ def test_mcp_list_tools(mcp_session: MCPSession) -> None:
         assert expected_tools <= tool_names, f"Missing tools: {expected_tools - tool_names}"
 
 
+def test_mcp_table_join_and_get_public_shapes(mcp_session: MCPSession) -> None:
+    """MCP discovery/runtime table_join and table_get shapes match the public spec."""
+    request_counter = [2]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_strict)
+
+    tools_response = mcp_session["client"].post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        headers=mcp_session["headers"],
+    )
+    assert tools_response.status_code == 200
+    tools = _parse_sse_response(tools_response.text)["result"]["tools"]
+    assert {"table_join", "table_get"} <= {tool["name"] for tool in tools}
+
+    created = call_tool("table_create", {"title": "MCP public shape"})
+    table_id = created["data"]["table_id"]
+    joined = call_tool("table_join", {"table_id": table_id})
+    fetched = call_tool("table_get", {"table_id": table_id})
+
+    assert joined["ok"] is True
+    assert "initial" in joined["data"]
+    assert "initial_sayings" not in joined["data"]
+    assert joined["data"]["sequence_latest"] == 0
+    assert joined["data"]["initial"] == {
+        "sayings": [],
+        "next_sequence": 0,
+        "has_more_history": False,
+    }
+    assert fetched["ok"] is True
+    assert fetched["data"]["table"]["table_id"] == table_id
+
+
 # =============================================================================
 # Patron Tool Tests (HTTP Transport via TestClient)
 # =============================================================================
@@ -1086,7 +1118,7 @@ def test_mcp_error_paused_table(mcp_session: MCPSession) -> None:
     # Step 2: Verify table status
     get_result = call_tool("table_get", {"table_id": table_id})
     assert get_result.get("ok")
-    assert get_result["data"]["status"] == "paused"
+    assert get_result["data"]["table"]["status"] == "paused"
 
     # Step 3: Read operations MUST work while paused
     listen_result = call_tool(
@@ -1232,7 +1264,7 @@ def test_mcp_error_version_conflict(mcp_session: MCPSession) -> None:
     # Get current version
     get_result = call_tool("table_get", {"table_id": table_id})
     assert get_result.get("ok")
-    current_version = get_result["data"]["version"]
+    current_version = get_result["data"]["table"]["version"]
 
     # First update succeeds
     first_update = call_tool(

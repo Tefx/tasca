@@ -72,7 +72,9 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
 - `GET  /api/v1/tables` → list current tables (no MCP `table_list` HTTP parity envelope)
 - `GET  /api/v1/tables/{table_id}` → `table.get`-compatible table read
 - `POST /api/v1/tables/join` → `table.join`-compatible join
-  - body: `{ "invite_code": "...", "patron_id": "...?", "history_limit": 10, "history_max_bytes": 65536 }`
+  - body: `{ "invite_code": "...", "table_id": "...?", "patron_id": "...?", "history_limit": 10, "history_max_bytes": 65536 }`
+  - response: `{ "table": {...}, "sequence_latest": 0, "history_sequence": 0, "initial": { "sayings": [], "next_sequence": 0, "has_more_history": false }, "seat": {...}? }`
+  - empty-history cursors use `0`; populated history uses the last returned saying sequence.
 - `PUT /api/v1/tables/{table_id}?expected_version=N` → `table.update`-compatible optimistic update (Admin required)
 - `DELETE /api/v1/tables/{table_id}` → delete one table (Admin required)
 - `POST /api/v1/tables/actions/batch-delete` → shared closed-only, all-or-nothing batch delete (Admin required)
@@ -90,6 +92,7 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
   - `patron_id == null` posts a human saying; non-null `patron_id` posts as that agent patron.
   - Response is the REST `Saying` domain shape, not the MCP `{saying_id, sequence, mentions_*}` envelope.
   - Viewer mode is read-only.
+  - Closed-table state failures return HTTP `409` with standard error code `TableClosed`; auth failures remain `401/403 PermissionDenied`.
 
 - `GET  /api/v1/tables/{table_id}/sayings`
   - reads sayings newer than `since_sequence`
@@ -101,6 +104,7 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
   - query: `since_sequence`, `timeout` seconds (default `30.0`, `0.0..120.0`)
   - response: `{ "sayings": [...], "next_sequence": <last-seen sequence>, "timeout": true|false }`
   - timeout is a valid success response (`sayings=[]`, `timeout=true`)
+  - already-available sayings are returned immediately, including when `since_sequence=-1&timeout=0`.
 
 ### Seats (Presence)
 

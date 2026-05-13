@@ -265,6 +265,15 @@ async def _wait_for_sayings_response(
     if isinstance(table_result, Failure):
         return Failure(table_result.failure())
 
+    immediate_result = list_sayings_by_table(conn, table_id, since_sequence, limit=1)
+    if isinstance(immediate_result, Failure):
+        return Failure(HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to check for sayings: {immediate_result.failure()}",
+        ))
+    if immediate_result.unwrap():
+        return _new_sayings_response(conn, table_id, since_sequence)
+
     end_time = time.monotonic() + timeout
     while time.monotonic() < end_time:
         result = list_sayings_by_table(conn, table_id, since_sequence, limit=1)
@@ -304,7 +313,10 @@ def _raise_table_say_failure(error: TableSayError) -> None:
         raise_http_error(status.HTTP_404_NOT_FOUND, "TableNotFound", error.message)
 
     if error.kind == TableSayErrorKind.OPERATION_NOT_ALLOWED:
-        raise_http_error(status.HTTP_403_FORBIDDEN, "PermissionDenied", error.message, {"table_status": error.table_status} if error.table_status else {})
+        details = {"table_status": error.table_status} if error.table_status else {}
+        if error.table_status == "closed":
+            raise_http_error(status.HTTP_409_CONFLICT, "TableClosed", error.message, details)
+        raise_http_error(status.HTTP_409_CONFLICT, "InvalidState", error.message, details)
 
     if error.kind == TableSayErrorKind.INVALID_SPEAKER:
         raise_http_error(status.HTTP_400_BAD_REQUEST, "InvalidRequest", error.message)

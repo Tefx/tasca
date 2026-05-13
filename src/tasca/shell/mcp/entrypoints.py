@@ -481,14 +481,15 @@ def table_join(
 
     history_sayings, history_sequence, has_more_history = history_result.unwrap()
 
-    # Compute next_sequence from history.
-    # Convention: -1 means "no sayings yet" — client uses since_sequence=-1 to fetch all.
-    # Note: table_listen/table_wait use a different convention via _compute_next_sequence
-    # (empty → since_sequence+1, not -1) because they only return new sayings, not history.
+    # Compute next_sequence from history. Public table_join uses 0 as the empty-history
+    # baseline documented by the MCP spec, while populated history uses the last seen
+    # saying sequence so clients can pass it back as since_sequence without duplicates.
     if history_sayings:
         next_sequence = max(s.sequence for s in history_sayings)
+        public_history_sequence = history_sequence
     else:
-        next_sequence = -1
+        next_sequence = 0
+        public_history_sequence = 0
 
     # Create seat if patron_id provided (optional - allows human join without seat)
     seat_data = None
@@ -501,12 +502,12 @@ def table_join(
     return Success(success_response(
         {
             "table": _build_table_dict(table),
-            "sequence_latest": sequence_latest,
-            "history_sequence": history_sequence,
-            "initial_sayings": {
+            "sequence_latest": max(0, sequence_latest),
+            "history_sequence": public_history_sequence,
+            "initial": {
                 "sayings": [_format_saying_dict(s) for s in history_sayings],
                 "next_sequence": next_sequence,
-                "has_more": has_more_history,
+                "has_more_history": has_more_history,
             },
             **({"seat": seat_data} if seat_data is not None else {}),
             "_next_action": _build_join_next_action(bool(history_sayings), next_sequence),
@@ -526,7 +527,7 @@ def table_get(table_id: str) -> Result[McpEnvelope, McpEnvelope]:
         return Failure(error_response("DATABASE_ERROR", f"Failed to get table: {error}"))
 
     table = result.unwrap()
-    return Success(success_response(_build_table_dict(table)))
+    return Success(success_response({"table": _build_table_dict(table)}))
 
 
 # Valid status filters for table_list

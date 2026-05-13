@@ -119,7 +119,7 @@ def test_unauthorized_control_and_update_do_not_mutate() -> None:
     assert denied_control["error"]["code"] == "PERMISSION_DENIED"
     assert denied_update["ok"] is False
     assert denied_update["error"]["code"] == "PERMISSION_DENIED"
-    after = table_get(table_id)["data"]
+    after = table_get(table_id)["data"]["table"]
     assert after["status"] == "open"
     assert after["version"] == 1
     assert after["question"] == "B6 permissions"
@@ -137,7 +137,7 @@ def test_creator_host_and_human_admin_authorization_paths() -> None:
         host_ids=[creator_id, host_id],
     )["data"]
     table_id = table["table_id"]
-    assert table_get(table_id)["data"]["host_ids"] == [creator_id, host_id]
+    assert table_get(table_id)["data"]["table"]["host_ids"] == [creator_id, host_id]
 
     host_update = table_update(
         table_id=table_id,
@@ -177,7 +177,7 @@ def test_creator_host_and_human_admin_authorization_paths() -> None:
     assert human_control["ok"] is True
     assert human_control["data"]["table_status"] == "open"
 
-    after = table_get(table_id)["data"]
+    after = table_get(table_id)["data"]["table"]
     assert after["status"] == "open"
     assert after["version"] == 5
     assert after["host_ids"] == [creator_id, new_host_id]

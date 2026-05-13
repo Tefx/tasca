@@ -307,8 +307,8 @@ class TestTableGet:
         result = table_get(table_id)
 
         assert result["ok"] is True
-        assert result["data"]["id"] == table_id
-        assert result["data"]["question"] == "Test question"
+        assert result["data"]["table"]["id"] == table_id
+        assert result["data"]["table"]["question"] == "Test question"
 
     def test_create_then_get_and_join_preserve_metadata_policy_board(self) -> None:
         """MCP create/readback surfaces persist table metadata fields."""
@@ -324,9 +324,9 @@ class TestTableGet:
 
         fetched = table_get(table_id)
         assert fetched["ok"] is True
-        assert fetched["data"]["metadata"] == {"space": "mcp"}
-        assert fetched["data"]["policy"] == {"mode": "critique", "params": {"rounds": 2}}
-        assert fetched["data"]["board"] == {"notes": ["pin"]}
+        assert fetched["data"]["table"]["metadata"] == {"space": "mcp"}
+        assert fetched["data"]["table"]["policy"] == {"mode": "critique", "params": {"rounds": 2}}
+        assert fetched["data"]["table"]["board"] == {"notes": ["pin"]}
 
         joined = table_join(table_id=table_id)
         assert joined["ok"] is True
@@ -366,9 +366,9 @@ class TestTableGet:
         assert table["board"] == {"notes": ["updated"]}
 
         fetched = table_get(table_id)
-        assert fetched["data"]["metadata"] == {"space": "updated"}
-        assert fetched["data"]["policy"] == {}
-        assert fetched["data"]["board"] == {"notes": ["updated"]}
+        assert fetched["data"]["table"]["metadata"] == {"space": "updated"}
+        assert fetched["data"]["table"]["policy"] == {}
+        assert fetched["data"]["table"]["board"] == {"notes": ["updated"]}
 
     def test_table_update_rejects_non_object_metadata_fields(self) -> None:
         """MCP table_update rejects bad metadata shapes explicitly."""
@@ -736,7 +736,7 @@ class TestTableJoin:
         assert "expires_at" in data["seat"]
 
     def test_join_initial_sayings_empty_table(self) -> None:
-        """Join table with no sayings returns empty initial_sayings."""
+        """Join table with no sayings returns empty initial block."""
         patron_result = patron_register(name=unique_name())
         patron_id = patron_result["data"]["id"]
         table_result = table_create(question="Empty table question")
@@ -745,10 +745,10 @@ class TestTableJoin:
         result = table_join(table_id=table_id, patron_id=patron_id)
 
         assert result["ok"] is True
-        initial = result["data"]["initial_sayings"]
+        initial = result["data"]["initial"]
         assert initial["sayings"] == []
-        assert initial["next_sequence"] == -1
-        assert initial["has_more"] is False
+        assert initial["next_sequence"] == 0
+        assert initial["has_more_history"] is False
 
     def test_join_initial_sayings_populated_table(self) -> None:
         """Join table with existing sayings returns them in sequence order."""
@@ -764,7 +764,7 @@ class TestTableJoin:
         result = table_join(table_id=table_id, patron_id=patron_id)
 
         assert result["ok"] is True
-        initial = result["data"]["initial_sayings"]
+        initial = result["data"]["initial"]
         sayings = initial["sayings"]
         assert len(sayings) == 3
         # Verify sequence order (ascending)
@@ -788,7 +788,7 @@ class TestTableJoin:
         result = table_join(table_id=table_id)
 
         assert result["ok"] is True
-        initial = result["data"]["initial_sayings"]
+        initial = result["data"]["initial"]
         max_seq = max(s["sequence"] for s in initial["sayings"])
         assert initial["next_sequence"] == max_seq
 
@@ -804,9 +804,9 @@ class TestTableJoin:
         result = table_join(table_id=table_id)
 
         assert result["ok"] is True
-        initial = result["data"]["initial_sayings"]
+        initial = result["data"]["initial"]
         assert len(initial["sayings"]) == 10  # capped at limit
-        assert initial["has_more"] is True
+        assert initial["has_more_history"] is True
 
     def test_join_initial_sayings_has_more_false_populated(self) -> None:
         """has_more is False when sayings fit within the history limit."""
@@ -820,12 +820,12 @@ class TestTableJoin:
         result = table_join(table_id=table_id)
 
         assert result["ok"] is True
-        initial = result["data"]["initial_sayings"]
+        initial = result["data"]["initial"]
         assert len(initial["sayings"]) > 0
-        assert initial["has_more"] is False
+        assert initial["has_more_history"] is False
 
     def test_join_backward_compat_table_and_seat_fields(self) -> None:
-        """Response still contains table and seat fields alongside initial_sayings."""
+        """Response contains table, seat, and documented initial fields."""
         patron_result = patron_register(name=unique_name())
         patron_id = patron_result["data"]["id"]
         table_result = table_create(question="Backward compat question")
@@ -837,7 +837,7 @@ class TestTableJoin:
         data = result["data"]
         assert "table" in data
         assert "seat" in data
-        assert "initial_sayings" in data
+        assert "initial" in data
         assert data["table"]["id"] == table_id
         assert data["seat"]["patron_id"] == patron_id
 

@@ -45198,6 +45198,249 @@ phases:
     depends_on:
     - finalization.deep-black-box-verification
     agent: python-senior
+  - id: finalization.retest-black-box-public-surface-blockers
+    name: Retest black-box public-surface blockers
+    status: pending
+    description: 'step_type: test
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      verification_scope: full-plan-check
+
+      agent: blind-tester-tacit
+
+      independence_level: L3
+
+      public_surface_retest: true
+
+
+      As an independent blind tester, retest the public HTTP server and MCP stdio/discovery
+      surfaces after `finalization.fix-black-box-public-surface-blockers`.
+
+
+      This is a post-implementation green retest. It must verify the externally observable
+      public contract, not internal functions or unit tests. Finding any unresolved
+      B1-B5 drift is a blocking result for `finalization.gate`.
+
+
+      ## Required black-box probes
+
+
+      ### B1 HTTP join route
+
+      - Start or reach the public HTTP server through its documented entrypoint.
+
+      - Probe `POST /api/v1/tables/join` using the public contract.
+
+      - PASS only if the route succeeds as documented OR docs/spec/discovery no longer
+      advertise it and all public tests/contract text are coherent with intentional
+      absence.
+
+
+      ### B2 HTTP wait cursor/listen semantics
+
+      - Create or identify a table with an already-existing saying.
+
+      - Probe `GET /api/v1/tables/{id}/sayings/wait?since_sequence=-1&timeout=0`.
+
+      - PASS only if the response includes the existing saying and a coherent `next_sequence`,
+      or if the public contract was updated coherently and the live behavior matches
+      it.
+
+
+      ### B3 HTTP post-close saying state error
+
+      - Authenticate successfully, close a table, then attempt to post an HTTP saying.
+
+      - PASS only if status/code/envelope distinguish closed-table/state semantics
+      from permission denial, unless 403 `PermissionDenied` is now explicitly documented
+      as authoritative and coherent.
+
+
+      ### B4 MCP `table_join` response/cursor
+
+      - Use MCP stdio/discovery, then call `table_join`.
+
+      - PASS only if live response shape and discovery/docs agree on `data.initial`
+      vs `data.initial_sayings` and empty-history `sequence_latest`/`next_sequence`
+      baseline values.
+
+
+      ### B5 MCP `table_get` wrapper
+
+      - Use MCP stdio/discovery, then call `table_get`.
+
+      - PASS only if live response shape and discovery/docs agree on the `data.table`
+      wrapper versus direct `data` object.
+
+
+      ## Behavioral proof register required
+
+      For each blocker B1-B5, include: `requirement_ref`, `behavior_claim`, `runtime_proof_expected`,
+      `evidence_ref`, `status`, `closure_path`, and `gate_decision_basis`.
+
+
+      ## Gate impact
+
+      This retest protects `finalization.gate`. `finalization.gate` must remain BLOCKED
+      unless all B1-B5 public-surface obligations are PROVEN or have explicit non-intersection
+      evidence, which is not expected for these public surfaces.'
+    verification: '- Expected result: GREEN after remediation.
+
+      - Black-box evidence uses public HTTP server entrypoint for B1-B3 and MCP stdio/discovery
+      for B4-B5.
+
+      - Exact probes include `POST /api/v1/tables/join`, `GET /api/v1/tables/{id}/sayings/wait?since_sequence=-1&timeout=0`,
+      authenticated post-close HTTP saying, MCP `table_join`, and MCP `table_get`.
+
+      - For each B1-B5 item, docs/spec/discovery and live runtime behavior agree.
+
+      - Retest report includes a behavioral proof register with PROVEN status for
+      every blocker or a gate-valid closure path.
+
+      - Unit tests alone are insufficient evidence.'
+    evidence_template: '## Verification Report
+
+
+      **Tester**: blind-tester-tacit (independent public-surface verifier)
+
+      **Scope**: B1-B5 black-box HTTP + MCP public-surface retest
+
+      **Independence Level**: L3
+
+      **Timestamp**: <ISO 8601>
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ### Public HTTP Server Evidence
+
+      **Server launch/invocation path**:
+
+      ```
+
+      <exact command/harness/URL used>
+
+      ```
+
+
+      **B1 `POST /api/v1/tables/join`**:
+
+      ```
+
+      <request + actual status/body + contract/doc reference>
+
+      ```
+
+      Verdict: PROVEN | BLOCKED
+
+
+      **B2 `GET /api/v1/tables/{id}/sayings/wait?since_sequence=-1&timeout=0` with
+      existing saying**:
+
+      ```
+
+      <setup + request + actual status/body showing expected saying/cursor>
+
+      ```
+
+      Verdict: PROVEN | BLOCKED
+
+
+      **B3 authenticated post-close HTTP saying**:
+
+      ```
+
+      <auth setup + close operation + post-close request + actual status/body>
+
+      ```
+
+      Verdict: PROVEN | BLOCKED
+
+
+      ### MCP stdio/discovery Evidence
+
+      **MCP invocation/discovery path**:
+
+      ```
+
+      <exact stdio/discovery command/session/tool list evidence>
+
+      ```
+
+
+      **B4 `table_join` response shape/cursors**:
+
+      ```
+
+      <tool call + actual response + documented/discovered contract comparison>
+
+      ```
+
+      Verdict: PROVEN | BLOCKED
+
+
+      **B5 `table_get` wrapper**:
+
+      ```
+
+      <tool call + actual response + documented/discovered contract comparison>
+
+      ```
+
+      Verdict: PROVEN | BLOCKED
+
+
+      ### Behavioral Proof Register
+
+      | Blocker | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref
+      | status | closure_path | gate_decision_basis |
+
+      | --- | --- | --- | --- | --- | --- | --- | --- |
+
+      | B1 | <ref> | <claim> | <proof> | <evidence> | PROVEN/BLOCKED | <path> | <basis>
+      |
+
+      | B2 | <ref> | <claim> | <proof> | <evidence> | PROVEN/BLOCKED | <path> | <basis>
+      |
+
+      | B3 | <ref> | <claim> | <proof> | <evidence> | PROVEN/BLOCKED | <path> | <basis>
+      |
+
+      | B4 | <ref> | <claim> | <proof> | <evidence> | PROVEN/BLOCKED | <path> | <basis>
+      |
+
+      | B5 | <ref> | <claim> | <proof> | <evidence> | PROVEN/BLOCKED | <path> | <basis>
+      |
+
+
+      ### Docs/runtime agreement
+
+      - Public docs/spec/discovery checked: <list>
+
+      - Runtime behavior matches documented public contract: YES/NO
+
+      - Any intentional contract updates: <list and proof>
+
+
+      ### Headline
+
+      - [ ] PASS: B1-B5 PROVEN; finalization.gate may review for OPEN
+
+      - [ ] FAIL: one or more blockers remain; finalization.gate must remain BLOCKED'
+    depends_on:
+    - finalization.fix-black-box-public-surface-blockers
+    agent: blind-tester-tacit
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

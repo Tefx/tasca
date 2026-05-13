@@ -41417,6 +41417,143 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T04:31:59.600396+00:00'
+  - id: fix-pp-invar-table-service-doctest
+    name: Residual Invar remediation — table_service prepare_table_update doctest
+      blocker
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+      provenance: introduced_or_exposed_by_full_guard_progress
+
+      disposition: blocking-now
+
+
+      Fix the remaining authoritative full-guard blocker after salvaged MCP direct
+      residual progress from commit `ddec67e` (`[vectl] salvage partial progress from
+      step-fix-pp-invar-mcp-direct-residuals`). Listed MCP direct blockers from `tool_contracts.py`
+      and `entrypoint_logic.py` are closed; mainline `uvx invar-tools guard --all`
+      static phase now passes with `errors=0`, but the full guard still exits nonzero
+      on this doctest blocker.
+
+
+      ## Exact failure context
+
+      - Command family: `uvx invar-tools guard --all`
+
+      - Failing doctest: `tasca.core.services.table_service.prepare_table_update`
+
+      - File: `src/tasca/core/services/table_service.py`
+
+      - Reported line: 163
+
+      - Exception: `NameError("name ''TableId'' is not defined")`
+
+      - Message: `NameError: name ''TableId'' is not defined. Did you mean: ''Table''?`
+
+      - Downstream blocked step: `retest-pp-invar-full-scan`
+
+
+      ## Required fix scope
+
+      Fix the doctest properly so `prepare_table_update` has all required domain identifiers/imports/names
+      available in the doctest context (for example, import or name `TableId` and
+      any related identifiers exactly where the doctest needs them).
+
+
+      Preserve Core contracts and doctests:
+
+      - Keep `@pre`/`@post` contracts valid and non-vacuous.
+
+      - Preserve the behavioral intent of `prepare_table_update`.
+
+      - Do not remove, skip, xfail, suppress, or weaken doctests/contracts.
+
+      - Do not add placeholder edits or broad suppressions.
+
+      - Do not broaden scope beyond closure of this full-guard doctest blocker and
+      any directly necessary import/name repair in `table_service.py`.
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause to confirm: doctest context lacks a required domain identifier
+      used by the example.
+
+      - Symptom: full guard reaches doctest stage and fails with `NameError: TableId`
+      for `prepare_table_update`.
+
+      - Why this fix must not be surface-level: the doctest should remain executable
+      and should continue proving the Core behavior rather than being hidden from
+      guard.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Completion
+      requires a minimal, behavior-preserving doctest/import/name repair that makes
+      the documented example execute under the authoritative guard command.
+
+
+      ## Non-goals
+
+      - Do not edit completed vectl steps.
+
+      - Do not change MCP direct residual code unless a new full-guard failure proves
+      a direct dependency, and document that as out-of-scope for this focused step.
+
+      - Do not modify unrelated services, shell surfaces, or tests except a focused
+      regression/doctest harness if absolutely necessary for this blocker.'
+    verification: '- Run the authoritative command exactly: `uvx invar-tools guard
+      --all`; it must exit 0 or, if a different downstream blocker appears, evidence
+      must show this `prepare_table_update` doctest blocker is closed and the new
+      blocker is separately identified.
+
+      - Run a focused doctest/pytest check for `src/tasca/core/services/table_service.py::prepare_table_update`
+      or the closest repo-supported focused doctest invocation for `prepare_table_update`;
+      paste the command and result.
+
+      - Run ruff over touched files, at minimum `uv run ruff check src/tasca/core/services/table_service.py`.
+
+      - Run mypy over touched files, at minimum `uv run mypy src/tasca/core/services/table_service.py`.
+
+      - Evidence confirms no suppressions/skips/xfail/placeholder edits were used
+      and Core contracts/doctests remain preserved.
+
+      - Evidence includes root-cause confirmation for the missing `TableId` doctest
+      name and proof that the `NameError` no longer occurs.'
+    evidence_template: "## refs Read Confirmation (MANDATORY)\n\nFor each ref in this\
+      \ step:\n- `src/tasca/core/services/table_service.py` — key passage or \"NOT\
+      \ READ: <reason>\"\n\nIf no refs were provided, state: \"No refs for this step.\"\
+      \n\n## Doctest Blocker Fix Evidence\n\n**symbolic_testing**: true\n**command_family_locked**:\
+      \ `uvx invar-tools guard --all`\n**Target doctest**: `tasca.core.services.table_service.prepare_table_update`\n\
+      \n### Failure Context Reproduced or Confirmed\n- File/line: `src/tasca/core/services/table_service.py:163`\n\
+      - Prior exception: `NameError(\"name 'TableId' is not defined\")`\n- Root cause\
+      \ confirmation: <why `TableId` was missing from the doctest context>\n\n###\
+      \ Changes Made\n- Touched files:\n  - <file>\n- Summary of minimal import/name/doctest\
+      \ repair:\n  - <summary>\n\n### Verification Commands and Output\n- Authoritative\
+      \ full guard:\n  ```\n  uvx invar-tools guard --all\n  <paste output or summary\
+      \ with exit status>\n  ```\n- Focused doctest/pytest for `prepare_table_update`:\n\
+      \  ```\n  <exact focused command>\n  <paste output>\n  ```\n- Ruff:\n  ```\n\
+      \  uv run ruff check src/tasca/core/services/table_service.py\n  <paste output>\n\
+      \  ```\n- Mypy:\n  ```\n  uv run mypy src/tasca/core/services/table_service.py\n\
+      \  <paste output>\n  ```\n\n### Guardrails\n- Suppressions/skips/xfail/placeholders\
+      \ added: YES/NO (must be NO)\n- Core contracts/doctests preserved: YES/NO\n\
+      - Scope broadened beyond this doctest blocker: YES/NO (must be NO, or justify\
+      \ direct necessity)\n\n### Headline\n- verdict: PASS | FAIL\n- blocker_closed:\
+      \ true | false\n- downstream_retest_unblocked: true | false"
+    depends_on:
+    - fix-pp-invar-mcp-direct-residuals
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

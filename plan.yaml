@@ -39739,6 +39739,7 @@ phases:
     - fix-pp-invar-mcp-proxy-budget-followup
     - fix-pp-invar-storage-config-residual
     - fix-pp-invar-project-budget-followup
+    - fix-pp-invar-mcp-direct-residuals
     agent: integration-verifier-tacit
   - id: fix-pp-invar-mcp-residual
     name: Residual Invar budget remediation — MCP residual seams only

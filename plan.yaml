@@ -43793,7 +43793,7 @@ phases:
       - None for the requested task."
   - id: finalization.retest-deep-wiring-table-metadata-contract
     name: retest-deep-wiring-table-metadata-contract
-    status: claimed
+    status: done
     description: 'step_type: test
 
       step_intent: retest_green
@@ -43958,6 +43958,136 @@ phases:
     agent: integration-verifier-tacit
     claimed_by: integration-verifier-tacit
     claimed_at: '2026-05-13T06:31:54.003582+00:00'
+    done_at: '2026-05-13T06:37:00.557232+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: integration-verifier-tacit (independent of implementation)
+
+      **Scope**: F1/F2 table metadata/policy/board contract remediation
+
+      **Independence Level**: L2
+
+
+      ## Mandatory semantic reporting
+
+      - step_intent: retest_green
+
+      - expected_result: green
+
+      - observed_result: pass — required guard command passed, targeted pytest collected
+      174 items and all passed, and direct REST/MCP semantic probes preserved/rejected
+      fields as expected.
+
+      - failure_alignment: no residual F1/F2 blocker observed. No supported metadata/policy/board
+      key was accepted and then silently dropped in exercised REST/MCP/storage paths.
+
+      - verdict: PASS
+
+      - blockers: []
+
+      - product_files_modified: false — []
+
+      - gate_open_allowed: true
+
+      - orchestrator_action_hint: COMPLETE
+
+      - Commit hash(es): none — verify-only step with no repo mutations
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      1. src/tasca/shell/mcp/tool_contracts.py — table_create contract includes metadata/policy/board;
+      table_update allowed patch keys include host_ids/metadata/policy/board; table_wait(include_table)
+      includes full table snapshot with board/policy.
+
+      2. src/tasca/shell/services/operations/table_creation.py — create_discussion_table
+      builds Table with metadata/policy/board and returns them in TableCreationOutcome.
+
+      3. src/tasca/shell/api/routes/tables.py — REST TableCreateRequest/TableCreateResponse
+      include metadata/policy/board; route passes them into shared creation; GET returns
+      Table.
+
+      4. src/tasca/shell/mcp/entrypoints.py — MCP table_create passes metadata/policy/board
+      to shared creation and returns them; table_get/table_join/table_wait include
+      _build_table_dict; table_update applies patch then update_table.
+
+      5. src/tasca/shell/storage/table_repo.py — insert/update SQL persists host_ids/metadata/policy/board;
+      _table_select_projection uses NULL AS for missing legacy columns; get_table
+      decodes via row_to_table.
+
+      6. src/tasca/core/domain/table.py — TableUpdate and Table define host_ids/metadata/policy/board
+      fields with dict/list defaults.
+
+      7. src/tasca/shell/mcp/server.py — FastMCP wrappers expose table_create metadata/policy/board,
+      table_update(patch=...), and table_wait(... include_table ...), forwarding to
+      entrypoints.
+
+      8. src/tasca/shell/mcp/entrypoint_logic.py — build_table_dict includes metadata/policy/board;
+      apply_table_patch parses these keys; _parse_patch_json_object preserves omitted
+      keys, clears null to {}, replaces dicts, and returns INVALID_REQUEST for non-dict
+      values.
+
+
+      ### Commands Run
+
+      - pwd && git status --short --branch: exit 0; no dirty files.
+
+      - uv run invar guard: exit 0; status passed, errors 0, warnings 0; files_checked
+      0 because verify-only worktree had no changed files, not used as sole behavioral
+      proof.
+
+      - uv run pytest tests/unit/storage/test_table_repo.py tests/unit/api/test_tables_routes.py
+      tests/unit/mcp/test_mcp_server.py -vv: exit 0; collected 174 items; 174 passed
+      in 4.11s.
+
+      - Direct semantic probe via uv run python: exit 0; REST create/get/update/refetch
+      preserved metadata/policy/board/host_ids and version 2 after update; MCP create/get/join/wait
+      preserved fields; MCP update persisted metadata/board and cleared policy to
+      {}; invalid board list returned code INVALID_REQUEST.
+
+      - Seam scan for Mock/MagicMock/AsyncMock/@patch/monkeypatch/mocker in targeted
+      tests: exit 0; metadata/readback tests do not mock storage seam.
+
+      - git status --short --branch && git diff --stat: exit 0; no diff stat.
+
+
+      ### F1 Retest — create/readback parity
+
+      Status: PROVEN. REST TestClient and MCP wrapper probes plus targeted tests proved
+      metadata/policy/board create/readback parity through REST GET, MCP table_get,
+      table_join, and table_wait(include_table=true).
+
+
+      ### F2 Retest — table_update behavior
+
+      Status: PROVEN. MCP table_update persisted/read back supported metadata/policy/board
+      keys; null cleared to {}; wrong-shape board returned INVALID_REQUEST. REST PUT
+      supplemental probe also updated and refetched metadata/policy/board at version
+      2.
+
+
+      ### Legacy/Fallback Retest
+
+      Status: PROVEN. Legacy-row test without metadata/policy/board columns passed;
+      source uses NULL AS projection and decode fallback to {}.
+
+
+      ### Contract/Runtime Agreement
+
+      Status: PROVEN. Tool contracts, MCP server wrappers, runtime responses, storage
+      insert/update/read paths, and tests agree; no accepted field silently dropped.
+
+
+      ### Behavioral Proof Register
+
+      All required behaviors were PROVEN for L2 in-process REST/MCP/storage verification.
+      No blockers found. Product files modified: false; final git status clean.
+
+
+      ### Verdict
+
+      PASS'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

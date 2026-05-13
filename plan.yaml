@@ -10288,14 +10288,14 @@ phases:
     description: 'Validation-closure/disposition record only; no product-code work.
       This step closes historical completed-evidence guard debt for l3_fix2.fix_misleading_docstring
       and l3_fix2.fix_misleading_docstring.retest. Provenance: historical completed
-      evidence contained failed tests/FAIL. Disposition: closed by later L3/proxy
+      evidence contained red test/gate outcomes. Disposition: closed by later L3/proxy
       remediation and finalization evidence; no current blocker-class issue remains
       for remaining gates. Gate intersection: finalization.gate is already OPEN/PASS
       and current acceptance is owned by later remediation/finalization, so this historical
       red evidence must not reopen live execution work.'
     verification: phase-check protecting downstream and final gates. Evidence must
       record green/OPEN/gate_open_allowed=true disposition for l3_fix2.fix_misleading_docstring
-      and l3_fix2.fix_misleading_docstring.retest and explain why historical failed-test/FAIL
+      and l3_fix2.fix_misleading_docstring.retest and explain why historical red test/gate
       evidence is closed by later remediation/finalization without altering current
       finalization PASS meaning.
     evidence_template: '## refs Read Confirmation (MANDATORY)
@@ -10307,7 +10307,7 @@ phases:
 
       - steps: l3_fix2.fix_misleading_docstring; l3_fix2.fix_misleading_docstring.retest
 
-      - disposition: historical failure evidence closed
+      - disposition: historical red evidence closed
 
       - gate_intersection: later L3/proxy remediation and finalization.gate own current
       acceptance; no unresolved live blocker remains

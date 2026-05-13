@@ -39878,6 +39878,232 @@ phases:
     depends_on:
     - retest-full-plan-blockers
     agent: python-senior
+  - id: fix-pp-invar-storage-config-residual
+    name: Residual Invar budget remediation — storage/config/services
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+      reduction_step: true
+
+      salvage_context: commit fbdf04b closed the direct shell_result/missing_contract
+      blockers and removed non-suppressible dead_export/missing_contract hatches;
+      do NOT redo those closed items unless regression evidence shows they reopened.
+
+
+      Bounded residual remediation for config, storage, and shell service budget blockers
+      remaining after salvaged partial progress from `fix-pp-invar-full-scan`.
+
+
+      ## Target residual inventory (this step owns exactly this surface)
+
+      - `src/tasca/config.py` shell_result 2/2
+
+      - `src/tasca/shell/services/operations/table_control.py` shell_result 2/2
+
+      - `src/tasca/shell/skills_cli.py` shell_result 3/2
+
+      - `src/tasca/shell/storage/saying_repo.py` shell_result 2/2
+
+      - `src/tasca/shell/storage/search_repo.py` shell_result 12/2
+
+      - `src/tasca/shell/storage/table_repo.py` shell_result 3/2
+
+
+      ## Root-cause constraints
+
+      - Reduce `shell_result` by introducing real `Result[T, E]` shell wrappers for
+      recoverable storage/config/service failures and moving pure validation/normalization
+      into contracted Core helpers where appropriate.
+
+      - Preserve persistence and config semantics: path resolution, missing-file fallback,
+      explicit clear/null overwrite behavior, partial-write/CAS or repository conflict
+      behavior, and backward-compatible legacy behavior must remain intact.
+
+      - For Core extractions, add meaningful `@pre`/`@post` contracts and at least
+      one doctest before implementation logic.
+
+      - Do NOT add suppressions, owner-only project exemptions, broad try/except masking,
+      or placeholder Result wrappers that discard errors.
+
+
+      ## Hardened acceptance for persistence/config surfaces
+
+      - Main path and highest-risk failure path must both be covered for each touched
+      repository/config seam.
+
+      - Explicitly document last-writer-wins vs preserved state semantics where repository
+      writes are touched.
+
+      - If load/save precedence or fallback behavior changes, provide before/after
+      compatibility rationale and regression coverage.
+
+
+      ## Known closed items not in scope
+
+      - Direct Core missing-contract blockers were salvaged in commit `fbdf04b`; verify
+      they do not regress, but do not re-solve them unless they reappear.
+
+      - Final salvaged guard inventory had `non_suppressible: []`; this step must
+      preserve that.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
+
+
+      ## Residual ownership semantics
+
+      This is a bounded reduction step. It succeeds by producing verified non-regressive
+      budget reductions for the target storage/config/service inventory above. Remaining
+      CLI/API or MCP residual debt is owned by sibling residual steps and the final
+      retest, not by rolling back mergeable storage/config progress.'
+    verification: '- Command lock: use `uvx invar-tools guard --all` as the authoritative
+      command family; do not substitute `uv run`, partial guard, or suppressions.
+
+      - Before/after accounting: evidence lists pre-change and post-change counts
+      for every target file in the storage/config/service residual inventory and explains
+      any count that remains above budget.
+
+      - Main path: focused repository/config/service smoke proves normal load/save/control/search
+      behavior still works after Result wrapping or Core extraction.
+
+      - Failure path: focused regression covers the highest-risk touched failure behavior
+      (missing file, bad config, partial write/CAS conflict, explicit clear/null overwrite,
+      or repository conflict as applicable).
+
+      - Regression guard: `non_suppressible` remains empty and direct errors closed
+      by commit `fbdf04b` do not reappear.
+
+      - Residual disposition: any remaining blocker-class count in this surface is
+      listed with file, rule, count, reason it remains, and closure path for retest
+      or a follow-up residual step.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+
+      For each ref in this step:
+
+      - <filename> — key passage or "NOT READ: <reason>"
+
+
+      If no refs were provided, state: "No refs for this step."
+
+
+      ## Residual Invar Budget Evidence — Storage/Config/Services
+
+
+      **salvage_commit_acknowledged**: fbdf04b
+
+      **command_family_locked**: uvx invar-tools guard --all
+
+      **symbolic_testing**: true
+
+
+      ### Target Inventory Before/After
+
+      | File | Rule | Before | After | Budget | Disposition |
+
+      | --- | --- | ---: | ---: | ---: | --- |
+
+      | src/tasca/config.py | shell_result | 2 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/services/operations/table_control.py | shell_result | 2 |
+      <after> | 2 | <closed/reduced/residual> |
+
+      | src/tasca/shell/skills_cli.py | shell_result | 3 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/storage/saying_repo.py | shell_result | 2 | <after> | 2 |
+      <closed/reduced/residual> |
+
+      | src/tasca/shell/storage/search_repo.py | shell_result | 12 | <after> | 2 |
+      <closed/reduced/residual> |
+
+      | src/tasca/shell/storage/table_repo.py | shell_result | 3 | <after> | 2 | <closed/reduced/residual>
+      |
+
+
+      ### Files Changed
+
+      - <path>: <Result wrapper / Core extraction with contracts / persistence compatibility
+      tests>
+
+
+      ### Persistence and Config Semantics
+
+      - path resolution behavior: <preserved/changed with rationale>
+
+      - missing-file fallback behavior: <preserved/changed with rationale>
+
+      - explicit clear/null overwrite behavior: <preserved/changed with rationale>
+
+      - stale-definition vs new-state precedence: <preserved/changed with rationale>
+
+      - partial-write/CAS-conflict behavior: <preserved/changed with rationale>
+
+
+      ### Commands and Output
+
+      ```bash
+
+      uvx invar-tools guard --all
+
+      <actual output summary including static_passed, errors, warnings, infos, budgets,
+      and non_suppressible>
+
+      ```
+
+
+      ```bash
+
+      <ruff/mypy/focused pytest smoke commands for touched storage/config/service
+      seams>
+
+      <actual output>
+
+      ```
+
+
+      ### Regression Smoke
+
+      - Config smoke: <command or test/output>
+
+      - Storage repository smoke: <test names/output>
+
+      - Table control/service smoke: <test names/output>
+
+      - Direct blocker regression check: non_suppressible remains empty and salvaged
+      direct blockers did not reappear.
+
+
+      ### Residual Closure Path
+
+      - Remaining storage/config/service residual blockers: <empty or exact file/rule/count/closure
+      path>
+
+      - Remaining other residual blockers owned by sibling steps: <summary>
+
+
+      ### Headline
+
+      PASS | PASS_WITH_RESIDUAL | FAIL'
+    depends_on:
+    - retest-full-plan-blockers
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

@@ -42584,6 +42584,274 @@ phases:
       - `retest-pp-invar-full-scan`: OPEN
 
       - Blockers if CLOSED: none'
+  - id: fix-pp-invar-final-retest-blockers
+    name: Batched fix for PP Invar final retest blockers
+    status: pending
+    description: 'step_type: implementation
+
+      work_type: technical_debt_remediation
+
+      priority: HIGH
+
+      agent: python-senior
+
+      symbolic_testing: true
+
+      command_family_locked: uvx invar-tools guard --all
+
+
+      Fix BOTH blockers found by failed `retest-pp-invar-full-scan` in one batched
+      implementation step. Do not split into serial fixes.
+
+
+      ## Failed retest context
+
+      Failed verification step: `retest-pp-invar-full-scan`.
+
+      Retest was verify-only; no product files were modified and no commit was produced.
+
+      Retest evidence had:
+
+      - `verdict: FAIL`
+
+      - `gate_open_allowed: false`
+
+      - `orchestrator_action_hint: DO_NOT_COMPLETE`
+
+
+      Positive evidence to preserve:
+
+      - Ruff changed/source surfaces passed.
+
+      - Mypy full source passed: `Success: no issues found in 81 source files`.
+
+      - API unit/integration smoke passed: `79 passed`.
+
+      - MCP unit/integration/proxy smoke passed: `211 passed`.
+
+      - CLI runtime help/skills smoke passed (`{new,mcp,version,export,skills}`, `tasca-moderation`).
+
+      - Guard static/doctest/CrossHair advanced, and `non_suppressible: []` remained
+      true.
+
+
+      ## Blockers to fix (ALL of these, not just the first)
+
+
+      ### B1 — Core property blocker from authoritative guard
+
+      Command: `uvx invar-tools guard --all`
+
+      Failure stage: property tests
+
+      Failure: `src/tasca/core/storage_rows.py::row_to_table` raised `''None'' is
+      not a valid TableStatus` on generated input satisfying current `@pre`.
+
+
+      Required remediation intent:
+
+      - Fix or tighten `row_to_table` preconditions or implementation so generated
+      inputs satisfying current contracts cannot produce invalid `TableStatus`.
+
+      - Preserve Core `@pre`/`@post`/doctest discipline.
+
+      - Do not suppress property tests.
+
+      - Do not weaken doctests or contracts merely to hide invalid behavior.
+
+      - Include focused evidence for the property failure path and the main valid
+      conversion path.
+
+
+      Grep/search hints:
+
+      - Search for all `row_to_table` callers and any `TableStatus(...)` construction
+      from storage rows.
+
+      - Search for storage-row fixtures or generated row dictionaries that omit or
+      set `status` to `None`.
+
+
+      ### B2 — CLI test-surface blocker
+
+      Command: focused CLI pytest including `tests/unit/test_cli.py`.
+
+      Failure: pytest collection failed because `tests/unit/test_cli.py` imports `create_table_via_mcp`
+      from `tasca.cli`, but `tasca.cli` no longer exports that name.
+
+
+      Runtime CLI help/skills smoke passed, so this is an unresolved CLI public/test
+      surface compatibility blocker, not proof that the CLI is fully green.
+
+
+      Required remediation intent:
+
+      - Reconcile `tests/unit/test_cli.py` import expectations with the intended CLI
+      public surface OR restore a compatible export/wrapper if that is the correct
+      contract.
+
+      - Preserve CLI behavior.
+
+      - Do not delete, skip, xfail, or weaken tests to force green.
+
+      - Do not add placeholders or no-op wrappers that only satisfy import collection
+      without preserving intended behavior.
+
+
+      Grep/search hints:
+
+      - Search for `create_table_via_mcp` across source and tests.
+
+      - Search `tasca.cli` public imports/exports and CLI helper compatibility expectations.
+
+
+      ## Root Cause vs Symptom
+
+      - Root cause candidates: contract/input-domain mismatch for Core storage row
+      conversion; stale or intentionally changed CLI public helper surface not reconciled
+      with tests.
+
+      - Symptoms: property-stage failure in authoritative guard; pytest collection
+      failure in `tests/unit/test_cli.py`.
+
+      - Why previous fix failed: prior retest advanced past static/doctest/CrossHair
+      but uncovered new property/test-surface blockers not owned by completed residual
+      steps.
+
+      - Why this fix is not surface-level: it must close the semantic seam for valid
+      generated Core inputs and the CLI public/test compatibility seam, not merely
+      add guards, suppressions, skips, xfails, or placeholder exports.
+
+
+      ## Guardrails
+
+      - No suppressions, skips, xfails, or placeholder implementations.
+
+      - No deleting tests to pass.
+
+      - No doctest or contract weakening to hide failures.
+
+      - Preserve CLI behavior and Core contracts.
+
+      - Keep `non_suppressible: []` true.
+
+      - Keep prior positive retest surfaces green unless the evidence explicitly identifies
+      a new blocker-class regression.
+
+
+      ## Completion Criteria (stub exclusion)
+
+      This is an IMPLEMENTATION step. Stub-only completion is NOT acceptable. Each
+      deliverable MUST contain substantive logic that processes its inputs and produces
+      outputs that vary based on those inputs. Private stub classes (`_Runtime*`,
+      `_Stub*`, `_Placeholder*`) do not satisfy this requirement.'
+    verification: '- Run the authoritative command exactly: `uvx invar-tools guard
+      --all`; it must pass, including property tests, without suppressions.
+
+      - Run focused property/pytest coverage for `src/tasca/core/storage_rows.py::row_to_table`
+      if available; otherwise add or run the narrowest focused regression that exercises
+      the generated `status=None`/invalid status failure path and a valid table-row
+      main path.
+
+      - Run focused CLI pytest including `tests/unit/test_cli.py`; collection must
+      pass and tests must not be deleted, skipped, xfailed, or weakened.
+
+      - Run ruff over touched Python files.
+
+      - Run mypy over touched source files or `src/tasca` if focused mypy is unavailable.
+
+      - Run CLI help/skills smoke covering `{new,mcp,version,export,skills}` and `tasca-moderation`
+      to preserve runtime CLI behavior.
+
+      - Evidence must explain the root cause for B1 and B2 and prove the fix closes
+      the blocker family rather than only the observed symptom.'
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      For each ref in this step:
+
+      - `src/tasca/core/storage_rows.py` — key passage or "NOT READ: <reason>"
+
+      - `src/tasca/cli.py` — key passage or "NOT READ: <reason>"
+
+      - `tests/unit/test_cli.py` — key passage or "NOT READ: <reason>"
+
+      - `tests/unit` — key passage or "NOT READ: <reason>"
+
+      - `INVAR.md` — key passage or "NOT READ: <reason>"
+
+
+      ## Batched Fix Evidence
+
+
+      **symbolic_testing**: true
+
+      **command_family_locked**: `uvx invar-tools guard --all`
+
+
+      ### Blocker Closure Register
+
+      | Blocker | Root cause | Files changed | Fix summary | Symptom-only patch avoided
+      how? | Status |
+
+      |---|---|---|---|---|---|
+
+      | B1 row_to_table property failure |  |  |  |  | PASS/FAIL |
+
+      | B2 tasca.cli create_table_via_mcp import surface |  |  |  |  | PASS/FAIL |
+
+
+      ### Forbidden Actions Confirmation
+
+      - Suppressions/skips/xfails added: YES/NO (must be NO)
+
+      - Tests deleted or weakened: YES/NO (must be NO)
+
+      - Doctests/contracts weakened to hide failure: YES/NO (must be NO)
+
+      - Placeholder/no-op wrappers introduced: YES/NO (must be NO)
+
+      - CLI behavior preserved: YES/NO
+
+      - Core @pre/@post/doctest discipline preserved: YES/NO
+
+
+      ### Commands and Outputs
+
+      Paste exact commands and key output for:
+
+      - `uvx invar-tools guard --all`
+
+      - focused `row_to_table` property/pytest regression or closest focused substitute
+
+      - focused CLI pytest including `tests/unit/test_cli.py`
+
+      - ruff over touched files
+
+      - mypy over touched source files or `src/tasca`
+
+      - CLI help/skills smoke for `{new,mcp,version,export,skills}` and `tasca-moderation`
+
+
+      ### Behavioral Proof Register
+
+      For B1 and B2 include:
+
+      - `requirement_ref`
+
+      - `behavior_claim`
+
+      - `runtime_proof_expected`
+
+      - `evidence_ref`
+
+      - `status`: PROVEN | NEEDS_TEST | UNPROVEN | UNCERTAIN_BLOCKING
+
+      - `closure_path`
+
+      - `gate_decision_basis`'
+    depends_on:
+    - retest-pp-invar-full-scan
+    agent: python-senior
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

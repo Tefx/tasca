@@ -40103,6 +40103,13 @@ phases:
       ### Headline
 
       PASS | PASS_WITH_RESIDUAL | FAIL'
+    refs:
+    - src/tasca/config.py
+    - src/tasca/shell/services/operations/table_control.py
+    - src/tasca/shell/skills_cli.py
+    - src/tasca/shell/storage/saying_repo.py
+    - src/tasca/shell/storage/search_repo.py
+    - src/tasca/shell/storage/table_repo.py
     depends_on:
     - retest-full-plan-blockers
     agent: python-senior

@@ -42295,7 +42295,7 @@ phases:
       - Blockers if CLOSED: patron_repo `create_patron` doctest missing `UTC` name.'
   - id: fix-pp-invar-patron-repo-doctest
     name: Residual Invar remediation — patron_repo create_patron doctest missing UTC
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       work_type: technical_debt_remediation
@@ -42493,6 +42493,95 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T05:13:35.522305+00:00'
+    done_at: '2026-05-13T05:19:49.028601+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+
+      - `src/tasca/shell/storage/patron_repo.py` — Read. Key passage: `create_patron`
+      doctest constructs `Patron(... created_at=datetime.now(UTC))` but did not import
+      `UTC` in the example scope.
+
+      - `src/tasca/shell/storage/schema.py` — NOT READ: file does not exist in this
+      worktree. Closest schema application seam read: `src/tasca/shell/storage/database.py`,
+      where `apply_schema(conn)` creates tables/indexes/FTS and runs backward-compatible
+      migrations.
+
+
+      ## Fix Evidence
+
+
+      **Failure reproduced/understood**:
+
+      - Target: `src/tasca/shell/storage/patron_repo.py::tasca.shell.storage.patron_repo.create_patron`
+
+      - Original blocker: `NameError("name ''UTC'' is not defined")` while constructing
+      `Patron(...)` in the doctest.
+
+
+      **Change summary**:
+
+      - Files changed: `src/tasca/shell/storage/patron_repo.py`
+
+      - Doctest/import/name fix applied: added `>>> from datetime import UTC` inside
+      the `create_patron` doctest before `datetime.now(UTC)`.
+
+      - Behavior code changed? no.
+
+
+      **Contract preservation**:
+
+      - Storage behavior preserved: yes; only doctest example import scope changed.
+
+      - `Result` contracts preserved: yes; no function logic/signatures changed.
+
+      - No suppressions/skips/xfail/placeholders introduced: yes; final diff is one
+      doctest import line only.
+
+      - Doctests/contracts not weakened: yes; example remains executable and still
+      creates/persists a real patron.
+
+
+      **Commands executed**:
+
+      - Worker commit: `897fb23` — `Fix patron repository doctest UTC import`.
+
+      - Main merge commit: `50287c6` — `[vectl] step-fix-pp-invar-patron-repo-doctest
+      completed`.
+
+      - Focused patron doctest: `uv run python -m doctest -v src/tasca/shell/storage/patron_repo.py`
+      — PASS (`30 passed`).
+
+      - Ruff: `uv run ruff check src/tasca/shell/storage/patron_repo.py` — PASS (`All
+      checks passed!`).
+
+      - Mypy: `uv run mypy src/tasca/shell/storage/patron_repo.py` — PASS (`Success:
+      no issues found in 1 source file`).
+
+      - Authoritative full guard: `uvx invar-tools guard --all` — PASS (`status: passed`,
+      static `errors: 0`, doctest passed, CrossHair verified with `files_cached: 0`,
+      property tests `119/119` passed).
+
+
+      **Guard closure**:
+
+      - patron_repo_create_patron_doctest: closed
+
+      - downstream blockers: none observed in `uvx invar-tools guard --all`
+
+      - Cached/hot state note: guard reported `files_cached: 0`.
+
+
+      ### Files changed
+
+      - `src/tasca/shell/storage/patron_repo.py` — added the missing `UTC` import
+      to the `create_patron` doctest scope.
+
+
+      ### Final retest readiness
+
+      - `retest-pp-invar-full-scan`: OPEN
+
+      - Blockers if CLOSED: none'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

@@ -43054,7 +43054,7 @@ phases:
       - Blockers if CLOSED: none'
   - id: retest-pp-invar-full-scan-final
     name: Final retest after PP Invar final blockers fix
-    status: claimed
+    status: done
     description: "step_type: test\nstep_intent: retest_green\nexpected_result: green\n\
       verification_scope: full-plan-check\nwork_type: technical_debt_remediation\n\
       priority: HIGH\nagent: integration-verifier-tacit\nsymbolic_testing: true\n\
@@ -43239,6 +43239,158 @@ phases:
     agent: integration-verifier-tacit
     claimed_by: integration-verifier-tacit
     claimed_at: '2026-05-13T05:45:42.492521+00:00'
+    done_at: '2026-05-13T05:52:27.430195+00:00'
+    evidence: '## Verification Report
+
+
+      **Tester**: integration-verifier-tacit (independent of implementation)
+
+      **Scope**: final PP Invar blocker retest after `fix-pp-invar-final-retest-blockers`
+
+      **Independence Level**: L1
+
+
+      step_intent: retest_green
+
+      expected_result: green
+
+      observed_result: pass; authoritative `uvx invar-tools guard --all` exited 0,
+      focused B1/B2 checks exited 0, preservation ruff/mypy/API/MCP/CLI smoke exited
+      0
+
+      failure_alignment: none
+
+      verdict: PASS
+
+      blockers: []
+
+      gate_open_allowed: true
+
+      product_files_modified: no; []
+
+      orchestrator_action_hint: COMPLETE
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      - `src/tasca/core/storage_rows.py`: READ. `row_to_table` has active preconditions
+      requiring length, status string, `_is_table_status(row[3])`, sqlite-int-compatible
+      version, and ISO datetimes before `TableStatus(str(row[3]))`; `None` status
+      is outside contract before enum conversion.
+
+      - `src/tasca/cli.py`: READ. `create_table_via_mcp`, `create_table_via_rest`,
+      and `is_server_running` are imported from `tasca.shell.cli_legacy` and exported
+      in `__all__`, preserving public/test import surface.
+
+      - `tests/unit/test_cli.py`: READ. Imports `create_table_via_mcp` from `tasca.cli`
+      and includes `TestCreateTableViaMcp`; focused run collected/passed 29 tests;
+      no skip/xfail markers found.
+
+      - `tests/unit`: READ. Contains CLI, storage rows, API, MCP, and other unit surfaces
+      used in focused and preservation smoke checks.
+
+      - `INVAR.md`: READ. Core functions require `@pre`, `@post`, and doctests; Shell
+      is required for I/O; guard is expected verification after changes.
+
+
+      ### blocker_closure_register
+
+      | Blocker | Requirement | Command | Result | Disposition |
+
+      |---|---|---|---|---|
+
+      | B1 | `row_to_table` no longer raises enum `ValueError` for generated inputs
+      satisfying active Core contracts; property stage passes without suppressions.
+      | `uvx invar-tools guard --all`; `uv run --group dev python -m pytest tests/unit/test_storage_rows.py
+      -q` | PASS. Guard property tests passed (`119/119`, `10200` examples, `0` failures,
+      `non_suppressible: []`). Focused pytest `2 passed`. | CLOSED |
+
+      | B2 | Focused CLI pytest including `tests/unit/test_cli.py` collects and runs
+      without import failure for `create_table_via_mcp` from `tasca.cli`; no deleted/skipped/xfail
+      compatibility tests accepted. | `uv run --group dev python -m pytest tests/unit/test_cli.py
+      -q`; static read/search | PASS. Pytest `29 passed`; file imports `create_table_via_mcp`;
+      no skip/xfail markers found. | CLOSED |
+
+
+      ### surface_preservation_register
+
+      | Surface | Command | Result | Status |
+
+      |---|---|---|---|
+
+      | Authoritative Invar full scan | `uvx invar-tools guard --all` | PASS: status
+      passed, errors 0, doctest passed, CrossHair verified files_cached 0, property
+      tests passed 119/119 | PRESERVED |
+
+      | Ruff changed/source surfaces | `uv run --group dev ruff check ...` | PASS:
+      All checks passed | PRESERVED |
+
+      | Mypy full source | `uv run --group dev mypy src/tasca` | PASS: no issues in
+      82 source files | PRESERVED |
+
+      | API unit/integration smoke | `uv run --group dev python -m pytest tests/unit/api
+      tests/integration/test_api.py -q` | PASS: 149 passed | PRESERVED |
+
+      | MCP unit/integration/proxy smoke | `uv run --group dev python -m pytest tests/unit/mcp
+      tests/integration/test_mcp.py tests/integration/test_mcp_proxy.py -q` | PASS:
+      233 passed | PRESERVED |
+
+      | CLI help/skills smoke | `uv run --group dev tasca new --help ... skills show
+      tasca-moderation` | PASS: help rendered; version printed; skill content printed
+      | PRESERVED |
+
+
+      ### behavioral_proof_register
+
+      | requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref |
+      status | closure_path | gate_decision_basis |
+
+      |---|---|---|---|---|---|---|
+
+      | B1 | `row_to_table` contract rejects invalid status before enum conversion;
+      valid path still converts. | Guard property stage passes; focused regression
+      for None status and valid conversion passes. | Guard property tests pass; `tests/unit/test_storage_rows.py`
+      2 passed. | PROVEN | Guard + focused storage-row regression. | Gate can open.
+      |
+
+      | B2 | CLI public/test compatibility restored for `create_table_via_mcp`. |
+      Focused CLI pytest collects and passes; no skip/xfail. | `tests/unit/test_cli.py`
+      29 passed; static read confirms import. | PROVEN | Focused CLI pytest + static
+      compatibility check. | Gate can open. |
+
+
+      ### Required Commands
+
+      - `uvx invar-tools guard --all`: PASS (`status: passed`, `errors: 0`, doctest
+      passed, CrossHair verified files_cached 0, property tests passed with 119/119
+      functions and 10200 examples).
+
+      - `uv run --group dev python -m pytest tests/unit/test_storage_rows.py -q`:
+      PASS (`2 passed`).
+
+      - `uv run --group dev python -m pytest tests/unit/test_cli.py -q`: PASS (`29
+      passed`).
+
+      - `uv run --group dev ruff check src/tasca/core/storage_rows.py src/tasca/cli.py
+      tests/unit/test_cli.py tests/unit/test_storage_rows.py`: PASS.
+
+      - `uv run --group dev mypy src/tasca`: PASS (`82 source files`).
+
+      - API smoke: PASS (`149 passed`).
+
+      - MCP smoke: PASS (`233 passed`).
+
+      - CLI help/skills smoke: PASS.
+
+
+      ### Files changed
+
+      none; product_files_modified: no. Worktree product diff clean.
+
+
+      ### Commits
+
+      none (verify-only step).'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

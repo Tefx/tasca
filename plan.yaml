@@ -39546,37 +39546,45 @@ phases:
       priority: HIGH\nagent: integration-verifier-tacit\nsymbolic_testing: true\n\
       command_family_locked: uvx invar-tools guard --all\n\nAs an INDEPENDENT TESTER,\
       \ retest the remaining `PP-invar-full-scan` blocker after all bounded residual\
-      \ Invar remediation steps complete:\n- `fix-pp-invar-full-scan` — CLI/API residual\
-      \ budget blockers\n- `fix-pp-invar-mcp-residual` — MCP residual budget blockers\n\
-      - `fix-pp-invar-storage-config-residual` — storage/config/service residual budget\
-      \ blockers\n\nThis retest is the closure gate for authoritative Invar full-scan\
+      \ Invar remediation steps complete:\n- `fix-pp-invar-full-scan` — CLI and API\
+      \ route residual budget blockers\n- `fix-pp-invar-mcp-residual` — remaining\
+      \ MCP residual budget blockers only (`entrypoint_session_tools.py`, `entrypoints.py`,\
+      \ `server.py`, `proxy.py`), while confirming `entrypoint_logic.py` and `tool_contracts.py`\
+      \ stayed closed from salvaged commit 587d79c\n- `fix-pp-invar-storage-config-residual`\
+      \ — storage/config/service residual budget blockers (completed after mainline\
+      \ verification)\n\nThis retest is the closure gate for authoritative Invar full-scan\
       \ compliance. Downstream finalization doc sync, deep review, and final gate\
       \ may not proceed until this step records `gate_open_allowed: true`.\n\n## Required\
       \ command coverage\n1. Run the authoritative command exactly:\n   - `uvx invar-tools\
-      \ guard --all`\n2. Confirm the prior salvaged direct blockers remain closed:\n\
-      \   - non-suppressible `dead_export` / `missing_contract` hatches remain absent\
+      \ guard --all`\n2. Confirm prior salvaged direct blockers remain closed:\n \
+      \  - non-suppressible `dead_export` / `missing_contract` hatches remain absent\
       \ (`non_suppressible: []`)\n   - direct `shell_result` and `missing_contract`\
-      \ blockers closed in commit `fbdf04b` have not reappeared\n3. Verify the residual\
-      \ budget inventory across all three surfaces:\n   - CLI/API routes\n   - MCP\
-      \ entrypoints/server/proxy/tool contracts\n   - storage/config/services\n4.\
-      \ Run enough regression smoke to prove the Invar remediation did not reopen\
-      \ previously closed B1/B2/B3 behavior:\n   - ruff smoke over the changed Python\
-      \ surface\n   - mypy smoke over `src/tasca`\n   - focused pytest smoke covering\
-      \ touched CLI/API/MCP/storage/config/Core seams\n5. If `uvx invar-tools guard\
-      \ --all` advances past static checks into doctest, CrossHair, or property stages,\
-      \ report those stages explicitly and keep `gate_open_allowed: false` for any\
-      \ blocker-class failure.\n\n## Closure fields (MANDATORY)\nEvidence MUST include\
-      \ these parseable fields:\n- `verdict`: `PASS` or `FAIL`\n- `blockers`: list\
-      \ of remaining blocker ids, empty only when closed\n- `gate_open_allowed`: true\
-      \ only when `uvx invar-tools guard --all` passes and regression smoke shows\
-      \ no reopened ruff/mypy/pytest blocker\n- `residual_budget_register`: table\
-      \ with file/rule/before/after/budget/disposition for every residual item owned\
-      \ by the three fix steps\n\n## Behavioral proof register\nFor each Invar/proof\
-      \ obligation, include:\n- `requirement_ref`\n- `behavior_claim`\n- `runtime_proof_expected`\n\
-      - `evidence_ref`\n- `status`: PROVEN | NEEDS_TEST | UNPROVEN | UNCERTAIN_BLOCKING\n\
-      - `closure_path`\n- `gate_decision_basis`\n\n`NEEDS_TEST`, `UNPROVEN`, and `UNCERTAIN_BLOCKING`\
-      \ MUST keep `gate_open_allowed: false` unless explicit non-intersection evidence\
-      \ is recorded."
+      \ blockers closed by prior salvage work have not reappeared\n   - MCP partial-progress\
+      \ items closed in commit 587d79c remain closed: `entrypoint_logic.py` entry_point_too_thick\
+      \ 4 -> 0 and shell_result 5 -> 0; `tool_contracts.py` shell_result 4 -> 0\n\
+      3. Verify the residual budget inventory across all three surfaces:\n   - CLI/API\
+      \ routes from `fix-pp-invar-full-scan`\n   - MCP remaining residual seams: `entrypoint_session_tools.py`,\
+      \ `entrypoints.py`, `server.py`, and project-budget accounting for `proxy.py`\n\
+      \   - storage/config/services from `fix-pp-invar-storage-config-residual`\n\
+      4. Run enough regression smoke to prove the Invar remediation did not reopen\
+      \ previously closed behavior:\n   - ruff smoke over the changed Python surface\n\
+      \   - mypy smoke over `src/tasca`\n   - focused pytest smoke covering touched\
+      \ CLI/API/MCP/storage/config/Core seams\n   - focused MCP smoke for server/tool/proxy/session\
+      \ happy paths and failure paths\n5. If `uvx invar-tools guard --all` advances\
+      \ past static checks into doctest, CrossHair, or property stages, report those\
+      \ stages explicitly and keep `gate_open_allowed: false` for any blocker-class\
+      \ failure.\n\n## Closure fields (MANDATORY)\nEvidence MUST include these parseable\
+      \ fields:\n- `verdict`: `PASS` or `FAIL`\n- `blockers`: list of remaining blocker\
+      \ ids, empty only when closed\n- `gate_open_allowed`: true only when `uvx invar-tools\
+      \ guard --all` passes and regression smoke shows no reopened ruff/mypy/pytest\
+      \ blocker\n- `residual_budget_register`: table with file/rule/before/after/budget/disposition\
+      \ for every residual item owned by the three fix steps\n- `mcp_salvage_regression_register`:\
+      \ table proving the commit-587d79c closed MCP surfaces stayed closed\n\n## Behavioral\
+      \ proof register\nFor each Invar/proof obligation, include:\n- `requirement_ref`\n\
+      - `behavior_claim`\n- `runtime_proof_expected`\n- `evidence_ref`\n- `status`:\
+      \ PROVEN | NEEDS_TEST | UNPROVEN | UNCERTAIN_BLOCKING\n- `closure_path`\n- `gate_decision_basis`\n\
+      \n`NEEDS_TEST`, `UNPROVEN`, and `UNCERTAIN_BLOCKING` MUST keep `gate_open_allowed:\
+      \ false` unless explicit non-intersection evidence is recorded."
     verification: '- expected_result: green.
 
       - `uvx invar-tools guard --all` exits 0; default is FAIL if it exits non-zero
@@ -39586,67 +39594,66 @@ phases:
       inventory with before/after/budget/disposition and no omitted blocker-class
       debt.
 
-      - `non_suppressible: []` remains true and direct blockers salvaged in commit
-      `fbdf04b` do not reappear.
+      - MCP salvage regression register explicitly confirms commit-587d79c closures
+      remain closed: `entrypoint_logic.py` entry_point_too_thick 0 and shell_result
+      0; `tool_contracts.py` shell_result 0.
+
+      - Remaining MCP residual files are checked against the updated bounded inventory:
+      `entrypoint_session_tools.py`, `entrypoints.py`, `server.py`, and `proxy.py`
+      project-budget accounting.
+
+      - `non_suppressible: []` remains true and direct blockers salvaged in prior
+      commits do not reappear.
 
       - Ruff/mypy/pytest smoke is sufficient to show no regression in previously closed
-      full-plan blockers and touched residual seams.
+      full-plan blockers and touched residual seams, including focused MCP happy-path
+      and failure-path smoke.
 
-      - Evidence includes parseable `verdict`, `blockers`, `gate_open_allowed`, and
-      `residual_budget_register`; downstream finalization may open only with `verdict:
-      PASS`, `blockers: []`, `gate_open_allowed: true`.
+      - Evidence includes parseable `verdict`, `blockers`, `gate_open_allowed`, `residual_budget_register`,
+      and `mcp_salvage_regression_register`; downstream finalization may open only
+      with `verdict: PASS`, `blockers: []`, `gate_open_allowed: true`.
 
       - Behavioral proof register includes closure paths for any unresolved Invar
       obligation; unresolved blocker-class obligations keep gate closed.'
     evidence_template: "## refs Read Confirmation (MANDATORY)\n\nFor each ref in this\
       \ step:\n- <filename> — key passage or \"NOT READ: <reason>\"\n\nIf no refs\
-      \ were provided, state: \"No refs for this step.\"\n\n## Retest Report — PP\
-      \ Invar Full Scan\n\n**command_family_locked**: uvx invar-tools guard --all\n\
-      **symbolic_testing**: true\n**salvage_commit_acknowledged**: fbdf04b\n\n###\
-      \ Closure Fields\nverdict: PASS|FAIL\nblockers:\n  - <remaining blocker id,\
-      \ or empty list>\ngate_open_allowed: true|false\n\n### Authoritative Command\
-      \ Output\n```bash\nuvx invar-tools guard --all\n<actual output, including static_passed,\
-      \ errors, warnings, infos, non_suppressible, budgets, and whether doctest/CrossHair/property\
-      \ stages ran>\n```\n\n### Residual Budget Register\n| Surface | File | Rule\
-      \ | Before | After | Budget | Disposition | Evidence ref |\n| --- | --- | ---\
-      \ | ---: | ---: | ---: | --- | --- |\n| CLI/API | src/tasca/cli.py | shell_result\
-      \ | 16 | <after> | 2 | <closed/residual> | <ref> |\n| Storage/Config | src/tasca/config.py\
-      \ | shell_result | 2 | <after> | 2 | <closed/residual> | <ref> |\n| API | src/tasca/shell/api/app.py\
-      \ | shell_result | 2 | <after> | 2 | <closed/residual> | <ref> |\n| API | src/tasca/shell/api/auth.py\
-      \ | shell_result | 3 | <after> | 2 | <closed/residual> | <ref> |\n| API | src/tasca/shell/api/routes/export.py\
-      \ | entry_point_too_thick | 2 | <after> | 2 | <closed/residual> | <ref> |\n\
-      | API | src/tasca/shell/api/routes/export.py | shell_result | 2 | <after> |\
-      \ 2 | <closed/residual> | <ref> |\n| API | src/tasca/shell/api/routes/patrons.py\
-      \ | entry_point_too_thick | 2 | <after> | 2 | <closed/residual> | <ref> |\n\
-      | API | src/tasca/shell/api/routes/sayings.py | entry_point_too_thick | 3 |\
-      \ <after> | 2 | <closed/residual> | <ref> |\n| API | src/tasca/shell/api/routes/sayings.py\
-      \ | shell_result | 3 | <after> | 2 | <closed/residual> | <ref> |\n| API | src/tasca/shell/api/routes/seats.py\
-      \ | entry_point_too_thick | 2 | <after> | 2 | <closed/residual> | <ref> |\n\
-      | API | src/tasca/shell/api/routes/seats.py | shell_result | 3 | <after> | 2\
-      \ | <closed/residual> | <ref> |\n| API | src/tasca/shell/api/routes/tables.py\
-      \ | entry_point_too_thick | 6 | <after> | 2 | <closed/residual> | <ref> |\n\
-      | MCP | src/tasca/shell/mcp/entrypoint_logic.py | entry_point_too_thick | 4\
-      \ | <after> | 2 | <closed/residual> | <ref> |\n| MCP | src/tasca/shell/mcp/entrypoint_logic.py\
-      \ | shell_result | 5 | <after> | 2 | <closed/residual> | <ref> |\n| MCP | src/tasca/shell/mcp/entrypoint_session_tools.py\
-      \ | shell_result | 7 | <after> | 2 | <closed/residual> | <ref> |\n| MCP | src/tasca/shell/mcp/entrypoints.py\
-      \ | shell_result | 27 | <after> | 2 | <closed/residual> | <ref> |\n| MCP | src/tasca/shell/mcp/proxy.py\
-      \ | shell_result | 2 | <after> | 2 | <closed/residual> | <ref> |\n| MCP | src/tasca/shell/mcp/server.py\
-      \ | shell_result | 18 | <after> | 2 | <closed/residual> | <ref> |\n| MCP | src/tasca/shell/mcp/tool_contracts.py\
-      \ | shell_result | 4 | <after> | 2 | <closed/residual> | <ref> |\n| Services\
-      \ | src/tasca/shell/services/operations/table_control.py | shell_result | 2\
-      \ | <after> | 2 | <closed/residual> | <ref> |\n| CLI | src/tasca/shell/skills_cli.py\
-      \ | shell_result | 3 | <after> | 2 | <closed/residual> | <ref> |\n| Storage\
-      \ | src/tasca/shell/storage/saying_repo.py | shell_result | 2 | <after> | 2\
-      \ | <closed/residual> | <ref> |\n| Storage | src/tasca/shell/storage/search_repo.py\
-      \ | shell_result | 12 | <after> | 2 | <closed/residual> | <ref> |\n| Storage\
-      \ | src/tasca/shell/storage/table_repo.py | shell_result | 3 | <after> | 2 |\
-      \ <closed/residual> | <ref> |\n\n### Regression Smoke\n```bash\n<ruff command(s)\
-      \ and output>\n<mypy command(s) and output>\n<focused pytest command(s) and\
-      \ output>\n```\n\n### Behavioral Proof Register\n| requirement_ref | behavior_claim\
-      \ | runtime_proof_expected | evidence_ref | status | closure_path | gate_decision_basis\
-      \ |\n| --- | --- | --- | --- | --- | --- | --- |\n| <ref> | <claim> | <proof>\
-      \ | <artifact> | PROVEN/NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING | <path> | <OPEN/BLOCK\
-      \ basis> |\n\n### Headline\nPASS | FAIL"
+      \ were provided, state: \"No refs for this step.\"\n\n## Full-Plan Retest Evidence\n\
+      \nverdict: <PASS|FAIL>\nblockers: <list>\ngate_open_allowed: <true|false>\n\
+      command_family_locked: uvx invar-tools guard --all\nsymbolic_testing: true\n\
+      \n### Authoritative Guard Run\n```text\n<paste `uvx invar-tools guard --all`\
+      \ output>\n```\n\n### Residual Budget Register\n| Surface | File | Rule | Before\
+      \ | After | Budget | Disposition | Owner/Closure Path |\n| --- | --- | --- |\
+      \ ---: | ---: | ---: | --- | --- |\n| CLI/API | <file> | <rule> | <before> |\
+      \ <after> | <budget> | <closed/open> | fix-pp-invar-full-scan / <path> |\n|\
+      \ MCP | src/tasca/shell/mcp/entrypoint_session_tools.py | shell_result | 7 |\
+      \ <after> | 2 | <closed/open> | fix-pp-invar-mcp-residual / <path> |\n| MCP\
+      \ | src/tasca/shell/mcp/entrypoints.py | shell_result | 27 | <after> | 2 | <closed/open>\
+      \ | fix-pp-invar-mcp-residual / <path> |\n| MCP | src/tasca/shell/mcp/server.py\
+      \ | shell_result | 18 | <after> | 2 | <closed/open> | fix-pp-invar-mcp-residual\
+      \ / <path> |\n| MCP | src/tasca/shell/mcp/proxy.py | shell_result | 2 | <after>\
+      \ | 2 | <preserved/reduced/reopened> | fix-pp-invar-mcp-residual / <path> |\n\
+      | Storage/Config/Services | <file> | <rule> | <before> | <after> | <budget>\
+      \ | <closed/open> | fix-pp-invar-storage-config-residual / <path> |\n\n### MCP\
+      \ Salvage Regression Register\n| File | Rule | Pre-587d79c | Post-587d79c |\
+      \ Current | Status |\n| --- | --- | ---: | ---: | ---: | --- |\n| src/tasca/shell/mcp/entrypoint_logic.py\
+      \ | entry_point_too_thick | 4 | 0 | <current> | <still closed/reopened> |\n\
+      | src/tasca/shell/mcp/entrypoint_logic.py | shell_result | 5 | 0 | <current>\
+      \ | <still closed/reopened> |\n| src/tasca/shell/mcp/tool_contracts.py | shell_result\
+      \ | 4 | 0 | <current> | <still closed/reopened> |\n\n### Regression Smoke\n\
+      - Ruff commands/output:\n  ```text\n  <paste>\n  ```\n- Mypy commands/output:\n\
+      \  ```text\n  <paste>\n  ```\n- Pytest commands/output:\n  ```text\n  <paste>\n\
+      \  ```\n- Focused MCP smoke and failure-path smoke:\n  ```text\n  <paste>\n\
+      \  ```\n\n### Direct / Non-Suppressible Guard\n- `non_suppressible`: <[] or\
+      \ list>\n- Direct blockers reopened: <none or list>\n\n### Behavioral Proof\
+      \ Register\n| requirement_ref | behavior_claim | runtime_proof_expected | evidence_ref\
+      \ | status | closure_path | gate_decision_basis |\n| --- | --- | --- | --- |\
+      \ --- | --- | --- |\n| <ref> | <claim> | <proof> | <evidence> | <PROVEN/NEEDS_TEST/UNPROVEN/UNCERTAIN_BLOCKING>\
+      \ | <path> | <OPEN/BLOCK basis> |\n\n### Residual Debt\n- Remaining blocker-class\
+      \ debt: <none or list with closure path>\n- Non-intersecting debt, if any: <explicit\
+      \ non-intersection evidence>\n\n### Gate Decision\n- [ ] OPEN: `verdict: PASS`,\
+      \ `blockers: []`, `gate_open_allowed: true`, and no unresolved blocker-class\
+      \ obligations\n- [ ] BLOCKED: any guard failure, reopened direct blocker, missing\
+      \ smoke, or unresolved blocker-class proof gap"
     refs:
     - src/tasca/cli.py
     - src/tasca/config.py
@@ -39668,6 +39675,9 @@ phases:
     - src/tasca/shell/storage/saying_repo.py
     - src/tasca/shell/storage/search_repo.py
     - src/tasca/shell/storage/table_repo.py
+    - tests/unit/mcp
+    - tests/integration/test_mcp.py
+    - tests/integration/test_mcp_proxy.py
     depends_on:
     - fix-pp-invar-full-scan
     - fix-pp-invar-mcp-residual

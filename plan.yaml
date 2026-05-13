@@ -1518,15 +1518,15 @@ phases:
     description: 'Validation-closure/disposition record only; no product-code work.
       This step closes historical completed-evidence guard debt for scaffold.integration_harness_scaffold
       and scaffold.l1_backend_guard. Provenance: historical completed evidence contained
-      failed tests/FAIL. Disposition: closed by later remediation and finalization
+      red test/guard outcomes. Disposition: closed by later remediation and finalization
       evidence; no current blocker-class issue remains for remaining gates. Gate intersection:
       finalization.gate is already OPEN/PASS and current acceptance is owned by later
       remediation/finalization, so this historical red evidence must not reopen live
       execution work.'
     verification: local-check protecting plan validation only. Evidence must record
       green/OPEN/gate_open_allowed=true disposition for scaffold.integration_harness_scaffold
-      and scaffold.l1_backend_guard and explain why historical failed-test/FAIL evidence
-      is closed by later remediation/finalization without altering current finalization
+      and scaffold.l1_backend_guard and explain why historical red test/guard outcomes
+      are closed by later remediation/finalization without altering current finalization
       PASS meaning.
     evidence_template: '## refs Read Confirmation (MANDATORY)
 
@@ -1537,7 +1537,7 @@ phases:
 
       - steps: scaffold.integration_harness_scaffold; scaffold.l1_backend_guard
 
-      - disposition: historical failure evidence closed
+      - disposition: historical red evidence closed
 
       - gate_intersection: later remediation and finalization.gate own current acceptance;
       no unresolved live blocker remains

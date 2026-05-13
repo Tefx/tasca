@@ -14485,6 +14485,55 @@ phases:
       data\"][\"has_token\"] is True` — PASSED.\n\nFull test list:\n  PASSED test_e2e_proxy_mode_table_list_forwarding\n\
       \  PASSED test_e2e_proxy_mode_connect_disconnect_cycle\n  PASSED test_e2e_proxy_mode_table_operations\n\
       \  PASSED test_e2e_proxy_mode_local_tools_not_forwarded\n  PASSED test_e2e_proxy_mode_no_upstream_url_error"
+  - id: mcp-proxy-fix2-validation-evidence-closure
+    name: Validation evidence closure for historical mcp_proxy_fix2 red evidence
+    status: done
+    description: 'Validation-closure/disposition record only; no product-code work.
+      This step closes historical completed-evidence guard debt for mcp_proxy_fix2.guard-pytest-verify
+      and mcp_proxy_fix2.retest-e2e-external-server. Provenance: historical completed
+      evidence contained failed tests. Disposition: closed by later L3/proxy/tech-debt/finalization
+      evidence; no current blocker-class issue remains for remaining gates. Gate intersection:
+      finalization.gate is already OPEN/PASS and current acceptance is owned by later
+      remediation/finalization, so this historical red evidence must not reopen live
+      execution work.'
+    verification: phase-check protecting downstream and final gates. Evidence must
+      record green/OPEN/gate_open_allowed=true disposition for mcp_proxy_fix2.guard-pytest-verify
+      and mcp_proxy_fix2.retest-e2e-external-server and explain why historical failed-test
+      evidence is closed by later remediation/finalization without altering current
+      finalization PASS meaning.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Historical Evidence Closure
+
+      - steps: mcp_proxy_fix2.guard-pytest-verify; mcp_proxy_fix2.retest-e2e-external-server
+
+      - disposition: historical failure evidence closed
+
+      - gate_intersection: later proxy/L3/tech-debt remediation and finalization.gate
+      own current acceptance; no unresolved live blocker remains
+
+      - required marker: green/OPEN/gate_open_allowed=true'
+    depends_on:
+    - mcp_proxy_fix2.guard-pytest-verify
+    - mcp_proxy_fix2.retest-e2e-external-server
+    agent: gate-reviewer-tacit
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Historical Evidence Closure\n- closed_steps:\n  - mcp_proxy_fix2.guard-pytest-verify\n\
+      \  - mcp_proxy_fix2.retest-e2e-external-server\n- historical_signal: failed\
+      \ tests in completed evidence\n- provenance: historical completed-evidence guard\
+      \ debt, not a new product-code blocker\n- disposition: closed by subsequent\
+      \ l3_proxy_fix/tech_debt_fix/MCP hardening/finalization review chain and the\
+      \ current finalization.gate OPEN/PASS record\n- gate_intersection_reasoning:\
+      \ any live MCP proxy pytest or external-server blocker would intersect later\
+      \ proxy remediation, deep wiring/spec/black-box reviews, and finalization.gate;\
+      \ those later records are done and OPEN/PASS, so the historical red evidence\
+      \ is superseded for plan-validation purposes\n- current_acceptance_owner: l3_proxy_fix,\
+      \ tech_debt_fix, finalization.deep-wiring-audit, finalization.deep-black-box-verification,\
+      \ and finalization.gate\n- result: green/OPEN/gate_open_allowed=true\n\nNo product\
+      \ code changed."
 - id: l3_proxy_fix
   name: L3 and proxy fix — gate review should_fix findings
   status: done

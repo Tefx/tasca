@@ -38471,6 +38471,7 @@ phases:
     depends_on:
     - finalization.deep-wiring-audit
     - retest-pp-invar-full-scan-final
+    - finalization.retest-deep-wiring-table-metadata-contract
     agent: software-architect-tacit
   - id: finalization.deep-contract-strength
     name: Deep contract-strength and closure review

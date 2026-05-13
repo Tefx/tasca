@@ -5,7 +5,7 @@ This module provides structured logging helpers for observability.
 All logs are JSON-formatted for easy parsing by log aggregators.
 
 Usage:
-    logger = get_logger(__name__)
+    logger = get_logger(__name__).unwrap()
     log_event(logger, "table_created", table_id="abc123", speaker="patron:xyz")
 """
 
@@ -46,7 +46,7 @@ def log_event(
         **fields: Additional structured fields to include.
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> logger = get_logger(__name__).unwrap()
         >>> log_event(logger, "table_created", table_id="abc", speaker="patron:xyz")
     """
     log_data = {
@@ -74,7 +74,7 @@ def log_dedup_hit(
         dedup_id: Client-provided idempotency key.
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> logger = get_logger(__name__).unwrap()
         >>> log_dedup_hit(logger, "table_say", "saying:table-123:patron-456", "dedup-789")
     """
     log_event(
@@ -99,7 +99,7 @@ def log_table_create(
         speaker: Speaker identifier (e.g., "patron:xyz" or "human").
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> logger = get_logger(__name__).unwrap()
         >>> log_table_create(logger, "table-123", "patron:agent-1")
     """
     log_event(logger, "table_created", table_id=table_id, speaker=speaker)
@@ -120,7 +120,7 @@ def log_table_update(
         speaker: Speaker identifier.
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> logger = get_logger(__name__).unwrap()
         >>> log_table_update(logger, "table-123", 2, "patron:agent-1")
     """
     log_event(logger, "table_updated", table_id=table_id, version=version, speaker=speaker)
@@ -139,7 +139,7 @@ def log_table_delete(
         speaker: Speaker identifier.
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> logger = get_logger(__name__).unwrap()
         >>> log_table_delete(logger, "table-123", "patron:agent-1")
     """
     log_event(logger, "table_deleted", table_id=table_id, speaker=speaker)
@@ -158,8 +158,19 @@ def log_batch_table_delete(
         speaker: Speaker identifier.
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> from io import StringIO
+        >>> stream = StringIO()
+        >>> logger = get_logger("tasca.shell.logging.doctest.batch").unwrap()
+        >>> logger.handlers.clear()
+        >>> logger.propagate = False
+        >>> logger.setLevel(logging.INFO)
+        >>> _ = logger.addHandler(logging.StreamHandler(stream))
         >>> log_batch_table_delete(logger, ["t1", "t2"], "rest:admin")
+        >>> payload = json.loads(stream.getvalue())
+        >>> payload["event"]
+        'tables_batch_deleted'
+        >>> payload["table_ids"], payload["count"], payload["speaker"]
+        (['t1', 't2'], 2, 'rest:admin')
     """
     log_event(
         logger,
@@ -189,7 +200,7 @@ def log_say(
         patron_id: Patron ID if agent, None if human.
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> logger = get_logger(__name__).unwrap()
         >>> log_say(logger, "table-123", 1, "agent", "Claude", "patron-456")
     """
     speaker = f"patron:{patron_id}" if patron_id else "human"
@@ -217,7 +228,7 @@ def log_wait_timeout(
         since_sequence: Sequence number client was waiting from.
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> logger = get_logger(__name__).unwrap()
         >>> log_wait_timeout(logger, "table-123", 5)
     """
     log_event(
@@ -243,7 +254,7 @@ def log_wait_returned(
         count: Number of new sayings returned.
 
     Example:
-        >>> logger = get_logger(__name__)
+        >>> logger = get_logger(__name__).unwrap()
         >>> log_wait_returned(logger, "table-123", 5, 3)
     """
     log_event(

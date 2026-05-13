@@ -42051,7 +42051,7 @@ phases:
       - Blockers if CLOSED: MCP proxy `switch_to_local` doctest Result-output mismatch.'
   - id: fix-pp-invar-mcp-proxy-doctest
     name: Residual Invar remediation — MCP proxy switch doctest Result mismatch
-    status: claimed
+    status: done
     description: "step_type: implementation\nwork_type: technical_debt_remediation\n\
       priority: HIGH\nagent: python-senior\nsymbolic_testing: true\ncommand_family_locked:\
       \ uvx invar-tools guard --all\n\nFocused downstream full-guard blocker after\
@@ -42187,6 +42187,112 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-05-13T05:04:24.876339+00:00'
+    done_at: '2026-05-13T05:13:00.613479+00:00'
+    evidence: '## refs Read Confirmation (MANDATORY)
+
+
+      - `src/tasca/shell/mcp/proxy.py` — Read. Key insight: module-level docs state
+      MCP proxy helpers return Result envelopes internally; `switch_to_remote` returned
+      `Success(_config)`, while `switch_to_local` reset state but returned `None`.
+
+      - `tests/unit/mcp` — Read. Key insight: proxy unit tests verify global switch
+      helpers mutate singleton state, forwarding preserves auth/session headers, and
+      local-only tools are not proxied.
+
+      - `tests/integration/test_mcp_proxy.py` — Read. Key insight: integration tests
+      cover real connect/disconnect cycles, upstream forwarding, local-only connection_status/connect
+      behavior, and invalid upstream error behavior.
+
+
+      ## MCP Proxy Doctest Fix Evidence
+
+
+      **symbolic_testing**: true
+
+      **command_family_locked**: `uvx invar-tools guard --all`
+
+
+      ### Failure closure
+
+      - Original blocker: `src/tasca/shell/mcp/proxy.py::tasca.shell.mcp.proxy.switch_to_local`
+
+      - Original unexpected output: `<Success: UpstreamConfig(url=''http://api.example.com'',
+      token=None, session_id=None)>`
+
+      - Chosen disposition: proxy seam correction + doctest contract correction
+
+      - Root cause vs symptom explanation: the symptom was a bare doctest expression
+      exposing the `Success(...)` repr from the Result-returning `switch_to_remote`.
+      The root cause was the doctest not expressing the shell Result contract, plus
+      `switch_to_local` still returning `None` despite the module’s Result-boundary
+      contract. The fix updates doctests to assign/assert Success values and makes
+      `switch_to_local` return `Success(_config)` after preserving the same local
+      reset behavior.
+
+
+      ### Commands executed
+
+      - Worker commit: `63d8cd4` — `mcp: align proxy mode doctests with Result contract`.
+
+      - Main salvage merge commit: `4ea1fbf` — `[vectl] salvage partial progress from
+      step-fix-pp-invar-mcp-proxy-doctest`.
+
+      - Focused proxy doctest: `uv run python -m doctest -v src/tasca/shell/mcp/proxy.py`
+      — PASS (`48 passed`).
+
+      - Proxy tests: `uv run pytest tests/unit/mcp/test_proxy.py tests/integration/test_mcp_proxy.py`
+      — PASS (`57 passed`).
+
+      - Ruff: `uv run ruff check src/tasca/shell/mcp/proxy.py` — PASS (`All checks
+      passed!`).
+
+      - Mypy: `uv run mypy src/tasca/shell/mcp/proxy.py` — PASS (`Success: no issues
+      found in 1 source file`).
+
+      - Authoritative full guard: `uvx invar-tools guard --all` — FAIL due new downstream
+      storage doctest only; static passed=true/errors=0; proxy doctests pass; new
+      failure `src/tasca/shell/storage/patron_repo.py::tasca.shell.storage.patron_repo.create_patron`
+      with `NameError("name ''UTC'' is not defined")`.
+
+
+      ### Guard Closure
+
+      - proxy_doctest: closed
+
+      - downstream blockers: `src/tasca/shell/storage/patron_repo.py::tasca.shell.storage.patron_repo.create_patron`
+      doctest `UTC` NameError, now owned by `fix-pp-invar-patron-repo-doctest`.
+
+
+      ### Broad Verifier Disposition Pass
+
+      - `src/tasca/shell/storage/patron_repo.py::tasca.shell.storage.patron_repo.create_patron`
+      raises `NameError("UTC is not defined")` => `batched_fix` / focused remediation
+      owner `fix-pp-invar-patron-repo-doctest`.
+
+      - `retest-pp-invar-full-scan` is kept blocked until `fix-pp-invar-patron-repo-doctest`
+      completes.
+
+
+      ### No-suppression Statement
+
+      - No skips, xfails, suppressions, placeholders, fake returns, or doctest weakening
+      were used. The doctest now explicitly asserts the Result contract, and `switch_to_local`
+      now returns the real updated `UpstreamConfig` in a `Success`.
+
+
+      ### Files changed
+
+      - `src/tasca/shell/mcp/proxy.py` — updated module-level proxy switch doctests
+      to bind/assert Result values; changed `switch_to_local` to return `Result[UpstreamConfig,
+      ProxyConfigError]` with `Success(_config)` while preserving local reset semantics.
+
+
+      ### Final retest readiness
+
+      - `retest-pp-invar-full-scan`: CLOSED until `fix-pp-invar-patron-repo-doctest`
+      completes.
+
+      - Blockers if CLOSED: patron_repo `create_patron` doctest missing `UTC` name.'
   - id: fix-pp-invar-patron-repo-doctest
     name: Residual Invar remediation — patron_repo create_patron doctest missing UTC
     status: pending

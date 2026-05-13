@@ -75,9 +75,18 @@ class LimitsConfig:
     max_bytes_per_table: int | None = None
     max_mentions_per_saying: int | None = None
 
-    # @invar:allow missing_contract: Dataclass __post_init__ validates invariants via ValueError
+    @deal.post(lambda result: result is None)
     def __post_init__(self) -> None:
-        """Validate that all limits are positive."""
+        """Validate that all configured limits are allowed values.
+
+        Examples:
+            >>> LimitsConfig(max_sayings_per_table=1).max_sayings_per_table
+            1
+            >>> LimitsConfig(max_content_length=0)  # doctest: +IGNORE_EXCEPTION_DETAIL
+            Traceback (most recent call last):
+                ...
+            ValueError: max_content_length must be positive
+        """
         if self.max_sayings_per_table is not None and self.max_sayings_per_table <= 0:
             raise ValueError("max_sayings_per_table must be positive")
         if self.max_content_length is not None and self.max_content_length <= 0:
@@ -91,9 +100,14 @@ class LimitsConfig:
 # Register Hypothesis strategy for LimitsConfig (for property-based testing)
 # This ensures Hypothesis generates valid configs (positive integers for limits,
 # non-negative for mentions) rather than arbitrary integers that would fail __post_init__
-# @invar:allow missing_contract: Module-level initialization function, not a core operation
+@deal.post(lambda result: result is None)
 def _register_hypothesis_strategies() -> None:
-    """Register custom Hypothesis strategies for this module's types."""
+    """Register custom Hypothesis strategies for this module's types.
+
+    Examples:
+        >>> _register_hypothesis_strategies() is None
+        True
+    """
     if not _HYPOTHESIS_AVAILABLE:
         return
     if hypothesis_strategies is None or SearchStrategy is None or register_hypothesis_type_strategy is None:
@@ -166,9 +180,17 @@ class LimitError:
     actual: int
     message: str = ""
 
-    # @invar:allow missing_contract: Dataclass __post_init__ generates default message
+    @deal.pre(lambda self: self.limit >= 0 and self.actual >= 0)
+    @deal.post(lambda result: result is None)
     def __post_init__(self) -> None:
-        """Generate message if not provided."""
+        """Generate message if not provided.
+
+        Examples:
+            >>> LimitError(kind=LimitKind.HISTORY, limit=10, actual=11).message
+            'history exceeds limit: 11 > 10'
+            >>> LimitError(kind=LimitKind.MENTIONS, limit=0, actual=1, message='too many').message
+            'too many'
+        """
         if not self.message:
             object.__setattr__(
                 self,

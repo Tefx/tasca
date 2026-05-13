@@ -28,8 +28,20 @@ class VersionMismatchError(Exception):
         expected_version: The version the client expected.
     """
 
-    # @invar:allow missing_contract: Exception class - contract on __init__ not meaningful
+    @deal.pre(lambda self, current_version, expected_version: current_version >= 1 and expected_version >= 1)
+    @deal.post(lambda result: result is None)
     def __init__(self, current_version: Version, expected_version: Version) -> None:
+        """Create a version mismatch error with both compared versions.
+
+        Doctests:
+            >>> exc = VersionMismatchError(Version(3), Version(2))
+            >>> exc.current_version
+            3
+            >>> exc.expected_version
+            2
+            >>> str(exc)
+            'Version conflict: expected 2, but current is 3'
+        """
         self.current_version = current_version
         self.expected_version = expected_version
         super().__init__(

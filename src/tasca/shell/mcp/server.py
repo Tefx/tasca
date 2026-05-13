@@ -248,7 +248,7 @@ from tasca.shell.mcp import entrypoints as ep  # noqa: E402
 
 VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 
-
+# @shell:entry - FastMCP decorator adapter returns framework callable, not a domain Result.
 def _contract_tool(tool_name: str) -> Callable[[F], F]:
     """Register an MCP tool using centralized contract metadata."""
     contract = tool_contract(tool_name)

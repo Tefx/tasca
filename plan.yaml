@@ -39068,7 +39068,7 @@ phases:
       ISSUES_FOUND / FAIL'
   - id: finalization.gate
     name: Final gate for duplicate-abstraction remediation
-    status: pending
+    status: claimed
     description: 'step_type: gate
 
       verification_scope: full-plan-check
@@ -39155,6 +39155,8 @@ phases:
     - finalization.retest-concurrent-review-blockers
     - finalization.retest-black-box-public-surface-blockers
     agent: gate-reviewer-tacit
+    claimed_by: gate-reviewer-tacit
+    claimed_at: '2026-05-13T10:12:58.732469+00:00'
   - id: fix-full-plan-blockers
     name: Remediate full-plan verifier blockers in one batch
     status: done

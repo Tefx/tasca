@@ -38279,7 +38279,7 @@ phases:
       \ raw string."
   - id: finalization.deep-wiring-audit
     name: Deep wiring audit after consolidation
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       verification_scope: full-plan-check
@@ -38350,6 +38350,154 @@ phases:
     agent: wiring-auditor
     claimed_by: wiring-auditor
     claimed_at: '2026-05-13T05:57:12.009838+00:00'
+    done_at: '2026-05-13T06:17:32.510582+00:00'
+    evidence: '## Wiring Audit Report
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Normalized status
+
+      - Status: FAIL
+
+      - Verdict: FAIL
+
+      - Gate open allowed: false
+
+      - Orchestrator action hint: DO_NOT_COMPLETE until remediation ownership exists
+
+      - Remediation ownership: created by planner as finalization.fix-deep-wiring-table-metadata-contract
+      and finalization.retest-deep-wiring-table-metadata-contract; downstream finalization
+      review steps updated to depend on retest.
+
+
+      ## Findings
+
+
+      ### F1 — HIGH — MCP/REST table_create metadata contract is not backed by persistence/readback
+
+      Evidence from wiring-auditor:
+
+      - Contract advertises table create metadata/policy/board: src/tasca/shell/mcp/tool_contracts.py:112-147.
+
+      - Shared create outcome includes metadata/policy/board: src/tasca/shell/services/operations/table_creation.py:27-32,154-156.
+
+      - REST response emits them: src/tasca/shell/api/routes/tables.py:180-192.
+
+      - MCP response emits them: src/tasca/shell/mcp/entrypoints.py:355-373.
+
+      - Persistence only inserts id/question/context/status/version/created_at/updated_at/creator_patron_id/host_ids:
+      src/tasca/shell/storage/table_repo.py:112-127 and DDL 470-478.
+
+      - Domain table has no metadata/policy/board: src/tasca/core/domain/table.py:80-88.
+
+      Impact: caller can send metadata/policy/board and see them in create response,
+      but later table_get/table_join/table_wait(include_table=true)/REST GET cannot
+      recover them.
+
+
+      ### F2 — HIGH — table_update contract advertises metadata/policy/board patching,
+      but implementation ignores them
+
+      Evidence from wiring-auditor:
+
+      - Contract says patch allowed keys include host_ids/metadata/policy/board: src/tasca/shell/mcp/tool_contracts.py:319-330.
+
+      - Runtime wrapper accepts patch: src/tasca/shell/mcp/server.py:520-534.
+
+      - Entrypoint delegates to _apply_table_patch: src/tasca/shell/mcp/entrypoints.py:1070-1083.
+
+      - Actual patch logic handles only question/context/status/host_ids: src/tasca/shell/mcp/entrypoint_logic.py:220-279.
+
+      - Response table dict returns host_ids/identity fields only, no metadata/policy/board:
+      src/tasca/shell/mcp/entrypoint_logic.py:78-104.
+
+      Impact: MCP clients are told they can update metadata/policy/board, but those
+      fields are silently dropped.
+
+
+      ## Audit coverage
+
+      **Orphan exports / shared owners**:
+
+      ```text
+
+      Runtime callers found for register_patron, create_discussion_table, delete_tables_batch,
+      export_table, execute_table_control across REST and MCP. No dead shared-operation
+      owner found among inspected new operation functions.
+
+      ```
+
+      **Unconsumed tool-contract metadata**:
+
+      ```text
+
+      Issue found: table_update patch metadata/policy/board advertised in tool_contracts.py
+      but only question/context/status/host_ids consumed in entrypoint_logic.py. Contract
+      source itself is consumed by server registration and tests.
+
+      ```
+
+      **Stubs or write-only fields**:
+
+      ```text
+
+      NotImplementedError/raise NotImplemented search under src/tasca found no stubs.
+      Write-only/dead-end fields found for metadata/policy/board in table create/update
+      surfaces as F1/F2.
+
+      ```
+
+      **Verdict**: ISSUES_FOUND
+
+
+      ## Semantic reporting
+
+      - step_intent: verification/full-plan-check
+
+      - expected_result: green
+
+      - observed_result: fail — shared operation callers are wired, but metadata/policy/board
+      fields are write-only/dead-end
+
+      - failure_alignment: blockers match requested class "no new write-only contract
+      field or metadata layer remains unconsumed"
+
+      - verdict: FAIL
+
+      - blockers: F1, F2 as above
+
+      - product_files_modified: false
+
+      - gate_open_allowed: false until remediation path closes
+
+      - behavioral_proof_register: shared operation owners have runtime REST/MCP callers
+      PROVEN static; MCP tool-contract source runtime registration PROVEN static;
+      no NotImplementedError stubs PROVEN by search; no write-only metadata/outcome
+      fields FAIL due F1/F2; runtime persistence/readback NEEDS_TEST
+
+
+      ## Commands/checks reported by worker
+
+      - pwd && git status --short --branch && git log --oneline --decorate -5: exit
+      0
+
+      - git status --short --branch final mutation check: exit 0
+
+      - Static read/search tools over source and tests completed; no app/tests executed
+      for this audit.
+
+
+      ## Remediation created
+
+      - finalization.fix-deep-wiring-table-metadata-contract
+
+      - finalization.retest-deep-wiring-table-metadata-contract
+
+      - Downstream finalization review steps were blocked on the retest before progression.'
   - id: finalization.deep-spec-conformance
     name: Deep cross-surface spec conformance audit
     status: pending

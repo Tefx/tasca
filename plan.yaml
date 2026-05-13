@@ -39307,7 +39307,7 @@ phases:
       \ security debt.\n  - Invar failure is authoritative from CLI after wrapper\
       \ instability; no product fixes were made by this verification-only step."
   - id: fix-pp-invar-full-scan
-    name: Remediate PP-invar-full-scan blockers in one invar batch
+    name: Residual Invar budget remediation — CLI and API routes
     status: pending
     description: 'step_type: implementation
 
@@ -39321,173 +39321,65 @@ phases:
 
       command_family_locked: uvx invar-tools guard --all
 
+      reduction_step: true
 
-      One-batch remediation for the remaining `PP-invar-full-scan` blocker reported
-      by `retest-full-plan-blockers`.
-
-
-      ## Root Cause vs Symptom
-
-      - Root cause: finalization remediation previously closed ruff, mypy, pytest,
-      transport/API, and frontend checks, but did not close the authoritative Invar
-      full-scan compliance surface and its escape-hatch budgets.
-
-      - Symptom: `uvx invar-tools guard --all` exits 1 with static_passed false, 43
-      errors, 85 warnings, 4 infos; doctest passes; CrossHair/property checks are
-      skipped because static failures stop the scan first.
-
-      - why_previous_fix_failed: previous fix only targeted ruff/mypy/pytest/static
-      type and did not run/close authoritative `uvx invar-tools guard --all` escape-hatch
-      budgets.
-
-      - Why this fix is not surface-level: the batch must remove or justify root causes
-      behind direct Invar errors and excessive escape hatches instead of adding suppressions
-      or owner-only project exemptions.
+      salvage_context: commit fbdf04b closed the direct shell_result/missing_contract
+      blockers and removed non-suppressible dead_export/missing_contract hatches;
+      do NOT redo those closed items unless regression evidence shows they reopened.
 
 
-      ## Blockers to Fix (ALL of these, not just the first)
+      Bounded residual remediation for CLI and API route budget blockers remaining
+      after salvaged partial progress from `fix-pp-invar-full-scan`.
 
 
-      ### B1: `shell_result` direct errors
-
-      Locations:
-
-      - `src/tasca/shell/mcp/server.py:252` `_contract_tool`
-
-      - `src/tasca/shell/api/errors.py:17` `raise_http_error`
-
-      Required remediation:
-
-      - Prefer real `Result[T, E]` shell wrappers where the function is shell-owned
-      and can return recoverable outcomes.
-
-      - If a function is a narrow framework adapter that must raise or return `NoReturn`,
-      add only the minimal justified shell/framework exception accepted by Invar policy;
-      do not broaden file-level suppressions.
-
-      - Prove the behavior still reaches FastAPI/MCP framework paths correctly.
-
-      Grep hint: search for nearby shell functions returning raw values or raising
-      framework exceptions without `Result[T, E]` semantics.
-
-
-      ### B2: `missing_contract` direct Core errors
-
-      Locations:
-
-      - `src/tasca/core/services/table_service.py:32` `VersionMismatchError.__init__`
-
-      - `src/tasca/core/services/limits_service.py:79` `LimitsConfig.__post_init__`
-
-      - `src/tasca/core/services/limits_service.py:95` `_register_hypothesis_strategies`
-
-      - `src/tasca/core/services/limits_service.py:170` `LimitError.__post_init__`
-
-      Required remediation:
-
-      - Add actual `@pre`/`@post` contracts and at least one meaningful doctest where
-      Core rules require it.
-
-      - Contracts must be non-vacuous, reference real parameters/results, and preserve
-      current public behavior.
-
-      - If a helper is not truly Core logic, relocate or restructure according to
-      Core/Shell boundaries rather than suppressing missing contracts.
-
-      Grep hint: search for `@invar:allow missing_contract` and adjacent Core functions
-      lacking real contracts/doctests.
-
-
-      ### B3: `escape_hatch_non_suppressible` errors
-
-      Locations:
-
-      - `src/tasca/cli.py` lines 242, 282, 344, 399 dead_export suppressions
-
-      - `src/tasca/core/services/table_service.py` line 31 missing_contract suppression
-
-      - `src/tasca/core/services/limits_service.py` lines 78, 94, 169 missing_contract
-      suppressions
-
-      Required remediation:
-
-      - Remove inline suppressions for non-suppressible rules.
-
-      - Prefer dead export cleanup, real reachability, or public entrypoint restructuring
-      for CLI cases.
-
-      - Prefer actual contracts/doctests or correct layer relocation for Core cases.
-
-      - Do not replace non-suppressible inline suppressions with owner-only project
-      exemptions; none are authorized.
-
-      Grep hint: search for all `@invar:allow dead_export` and `@invar:allow missing_contract`
-      occurrences and remove or replace with real compliance.
-
-
-      ### B4: escape-hatch file and project budget failures
-
-      High-priority budget hotspots:
+      ## Target residual inventory (this step owns exactly this surface)
 
       - `src/tasca/cli.py` shell_result 16/2
 
-      - `src/tasca/shell/mcp/entrypoints.py` shell_result 27/2
+      - `src/tasca/shell/api/app.py` shell_result 2/2
 
-      - `src/tasca/shell/mcp/server.py` shell_result 18/2
+      - `src/tasca/shell/api/auth.py` shell_result 3/2
 
-      - `src/tasca/shell/mcp/entrypoint_session_tools.py` shell_result 7/2
+      - `src/tasca/shell/api/routes/export.py` entry_point_too_thick 2/2 and shell_result
+      2/2
 
-      - `src/tasca/shell/mcp/tool_contracts.py` shell_result 4/2
+      - `src/tasca/shell/api/routes/patrons.py` entry_point_too_thick 2/2
+
+      - `src/tasca/shell/api/routes/sayings.py` entry_point_too_thick 3/2 and shell_result
+      3/2
+
+      - `src/tasca/shell/api/routes/seats.py` entry_point_too_thick 2/2 and shell_result
+      3/2
 
       - `src/tasca/shell/api/routes/tables.py` entry_point_too_thick 6/2
 
-      - `src/tasca/shell/api/routes/sayings.py` entry_point_too_thick 3/2 and shell_result
-      2/2
 
-      - plus listed shell/api/storage/service files from the full scan.
+      ## Root-cause constraints
 
-      Project budget failures:
+      - Reduce `shell_result` by introducing actual `Result[T, E]` shell seams/wrappers
+      or converting raw shell logic into Core helpers that carry real `@pre`/`@post`
+      contracts and doctests.
 
-      - entry_point_too_thick 21/5
+      - Reduce `entry_point_too_thick` by thinning route/CLI entrypoints into contracted
+      Core or service helpers while preserving FastAPI/CLI runtime behavior.
 
-      - file_size 6/5
+      - Do NOT add new suppressions, owner-only project exemptions, or framework-only
+      escape hatches to make budgets look better.
 
-      - shell_result 128/5
-
-      - weighted budget 478/15
-
-      Required remediation:
-
-      - Prioritize direct errors first, then non-suppressible suppressions, then budget
-      reductions.
-
-      - Reduce budget load by actual code movement and contract/shell compliance,
-      not by adding broad suppressions.
-
-      - Prefer Result wrappers, dead export cleanup, entrypoint thinning, and Core
-      extraction with contracts.
-
-      - Keep runtime/deployability semantics intact for CLI, API, and MCP server surfaces.
-
-      - Do not use owner-only project exemptions unless explicitly authorized; authorization
-      is not available for this batch.
+      - Keep CLI and API deployability semantics intact: commands/routes must remain
+      registered and reachable.
 
 
-      ## Prioritized execution order
+      ## Known closed items not in scope
 
-      1. Close direct `shell_result` and `missing_contract` errors.
+      - Direct `shell_result` errors in `src/tasca/shell/api/errors.py` and `src/tasca/shell/mcp/server.py`
+      were addressed in salvage commit `fbdf04b`.
 
-      2. Remove non-suppressible inline suppressions and replace with real compliance.
+      - Direct Core `missing_contract` blockers in table/limits services were addressed
+      in salvage commit `fbdf04b`.
 
-      3. Reduce file/project escape-hatch budgets by thinning entrypoints, replacing
-      raw shell returns with Result-based shell seams, deleting dead exports, and
-      extracting Core logic with contracts/doctests.
-
-      4. Rerun `uvx invar-tools guard --all` repeatedly until static_passed is true
-      and downstream CrossHair/property stages are no longer skipped by static failures.
-
-      5. Run enough ruff/mypy/pytest smoke locally to ensure no regression before
-      handoff to independent retest.
+      - Non-suppressible `dead_export` / `missing_contract` hatches were absent in
+      the final salvaged guard inventory (`non_suppressible: []`).
 
 
       ## Completion Criteria (stub exclusion)
@@ -39498,111 +39390,151 @@ phases:
       `_Stub*`, `_Placeholder*`) do not satisfy this requirement.
 
 
-      ## Out-of-scope guardrail
+      ## Residual ownership semantics
 
-      Do not perform unrelated feature work. Do not hide remaining blocker-class Invar
-      failures as `pre-existing` or `out-of-scope`; if `uvx invar-tools guard --all`
-      still fails, evidence must list remaining blocker ids and the next closure path.'
-    verification: '- Direct path: all listed direct `shell_result`, `missing_contract`,
-      and non-suppressible escape-hatch errors are resolved without owner-only project
-      exemptions.
+      This is a bounded reduction step. It succeeds by producing verified non-regressive
+      budget reductions for the target CLI/API inventory above. Remaining MCP or storage/config/service
+      residual debt is owned by sibling residual steps and the final retest, not by
+      rolling back mergeable CLI/API progress.'
+    verification: '- Command lock: use `uvx invar-tools guard --all` as the authoritative
+      command family; do not substitute `uv run`, partial guard, or suppressions.
 
-      - Budget path: `uvx invar-tools guard --all` no longer fails on escape-hatch
-      file/project/weighted budget errors, or remaining failures are explicitly blocker-class
-      with exact residual inventory for retest.
+      - Before/after accounting: evidence lists pre-change and post-change counts
+      for every target file in the CLI/API residual inventory and explains any count
+      that remains above budget.
 
-      - Regression smoke: evidence includes ruff, mypy, and focused pytest smoke sufficient
-      to show the Invar remediation did not regress previously closed B1/B2/B3 behavior.
+      - Main path: CLI command smoke and focused API route/error pytest smoke pass
+      for touched seams.
 
-      - Root-cause evidence explains how Result wrappers, real contracts, dead export
-      cleanup, entrypoint thinning, or Core extraction reduced the blocker family
-      rather than suppressing symptoms.'
+      - Failure path: FastAPI error/route behavior still returns the documented response
+      shape after entrypoint thinning or Core extraction.
+
+      - Regression guard: `non_suppressible` remains empty and direct errors closed
+      by commit `fbdf04b` do not reappear.
+
+      - Residual disposition: any remaining blocker-class count in this surface is
+      listed with file, rule, count, reason it remains, and closure path for retest
+      or a follow-up residual step.'
     evidence_template: '## refs Read Confirmation (MANDATORY)
 
 
       For each ref in this step:
 
-      - AGENTS.md — key passage or "NOT READ: <reason>"
-
-      - INVAR.md — key passage or "NOT READ: <reason>"
+      - <filename> — key passage or "NOT READ: <reason>"
 
 
       If no refs were provided, state: "No refs for this step."
 
 
-      ## Invar Remediation Batch Evidence
+      ## Residual Invar Budget Evidence — CLI/API
 
 
-      **Command family locked**: `uvx invar-tools guard --all`
+      **salvage_commit_acknowledged**: fbdf04b
 
-      **why_previous_fix_failed**: previous fix only targeted ruff/mypy/pytest/static
-      type and did not run/close authoritative `uvx invar-tools guard --all` escape-hatch
-      budgets.
+      **command_family_locked**: uvx invar-tools guard --all
 
-
-      ### Direct Errors Closed
-
-      | Rule | Location | Remediation | Evidence |
-
-      | --- | --- | --- | --- |
-
-      | shell_result | `src/tasca/shell/mcp/server.py:252` | <Result wrapper or narrow
-      framework exception> | <proof> |
-
-      | shell_result | `src/tasca/shell/api/errors.py:17` | <Result wrapper or narrow
-      NoReturn adapter exception> | <proof> |
-
-      | missing_contract | `src/tasca/core/services/table_service.py:32` | <contract/doctest/relocation>
-      | <proof> |
-
-      | missing_contract | `src/tasca/core/services/limits_service.py:79` | <contract/doctest/relocation>
-      | <proof> |
-
-      | missing_contract | `src/tasca/core/services/limits_service.py:95` | <contract/doctest/relocation>
-      | <proof> |
-
-      | missing_contract | `src/tasca/core/services/limits_service.py:170` | <contract/doctest/relocation>
-      | <proof> |
+      **symbolic_testing**: true
 
 
-      ### Non-Suppressible Suppressions Removed
+      ### Target Inventory Before/After
 
-      ```text
+      | File | Rule | Before | After | Budget | Disposition |
 
-      <paste grep/search output and remediation notes>
+      | --- | --- | ---: | ---: | ---: | --- |
 
-      ```
+      | src/tasca/cli.py | shell_result | 16 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/api/app.py | shell_result | 2 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/api/auth.py | shell_result | 3 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/api/routes/export.py | entry_point_too_thick | 2 | <after>
+      | 2 | <closed/reduced/residual> |
+
+      | src/tasca/shell/api/routes/export.py | shell_result | 2 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/api/routes/patrons.py | entry_point_too_thick | 2 | <after>
+      | 2 | <closed/reduced/residual> |
+
+      | src/tasca/shell/api/routes/sayings.py | entry_point_too_thick | 3 | <after>
+      | 2 | <closed/reduced/residual> |
+
+      | src/tasca/shell/api/routes/sayings.py | shell_result | 3 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/api/routes/seats.py | entry_point_too_thick | 2 | <after>
+      | 2 | <closed/reduced/residual> |
+
+      | src/tasca/shell/api/routes/seats.py | shell_result | 3 | <after> | 2 | <closed/reduced/residual>
+      |
+
+      | src/tasca/shell/api/routes/tables.py | entry_point_too_thick | 6 | <after>
+      | 2 | <closed/reduced/residual> |
 
 
-      ### Budget Reduction Inventory
+      ### Files Changed
 
-      ```text
-
-      <paste before/after Invar budget summary for file/project/weighted budgets>
-
-      ```
+      - <path>: <Result wrapper / entrypoint thinning / Core extraction with contracts
+      / tests>
 
 
-      ### Commands Run
+      ### Commands and Output
 
-      ```text
+      ```bash
 
       uvx invar-tools guard --all
 
-      <ruff/mypy/pytest smoke commands>
+      <actual output summary including static_passed, errors, warnings, infos, budgets,
+      and non_suppressible>
 
       ```
 
 
-      ### Result
+      ```bash
 
-      - `uvx invar-tools guard --all`: PASS | FAIL
+      <ruff/mypy/focused pytest smoke commands for touched CLI/API seams>
 
-      - Remaining blockers: [] or [<ids>]
+      <actual output>
 
-      - Regression smoke: PASS | FAIL
+      ```
 
-      - Notes: <root-cause explanation and any residual closure path>'
+
+      ### Regression Smoke
+
+      - CLI smoke: <command/output or NOT RUN reason>
+
+      - API route/error smoke: <test names/output>
+
+      - Direct blocker regression check: non_suppressible remains empty and salvaged
+      direct blockers did not reappear.
+
+
+      ### Residual Closure Path
+
+      - Remaining CLI/API residual blockers: <empty or exact file/rule/count/closure
+      path>
+
+      - Remaining non-CLI/API residual blockers owned by sibling steps: <summary>
+
+
+      ### Headline
+
+      PASS | PASS_WITH_RESIDUAL | FAIL'
+    refs:
+    - src/tasca/cli.py
+    - src/tasca/shell/api/app.py
+    - src/tasca/shell/api/auth.py
+    - src/tasca/shell/api/routes/export.py
+    - src/tasca/shell/api/routes/patrons.py
+    - src/tasca/shell/api/routes/sayings.py
+    - src/tasca/shell/api/routes/seats.py
+    - src/tasca/shell/api/routes/tables.py
+    - src/tasca/core/services/http_error_service.py
+    - src/tasca/shell/api/errors.py
     depends_on:
     - retest-full-plan-blockers
     agent: python-senior

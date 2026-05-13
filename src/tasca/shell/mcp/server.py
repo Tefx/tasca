@@ -255,7 +255,7 @@ VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 # @shell:entry - FastMCP decorator adapter returns framework callable, not a domain Result.
 def _contract_tool(tool_name: str) -> Callable[[F], F]:
     """Register an MCP tool using centralized contract metadata."""
-    contract = tool_contract(tool_name)
+    contract = tool_contract(tool_name).unwrap()
 
     def decorator(func: F) -> F:
         if iscoroutinefunction(func):
@@ -302,26 +302,26 @@ def _to_mcp_response(result: McpResult) -> Result[McpEnvelope, str]:
 @_contract_tool("patron_register")
 def patron_register(
     display_name: Annotated[
-        str, parameter_field("patron_register", "display_name")
-    ] = parameter_default("patron_register", "display_name"),
-    alias: Annotated[str, parameter_field("patron_register", "alias")] = parameter_default(
+        str, parameter_field("patron_register", "display_name").unwrap()
+    ] = parameter_default("patron_register", "display_name").unwrap(),
+    alias: Annotated[str, parameter_field("patron_register", "alias").unwrap()] = parameter_default(
         "patron_register", "alias"
-    ),
-    meta: Annotated[dict[str, Any], parameter_field("patron_register", "meta")] = parameter_default(
+    ).unwrap(),
+    meta: Annotated[dict[str, Any], parameter_field("patron_register", "meta").unwrap()] = parameter_default(
         "patron_register", "meta"
-    ),
-    patron_id: Annotated[str, parameter_field("patron_register", "patron_id")] = parameter_default(
+    ).unwrap(),
+    patron_id: Annotated[str, parameter_field("patron_register", "patron_id").unwrap()] = parameter_default(
         "patron_register", "patron_id"
-    ),
-    dedup_id: Annotated[str, parameter_field("patron_register", "dedup_id")] = parameter_default(
+    ).unwrap(),
+    dedup_id: Annotated[str, parameter_field("patron_register", "dedup_id").unwrap()] = parameter_default(
         "patron_register", "dedup_id"
-    ),
-    name: Annotated[str, parameter_field("patron_register", "name")] = parameter_default(
+    ).unwrap(),
+    name: Annotated[str, parameter_field("patron_register", "name").unwrap()] = parameter_default(
         "patron_register", "name"
-    ),
+    ).unwrap(),
     kind: Annotated[
-        Literal["agent", "human"], parameter_field("patron_register", "kind")
-    ] = parameter_default("patron_register", "kind"),
+        Literal["agent", "human"], parameter_field("patron_register", "kind").unwrap()
+    ] = parameter_default("patron_register", "kind").unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.patron_register(display_name, alias, meta, patron_id, dedup_id, name, kind)
@@ -329,7 +329,7 @@ def patron_register(
 
 @_contract_tool("patron_get")
 def patron_get(
-    patron_id: Annotated[str, parameter_field("patron_get", "patron_id")],
+    patron_id: Annotated[str, parameter_field("patron_get", "patron_id").unwrap()],
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.patron_get(patron_id)
@@ -337,36 +337,36 @@ def patron_get(
 
 @_contract_tool("table_create")
 def table_create(
-    title: Annotated[str, parameter_field("table_create", "title")] = parameter_default(
+    title: Annotated[str, parameter_field("table_create", "title").unwrap()] = parameter_default(
         "table_create", "title"
-    ),
-    question: Annotated[str, parameter_field("table_create", "question")] = parameter_default(
+    ).unwrap(),
+    question: Annotated[str, parameter_field("table_create", "question").unwrap()] = parameter_default(
         "table_create", "question"
-    ),
-    context: Annotated[str, parameter_field("table_create", "context")] = parameter_default(
+    ).unwrap(),
+    context: Annotated[str, parameter_field("table_create", "context").unwrap()] = parameter_default(
         "table_create", "context"
-    ),
+    ).unwrap(),
     creator_patron_id: Annotated[
-        str, parameter_field("table_create", "creator_patron_id")
-    ] = parameter_default("table_create", "creator_patron_id"),
-    created_by: Annotated[str, parameter_field("table_create", "created_by")] = parameter_default(
+        str, parameter_field("table_create", "creator_patron_id").unwrap()
+    ] = parameter_default("table_create", "creator_patron_id").unwrap(),
+    created_by: Annotated[str, parameter_field("table_create", "created_by").unwrap()] = parameter_default(
         "table_create", "created_by"
-    ),
-    host_ids: Annotated[list[str], parameter_field("table_create", "host_ids")] = parameter_default(
+    ).unwrap(),
+    host_ids: Annotated[list[str], parameter_field("table_create", "host_ids").unwrap()] = parameter_default(
         "table_create", "host_ids"
-    ),
+    ).unwrap(),
     metadata: Annotated[
-        dict[str, Any], parameter_field("table_create", "metadata")
-    ] = parameter_default("table_create", "metadata"),
+        dict[str, Any], parameter_field("table_create", "metadata").unwrap()
+    ] = parameter_default("table_create", "metadata").unwrap(),
     policy: Annotated[
-        dict[str, Any], parameter_field("table_create", "policy")
-    ] = parameter_default("table_create", "policy"),
-    board: Annotated[dict[str, Any], parameter_field("table_create", "board")] = parameter_default(
+        dict[str, Any], parameter_field("table_create", "policy").unwrap()
+    ] = parameter_default("table_create", "policy").unwrap(),
+    board: Annotated[dict[str, Any], parameter_field("table_create", "board").unwrap()] = parameter_default(
         "table_create", "board"
-    ),
-    dedup_id: Annotated[str, parameter_field("table_create", "dedup_id")] = parameter_default(
+    ).unwrap(),
+    dedup_id: Annotated[str, parameter_field("table_create", "dedup_id").unwrap()] = parameter_default(
         "table_create", "dedup_id"
-    ),
+    ).unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_create(
@@ -385,21 +385,21 @@ def table_create(
 
 @_contract_tool("table_join")
 def table_join(
-    table_id: Annotated[str, parameter_field("table_join", "table_id")] = parameter_default(
+    table_id: Annotated[str, parameter_field("table_join", "table_id").unwrap()] = parameter_default(
         "table_join", "table_id"
-    ),
-    patron_id: Annotated[str, parameter_field("table_join", "patron_id")] = parameter_default(
+    ).unwrap(),
+    patron_id: Annotated[str, parameter_field("table_join", "patron_id").unwrap()] = parameter_default(
         "table_join", "patron_id"
-    ),
-    invite_code: Annotated[str, parameter_field("table_join", "invite_code")] = parameter_default(
+    ).unwrap(),
+    invite_code: Annotated[str, parameter_field("table_join", "invite_code").unwrap()] = parameter_default(
         "table_join", "invite_code"
-    ),
+    ).unwrap(),
     history_limit: Annotated[
-        int, parameter_field("table_join", "history_limit")
-    ] = parameter_default("table_join", "history_limit"),
+        int, parameter_field("table_join", "history_limit").unwrap()
+    ] = parameter_default("table_join", "history_limit").unwrap(),
     history_max_bytes: Annotated[
-        int, parameter_field("table_join", "history_max_bytes")
-    ] = parameter_default("table_join", "history_max_bytes"),
+        int, parameter_field("table_join", "history_max_bytes").unwrap()
+    ] = parameter_default("table_join", "history_max_bytes").unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_join(table_id, patron_id, invite_code, history_limit, history_max_bytes)
@@ -407,7 +407,7 @@ def table_join(
 
 @_contract_tool("table_get")
 def table_get(
-    table_id: Annotated[str, parameter_field("table_get", "table_id")],
+    table_id: Annotated[str, parameter_field("table_get", "table_id").unwrap()],
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_get(table_id)
@@ -416,8 +416,8 @@ def table_get(
 @_contract_tool("table_list")
 def table_list(
     status: Annotated[
-        Literal["open", "closed", "paused", "all"], parameter_field("table_list", "status")
-    ] = parameter_default("table_list", "status"),
+        Literal["open", "closed", "paused", "all"], parameter_field("table_list", "status").unwrap()
+    ] = parameter_default("table_list", "status").unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_list(status)
@@ -425,7 +425,7 @@ def table_list(
 
 @_contract_tool("table_delete_batch")
 def table_delete_batch(
-    ids: Annotated[list[str], parameter_field("table_delete_batch", "ids")],
+    ids: Annotated[list[str], parameter_field("table_delete_batch", "ids").unwrap()],
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_delete_batch(ids)
@@ -433,10 +433,10 @@ def table_delete_batch(
 
 @_contract_tool("table_export")
 def table_export(
-    table_id: Annotated[str, parameter_field("table_export", "table_id")],
+    table_id: Annotated[str, parameter_field("table_export", "table_id").unwrap()],
     format: Annotated[
-        Literal["markdown", "jsonl"], parameter_field("table_export", "format")
-    ] = parameter_default("table_export", "format"),
+        Literal["markdown", "jsonl"], parameter_field("table_export", "format").unwrap()
+    ] = parameter_default("table_export", "format").unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_export(table_id, format)
@@ -444,29 +444,29 @@ def table_export(
 
 @_contract_tool("table_say")
 def table_say(
-    table_id: Annotated[str, parameter_field("table_say", "table_id")],
-    content: Annotated[str, parameter_field("table_say", "content")],
+    table_id: Annotated[str, parameter_field("table_say", "table_id").unwrap()],
+    content: Annotated[str, parameter_field("table_say", "content").unwrap()],
     speaker_kind: Annotated[
-        Literal["agent", "human"], parameter_field("table_say", "speaker_kind")
-    ] = parameter_default("table_say", "speaker_kind"),
-    patron_id: Annotated[str, parameter_field("table_say", "patron_id")] = parameter_default(
+        Literal["agent", "human"], parameter_field("table_say", "speaker_kind").unwrap()
+    ] = parameter_default("table_say", "speaker_kind").unwrap(),
+    patron_id: Annotated[str, parameter_field("table_say", "patron_id").unwrap()] = parameter_default(
         "table_say", "patron_id"
-    ),
-    speaker_name: Annotated[str, parameter_field("table_say", "speaker_name")] = parameter_default(
+    ).unwrap(),
+    speaker_name: Annotated[str, parameter_field("table_say", "speaker_name").unwrap()] = parameter_default(
         "table_say", "speaker_name"
-    ),
+    ).unwrap(),
     saying_type: Annotated[
-        Literal["text", "control", "system"], parameter_field("table_say", "saying_type")
-    ] = parameter_default("table_say", "saying_type"),
-    mentions: Annotated[list[str], parameter_field("table_say", "mentions")] = parameter_default(
+        Literal["text", "control", "system"], parameter_field("table_say", "saying_type").unwrap()
+    ] = parameter_default("table_say", "saying_type").unwrap(),
+    mentions: Annotated[list[str], parameter_field("table_say", "mentions").unwrap()] = parameter_default(
         "table_say", "mentions"
-    ),
+    ).unwrap(),
     reply_to_sequence: Annotated[
-        int, parameter_field("table_say", "reply_to_sequence")
-    ] = parameter_default("table_say", "reply_to_sequence"),
-    dedup_id: Annotated[str, parameter_field("table_say", "dedup_id")] = parameter_default(
+        int, parameter_field("table_say", "reply_to_sequence").unwrap()
+    ] = parameter_default("table_say", "reply_to_sequence").unwrap(),
+    dedup_id: Annotated[str, parameter_field("table_say", "dedup_id").unwrap()] = parameter_default(
         "table_say", "dedup_id"
-    ),
+    ).unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_say(
@@ -484,13 +484,13 @@ def table_say(
 
 @_contract_tool("table_listen")
 def table_listen(
-    table_id: Annotated[str, parameter_field("table_listen", "table_id")],
+    table_id: Annotated[str, parameter_field("table_listen", "table_id").unwrap()],
     since_sequence: Annotated[
-        int, parameter_field("table_listen", "since_sequence")
-    ] = parameter_default("table_listen", "since_sequence"),
-    limit: Annotated[int, parameter_field("table_listen", "limit")] = parameter_default(
+        int, parameter_field("table_listen", "since_sequence").unwrap()
+    ] = parameter_default("table_listen", "since_sequence").unwrap(),
+    limit: Annotated[int, parameter_field("table_listen", "limit").unwrap()] = parameter_default(
         "table_listen", "limit"
-    ),
+    ).unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_listen(table_id, since_sequence, limit)
@@ -498,20 +498,20 @@ def table_listen(
 
 @_contract_tool("table_control")
 def table_control(
-    table_id: Annotated[str, parameter_field("table_control", "table_id")],
+    table_id: Annotated[str, parameter_field("table_control", "table_id").unwrap()],
     action: Annotated[
-        Literal["pause", "resume", "close"], parameter_field("table_control", "action")
+        Literal["pause", "resume", "close"], parameter_field("table_control", "action").unwrap()
     ],
-    speaker_name: Annotated[str, parameter_field("table_control", "speaker_name")],
-    patron_id: Annotated[str, parameter_field("table_control", "patron_id")] = parameter_default(
+    speaker_name: Annotated[str, parameter_field("table_control", "speaker_name").unwrap()],
+    patron_id: Annotated[str, parameter_field("table_control", "patron_id").unwrap()] = parameter_default(
         "table_control", "patron_id"
-    ),
-    reason: Annotated[str, parameter_field("table_control", "reason")] = parameter_default(
+    ).unwrap(),
+    reason: Annotated[str, parameter_field("table_control", "reason").unwrap()] = parameter_default(
         "table_control", "reason"
-    ),
-    dedup_id: Annotated[str, parameter_field("table_control", "dedup_id")] = parameter_default(
+    ).unwrap(),
+    dedup_id: Annotated[str, parameter_field("table_control", "dedup_id").unwrap()] = parameter_default(
         "table_control", "dedup_id"
-    ),
+    ).unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_control(table_id, action, speaker_name, patron_id, reason, dedup_id)
@@ -519,16 +519,16 @@ def table_control(
 
 @_contract_tool("table_update")
 def table_update(
-    table_id: Annotated[str, parameter_field("table_update", "table_id")],
-    expected_version: Annotated[int, parameter_field("table_update", "expected_version")],
-    patch: Annotated[dict[str, Any], parameter_field("table_update", "patch")],
-    speaker_name: Annotated[str, parameter_field("table_update", "speaker_name")],
-    patron_id: Annotated[str, parameter_field("table_update", "patron_id")] = parameter_default(
+    table_id: Annotated[str, parameter_field("table_update", "table_id").unwrap()],
+    expected_version: Annotated[int, parameter_field("table_update", "expected_version").unwrap()],
+    patch: Annotated[dict[str, Any], parameter_field("table_update", "patch").unwrap()],
+    speaker_name: Annotated[str, parameter_field("table_update", "speaker_name").unwrap()],
+    patron_id: Annotated[str, parameter_field("table_update", "patron_id").unwrap()] = parameter_default(
         "table_update", "patron_id"
-    ),
-    dedup_id: Annotated[str, parameter_field("table_update", "dedup_id")] = parameter_default(
+    ).unwrap(),
+    dedup_id: Annotated[str, parameter_field("table_update", "dedup_id").unwrap()] = parameter_default(
         "table_update", "dedup_id"
-    ),
+    ).unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_update(table_id, expected_version, patch, speaker_name, patron_id, dedup_id)
@@ -536,19 +536,19 @@ def table_update(
 
 @_contract_tool("table_wait")
 async def table_wait(
-    table_id: Annotated[str, parameter_field("table_wait", "table_id")],
+    table_id: Annotated[str, parameter_field("table_wait", "table_id").unwrap()],
     since_sequence: Annotated[
-        int, parameter_field("table_wait", "since_sequence")
-    ] = parameter_default("table_wait", "since_sequence"),
-    wait_ms: Annotated[int, parameter_field("table_wait", "wait_ms")] = parameter_default(
+        int, parameter_field("table_wait", "since_sequence").unwrap()
+    ] = parameter_default("table_wait", "since_sequence").unwrap(),
+    wait_ms: Annotated[int, parameter_field("table_wait", "wait_ms").unwrap()] = parameter_default(
         "table_wait", "wait_ms"
-    ),
-    limit: Annotated[int, parameter_field("table_wait", "limit")] = parameter_default(
+    ).unwrap(),
+    limit: Annotated[int, parameter_field("table_wait", "limit").unwrap()] = parameter_default(
         "table_wait", "limit"
-    ),
+    ).unwrap(),
     include_table: Annotated[
-        bool, parameter_field("table_wait", "include_table")
-    ] = parameter_default("table_wait", "include_table"),
+        bool, parameter_field("table_wait", "include_table").unwrap()
+    ] = parameter_default("table_wait", "include_table").unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return await ep.table_wait(table_id, since_sequence, wait_ms, limit, include_table)
@@ -556,22 +556,22 @@ async def table_wait(
 
 @_contract_tool("seat_heartbeat")
 def seat_heartbeat(
-    table_id: Annotated[str, parameter_field("seat_heartbeat", "table_id")],
-    patron_id: Annotated[str, parameter_field("seat_heartbeat", "patron_id")] = parameter_default(
+    table_id: Annotated[str, parameter_field("seat_heartbeat", "table_id").unwrap()],
+    patron_id: Annotated[str, parameter_field("seat_heartbeat", "patron_id").unwrap()] = parameter_default(
         "seat_heartbeat", "patron_id"
-    ),
+    ).unwrap(),
     state: Annotated[
-        Literal["running", "idle", "done"], parameter_field("seat_heartbeat", "state")
-    ] = parameter_default("seat_heartbeat", "state"),
-    ttl_ms: Annotated[int, parameter_field("seat_heartbeat", "ttl_ms")] = parameter_default(
+        Literal["running", "idle", "done"], parameter_field("seat_heartbeat", "state").unwrap()
+    ] = parameter_default("seat_heartbeat", "state").unwrap(),
+    ttl_ms: Annotated[int, parameter_field("seat_heartbeat", "ttl_ms").unwrap()] = parameter_default(
         "seat_heartbeat", "ttl_ms"
-    ),
-    dedup_id: Annotated[str, parameter_field("seat_heartbeat", "dedup_id")] = parameter_default(
+    ).unwrap(),
+    dedup_id: Annotated[str, parameter_field("seat_heartbeat", "dedup_id").unwrap()] = parameter_default(
         "seat_heartbeat", "dedup_id"
-    ),
-    seat_id: Annotated[str, parameter_field("seat_heartbeat", "seat_id")] = parameter_default(
+    ).unwrap(),
+    seat_id: Annotated[str, parameter_field("seat_heartbeat", "seat_id").unwrap()] = parameter_default(
         "seat_heartbeat", "seat_id"
-    ),
+    ).unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.seat_heartbeat(table_id, patron_id, state, ttl_ms, dedup_id, seat_id)
@@ -579,10 +579,10 @@ def seat_heartbeat(
 
 @_contract_tool("seat_list")
 def seat_list(
-    table_id: Annotated[str, parameter_field("seat_list", "table_id")],
-    active_only: Annotated[bool, parameter_field("seat_list", "active_only")] = parameter_default(
+    table_id: Annotated[str, parameter_field("seat_list", "table_id").unwrap()],
+    active_only: Annotated[bool, parameter_field("seat_list", "active_only").unwrap()] = parameter_default(
         "seat_list", "active_only"
-    ),
+    ).unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.seat_list(table_id, active_only)
@@ -590,10 +590,10 @@ def seat_list(
 
 @_contract_tool("connect")
 async def connect(
-    url: Annotated[str, parameter_field("connect", "url")] = parameter_default("connect", "url"),
-    token: Annotated[str, parameter_field("connect", "token")] = parameter_default(
+    url: Annotated[str, parameter_field("connect", "url").unwrap()] = parameter_default("connect", "url").unwrap(),
+    token: Annotated[str, parameter_field("connect", "token").unwrap()] = parameter_default(
         "connect", "token"
-    ),
+    ).unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return await ep.connect(url, token)

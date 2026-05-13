@@ -13,6 +13,7 @@ from typing import Any, Final, cast
 
 from pydantic import Field
 from pydantic.fields import FieldInfo
+from returns.result import Failure, Result, Success
 
 
 @dataclass(frozen=True, slots=True)
@@ -437,46 +438,58 @@ TOOL_CONTRACTS_BY_NAME: Final[dict[str, ToolContract]] = {
 }
 
 
-def parameter_contract(tool_name: str, parameter_name: str) -> ParameterContract:
+def parameter_contract(tool_name: str, parameter_name: str) -> Result[ParameterContract, str]:
     """Return the authoritative ParameterContract for runtime registration.
 
-    >>> parameter_contract("table_say", "saying_type").default
+    >>> parameter_contract("table_say", "saying_type").unwrap().default
     'text'
-    >>> parameter_contract("seat_heartbeat", "ttl_ms").default
+    >>> parameter_contract("seat_heartbeat", "ttl_ms").unwrap().default
     60000
     """
-    contract = TOOL_CONTRACTS_BY_NAME[tool_name]
+    contract_result = tool_contract(tool_name)
+    if isinstance(contract_result, Failure):
+        return Failure(contract_result.failure())
+    contract = contract_result.unwrap()
     for parameter in contract.parameters:
         if parameter.name == parameter_name:
-            return parameter
-    raise KeyError(f"Unknown MCP parameter: {tool_name}.{parameter_name}")
+            return Success(parameter)
+    return Failure(f"Unknown MCP parameter: {tool_name}.{parameter_name}")
 
 
-def tool_contract(tool_name: str) -> ToolContract:
+def tool_contract(tool_name: str) -> Result[ToolContract, str]:
     """Return the authoritative ToolContract for runtime registration.
 
-    >>> tool_contract("table_wait").description.startswith("This is the primary loop tool")
+    >>> tool_contract("table_wait").unwrap().description.startswith("This is the primary loop tool")
     True
     """
-    return TOOL_CONTRACTS_BY_NAME[tool_name]
+    contract = TOOL_CONTRACTS_BY_NAME.get(tool_name)
+    if contract is None:
+        return Failure(f"Unknown MCP tool: {tool_name}")
+    return Success(contract)
 
 
-def parameter_default(tool_name: str, parameter_name: str) -> Any:
+def parameter_default(tool_name: str, parameter_name: str) -> Result[Any, str]:
     """Return the runtime default from centralized MCP parameter metadata.
 
-    >>> parameter_default("table_join", "history_limit")
+    >>> parameter_default("table_join", "history_limit").unwrap()
     10
-    >>> parameter_default("table_say", "mentions") is None
+    >>> parameter_default("table_say", "mentions").unwrap() is None
     True
     """
-    return parameter_contract(tool_name, parameter_name).default
+    parameter_result = parameter_contract(tool_name, parameter_name)
+    if isinstance(parameter_result, Failure):
+        return Failure(parameter_result.failure())
+    return Success(parameter_result.unwrap().default)
 
 
-def parameter_field(tool_name: str, parameter_name: str) -> FieldInfo:
+def parameter_field(tool_name: str, parameter_name: str) -> Result[FieldInfo, str]:
     """Build a Pydantic Field from centralized MCP contract metadata.
 
-    >>> parameter_field("table_create", "title").description
+    >>> parameter_field("table_create", "title").unwrap().description
     'MCP-spec table title; required unless legacy question is provided'
     """
-    parameter = parameter_contract(tool_name, parameter_name)
-    return cast(FieldInfo, Field(description=parameter.description))
+    parameter_result = parameter_contract(tool_name, parameter_name)
+    if isinstance(parameter_result, Failure):
+        return Failure(parameter_result.failure())
+    parameter = parameter_result.unwrap()
+    return Success(cast(FieldInfo, Field(description=parameter.description)))

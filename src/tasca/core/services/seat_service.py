@@ -94,6 +94,7 @@ def is_seat_expired(seat: Seat, ttl_seconds: int, now: datetime) -> bool:
 
     Doctests:
         >>> from datetime import datetime
+        >>> from tasca.core.domain.seat import SeatId
         >>> seat = Seat(
         ...     id=SeatId("test"), table_id="t1", patron_id="p1",
         ...     state=SeatState.JOINED,
@@ -177,6 +178,7 @@ def seconds_until_expiry(seat: Seat, ttl_seconds: int, now: datetime) -> float:
 
     Doctests:
         >>> from datetime import datetime
+        >>> from tasca.core.domain.seat import SeatId
         >>> seat = Seat(
         ...     id=SeatId("test"), table_id="t1", patron_id="p1",
         ...     state=SeatState.JOINED,
@@ -224,6 +226,7 @@ def filter_expired_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> 
 
     Doctests:
         >>> from datetime import datetime
+        >>> from tasca.core.domain.seat import SeatId
         >>> seats = [
         ...     Seat(
         ...         id=SeatId("active"), table_id="t1", patron_id="p1",
@@ -273,6 +276,7 @@ def filter_active_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> l
 
     Doctests:
         >>> from datetime import datetime
+        >>> from tasca.core.domain.seat import SeatId
         >>> seats = [
         ...     Seat(
         ...         id=SeatId("active"), table_id="t1", patron_id="p1",
@@ -314,6 +318,7 @@ def heartbeat_update_time(seat: Seat, now: datetime) -> datetime:
 
     Doctests:
         >>> from datetime import datetime
+        >>> from tasca.core.domain.seat import SeatId
         >>> seat = Seat(
         ...     id=SeatId("test"), table_id="t1", patron_id="p1",
         ...     state=SeatState.JOINED,
@@ -344,6 +349,7 @@ def create_heartbeat_update(seat: Seat, now: datetime) -> Seat:
 
     Doctests:
         >>> from datetime import datetime
+        >>> from tasca.core.domain.seat import SeatId
         >>> seat = Seat(
         ...     id=SeatId("test"), table_id="t1", patron_id="p1",
         ...     state=SeatState.JOINED,

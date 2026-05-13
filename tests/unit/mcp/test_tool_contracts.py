@@ -138,7 +138,7 @@ def test_optional_parameter_contract_defaults_match_server_signatures() -> None:
 
 
 def test_runtime_field_metadata_is_built_from_tool_contracts() -> None:
-    field = parameter_field("seat_heartbeat", "ttl_ms")
+    field = parameter_field("seat_heartbeat", "ttl_ms").unwrap()
 
     assert field.description == (
         "Time-to-live in ms before the seat expires (default 60000 = 60s)"

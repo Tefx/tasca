@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any, cast
 
 import deal
+from returns.result import Failure, Result, Success
 
 from tasca.core.domain.patron import Patron
 from tasca.core.domain.seat import Seat
@@ -20,6 +21,7 @@ from tasca.shell.mcp.responses import error_response
 EXIT_EMPTY_WAITS_THRESHOLD = 30
 _NUDGE_THRESHOLD = 4
 _URGENCY_THRESHOLD = 11
+PatchApplyResult = tuple[TableUpdate, dict[str, Any] | None]
 
 _JOIN_OPENING_ACTION = (
     "The table has a question but no discussion yet. "
@@ -75,9 +77,9 @@ def build_patron_response_data(patron: Patron, *, is_new: bool) -> dict[str, Any
 @deal.post(lambda result: "id" in result and "status" in result)
 def build_table_dict(table: Table) -> dict[str, Any]:
     """Build MCP table payload."""
+    identity_payload = _table_identity_payload(table)
     return {
-        "id": table.id,
-        "table_id": table.id,
+        **identity_payload,
         "question": table.question,
         "title": table.question,
         "context": table.context,
@@ -85,10 +87,20 @@ def build_table_dict(table: Table) -> dict[str, Any]:
         "version": table.version,
         "created_at": table.created_at.isoformat(),
         "updated_at": table.updated_at.isoformat(),
+        "host_ids": table.host_ids,
+    }
+
+
+@deal.pre(lambda table: table is not None)
+@deal.post(lambda result: "id" in result and "creator_id" in result)
+def _table_identity_payload(table: Table) -> dict[str, Any]:
+    """Build stable table identity aliases for MCP compatibility."""
+    return {
+        "id": table.id,
+        "table_id": table.id,
         "creator_id": table.creator_patron_id,
         "created_by": table.creator_patron_id,
         "creator_patron_id": table.creator_patron_id,
-        "host_ids": table.host_ids,
     }
 
 
@@ -133,18 +145,29 @@ def validate_speaker_constraints(
 ) -> dict[str, Any] | None:
     """Validate speaker kind/patron_id protocol constraints."""
     if speaker_kind == "agent" and patron_id is None:
-        return error_response(
-            "INVALID_REQUEST",
-            "patron_id is required when speaker_kind is 'agent'",
-            {"speaker_kind": speaker_kind},
-        )
+        return _speaker_constraint_error("agent_missing_patron", speaker_kind, patron_id)
     if speaker_kind == "human" and patron_id is not None:
-        return error_response(
-            "INVALID_REQUEST",
-            "patron_id must be null or omitted when speaker_kind is 'human'",
-            {"speaker_kind": speaker_kind, "patron_id": patron_id},
-        )
+        return _speaker_constraint_error("human_with_patron", speaker_kind, patron_id)
     return None
+
+
+@deal.pre(lambda kind, speaker_kind, patron_id: kind in {"agent_missing_patron", "human_with_patron"})
+@deal.post(lambda result: result.get("ok") is False and "error" in result)
+def _speaker_constraint_error(
+    kind: str, speaker_kind: str, patron_id: str | None,
+) -> dict[str, Any]:
+    """Build speaker constraint error envelopes."""
+    if kind == "agent_missing_patron":
+        message = "patron_id is required when speaker_kind is 'agent'"
+        details: dict[str, Any] = {"speaker_kind": speaker_kind}
+    else:
+        message = "patron_id must be null or omitted when speaker_kind is 'human'"
+        details = {"speaker_kind": speaker_kind, "patron_id": patron_id}
+    return error_response(
+        "INVALID_REQUEST",
+        message,
+        details,
+    )
 
 
 @deal.pre(lambda new_status, control_sequence: control_sequence >= 0)
@@ -178,55 +201,81 @@ def build_join_next_action(has_history: bool, next_sequence: int) -> str:
 # +#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+#+
 def _parse_patch_status(
     current_table: Table, patch: dict[str, Any]
-) -> tuple[TableStatus, dict[str, Any] | None]:
+) -> Result[tuple[TableStatus, dict[str, Any] | None], str]:
     """Parse optional status patch into a TableStatus."""
     if "status" not in patch:
-        return current_table.status, None
+        return Success((current_table.status, None))
     status_value = patch["status"]
     try:
-        return TableStatus(status_value), None
+        return Success((TableStatus(status_value), None))
     except ValueError:
-        return current_table.status, error_response(
+        return Success((current_table.status, error_response(
             "INVALID_STATUS",
             f"Invalid status value: {status_value}. Must be one of: open, paused, closed",
-        )
+        )))
 
 
 @deal.pre(lambda current_table, patch: current_table is not None and patch is not None)
 @deal.post(lambda result: len(result) == 2)
-def apply_table_patch(
-    current_table: Table,
-    patch: dict[str, Any],
-) -> tuple[TableUpdate, dict[str, Any] | None]:
+def apply_table_patch(current_table: Table, patch: dict[str, Any]) -> PatchApplyResult:
     """Apply supported table patch fields and validate status transitions."""
-    new_status, status_error = _parse_patch_status(current_table, patch)
+    new_status, status_error = _parse_patch_status(current_table, patch).unwrap()
     if status_error is not None:
-        return (
-            TableUpdate(
-                question=current_table.question,
-                context=current_table.context,
-                status=current_table.status,
-            ),
-            status_error,
-        )
+        return _patch_error_result(current_table, status_error)
     new_question = patch.get("question", current_table.question)
-    new_context = patch.get("context", current_table.context)
-    new_host_ids = patch.get("host_ids", current_table.host_ids)
-    if not isinstance(new_host_ids, list) or not all(isinstance(item, str) for item in new_host_ids):
-        return (
-            TableUpdate(
-                question=current_table.question,
-                context=current_table.context,
-                status=current_table.status,
-                host_ids=current_table.host_ids,
-            ),
-            error_response("INVALID_REQUEST", "host_ids must be a list of patron_id strings"),
+    new_context = cast(str, patch.get("context", current_table.context))
+    host_ids_result = _parse_patch_host_ids(patch, current_table.host_ids)
+    if isinstance(host_ids_result, Failure):
+        return _patch_error_result(
+            current_table,
+            host_ids_result.failure(),
         )
+    new_host_ids = host_ids_result.unwrap()
+    return _patch_success_result(new_question, new_context, new_status, new_host_ids)
+
+
+def _parse_patch_host_ids(
+    patch: dict[str, Any], current_host_ids: list[str]
+) -> Result[list[str], dict[str, Any]]:
+    """Parse and validate optional host_ids patch field."""
+    host_ids = patch.get("host_ids", current_host_ids)
+    if not isinstance(host_ids, list) or not all(isinstance(item, str) for item in host_ids):
+        return Failure(error_response("INVALID_REQUEST", "host_ids must be a list of patron_id strings"))
+    return Success(host_ids)
+
+
+@deal.pre(lambda current_table, error: current_table is not None and error is not None)
+@deal.post(lambda result: len(result) == 2 and result[1] is not None)
+def _patch_error_result(
+    current_table: Table,
+    error: dict[str, Any],
+) -> tuple[TableUpdate, dict[str, Any]]:
+    """Build an unchanged update plus validation error."""
+    return (
+        TableUpdate(
+            question=current_table.question,
+            context=current_table.context,
+            status=current_table.status,
+            host_ids=current_table.host_ids,
+        ),
+        error,
+    )
+
+
+@deal.pre(lambda question, context, status, host_ids: isinstance(host_ids, list))
+@deal.post(lambda result: len(result) == 2 and result[1] is None)
+def _patch_success_result(
+    question: str,
+    context: str,
+    status: TableStatus,
+    host_ids: list[str],
+) -> tuple[TableUpdate, None]:
+    """Build a validated table update tuple."""
     return TableUpdate(
-        question=new_question,
-        context=new_context,
-        status=new_status,
-        host_ids=new_host_ids,
+        question=question,
+        context=context,
+        status=status,
+        host_ids=host_ids,
     ), None
 
 
@@ -239,29 +288,68 @@ def build_say_response(
     mentions_unresolved: list[str],
 ) -> dict[str, Any]:
     """Build table_say response payload."""
-    speaker_payload = {
-        "kind": saying.speaker.kind.value,
-        "name": saying.speaker.name,
-        "patron_id": saying.speaker.patron_id,
-    }
-    next_action = (
-        f"IMMEDIATELY call tasca.table_wait(since_sequence={saying.sequence}). "
-        "Your response = tool_call, not text."
-    )
+    compatibility = _say_compatibility_payload(saying)
+    speaker = _saying_speaker_payload(saying)
+    next_action = _say_next_action(saying.sequence)
+    return _say_response_payload(
+        saying, compatibility, speaker, next_action, mentions_all, mentions_resolved, mentions_unresolved
+    ).unwrap()
+
+
+def _say_response_payload(
+    saying: Any,
+    compatibility: dict[str, Any],
+    speaker: dict[str, Any],
+    next_action: str,
+    mentions_all: bool,
+    mentions_resolved: list[str],
+    mentions_unresolved: list[str],
+) -> Result[dict[str, Any], str]:
+    """Build complete table_say response payload."""
+    return Success({
+        **compatibility,
+        "mentions_all": mentions_all,
+        "mentions_resolved": mentions_resolved,
+        "mentions_unresolved": mentions_unresolved,
+        "table_id": saying.table_id,
+        "speaker": speaker,
+        "content": saying.content,
+        "pinned": saying.pinned,
+        "_next_action": next_action,
+    })
+
+
+@deal.pre(lambda saying: saying is not None)
+@deal.post(lambda result: "saying_id" in result and "id" in result)
+def _say_compatibility_payload(saying: Any) -> dict[str, Any]:
+    """Build legacy and spec aliases for a table_say response."""
     return {
         "saying_id": saying.id,
         "sequence": saying.sequence,
         "created_at": saying.created_at.isoformat(),
-        "mentions_all": mentions_all,
-        "mentions_resolved": mentions_resolved,
-        "mentions_unresolved": mentions_unresolved,
         "id": saying.id,
-        "table_id": saying.table_id,
-        "speaker": speaker_payload,
-        "content": saying.content,
-        "pinned": saying.pinned,
-        "_next_action": next_action,
     }
+
+
+@deal.pre(lambda saying: saying is not None)
+@deal.post(lambda result: "kind" in result and "name" in result)
+def _saying_speaker_payload(saying: Any) -> dict[str, Any]:
+    """Build speaker payload for saying responses."""
+    return {
+        "kind": saying.speaker.kind.value,
+        "name": saying.speaker.name,
+        "patron_id": saying.speaker.patron_id,
+    }
+
+
+@deal.pre(lambda sequence: sequence >= 0)
+@deal.post(lambda result: "tasca.table_wait" in result)
+def _say_next_action(sequence: int) -> str:
+    """Build guidance after a successful table_say."""
+    return (
+        f"IMMEDIATELY call tasca.table_wait(since_sequence={sequence}). "
+        "Your response = tool_call, not text."
+    )
 
 
 @deal.post(lambda result: isinstance(result, dict))
@@ -290,16 +378,16 @@ def build_table_update_actor_metadata(
     }
 
 
-def _silence_nudge(empty_waits: int, threshold: int, next_sequence: int) -> str:
-    return (
+def _silence_nudge(empty_waits: int, threshold: int, next_sequence: int) -> Result[str, str]:
+    return Success(
         f"No new messages ({empty_waits}/{threshold}). "
         f"IMMEDIATELY call tasca.table_wait(since_sequence={next_sequence}). "
         "Your response = tool_call, not text."
     )
 
 
-def _silence_stall(empty_waits: int, next_sequence: int) -> str:
-    return (
+def _silence_stall(empty_waits: int, next_sequence: int) -> Result[str, str]:
+    return Success(
         f"Silence for {empty_waits} consecutive waits - discussion may be stalling. "
         "Consider whether the table's question has been fully addressed. "
         "If not, call tasca.table_say to advance: raise an unaddressed aspect, "
@@ -309,8 +397,8 @@ def _silence_stall(empty_waits: int, next_sequence: int) -> str:
     )
 
 
-def _silence_last_chance(empty_waits: int, threshold: int, next_sequence: int) -> str:
-    return (
+def _silence_last_chance(empty_waits: int, threshold: int, next_sequence: int) -> Result[str, str]:
+    return Success(
         f"Extended silence ({empty_waits}/{threshold}). If you have ANY remaining "
         "perspective on the table's question, call tasca.table_say NOW - "
         "this is your last chance before the discussion ends. "
@@ -320,8 +408,8 @@ def _silence_last_chance(empty_waits: int, threshold: int, next_sequence: int) -
     )
 
 
-def _silence_exit(threshold: int) -> str:
-    return (
+def _silence_exit(threshold: int) -> Result[str, str]:
+    return Success(
         f"Empty waits reached {threshold}. Discussion is over. "
         "IMMEDIATELY call tasca.seat_heartbeat(state='done'), then report to the user."
     )
@@ -333,12 +421,12 @@ def silence_next_action(empty_waits: int, next_sequence: int) -> str:
     """Build table_wait silence guidance text."""
     threshold = EXIT_EMPTY_WAITS_THRESHOLD
     if empty_waits < _NUDGE_THRESHOLD:
-        return _silence_nudge(empty_waits, threshold, next_sequence)
+        return _silence_nudge(empty_waits, threshold, next_sequence).unwrap()
     if empty_waits < _URGENCY_THRESHOLD:
-        return _silence_stall(empty_waits, next_sequence)
+        return _silence_stall(empty_waits, next_sequence).unwrap()
     if empty_waits < threshold:
-        return _silence_last_chance(empty_waits, threshold, next_sequence)
-    return _silence_exit(threshold)
+        return _silence_last_chance(empty_waits, threshold, next_sequence).unwrap()
+    return _silence_exit(threshold).unwrap()
 
 
 @deal.pre(lambda sayings, since_sequence: since_sequence >= -1)

@@ -136,7 +136,7 @@ from tasca.shell.storage.table_repo import (
     update_table,
 )
 
-logger = get_logger(__name__)
+logger = get_logger(__name__).unwrap()
 McpEnvelope = dict[str, Any]
 
 # Per-session loop state tracking.
@@ -722,7 +722,7 @@ def _resolve_mentions_for_say(
 
     patrons_result = list_patrons(conn)
     if isinstance(patrons_result, Failure):
-        get_logger(__name__).warning(
+        get_logger(__name__).unwrap().warning(
             "Failed to fetch patrons for mention resolution",
             extra={"error": str(patrons_result.failure())},
         )
@@ -807,7 +807,8 @@ def table_say(
         )
 
     actual_speaker_kind = speaker_kind
-    validation_error = validate_table_say_speaker_constraints(actual_speaker_kind, patron_id)
+    validation_result = validate_table_say_speaker_constraints(actual_speaker_kind, patron_id)
+    validation_error = validation_result.unwrap()
     if validation_error is not None:
         return _table_say_error_to_mcp_response(validation_error)
 

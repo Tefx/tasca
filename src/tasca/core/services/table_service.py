@@ -134,7 +134,6 @@ def check_version_or_raise(current_version: Version, expected_version: Version) 
 # =============================================================================
 
 
-# @invar:allow partial_contract: Each @pre checks all parameters - deal expects separate @pre per condition
 @deal.pre(lambda table, update, now: table is not None and update is not None and now is not None)
 @deal.post(lambda result: result.version > 1)  # version always increments
 @deal.post(lambda result: result.id is not None)  # id preserved
@@ -208,10 +207,13 @@ def prepare_table_update(table: Table, update: TableUpdate, now: datetime) -> Ta
 # =============================================================================
 
 
-# @invar:allow partial_contract: Combined @pre checks all parameters in one lambda
 @deal.pre(
     lambda table, update, expected_version, now: (
-        table is not None and update is not None and expected_version >= 1 and now is not None
+        table is not None
+        and update is not None
+        and expected_version is not None
+        and expected_version >= 1
+        and now is not None
     )
 )
 @deal.raises(VersionMismatchError)

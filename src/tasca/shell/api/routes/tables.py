@@ -47,7 +47,7 @@ from tasca.shell.storage.table_repo import (
 
 router = APIRouter()
 router.include_router(tables_control.router)
-logger = get_logger(__name__)
+logger = get_logger(__name__).unwrap()
 
 
 # =============================================================================
@@ -132,6 +132,7 @@ class BatchDeleteErrorResponse(BaseModel):
     details: list[BatchDeleteRejectionDetail]
 
 
+# @shell_complexity: REST table creation maps validation, idempotency, service errors, logging, and cache write.
 def _table_create_response(
     conn: sqlite3.Connection,
     data: TableCreateRequest,

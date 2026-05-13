@@ -47,9 +47,8 @@ class PatronDatabaseError(PatronError):
 # =============================================================================
 
 
-# @invar:allow shell_result: Private helper - pure data transformation, not a shell operation
 # @shell_orchestration: Helper for row-to-domain mapping, used internally by repo functions
-def _row_to_patron(row: tuple[Any, ...]) -> Patron:
+def _row_to_patron(row: tuple[Any, ...]) -> Result[Patron, PatronError]:
     """Convert a database row to a Patron object.
 
     Args:
@@ -70,13 +69,15 @@ def _row_to_patron(row: tuple[Any, ...]) -> Patron:
         meta_val = None
         created_at_val = row[3]
 
-    return Patron(
-        id=PatronId(row[0]),
-        name=row[1],
-        kind=row[2],
-        alias=alias_val,
-        meta=meta_val,
-        created_at=datetime.fromisoformat(created_at_val),
+    return Success(
+        Patron(
+            id=PatronId(row[0]),
+            name=row[1],
+            kind=row[2],
+            alias=alias_val,
+            meta=meta_val,
+            created_at=datetime.fromisoformat(created_at_val),
+        )
     )
 
 
@@ -170,7 +171,7 @@ def get_patron(conn: sqlite3.Connection, patron_id: PatronId) -> Result[Patron, 
         if row is None:
             return Failure(PatronNotFoundError(patron_id))
 
-        return Success(_row_to_patron(row))
+        return _row_to_patron(row)
     except sqlite3.Error as e:
         return Failure(PatronDatabaseError(f"Failed to get patron: {e}"))
 
@@ -208,7 +209,7 @@ def find_patron_by_name(conn: sqlite3.Connection, name: str) -> Result[Patron | 
         if row is None:
             return Success(None)
 
-        return Success(_row_to_patron(row))
+        return _row_to_patron(row)
     except sqlite3.Error as e:
         return Failure(PatronDatabaseError(f"Failed to find patron: {e}"))
 
@@ -245,6 +246,12 @@ def list_patrons(conn: sqlite3.Connection) -> Result[list[Patron], PatronError]:
             """
         )
         rows = cursor.fetchall()
-        return Success([_row_to_patron(row) for row in rows])
+        patrons: list[Patron] = []
+        for row in rows:
+            patron_result = _row_to_patron(row)
+            if isinstance(patron_result, Failure):
+                return patron_result
+            patrons.append(patron_result.unwrap())
+        return Success(patrons)
     except sqlite3.Error as e:
         return Failure(PatronDatabaseError(f"Failed to list patrons: {e}"))

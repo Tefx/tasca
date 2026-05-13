@@ -1,16 +1,4 @@
-"""
-Limits service - core business logic for server-side limits enforcement.
-
-This module provides pure functions for validating various caps:
-- history: max sayings per table
-- content: max message length
-- bytes: max total data per table
-- mentions: max mentions per saying
-
-All functions are pure (no I/O) with @pre/@post contracts and doctests.
-"""
-
-# @invar:allow file_size: limits checks and aggregate status share one contract surface used together by shell boundary glue.
+"""Core business logic for server-side limits enforcement."""
 
 import re
 from dataclasses import dataclass
@@ -19,7 +7,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import deal
 
-# Hypothesis optional - for property-based testing
 try:
     from hypothesis import strategies as imported_hypothesis_strategies
     from hypothesis.strategies import SearchStrategy as ImportedSearchStrategy
@@ -51,14 +38,6 @@ class LimitKind(StrEnum):
 @dataclass(frozen=True)
 class LimitsConfig:
     """Configuration for server-side limits.
-
-    All limits are positive integers. Use 0 or None to disable a limit.
-
-    Attributes:
-        max_sayings_per_table: Maximum number of sayings allowed per table.
-        max_content_length: Maximum length of message content in characters.
-        max_bytes_per_table: Maximum total bytes stored per table.
-        max_mentions_per_saying: Maximum number of @mentions per saying.
 
     Example:
         >>> config = LimitsConfig(max_sayings_per_table=100, max_content_length=5000)
@@ -97,23 +76,14 @@ class LimitsConfig:
             raise ValueError("max_mentions_per_saying must be non-negative")
 
 
-# Register Hypothesis strategy for LimitsConfig (for property-based testing)
-# This ensures Hypothesis generates valid configs (positive integers for limits,
-# non-negative for mentions) rather than arbitrary integers that would fail __post_init__
 @deal.post(lambda result: result is None)
 def _register_hypothesis_strategies() -> None:
-    """Register custom Hypothesis strategies for this module's types.
-
-    Examples:
-        >>> _register_hypothesis_strategies() is None
-        True
-    """
+    """Register custom Hypothesis strategies for this module's types."""
     if not _HYPOTHESIS_AVAILABLE:
         return
     if hypothesis_strategies is None or SearchStrategy is None or register_hypothesis_type_strategy is None:
         return
 
-    # Strategy for valid LimitsConfig: positive integers for limits, non-negative for mentions
     limits_config_strategy = cast(
         SearchStrategy[LimitsConfig],
         hypothesis_strategies.builds(
@@ -161,12 +131,6 @@ def settings_to_limits_config(settings: "Settings") -> LimitsConfig:
 class LimitError:
     """Error returned when a limit is exceeded.
 
-    Attributes:
-        kind: The type of limit that was exceeded.
-        limit: The configured limit value.
-        actual: The actual value that exceeded the limit.
-        message: Human-readable error message.
-
     Example:
         >>> error = LimitError(kind=LimitKind.CONTENT, limit=100, actual=150)
         >>> error.kind
@@ -199,11 +163,6 @@ class LimitError:
             )
 
 
-# =============================================================================
-# Core Validation Functions
-# =============================================================================
-
-# Mention pattern compiled at module level for reuse
 _MENTION_PATTERN = re.compile(r"(?<!\w)@[^\s@]+")
 
 

@@ -206,8 +206,7 @@ def verify_database_config(conn: sqlite3.Connection) -> Result[dict[str, int | b
     >>> conn.close()
     """
     try:
-        config = _read_database_config(conn)
-        return Success(config)
+        return _read_database_config(conn)
     except sqlite3.Error as e:
         return Failure(f"Failed to verify database config: {e}")
 
@@ -269,8 +268,7 @@ def _configure_connection_defaults(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys=ON")
 
 
-# @invar:allow shell_result: Private normalizer feeds verify_database_config Result wrapper.
-def _read_database_config(conn: sqlite3.Connection) -> dict[str, int | bool | str]:
+def _read_database_config(conn: sqlite3.Connection) -> Result[dict[str, int | bool | str], str]:
     """Read and normalize journal, busy_timeout, and foreign_keys pragmas."""
     journal_result = conn.execute("PRAGMA journal_mode").fetchone()
     timeout_result = conn.execute("PRAGMA busy_timeout").fetchone()
@@ -279,4 +277,4 @@ def _read_database_config(conn: sqlite3.Connection) -> dict[str, int | bool | st
     journal_mode = normalize_journal_mode(journal_result)
     busy_timeout = normalize_busy_timeout(timeout_result)
     foreign_keys = normalize_foreign_keys_enabled(fk_result)
-    return build_database_config(journal_mode, busy_timeout, foreign_keys)
+    return Success(build_database_config(journal_mode, busy_timeout, foreign_keys))

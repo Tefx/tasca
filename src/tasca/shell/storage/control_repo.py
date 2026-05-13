@@ -86,7 +86,6 @@ class ControlDatabaseError(ControlError):
 
 
 # @shell_orchestration: Multi-step atomic operation (BEGIN IMMEDIATE, insert saying, update table, COMMIT)
-# @invar:allow function_size: Transaction boundary - atomicity requires all operations in one function
 # @shell_complexity: transaction boundary requires lock/insert/update/rollback branches to preserve atomic audit+state semantics.
 def atomic_control_table(
     conn: sqlite3.Connection,

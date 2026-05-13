@@ -85,8 +85,7 @@ def check_duplicate(
         if not row:
             return Success(None)
 
-        record = _row_to_dedup_record(row)
-        return Success(record)
+        return _row_to_dedup_record(row)
 
     except sqlite3.Error as e:
         return Failure(DedupError(f"Database error: {e}"))
@@ -314,7 +313,10 @@ def check_duplicate_with_expiry(
         if not row:
             return Success(None)
 
-        record = _row_to_dedup_record(row)
+        record_result = _row_to_dedup_record(row)
+        if isinstance(record_result, Failure):
+            return record_result
+        record = record_result.unwrap()
 
         # Check if expired
         if is_dedup_entry_expired(record.first_seen_at, ttl_seconds, now):
@@ -530,9 +532,8 @@ def store_or_get_existing_with_expiry(
 # =============================================================================
 
 
-# @invar:allow shell_result: Private helper converting DB row to domain object
 # @shell_orchestration: Helper for row-to-domain conversion within repository
-def _row_to_dedup_record(row: tuple[str, str, str]) -> DedupRecord:
+def _row_to_dedup_record(row: tuple[str, str, str]) -> Result[DedupRecord, DedupError]:
     """Convert a database row to a DedupRecord domain object.
 
     Args:
@@ -544,8 +545,10 @@ def _row_to_dedup_record(row: tuple[str, str, str]) -> DedupRecord:
     content_hash, content_preview, first_seen_at_str = row
     first_seen_at = datetime.fromisoformat(first_seen_at_str)
 
-    return DedupRecord(
-        content_hash=content_hash,
-        content_preview=content_preview,
-        first_seen_at=first_seen_at,
+    return Success(
+        DedupRecord(
+            content_hash=content_hash,
+            content_preview=content_preview,
+            first_seen_at=first_seen_at,
+        )
     )

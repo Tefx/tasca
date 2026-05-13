@@ -47,18 +47,30 @@ class SeatDatabaseError(SeatError):
 # =============================================================================
 
 
-# @invar:allow shell_result: seat_repo.py - private helper converts DB row to domain object, not Result
 # @shell_orchestration: Helper for row-to-domain mapping, used internally by repo functions
-def _row_to_seat(row: tuple[Any, ...]) -> Seat:
+def _row_to_seat(row: tuple[Any, ...]) -> Result[Seat, SeatError]:
     """Convert a database row to a Seat object."""
-    return Seat(
-        id=SeatId(row[0]),
-        table_id=row[1],
-        patron_id=row[2],
-        state=SeatState(row[3]),
-        last_heartbeat=datetime.fromisoformat(row[4]),
-        joined_at=datetime.fromisoformat(row[5]),
+    return Success(
+        Seat(
+            id=SeatId(row[0]),
+            table_id=row[1],
+            patron_id=row[2],
+            state=SeatState(row[3]),
+            last_heartbeat=datetime.fromisoformat(row[4]),
+            joined_at=datetime.fromisoformat(row[5]),
+        )
     )
+
+
+def _rows_to_seats(rows: list[tuple[Any, ...]]) -> Result[list[Seat], SeatError]:
+    """Convert database rows to seats while preserving the first conversion failure."""
+    seats: list[Seat] = []
+    for row in rows:
+        seat_result = _row_to_seat(row)
+        if isinstance(seat_result, Failure):
+            return seat_result
+        seats.append(seat_result.unwrap())
+    return Success(seats)
 
 
 def create_seat(conn: sqlite3.Connection, seat: Seat) -> Result[Seat, SeatError]:
@@ -116,7 +128,7 @@ def get_seat(conn: sqlite3.Connection, seat_id: SeatId) -> Result[Seat, SeatErro
         if row is None:
             return Failure(SeatNotFoundError(seat_id))
 
-        return Success(_row_to_seat(row))
+        return _row_to_seat(row)
     except sqlite3.Error as e:
         return Failure(SeatDatabaseError(f"Failed to get seat: {e}"))
 
@@ -148,7 +160,7 @@ def get_seat_by_patron(
             # The message will still be useful for debugging
             return Failure(SeatNotFoundError(SeatId(f"{table_id}:{patron_id}")))
 
-        return Success(_row_to_seat(row))
+        return _row_to_seat(row)
     except sqlite3.Error as e:
         return Failure(SeatDatabaseError(f"Failed to get seat by patron: {e}"))
 
@@ -265,8 +277,7 @@ def find_seats_by_table(conn: sqlite3.Connection, table_id: str) -> Result[list[
             (table_id,),
         )
         rows = cursor.fetchall()
-        seats = [_row_to_seat(row) for row in rows]
-        return Success(seats)
+        return _rows_to_seats(rows)
     except sqlite3.Error as e:
         return Failure(SeatDatabaseError(f"Failed to find seats by table: {e}"))
 
@@ -306,7 +317,10 @@ def find_expired_seats(
         )
         rows = cursor.fetchall()
 
-        seats = [_row_to_seat(row) for row in rows]
+        seats_result = _rows_to_seats(rows)
+        if isinstance(seats_result, Failure):
+            return seats_result
+        seats = seats_result.unwrap()
 
         # Double-check with core logic (belt and suspenders)
         # This ensures consistency even if SQL query has edge cases

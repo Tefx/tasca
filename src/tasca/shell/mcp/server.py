@@ -246,13 +246,12 @@ else:
     )
 
 # Logger for structured logging
-logger = get_logger(__name__)
+logger = get_logger(__name__).unwrap()
 
 from tasca.shell.mcp import entrypoints as ep  # noqa: E402
 
 VALID_TABLE_STATUS_FILTERS = ep.VALID_TABLE_STATUS_FILTERS
 
-# @invar:allow entry_point_too_thick: FastMCP adapter factory must preserve signatures while registering transport wrappers.
 # @shell:entry - FastMCP decorator adapter returns framework callable, not a domain Result.
 def _contract_tool(tool_name: str) -> Callable[[F], F]:
     """Register an MCP tool using centralized contract metadata."""
@@ -260,44 +259,44 @@ def _contract_tool(tool_name: str) -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         if iscoroutinefunction(func):
-
-            @wraps(func)
-            async def async_adapter(*args: Any, **kwargs: Any) -> McpEnvelope:
-                result = await func(*args, **kwargs)
-                return _to_mcp_response(result)
-
-            mcp.tool(name=contract.tool_name, description=contract.description)(async_adapter)
-
-            @wraps(func)
-            async def async_public(*args: Any, **kwargs: Any) -> McpEnvelope:
-                result = await func(*args, **kwargs)
-                return _to_mcp_response(result)
-
-            return cast(F, async_public)
-
-        @wraps(func)
-        def adapter(*args: Any, **kwargs: Any) -> McpEnvelope:
-            result = func(*args, **kwargs)
-            return _to_mcp_response(result)
-
-        mcp.tool(name=contract.tool_name, description=contract.description)(adapter)
-
-        @wraps(func)
-        def public(*args: Any, **kwargs: Any) -> McpEnvelope:
-            result = func(*args, **kwargs)
-            return _to_mcp_response(result)
-
-        return cast(F, public)
+            return _register_async_contract_tool(func, contract.tool_name, contract.description).unwrap()
+        return _register_sync_contract_tool(func, contract.tool_name, contract.description).unwrap()
 
     return decorator
 
 
-# @invar:allow shell_result: FastMCP boundary adapter unwraps Result envelopes for JSON serialization.
-def _to_mcp_response(result: McpResult) -> McpEnvelope:
+def _register_async_contract_tool[F](func: F, tool_name: str, description: str) -> Result[F, str]:
+    """Register an async MCP adapter and return the public wrapper."""
+    callable_func = cast(Callable[..., Any], func)
+
+    @wraps(callable_func)
+    async def async_adapter(*args: Any, **kwargs: Any) -> McpEnvelope:
+        result = await callable_func(*args, **kwargs)
+        return _to_mcp_response(result).unwrap()
+
+    mcp.tool(name=tool_name, description=description)(async_adapter)
+    return Success(cast(F, async_adapter))
+
+
+def _register_sync_contract_tool[F](func: F, tool_name: str, description: str) -> Result[F, str]:
+    """Register a sync MCP adapter and return the public wrapper."""
+    callable_func = cast(Callable[..., Any], func)
+
+    @wraps(callable_func)
+    def adapter(*args: Any, **kwargs: Any) -> McpEnvelope:
+        result = callable_func(*args, **kwargs)
+        return _to_mcp_response(result).unwrap()
+
+    mcp.tool(name=tool_name, description=description)(adapter)
+    return Success(cast(F, adapter))
+
+
+# @shell_orchestration: FastMCP boundary adapter unwraps Result envelopes for JSON serialization.
+def _to_mcp_response(result: McpResult) -> Result[McpEnvelope, str]:
     """Convert internal MCP Result seams to transport envelope dictionaries."""
     if isinstance(result, Failure):
-        return cast(McpEnvelope, result.failure())
-    return result.unwrap()
+        return Success(cast(McpEnvelope, result.failure()))
+    return Success(result.unwrap())
 
 
 @_contract_tool("patron_register")

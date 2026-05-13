@@ -28,7 +28,7 @@ from tasca.shell.storage.seat_repo import (
     heartbeat_seat_by_patron,
 )
 
-logger = get_logger(__name__)
+logger = get_logger(__name__).unwrap()
 
 McpEnvelope = dict[str, Any]
 McpResult = Result[McpEnvelope, McpEnvelope]

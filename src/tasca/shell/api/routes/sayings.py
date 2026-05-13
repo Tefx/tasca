@@ -40,7 +40,7 @@ from tasca.shell.storage.saying_repo import (
 from tasca.shell.storage.table_repo import TableNotFoundError, get_table
 
 router = APIRouter()
-logger = get_logger(__name__)
+logger = get_logger(__name__).unwrap()
 
 
 # =============================================================================
@@ -160,6 +160,7 @@ def _get_table_or_404(conn: sqlite3.Connection, table_id: str) -> Result[Table, 
     return Success(result.unwrap())
 
 
+# @shell_complexity: HTTP adapter composes limits, shared append, logging, and exception mapping.
 def _append_saying_response(
     conn: sqlite3.Connection,
     table_id: str,
@@ -196,6 +197,7 @@ def _append_saying_response(
     return Success(saying)
 
 
+# @shell_complexity: HTTP adapter validates table existence, max sequence, list errors, and response semantics.
 def _list_sayings_response(
     conn: sqlite3.Connection,
     table_id: str,

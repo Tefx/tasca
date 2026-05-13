@@ -10,7 +10,7 @@ import sqlite3
 from typing import Annotated
 
 from pydantic import BaseModel
-from returns.result import Failure
+from returns.result import Failure, Result, Success
 
 from tasca.core.domain.table import TableStatus
 from tasca.shell.api.deps import get_db
@@ -66,78 +66,29 @@ class SearchResponse(BaseModel):
 # =============================================================================
 
 
-# @invar:allow entry_point_too_thick: search.py search_endpoint GET route with docstrings, type hints, and error handling
-@router.get("", response_model=SearchResponse)
-async def search_endpoint(
-    q: Annotated[str, Query(min_length=1, description="Search query string")],
-    table_status: str | None = Query(
-        None, alias="status", description="Filter by table status (open, paused, closed)"
-    ),
-    limit: Annotated[int, Query(ge=1, le=200, description="Max results to return")] = 50,
-    offset: Annotated[int, Query(ge=0, description="Offset for pagination")] = 0,
-    conn: sqlite3.Connection = Depends(get_db),
-) -> SearchResponse:
-    """Search tables and sayings for matching content.
-
-    Uses FTS5 full-text search for saying content with BM25 relevance ranking,
-    and LIKE search for table question and context.
-
-    Search priorities (each table appears once):
-    1. Question matches (highest priority)
-    2. Context matches
-    3. Saying content matches (FTS5 with BM25 ranking)
-
-    Args:
-        q: Search query string (FTS5 syntax supported for saying search).
-        table_status: Optional filter by table status.
-        limit: Maximum number of results (1-200, default 50).
-        offset: Offset for pagination.
-        conn: Database connection (injected via dependency).
-
-    Returns:
-        SearchResponse with matching tables ordered by relevance.
-
-    Raises:
-        HTTPException: 400 if invalid status value or FTS5 query syntax.
-        HTTPException: 500 if database operation fails.
-    """
-    # Validate table_status if provided
+# @shell_complexity: Search response assembly maps status, query, and count failures at HTTP boundary.
+def _search_response(
+    conn: sqlite3.Connection,
+    q: str,
+    table_status: str | None,
+    limit: int,
+    offset: int,
+) -> Result[SearchResponse, HTTPException]:
+    """Run table search and build its HTTP response model."""
     if table_status and table_status not in [s.value for s in TableStatus]:
-        raise HTTPException(
+        return Failure(HTTPException(
             status_code=400,
             detail=f"Invalid status: {table_status}. Must be one of: open, paused, closed",
-        )
-
-    # Perform search using FTS5-based search_repo
+        ))
     search_result = search_tables(conn, q, table_status, limit, offset)
-
     if isinstance(search_result, Failure):
         error = search_result.failure()
-        # Check for FTS5 syntax errors
-        if "syntax" in error.lower() or "fts5" in error.lower():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid search query: {error}",
-            )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Search failed: {error}",
-        )
-
-    hits = search_result.unwrap()
-
-    # Get total count
+        status_code = 400 if "syntax" in error.lower() or "fts5" in error.lower() else 500
+        detail = f"Invalid search query: {error}" if status_code == 400 else f"Search failed: {error}"
+        return Failure(HTTPException(status_code=status_code, detail=detail))
     count_result = count_table_search_results(conn, q, table_status)
-
     if isinstance(count_result, Failure):
-        raise HTTPException(
-            status_code=500,
-            detail=f"Search count failed: {count_result.failure()}",
-        )
-
-    total = count_result.unwrap()
-
-    # Convert TableSearchHit to SearchHit response model
+        return Failure(HTTPException(status_code=500, detail=f"Search count failed: {count_result.failure()}"))
     response_hits = [
         SearchHit(
             table_id=hit.table_id,
@@ -148,7 +99,23 @@ async def search_endpoint(
             created_at=hit.created_at,
             updated_at=hit.updated_at,
         )
-        for hit in hits
+        for hit in search_result.unwrap()
     ]
+    return Success(SearchResponse(query=q, total=count_result.unwrap(), hits=response_hits))
 
-    return SearchResponse(query=q, total=total, hits=response_hits)
+
+@router.get("", response_model=SearchResponse)
+async def search_endpoint(
+    q: Annotated[str, Query(min_length=1, description="Search query string")],
+    table_status: str | None = Query(
+        None, alias="status", description="Filter by table status (open, paused, closed)"
+    ),
+    limit: Annotated[int, Query(ge=1, le=200, description="Max results to return")] = 50,
+    offset: Annotated[int, Query(ge=0, description="Offset for pagination")] = 0,
+    conn: sqlite3.Connection = Depends(get_db),
+) -> SearchResponse:
+    """Search tables and sayings for matching content."""
+    result = _search_response(conn, q, table_status, limit, offset)
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()

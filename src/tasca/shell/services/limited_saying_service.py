@@ -131,32 +131,32 @@ def append_saying_with_limits(
     return Success(result.unwrap())
 
 
-# @invar:allow shell_result: Shared adapter pre-check returns optional typed error for idempotency ordering.
+# @shell_orchestration: Transport adapter pre-check keeps idempotency ordering before shared append.
 def validate_table_say_speaker_constraints(
     speaker_kind: str,
     patron_id: str | None,
-) -> TableSayError | None:
+) -> Result[TableSayError | None, str]:
     if speaker_kind == "agent" and patron_id is None:
-        return TableSayError(
+        return Success(TableSayError(
             kind=TableSayErrorKind.INVALID_SPEAKER,
             message="patron_id is required when speaker_kind is 'agent'",
             speaker_kind=speaker_kind,
-        )
+        ))
     if speaker_kind == "human" and patron_id is not None:
-        return TableSayError(
+        return Success(TableSayError(
             kind=TableSayErrorKind.INVALID_SPEAKER,
             message="patron_id must be null or omitted when speaker_kind is 'human'",
             speaker_kind=speaker_kind,
             patron_id=patron_id,
-        )
+        ))
     if speaker_kind not in {"agent", "human"}:
-        return TableSayError(
+        return Success(TableSayError(
             kind=TableSayErrorKind.INVALID_SPEAKER,
             message=f"speaker_kind must be 'agent' or 'human', got {speaker_kind!r}",
             speaker_kind=speaker_kind,
             patron_id=patron_id,
-        )
-    return None
+        ))
+    return Success(None)
 
 
 # @shell_complexity: Transport-neutral speaker resolution includes optional patron lookup/error classification.
@@ -203,7 +203,7 @@ def _resolve_speaker(
     return Success((Speaker(kind=SpeakerKind.HUMAN, name=resolved_name, patron_id=None), "human"))
 
 
-# @invar:allow shell_complexity: Shared transport-neutral table_say operation owns lookup/state/speaker/limit/append orchestration.
+# @shell_complexity: Shared transport-neutral table_say operation owns lookup/state/speaker/limit/append orchestration.
 def append_saying_operation(
     conn: sqlite3.Connection,
     table_id: str,
@@ -219,7 +219,8 @@ def append_saying_operation(
     speaker constraints/resolution, limit enforcement, append, and typed error
     classification. HTTP/MCP adapters map these outcomes to local envelopes.
     """
-    validation_error = validate_table_say_speaker_constraints(speaker_kind, patron_id)
+    validation_result = validate_table_say_speaker_constraints(speaker_kind, patron_id)
+    validation_error = validation_result.unwrap()
     if validation_error is not None:
         return Failure(validation_error)
 

@@ -16,9 +16,10 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from returns.result import Result, Success
 
-# @invar:allow shell_result: Logging utilities - side-effect helpers, no business logic
-def get_logger(name: str) -> logging.Logger:
+
+def get_logger(name: str) -> Result[logging.Logger, str]:
     """Get a logger with structured logging support.
 
     Args:
@@ -27,7 +28,7 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Configured logger instance.
     """
-    return logging.getLogger(name)
+    return Success(logging.getLogger(name))
 
 
 def log_event(

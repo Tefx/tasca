@@ -7,10 +7,11 @@ callable contract that tests and local runtime policy patching depend on.
 
 from __future__ import annotations
 
+from returns.result import Failure, Result, Success
 
-# @invar:allow shell_result: Startup policy hook mutates no state and returns None by convention.
+
 # @shell_orchestration: Startup integration policy is invoked by usercustomize at interpreter startup.
-def enforce_runtime_guard_contract(argv: list[str]) -> None:
+def enforce_runtime_guard_contract(argv: list[str]) -> Result[None, str]:
     """Validate startup-time Invar guard policy inputs.
 
     The current policy is permissive because guard enforcement is performed by
@@ -21,7 +22,9 @@ def enforce_runtime_guard_contract(argv: list[str]) -> None:
         argv: Interpreter argument vector forwarded by ``usercustomize``.
 
     Example:
-        >>> enforce_runtime_guard_contract(["/repo/.venv/bin/invar", "guard"])
+        >>> enforce_runtime_guard_contract(["/repo/.venv/bin/invar", "guard"]).unwrap() is None
+        True
     """
     if not isinstance(argv, list):
-        raise TypeError("argv must be a list[str]")
+        return Failure("argv must be a list[str]")
+    return Success(None)

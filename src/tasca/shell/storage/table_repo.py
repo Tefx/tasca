@@ -402,7 +402,6 @@ def delete_table(conn: sqlite3.Connection, table_id: TableId) -> Result[None, Ta
 
 
 # @shell_complexity: 4 branches for empty-check + 3-step cascade SQL + try/except error handling
-# @invar:allow shell_pure_logic: Batch cascade delete orchestrates 3 SQL statements in a transaction
 def batch_delete_tables(
     conn: sqlite3.Connection, table_ids: list[str]
 ) -> Result[list[str], TableError]:

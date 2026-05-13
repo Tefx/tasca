@@ -39064,7 +39064,7 @@ phases:
       independent confirmation of this disposition.'
   - id: retest-full-plan-blockers
     name: Retest full-plan verifier blockers after batched remediation
-    status: claimed
+    status: done
     description: 'step_type: test
 
       step_intent: retest_green
@@ -39264,6 +39264,48 @@ phases:
     agent: integration-verifier-tacit
     claimed_by: integration-verifier-tacit
     claimed_at: '2026-05-12T20:44:38.144606+00:00'
+    done_at: '2026-05-13T01:36:08.543603+00:00'
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Full-Plan Remediation Retest Report\nverdict: FAIL\nblockers: [PP-invar-full-scan]\n\
+      gate_open_allowed: false\n\n### Command Results\n| Obligation | Command | Result\
+      \ | Evidence Ref |\n| --- | --- | --- | --- |\n| B1 ruff/mypy | `.venv/bin/python\
+      \ -m ruff check . && .venv/bin/python -m mypy src/tasca` | PASS | Ruff all checks\
+      \ passed; mypy no issues in 78 source files |\n| B2 full pytest | `.venv/bin/python\
+      \ -m pytest` | PASS | `1119 passed in 14.27s` |\n| B3 targeted transport/shared-operation\
+      \ | `.venv/bin/python -m pytest tests/unit/api tests/unit/mcp/test_mcp_server.py\
+      \ tests/unit/services/test_limited_saying_service.py` | PASS | `259 passed in\
+      \ 6.76s` |\n| S1 frontend hydration/audit | `npm ci`; `npm run build`; `npm\
+      \ run lint`; targeted vitest; `npm audit --audit-level=moderate` | PASS_WITH_DEBT\
+      \ | build/lint/tests passed; audit 9 vulnerabilities requiring force/breaking\
+      \ or out-of-range upgrades |\n| Previously proven checks / invar full scan |\
+      \ `uvx invar-tools guard --all` | FAIL | static.passed false; 43 errors; 85\
+      \ warnings; exit 1 |\n\n### Invar Failure Inventory\n- Direct `shell_result`\
+      \ errors: `_contract_tool` in `src/tasca/shell/mcp/server.py`, `raise_http_error`\
+      \ in `src/tasca/shell/api/errors.py`.\n- Direct `missing_contract` errors: `VersionMismatchError.__init__`,\
+      \ `LimitsConfig.__post_init__`, `_register_hypothesis_strategies`, `LimitError.__post_init__`.\n\
+      - Non-suppressible inline escape hatch errors: `dead_export` suppressions in\
+      \ `src/tasca/cli.py`; `missing_contract` suppressions in table/limits core services.\n\
+      - File/project escape hatch budget errors: shell_result and entry_point_too_thick\
+      \ budgets exceeded across CLI, API, MCP server/entrypoints/session tools, storage/search/table\
+      \ repos, and project-wide weighted budget.\n\n### Behavioral Proof Register\n\
+      - B1 ruff/mypy: PROVEN closed.\n- B2 full pytest: PROVEN closed.\n- B3 targeted\
+      \ transport/shared-operation: PROVEN closed.\n- S1 frontend hydration/audit:\
+      \ PROVEN_WITH_DEBT; non-blocking audit debt requires breaking/out-of-range upgrades.\n\
+      - PP-invar-full-scan: UNPROVEN/BLOCKER; authoritative `uvx invar-tools guard\
+      \ --all` failed.\n\n## Remediation Ownership Created\n- Fix step created: `fix-pp-invar-full-scan`,\
+      \ depending on `retest-full-plan-blockers`.\n- Retest step created: `retest-pp-invar-full-scan`,\
+      \ depending on `fix-pp-invar-full-scan`.\n- Downstream finalization doc/review/gate\
+      \ steps rewired to remain blocked until `retest-pp-invar-full-scan` passes.\n\
+      \n## Closure Fields\nstep_intent: retest_green\nexpected_result: green\nobserved_result:\
+      \ backend static/type and pytest closures green; frontend build/security checks\
+      \ green with audit debt; invar full scan failed\nfailure_alignment: Retest disproves\
+      \ full-plan closure because authoritative invar full-scan obligation is red.\n\
+      verdict: FAIL\nblockers: [PP-invar-full-scan]\ngate_open_allowed: false\norchestrator_action_hint:\
+      \ COMPLETE_AS_ISSUE_DISCOVERY_WITH_REMEDIATION_OWNER\nproduct_implementation_files_modified:\
+      \ no\nCommit hash(es): none\nuncertainty_sources:\n  - Audit vulnerabilities\
+      \ may be deferrable due breaking/out-of-range upgrades, but remain dependency\
+      \ security debt.\n  - Invar failure is authoritative from CLI after wrapper\
+      \ instability; no product fixes were made by this verification-only step."
   - id: fix-pp-invar-full-scan
     name: Remediate PP-invar-full-scan blockers in one invar batch
     status: pending

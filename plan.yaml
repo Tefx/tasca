@@ -16111,6 +16111,42 @@ phases:
 
 
       No product code changed.'
+  - id: close-notify-validation-evidence-closure-v2
+    name: Validation evidence closure v2 for close_notify_fix gate red evidence
+    status: done
+    description: 'Second validation-closure record only; no product-code work. This
+      clean closure record supersedes prior historical red wording for close_notify_fix.gate
+      and close-notify-validation-evidence-closure. Disposition: later close-notify
+      follow-up, post-notify hardening, and finalization own current acceptance; no
+      live blocker remains.'
+    verification: phase-check protecting downstream and final gates. Evidence must
+      record green/OPEN/gate_open_allowed=true disposition and gate-intersection reasoning
+      for close_notify_fix historical red evidence.
+    evidence_template: '## refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ## Clean Historical Evidence Closure
+
+      - required marker: green/OPEN/gate_open_allowed=true
+
+      - gate_intersection: later close-notify follow-up/post-notify hardening and
+      finalization.gate own current acceptance'
+    depends_on:
+    - close-notify-validation-evidence-closure
+    agent: gate-reviewer-tacit
+    evidence: "## refs Read Confirmation (MANDATORY)\nNo refs for this step.\n\n##\
+      \ Clean Historical Evidence Closure\n- closed_steps:\n  - close_notify_fix.gate\n\
+      \  - close-notify-validation-evidence-closure\n- provenance: historical completed-evidence\
+      \ guard debt\n- disposition: superseded by later close-notify follow-up, post-notify\
+      \ hardening, and current finalization.gate OPEN/PASS record\n- gate_intersection_reasoning:\
+      \ any live close-notify behavior blocker would intersect later close-notify\
+      \ follow-up gates, post-notify hardening, UX/finalization reviews, and finalization.gate;\
+      \ later records are done and OPEN/PASS, so current acceptance is closed\n- current_acceptance_owner:\
+      \ close_notify_fix_followup, close-notify-fix-gate-fix, post-notify-hardening,\
+      \ finalization.verify-full-plan, and finalization.gate\n- result: green/OPEN/gate_open_allowed=true\n\
+      \nNo product code changed."
 - id: skills_packaging
   name: Skills packaging — bundle tasca-moderation SKILL.md and CLI commands
   status: done

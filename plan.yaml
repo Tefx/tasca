@@ -37989,7 +37989,7 @@ phases:
       a new mainline commit.'
 - id: finalization
   name: Finalization (Full Verify + Doc Sync + Deep Review)
-  status: in_progress
+  status: done
   gate: Repo-wide verification, documentation sync, and independent deep review are
     complete with no unresolved blocker-class drift. Finalization also covers the
     Web Mermaid stream rendering fix before plan closure.
@@ -39068,7 +39068,7 @@ phases:
       ISSUES_FOUND / FAIL'
   - id: finalization.gate
     name: Final gate for duplicate-abstraction remediation
-    status: claimed
+    status: done
     description: 'step_type: gate
 
       verification_scope: full-plan-check
@@ -39157,6 +39157,127 @@ phases:
     agent: gate-reviewer-tacit
     claimed_by: gate-reviewer-tacit
     claimed_at: '2026-05-13T10:12:58.732469+00:00'
+    done_at: '2026-05-13T10:20:37.781931+00:00'
+    evidence: '## Gate Review Report
+
+
+      ### refs Read Confirmation (MANDATORY)
+
+      No refs for this step.
+
+
+      ### Decision Basis
+
+      - Full-plan verify result: PASS. invar_guard full scan completed with ok true,
+      errors 0, warnings 30, infos 4, files_checked 83.
+
+      - Doc-sync result: PASS by inspected docs: docs/tasca-http-api-v0.1.md documents
+      shared operations, error envelope, canonical table fields, join initial block,
+      and control dedup; docs/tasca-mcp-interface-v0.1.md documents centralized tool_contracts.py
+      as MCP discovery source.
+
+      - Deep wiring/spec/architecture/contract/black-box reviews: PASS. Evidence inspected
+      in evidence/dup_guardrails-parity-contract-capture.md, evidence/dup_guardrails-gate.md,
+      docs/foundation-conformance-wiring-dispositions.md, tests, and source.
+
+      - Unresolved statuses and closure paths: historical NEEDS_TEST / UNPROVEN entries
+      exist only in pre-remediation guardrail evidence. Current source/tests close
+      them for this gate: shared atomic execute_table_control, REST conformance tests,
+      MCP contract/discovery tests, metadata/policy/board readback tests, and MCP
+      public-shape integration probes all passed.
+
+
+      ### W1-W8 / Equivalent Wiring Audit
+
+      - W1 Shared semantics identified: PASS.
+
+      - W2 Transport-local shaping preserved: PASS.
+
+      - W3 Atomic control blocker closed: PASS — execute_table_control centralizes
+      control and delegates all-or-nothing mutation to atomic_control_table; table_control
+      unit tests passed.
+
+      - W4 HTTP documented control shape/dedup closed: PASS — REST control same-dedup
+      replay regression passed.
+
+      - W5 Canonical control audit content convergence closed: PASS.
+
+      - W6 Limit/shared behavior guard retained: PASS.
+
+      - W7 MCP schema ownership centralized: PASS — tool_contracts.py is declarative
+      contract source; tool contract and runtime discovery tests passed.
+
+      - W8 Existing REST/MCP behavior not destabilized: PASS.
+
+
+      ### Escape Hatch Audit
+
+      - @invar:allow annotations exist in MCP server/entrypoints/entrypoint_logic,
+      tables routes, API app, and mention service.
+
+      - Result: WARNING only, not blocker. They are explicit architectural/file-size/shell-result
+      allowances, and invar_guard passed with zero errors.
+
+
+      ### Smoke/Liveness / Behavioral Proof
+
+      - invar_guard full scan: PASS; ok true, errors 0, files_checked 83.
+
+      - git diff --check: exit code 0.
+
+      - .venv/bin/python -m pytest tests/unit/mcp/test_tool_contracts.py tests/unit/services/operations/test_table_control.py
+      tests/integration/test_rest_spec_conformance_remediation.py -q: 22 passed.
+
+      - .venv/bin/python -m pytest selected MCP runtime registration/create/get/join
+      tests: 5 passed.
+
+      - .venv/bin/python -m pytest tests/integration/test_mcp.py::test_mcp_list_tools
+      tests/integration/test_mcp.py::test_mcp_table_join_and_get_public_shapes tests/integration/test_mcp.py::test_mcp_error_table_closed
+      -q: 3 passed.
+
+
+      ### Fixture-vs-Real Integration Distinction
+
+      - Real integration/behavioral proof: tests/integration/test_rest_spec_conformance_remediation.py
+      uses ASGI HTTP client behavior; tests/integration/test_mcp.py exercises MCP
+      /mcp discovery/tool-call public behavior through integration session.
+
+      - Unit/contract proof: tests/unit/mcp/test_tool_contracts.py, tests/unit/mcp/test_mcp_server.py,
+      and tests/unit/services/operations/test_table_control.py validate centralized
+      contract metadata and atomic operation behavior.
+
+      - Static/document proof: docs and evidence files were used only to corroborate
+      contract alignment, not as substitutes for runtime tests.
+
+
+      ### Gate Decision
+
+      - OPEN with no blocker-class drift remaining for finalization.
+
+      - Required actions: none for gate opening.
+
+
+      ### Normalized Closure Fields
+
+      headline: PASS
+
+      verdict: PASS
+
+      blockers: []
+
+      proof_gap_status: NONE
+
+      blocking_status: CLOSED
+
+      gate_open_allowed: true
+
+      orchestrator_action_hint: COMPLETE
+
+      product_files_modified: false
+
+      product_files_modified_list: []
+
+      commit_hashes: none — gate-review step with no repo mutations'
   - id: fix-full-plan-blockers
     name: Remediate full-plan verifier blockers in one batch
     status: done

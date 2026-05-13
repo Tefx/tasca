@@ -38313,7 +38313,7 @@ phases:
 
       '
     depends_on:
-    - retest-pp-invar-full-scan
+    - retest-pp-invar-full-scan-final
     agent: wiring-auditor
   - id: finalization.deep-spec-conformance
     name: Deep cross-surface spec conformance audit

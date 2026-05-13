@@ -94,6 +94,7 @@ def create_patron(conn: sqlite3.Connection, patron: Patron) -> Result[Patron, Pa
 
     Example:
         >>> from tasca.shell.storage.database import apply_schema
+        >>> from datetime import UTC
         >>> conn = sqlite3.connect(":memory:")
         >>> _ = apply_schema(conn)
         >>> patron = Patron(

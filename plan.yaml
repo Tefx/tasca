@@ -45396,7 +45396,7 @@ phases:
       - None."
   - id: finalization.retest-black-box-public-surface-blockers
     name: Retest black-box public-surface blockers
-    status: pending
+    status: claimed
     description: 'step_type: test
 
       step_intent: retest_green
@@ -45637,6 +45637,8 @@ phases:
     depends_on:
     - finalization.fix-black-box-public-surface-blockers
     agent: blind-tester-tacit
+    claimed_by: blind-tester-tacit
+    claimed_at: '2026-05-13T10:06:09.386039+00:00'
 - id: web_mermaid_stream_fix
   name: Web Mermaid stream rendering fix
   status: done

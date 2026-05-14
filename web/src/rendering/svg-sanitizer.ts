@@ -42,8 +42,12 @@ const ALLOWED_SVG_ATTRIBUTES = new Set([
   'y1',
   'x2',
   'y2',
+  'dx',
+  'dy',
   'd',
   'points',
+  'transform',
+  'preserveaspectratio',
   'fill',
   'fill-opacity',
   'stroke',
@@ -65,10 +69,17 @@ const ALLOWED_SVG_ATTRIBUTES = new Set([
   'marker-start',
   'marker-mid',
   'marker-end',
+  'markerwidth',
+  'markerheight',
+  'markerunits',
+  'refx',
+  'refy',
+  'orient',
 ])
 
 const MARKER_REFERENCE_ATTRIBUTES = new Set(['marker-start', 'marker-mid', 'marker-end'])
 const PAINT_ATTRIBUTES = new Set(['fill', 'stroke'])
+const MARKER_NUMERIC_ATTRIBUTES = new Set(['markerwidth', 'markerheight', 'refx', 'refy'])
 
 const EVENT_HANDLER_PATTERN = /^on/i
 const INTERNAL_FRAGMENT_PATTERN = /^#[A-Za-z_][\w:.-]*$/
@@ -76,6 +87,17 @@ const INTERNAL_URL_FUNCTION_PATTERN = /^url\(\s*['"]?(#[A-Za-z_][\w:.-]*)['"]?\s
 const URL_FUNCTION_PATTERN = /url\(/i
 const FORBIDDEN_URL_PATTERN = /(?:javascript|data|file|https?|mailto):|\b(?:src|href)\s*=|@import/i
 const RELATIVE_URL_LIKE_PATTERN = /^(?:\.?\.?\/|\/|[^\s]+\.(?:svg|png|jpg|jpeg|gif|webp)(?:[#?/].*)?)/i
+const SVG_NUMBER_PATTERN = /^[-+]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:e[-+]?\d+)?$/i
+const SAFE_TRANSFORM_FUNCTIONS = new Map<string, ReadonlySet<number>>([
+  ['matrix', new Set([6])],
+  ['translate', new Set([1, 2])],
+  ['scale', new Set([1, 2])],
+  ['rotate', new Set([1, 3])],
+  ['skewx', new Set([1])],
+  ['skewy', new Set([1])],
+])
+const MAX_TRANSFORM_LENGTH = 512
+const MAX_ABSOLUTE_SVG_NUMBER = 1_000_000
 
 /**
  * Sanitize an SVG string by removing elements/attributes outside ADR-002.
@@ -126,7 +148,7 @@ function sanitizeAttributes(element: Element): void {
       continue
     }
 
-    if (!isAllowedAttributeValue(attrName, attr.value)) {
+    if (!isAllowedAttributeValue(element, attrName, attr.value)) {
       attributesToRemove.push(attr.name)
     }
   }
@@ -136,8 +158,9 @@ function sanitizeAttributes(element: Element): void {
   }
 }
 
-function isAllowedAttributeValue(attrName: string, rawValue: string): boolean {
+function isAllowedAttributeValue(element: Element, attrName: string, rawValue: string): boolean {
   const value = rawValue.trim()
+  const tagName = element.tagName.toLowerCase()
 
   if (MARKER_REFERENCE_ATTRIBUTES.has(attrName)) {
     return INTERNAL_URL_FUNCTION_PATTERN.test(value)
@@ -151,7 +174,109 @@ function isAllowedAttributeValue(attrName: string, rawValue: string): boolean {
     return !FORBIDDEN_URL_PATTERN.test(value) && !RELATIVE_URL_LIKE_PATTERN.test(value)
   }
 
+  if (attrName === 'transform') {
+    return isAllowedTransformValue(value)
+  }
+
+  if (MARKER_NUMERIC_ATTRIBUTES.has(attrName)) {
+    return tagName === 'marker' && isFiniteSvgNumber(value)
+  }
+
+  if (attrName === 'markerunits') {
+    return tagName === 'marker' && (value === 'strokeWidth' || value === 'userSpaceOnUse')
+  }
+
+  if (attrName === 'orient') {
+    return tagName === 'marker' && (value === 'auto' || value === 'auto-start-reverse' || isFiniteSvgNumber(value))
+  }
+
+  if (attrName === 'preserveaspectratio') {
+    return tagName === 'svg' && isAllowedPreserveAspectRatioValue(value)
+  }
+
   return !URL_FUNCTION_PATTERN.test(value) && !FORBIDDEN_URL_PATTERN.test(value)
+}
+
+function isFiniteSvgNumber(value: string): boolean {
+  if (!SVG_NUMBER_PATTERN.test(value)) {
+    return false
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && Math.abs(parsed) <= MAX_ABSOLUTE_SVG_NUMBER
+}
+
+function parseTransformArguments(args: string): string[] {
+  return args
+    .trim()
+    .replace(/,/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+function isAllowedTransformValue(value: string): boolean {
+  if (value.length === 0 || value.length > MAX_TRANSFORM_LENGTH) {
+    return false
+  }
+
+  let offset = 0
+  const transformPattern = /([A-Za-z]+)\s*\(([^()]*)\)/gy
+
+  while (offset < value.length) {
+    while (offset < value.length && /[\s,]/.test(value[offset])) {
+      offset += 1
+    }
+
+    if (offset >= value.length) {
+      break
+    }
+
+    transformPattern.lastIndex = offset
+    const match = transformPattern.exec(value)
+    if (!match) {
+      return false
+    }
+
+    const functionName = match[1].toLowerCase()
+    const allowedArgCounts = SAFE_TRANSFORM_FUNCTIONS.get(functionName)
+    if (!allowedArgCounts) {
+      return false
+    }
+
+    const args = parseTransformArguments(match[2])
+    if (!allowedArgCounts.has(args.length) || !args.every(isFiniteSvgNumber)) {
+      return false
+    }
+
+    offset = transformPattern.lastIndex
+  }
+
+  return offset > 0
+}
+
+function isAllowedPreserveAspectRatioValue(value: string): boolean {
+  if (value === 'none') {
+    return true
+  }
+
+  const [align, meetOrSlice, extra] = value.split(/\s+/)
+  if (extra !== undefined) {
+    return false
+  }
+
+  const allowedAlignments = new Set([
+    'xMinYMin',
+    'xMidYMin',
+    'xMaxYMin',
+    'xMinYMid',
+    'xMidYMid',
+    'xMaxYMid',
+    'xMinYMax',
+    'xMidYMax',
+    'xMaxYMax',
+  ])
+
+  return allowedAlignments.has(align) && (meetOrSlice === undefined || meetOrSlice === 'meet' || meetOrSlice === 'slice')
 }
 
 export function isSafeInternalFragmentReference(value: string): boolean {
@@ -162,7 +287,7 @@ export function hasDangerousSvgContent(svgString: string): boolean {
   const dangerousPatterns = [
     /<(?:script|foreignobject|iframe|embed|object|audio|video|image|a|style|animate|set|animatetransform|animatemotion|use|symbol|title|desc|textpath)\b/i,
     /\bon\w+\s*=/i,
-    /\b(?:href|xlink:href|style|target|rel|aria-labelledby|aria-describedby|tabindex|transform|preserveAspectRatio|markerWidth|markerHeight|markerUnits|refX|refY|orient|gradientUnits|gradientTransform|spreadMethod|fx|fy|offset|stop-color|stop-opacity)\s*=/i,
+    /\b(?:href|xlink:href|style|target|rel|aria-labelledby|aria-describedby|tabindex|gradientUnits|gradientTransform|spreadMethod|fx|fy|offset|stop-color|stop-opacity)\s*=/i,
     /(?:javascript|data|file|https?|mailto):/i,
     /url\(\s*['"]?(?!#[A-Za-z_][\w:.-]*['"]?\s*\))/i,
   ]

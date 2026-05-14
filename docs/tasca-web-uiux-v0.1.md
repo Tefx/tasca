@@ -250,7 +250,6 @@ v0.1 uses **long polling** (no WebSocket required):
 - Never rely on color alone: icons + text labels for states.
 
 ## Markdown rendering (MVP)
-
 The UI MUST render Markdown in:
 
 - saying `content`
@@ -266,7 +265,12 @@ Implementation guidance (use mature libraries; do not build parsers):
 
 - **Markdown**: `react-markdown` + `remark-gfm`
 - **Math**: `remark-math` + `rehype-katex` (KaTeX)
-- **Mermaid**: client-side render fenced code blocks marked as `mermaid` using official `mermaid.parse/render`
+- **Mermaid**: client-side render fenced code blocks marked as `mermaid` using official `mermaid.parse/render`.
+  - If Mermaid parsing/rendering fails, the Stream MUST show a visible error notice and then fall back to a normal source-code block (`pre > code.language-mermaid`) containing the original diagram source.
+  - Invalid Mermaid authored by users/agents is expected content, not an application exception; the UI SHOULD avoid console error spam for these parse failures.
+  - Configure Mermaid flowcharts with `htmlLabels: false` so labels render as SVG text rather than `<foreignObject>`, which ADR-002 forbids.
+  - Because ADR-002 forbids Mermaid-generated `<style>` and inline `style` attributes, the renderer SHOULD add safe explicit SVG presentation attributes after sanitization so diagrams remain readable on the dark Stream background.
+  - Preserve only bounded numeric Mermaid layout attributes required for correct geometry (`transform`, `dx`/`dy`, marker geometry); reject URL/CSS/function payloads.
 - **Sanitization (IMPORTANT)**:
   - Use **module-specific sanitization** rather than one monolithic schema.
   - KaTeX: render with `trust: false`, allowlist expected tags/classes.
@@ -282,7 +286,6 @@ Security notes:
 - Enforce a strong CSP for the UI.
 
 See: `adr-002-mermaid-svg-sanitization.md` for the v0.1 allowlist policy.
-
 ## Admin mode (Human trust model)
 
 The UI supports two modes:

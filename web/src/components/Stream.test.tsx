@@ -161,6 +161,12 @@ describe('Stream Mermaid Markdown rendering', () => {
       configurable: true,
       value: () => ({ x: 0, y: 0, width: 120, height: 48 }),
     })
+    Object.defineProperty(SVGElement.prototype, 'getComputedTextLength', {
+      configurable: true,
+      value: function getComputedTextLength() {
+        return (this.textContent ?? '').length * 8
+      },
+    })
   })
 
   it('renders documented mermaid fences in saying content as diagrams, not ordinary code', () => {
@@ -192,6 +198,45 @@ describe('Stream Mermaid Markdown rendering', () => {
     })
     expect(container.querySelector('.mc-mermaid-diagram script')).not.toBeInTheDocument()
     expect(container.querySelector('.mc-mermaid-diagram [onload]')).not.toBeInTheDocument()
+  })
+
+  it('renders Mermaid SVGs inside the scroll/readability styling hook', async () => {
+    const mermaidSaying: Saying = {
+      ...makeSaying(1),
+      content: DOCUMENTED_MERMAID_MARKDOWN,
+    }
+
+    const { container } = render(
+      <Stream sayings={[mermaidSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    const diagram = screen.getByLabelText('Mermaid diagram')
+    expect(diagram).toHaveClass('mc-mermaid-diagram')
+
+    await waitFor(() => {
+      expect(container.querySelector('.mc-mermaid-diagram > svg')).toBeInTheDocument()
+    })
+  })
+
+  it('applies readable presentation attributes after Mermaid SVG sanitization', async () => {
+    const mermaidSaying: Saying = {
+      ...makeSaying(1),
+      content: DOCUMENTED_MERMAID_MARKDOWN,
+    }
+
+    const { container } = render(
+      <Stream sayings={[mermaidSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector('.mc-mermaid-diagram svg .node rect')).toBeInTheDocument()
+    })
+
+    const nodeShape = container.querySelector('.mc-mermaid-diagram svg .node rect')
+    const labelText = container.querySelector('.mc-mermaid-diagram svg text')
+    expect(nodeShape).toHaveAttribute('fill', '#1e3a5f')
+    expect(nodeShape).toHaveAttribute('stroke', '#93c5fd')
+    expect(labelText).toHaveAttribute('fill', '#f8fafc')
   })
 
   it('preserves raw HTML escaping, inline code, and non-Mermaid fenced code', () => {
@@ -228,7 +273,7 @@ describe('Stream Mermaid Markdown rendering', () => {
     expect(container).not.toHaveTextContent('theme')
   })
 
-  it('shows the MermaidRenderer fallback for invalid Mermaid without restoring code-fence rendering', async () => {
+  it('shows a Mermaid error while falling back to normal source code display', async () => {
     const invalidMermaidSaying: Saying = {
       ...makeSaying(1),
       content: '```mermaid\nnot a valid mermaid diagram\n```',
@@ -239,9 +284,10 @@ describe('Stream Mermaid Markdown rendering', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('Failed to render diagram')
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to render Mermaid diagram')
     })
-    expect(container.querySelector('code.language-mermaid')).not.toBeInTheDocument()
-    expect(screen.getByText('not a valid mermaid diagram')).toBeInTheDocument()
+    const fallbackCode = container.querySelector('pre.mc-mermaid-source code.language-mermaid')
+    expect(fallbackCode).toBeInTheDocument()
+    expect(fallbackCode).toHaveTextContent('not a valid mermaid diagram')
   })
 })

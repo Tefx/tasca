@@ -10,11 +10,12 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
+  applyReadableMermaidTheme,
   stripMermaidInitDirectives,
   countMermaidInitDirectives,
   hasMermaidInitDirectives,
 } from './mermaid'
-import { sanitizeSvg } from './svg-sanitizer'
+import { hasDangerousSvgContent, sanitizeSvg } from './svg-sanitizer'
 
 describe('stripMermaidInitDirectives', () => {
   /**
@@ -236,6 +237,36 @@ describe('MermaidRenderer component integration', () => {
     // Verify the sanitization removes the directive
     expect(sanitized).not.toContain('%%{init')
     expect(sanitized).toContain('graph TD')
+  })
+})
+
+describe('applyReadableMermaidTheme', () => {
+  it('adds safe presentation attributes so sanitized Mermaid output is readable', () => {
+    const unstyledSanitizedSvg = `
+      <svg viewBox="0 0 200 100">
+        <g class="node default"><rect class="basic label-container" x="10" y="10" width="80" height="40" /></g>
+        <path class="flowchart-link" d="M90,30L150,30" />
+        <marker id="arrow"><path d="M0,0L10,5L0,10" /></marker>
+        <g class="edgeLabel"><rect x="95" y="18" width="40" height="24" /></g>
+        <text x="20" y="35"><tspan>Readable</tspan></text>
+      </svg>`
+
+    const themed = applyReadableMermaidTheme(unstyledSanitizedSvg)
+    const parsed = new DOMParser().parseFromString(themed, 'image/svg+xml')
+
+    expect(parsed.querySelector('.node rect')?.getAttribute('fill')).toBe('#1e3a5f')
+    expect(parsed.querySelector('.node rect')?.getAttribute('stroke')).toBe('#93c5fd')
+    expect(parsed.querySelector('.flowchart-link')?.getAttribute('fill')).toBe('none')
+    expect(parsed.querySelector('.flowchart-link')?.getAttribute('stroke')).toBe('#94a3b8')
+    expect(parsed.querySelector('marker path')?.getAttribute('fill')).toBe('#94a3b8')
+    expect(parsed.querySelector('.edgeLabel rect')?.getAttribute('fill')).toBe('#0f172a')
+    expect(parsed.querySelector('text')?.getAttribute('fill')).toBe('#f8fafc')
+    expect(parsed.querySelector('tspan')?.getAttribute('fill')).toBe('#f8fafc')
+    expect(hasDangerousSvgContent(themed)).toBe(false)
+  })
+
+  it('leaves malformed non-SVG input unchanged', () => {
+    expect(applyReadableMermaidTheme('not svg')).toBe('not svg')
   })
 })
 

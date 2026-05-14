@@ -321,16 +321,15 @@ Rationale: human review and archival. **[Proven]**
 - Raw HTML in Markdown MUST be disabled by default.
 
 ### 8.2 Mermaid
-
 - Mermaid rendering is client-side (ADR-001).
 - Mermaid init directives `%%{init: ...}%%` MUST be stripped/forbidden.
 - Mermaid output SVG MUST be sanitized per ADR-002:
   - allowlist tags/attributes only
+  - allow bounded numeric layout attributes required by Mermaid (`transform`, `dx`/`dy`, marker geometry) under strict value checks
   - forbid `<script>`, `<foreignObject>`, `<a>`, `<image>`, all `on*`, and inline `style`
   - internal fragment references only (`url(#id)` / `#id`)
 
 Rationale: content is potentially attacker-controlled (LLM output / untrusted collaborators). **[Proven]**
-
 ### 8.3 Content Security Policy (CSP) (normative, v0.1)
 
 **Decision:** Production deployments MUST enable a CSP that:

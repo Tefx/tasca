@@ -3,8 +3,9 @@
  *
  * SECURITY: This module implements defense-in-depth for Mermaid diagrams:
  *
- * 1. **Mermaid initialization**: `mermaid.initialize({ securityLevel: 'strict' })`
- *    is called at module load time to prevent click/href handler evaluation
+ * 1. **Mermaid initialization**: `mermaid.initialize({ securityLevel: 'strict',
+ *    flowchart: { htmlLabels: false } })` is called at module load time to
+ *    prevent click/href handler evaluation and avoid `<foreignObject>` labels
  * 2. **Input sanitization**: Init directives (`%%{init: ...}%%`) are stripped
  *    to prevent configuration injection attacks
  * 3. **Output sanitization**: SVG output is passed through `sanitizeSvg()`
@@ -14,6 +15,8 @@
  *
  * - **Strict security level**: `mermaid.initialize({ securityLevel: 'strict' })`
  *   called at module load — not relying on library defaults
+ * - **SVG labels**: `flowchart.htmlLabels: false` keeps labels in SVG text
+ *   elements so ADR-002 can forbid `<foreignObject>` without dropping labels
  * - **Init directives stripped**: `%%{init: ...}%%` directives are removed
  *   to prevent configuration injection attacks (e.g., XSS, SSRF)
  * - **Additional directives**: `%%{initialize: ...}%%` also stripped (alias)
@@ -47,9 +50,17 @@ import { sanitizeSvg } from './svg-sanitizer'
  * import, which could process unsanitized content before our sanitization
  * pipeline runs.
  *
+ * `flowchart.htmlLabels: false` avoids generated `<foreignObject>` labels.
+ * ADR-002 forbids `<foreignObject>`, so keeping labels as SVG text preserves
+ * diagram readability after sanitization.
+ *
  * References: ADR-001 (mandatory security guardrails)
  */
-mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' })
+mermaid.initialize({
+  startOnLoad: false,
+  securityLevel: 'strict',
+  flowchart: { htmlLabels: false },
+})
 
 // =============================================================================
 // Constants
@@ -151,6 +162,136 @@ export function hasMermaidInitDirectives(code: string): boolean {
   return countMermaidInitDirectives(code) > 0
 }
 
+// =============================================================================
+// Safe presentation repair
+// =============================================================================
+
+/**
+ * Post-sanitization presentation attributes for Mermaid diagrams in the dark
+ * Mission Control stream.
+ *
+ * ADR-002 forbids Mermaid's generated `<style>` blocks and inline `style="..."`
+ * attributes. Without replacement presentation, SVG shapes fall back to the
+ * browser default black fill/stroke, which renders as unreadable black blocks
+ * on the dark stream background. These fixed values use only ADR-002-allowed
+ * presentation attributes (`fill`, `stroke`, `stroke-width`, `fill-opacity`).
+ */
+const READABLE_MERMAID_PRESENTATION = {
+  nodeFill: '#1e3a5f',
+  nodeStroke: '#93c5fd',
+  clusterFill: '#111827',
+  clusterStroke: '#64748b',
+  edgeStroke: '#94a3b8',
+  labelFill: '#0f172a',
+  textFill: '#f8fafc',
+} as const
+
+const MERMAID_NODE_SHAPE_SELECTOR = [
+  '.node rect',
+  '.node circle',
+  '.node ellipse',
+  '.node polygon',
+  '.node path',
+  'rect.label-container',
+  'rect.actor',
+  'rect.activation0',
+  'rect.activation1',
+  'rect.activation2',
+  'rect.note',
+  'polygon.note',
+].join(', ')
+
+const MERMAID_CLUSTER_SHAPE_SELECTOR = [
+  '.cluster rect',
+  '.cluster polygon',
+  '.cluster path',
+].join(', ')
+
+const MERMAID_EDGE_SELECTOR = [
+  '.flowchart-link',
+  '.edgePath path',
+  'path.path',
+  '.messageLine0',
+  '.messageLine1',
+  '.loopLine',
+  '.actor-line',
+].join(', ')
+
+const MERMAID_LABEL_BACKGROUND_SELECTOR = [
+  '.edgeLabel rect',
+  'rect.labelBkg',
+  'rect.labelBox',
+].join(', ')
+
+const MERMAID_TEXT_SELECTOR = [
+  'text',
+  'tspan',
+  '.nodeLabel',
+  '.edgeLabel',
+  '.cluster-label',
+  '.messageText',
+  '.noteText',
+  '.loopText',
+].join(', ')
+
+function setPresentationAttributes(
+  elements: NodeListOf<Element>,
+  attributes: Readonly<Record<string, string>>
+): void {
+  for (const element of Array.from(elements)) {
+    for (const [name, value] of Object.entries(attributes)) {
+      element.setAttribute(name, value)
+    }
+  }
+}
+
+/**
+ * Add safe, explicit presentation attributes to sanitized Mermaid SVG output.
+ *
+ * @param svgString - Sanitized Mermaid SVG string
+ * @returns SVG string with readable dark-theme presentation attributes
+ */
+export function applyReadableMermaidTheme(svgString: string): string {
+  const parsed = new DOMParser().parseFromString(svgString, 'image/svg+xml')
+  if (parsed.querySelector('parsererror')) {
+    return svgString
+  }
+
+  const svg = parsed.documentElement
+  if (svg.tagName.toLowerCase() !== 'svg') {
+    return svgString
+  }
+
+  setPresentationAttributes(svg.querySelectorAll(MERMAID_NODE_SHAPE_SELECTOR), {
+    fill: READABLE_MERMAID_PRESENTATION.nodeFill,
+    stroke: READABLE_MERMAID_PRESENTATION.nodeStroke,
+    'stroke-width': '1.5',
+  })
+  setPresentationAttributes(svg.querySelectorAll(MERMAID_CLUSTER_SHAPE_SELECTOR), {
+    fill: READABLE_MERMAID_PRESENTATION.clusterFill,
+    stroke: READABLE_MERMAID_PRESENTATION.clusterStroke,
+    'stroke-width': '1.5',
+  })
+  setPresentationAttributes(svg.querySelectorAll(MERMAID_EDGE_SELECTOR), {
+    fill: 'none',
+    stroke: READABLE_MERMAID_PRESENTATION.edgeStroke,
+    'stroke-width': '1.5',
+  })
+  setPresentationAttributes(svg.querySelectorAll('marker path'), {
+    fill: READABLE_MERMAID_PRESENTATION.edgeStroke,
+    stroke: READABLE_MERMAID_PRESENTATION.edgeStroke,
+  })
+  setPresentationAttributes(svg.querySelectorAll(MERMAID_LABEL_BACKGROUND_SELECTOR), {
+    fill: READABLE_MERMAID_PRESENTATION.labelFill,
+    'fill-opacity': '0.95',
+  })
+  setPresentationAttributes(svg.querySelectorAll(MERMAID_TEXT_SELECTOR), {
+    fill: READABLE_MERMAID_PRESENTATION.textFill,
+  })
+
+  return new XMLSerializer().serializeToString(svg)
+}
+
 /**
  * Props for the MermaidRenderer component.
  *
@@ -235,19 +376,37 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps): JSX.
       // SECURITY LAYER 2: mermaid.initialize({ securityLevel: 'strict' }) is called
       // at module load time (see top of file). All renders in this session use strict mode.
 
-      // SECURITY LAYER 3: Render the diagram
-      const { svg: rawSvg } = await mermaid.render(diagramId, sanitizedCode)
+      // SECURITY LAYER 3: Render the diagram. Passing an explicit temporary
+      // container prevents Mermaid from leaving raw SVG output directly in
+      // document.body while we still need to sanitize it. Mermaid measures this
+      // container, so it must be attached to the DOM during render.
+      const renderContainer = document.createElement('div')
+      renderContainer.setAttribute('aria-hidden', 'true')
+      renderContainer.style.position = 'absolute'
+      renderContainer.style.left = '-10000px'
+      renderContainer.style.top = '0'
+      document.body.appendChild(renderContainer)
+
+      let rawSvg = ''
+      try {
+        const renderResult = await mermaid.render(diagramId, sanitizedCode, renderContainer)
+        rawSvg = renderResult.svg
+      } finally {
+        renderContainer.remove()
+      }
 
       // SECURITY LAYER 4: Sanitize the SVG output before DOM injection
       // This removes script tags, event handlers, and other dangerous content
       const sanitizedSvg = sanitizeSvg(rawSvg)
+      const readableSvg = applyReadableMermaidTheme(sanitizedSvg)
 
-      setSvgContent(sanitizedSvg)
+      setSvgContent(readableSvg)
       setRenderState('success')
     } catch (err) {
-      // Handle rendering errors gracefully
+      // Handle author-supplied Mermaid syntax errors gracefully. These are
+      // expected for LLM/user-generated diagrams, so avoid console.error spam;
+      // the visible fallback below preserves the source for diagnosis/editing.
       const errorMessage = err instanceof Error ? err.message : 'Failed to render diagram'
-      console.error('Mermaid rendering error:', err)
       setError(errorMessage)
       setRenderState('error')
       setSvgContent(null)
@@ -289,12 +448,17 @@ export function MermaidRenderer({ code, className }: MermaidRendererProps): JSX.
 
   if (renderState === 'error') {
     return (
-      <div className={className} role="alert">
-        <div className="border border-destructive/50 rounded-lg p-4 text-destructive">
-          <p className="font-medium">Failed to render diagram</p>
-          <p className="text-sm mt-1 opacity-80">{error}</p>
-          <pre className="mt-2 text-xs bg-muted p-2 rounded overflow-x-auto">{code}</pre>
+      <div
+        className={`${className ?? ''} mc-mermaid-diagram--error`.trim()}
+        aria-label="Mermaid diagram render failed"
+      >
+        <div className="mc-mermaid-error-message" role="alert">
+          <p className="mc-mermaid-error-title">Failed to render Mermaid diagram</p>
+          <p className="mc-mermaid-error-detail">{error}</p>
         </div>
+        <pre className="mc-mermaid-source" aria-label="Mermaid source fallback">
+          <code className="language-mermaid">{code}</code>
+        </pre>
       </div>
     )
   }

@@ -230,20 +230,50 @@ describe('SVG Sanitization', () => {
       })
     }
 
-    it('removes broad non-ADR attributes while preserving allowed attributes', () => {
+    it('removes broad non-ADR attributes while preserving safe layout attributes', () => {
       const result = sanitizeSvg(
         '<svg viewBox="0 0 10 10" preserveAspectRatio="xMidYMid" transform="scale(2)" tabindex="0" aria-labelledby="t" data-test="x"><rect x="1" y="2" width="3" height="4" markerWidth="5" refX="6"/></svg>'
       )
 
       expect(result).toContain('viewBox="0 0 10 10"')
+      expect(result).toContain('preserveAspectRatio="xMidYMid"')
+      expect(result).toContain('transform="scale(2)"')
       expect(result).toContain('width="3"')
-      expect(result).not.toContain('preserveAspectRatio')
-      expect(result).not.toContain('transform=')
       expect(result).not.toContain('tabindex')
       expect(result).not.toContain('aria-labelledby')
       expect(result).not.toContain('data-test')
       expect(result).not.toContain('markerWidth')
       expect(result).not.toContain('refX')
+    })
+
+    it('preserves Mermaid layout transform, tspan offsets, and marker geometry attributes', () => {
+      const result = sanitizeSvg(
+        '<svg viewBox="0 0 100 80"><defs><marker id="arrow" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" refX="5" refY="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs><g class="node" transform="translate(12.5, 20) rotate(-3)"><rect width="80" height="30"/><text x="4" y="12"><tspan x="4" dy="1.1em">A</tspan></text></g><path class="flowchart-link" marker-end="url(#arrow)" d="M0 0 L1 1"/></svg>'
+      )
+
+      expect(result).toContain('transform="translate(12.5, 20) rotate(-3)"')
+      expect(result).toContain('dy="1.1em"')
+      expect(result).toContain('markerWidth="8"')
+      expect(result).toContain('markerHeight="8"')
+      expect(result).toContain('markerUnits="userSpaceOnUse"')
+      expect(result).toContain('refX="5"')
+      expect(result).toContain('refY="5"')
+      expect(result).toContain('orient="auto"')
+      expect(result).toContain('marker-end="url(#arrow)"')
+    })
+
+    it('removes unsafe transform and marker geometry values', () => {
+      const result = sanitizeSvg(
+        '<svg><g transform="translate(1) url(javascript:alert(1))"><rect width="1" height="1"/></g><marker id="bad" markerWidth="calc(1 + 1)" markerHeight="Infinity" markerUnits="evil" refX="javascript:alert(1)" orient="url(#x)"><path d="M0 0 L1 1"/></marker></svg>'
+      )
+
+      expect(result).not.toContain('transform=')
+      expect(result).not.toContain('markerWidth')
+      expect(result).not.toContain('markerHeight')
+      expect(result).not.toContain('markerUnits')
+      expect(result).not.toContain('refX')
+      expect(result).not.toContain('orient=')
+      expect(result).not.toContain('javascript:')
     })
 
     it('removes gradient attributes not listed in ADR-002 v0.1', () => {

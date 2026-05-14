@@ -30,13 +30,14 @@ Sanitization is **strict allowlist**. Anything not explicitly allowed is removed
 - Gradients (optional but commonly needed): `linearGradient`, `radialGradient`, `stop`
 
 #### Allowed attributes (v0.1)
-
-Geometry/viewport:
+Geometry/viewport/layout:
 
 - `viewBox`, `width`, `height`
-- `x`, `y`, `cx`, `cy`, `r`, `rx`, `ry`
+- `x`, `y`, `dx`, `dy`, `cx`, `cy`, `r`, `rx`, `ry`
 - `x1`, `y1`, `x2`, `y2`
 - `d`, `points`
+- `preserveAspectRatio`
+- `transform` only when it is a bounded numeric SVG transform list (`matrix`, `translate`, `scale`, `rotate`, `skewX`, `skewY`); reject URL/CSS/function payloads.
 
 Presentation attributes (prefer these over CSS):
 
@@ -52,6 +53,10 @@ Text attributes:
 Identification / accessibility:
 
 - `id`, `class`, `role`, `aria-label`
+
+Marker attributes:
+
+- `markerWidth`, `markerHeight`, `markerUnits`, `refX`, `refY`, `orient` on `<marker>` only, constrained to finite numeric values and known enum values.
 
 Internal-reference attributes (subject to URL rules below):
 

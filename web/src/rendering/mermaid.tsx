@@ -4,7 +4,7 @@
  * SECURITY: This module implements defense-in-depth for Mermaid diagrams:
  *
  * 1. **Mermaid initialization**: `mermaid.initialize({ securityLevel: 'strict',
- *    flowchart: { htmlLabels: false } })` is called at module load time to
+ *    htmlLabels: false, flowchart: { htmlLabels: false } })` is called at module load time to
  *    prevent click/href handler evaluation and avoid `<foreignObject>` labels
  * 2. **Input sanitization**: Init directives (`%%{init: ...}%%`) are stripped
  *    to prevent configuration injection attacks
@@ -15,8 +15,9 @@
  *
  * - **Strict security level**: `mermaid.initialize({ securityLevel: 'strict' })`
  *   called at module load — not relying on library defaults
- * - **SVG labels**: `flowchart.htmlLabels: false` keeps labels in SVG text
- *   elements so ADR-002 can forbid `<foreignObject>` without dropping labels
+ * - **SVG labels**: top-level `htmlLabels: false` plus
+ *   `flowchart.htmlLabels: false` keeps labels in SVG text elements so ADR-002
+ *   can forbid `<foreignObject>` without dropping labels
  * - **Init directives stripped**: `%%{init: ...}%%` directives are removed
  *   to prevent configuration injection attacks (e.g., XSS, SSRF)
  * - **Additional directives**: `%%{initialize: ...}%%` also stripped (alias)
@@ -50,15 +51,17 @@ import { sanitizeSvg } from './svg-sanitizer'
  * import, which could process unsanitized content before our sanitization
  * pipeline runs.
  *
- * `flowchart.htmlLabels: false` avoids generated `<foreignObject>` labels.
- * ADR-002 forbids `<foreignObject>`, so keeping labels as SVG text preserves
- * diagram readability after sanitization.
+ * Top-level `htmlLabels: false` is required by Mermaid 11.10.1 for flowchart
+ * node labels; `flowchart.htmlLabels: false` alone still emits node-label
+ * `<foreignObject>` wrappers that ADR-002 correctly strips. Keeping both values
+ * false preserves labels as SVG text while maintaining the `<foreignObject>` ban.
  *
  * References: ADR-001 (mandatory security guardrails)
  */
 mermaid.initialize({
   startOnLoad: false,
   securityLevel: 'strict',
+  htmlLabels: false,
   flowchart: { htmlLabels: false },
 })
 

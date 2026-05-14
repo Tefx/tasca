@@ -25,6 +25,14 @@ flowchart TD
   A --> B
 \`\`\``
 
+const LABELED_MERMAID_MARKDOWN = `\`\`\`mermaid
+flowchart TD
+  subgraph API[API Layer]
+    A[Gateway Service] --> B[Worker Node]
+  end
+  B -->|publishes| C[Event Bus]
+\`\`\``
+
 describe('Stream live region announcements', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -237,6 +245,32 @@ describe('Stream Mermaid Markdown rendering', () => {
     expect(nodeShape).toHaveAttribute('fill', '#1e3a5f')
     expect(nodeShape).toHaveAttribute('stroke', '#93c5fd')
     expect(labelText).toHaveAttribute('fill', '#f8fafc')
+  })
+
+  it('preserves node-internal Mermaid labels after sanitization', async () => {
+    const mermaidSaying: Saying = {
+      ...makeSaying(1),
+      content: LABELED_MERMAID_MARKDOWN,
+    }
+
+    const { container } = render(
+      <Stream sayings={[mermaidSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector('.mc-mermaid-diagram svg .node text')).toBeInTheDocument()
+    })
+
+    const diagram = container.querySelector('.mc-mermaid-diagram svg')
+    const nodeLabels = Array.from(diagram?.querySelectorAll('.node text') ?? []).map((node) =>
+      node.textContent?.replace(/\s+/g, ' ').trim()
+    )
+
+    expect(nodeLabels).toEqual(
+      expect.arrayContaining(['Gateway Service', 'Worker Node', 'Event Bus'])
+    )
+    expect(diagram?.querySelector('foreignObject')).not.toBeInTheDocument()
+    expect(diagram?.querySelector('style')).not.toBeInTheDocument()
   })
 
   it('preserves raw HTML escaping, inline code, and non-Mermaid fenced code', () => {

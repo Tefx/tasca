@@ -237,6 +237,12 @@ const MERMAID_TEXT_SELECTOR = [
   '.loopText',
 ].join(', ')
 
+const NODE_LABEL_MAX_CHARS_PER_LINE = 18
+const NODE_LABEL_LINE_HEIGHT = 16
+const NODE_LABEL_HORIZONTAL_PADDING = 32
+const NODE_LABEL_VERTICAL_PADDING = 24
+const NODE_LABEL_CHARACTER_WIDTH = 8
+
 function setPresentationAttributes(
   elements: NodeListOf<Element>,
   attributes: Readonly<Record<string, string>>
@@ -244,6 +250,97 @@ function setPresentationAttributes(
   for (const element of Array.from(elements)) {
     for (const [name, value] of Object.entries(attributes)) {
       element.setAttribute(name, value)
+    }
+  }
+}
+
+function wrapLabelText(label: string, maxCharsPerLine: number): string[] {
+  const words = label.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
+  if (words.length === 0) {
+    return []
+  }
+
+  const lines: string[] = []
+  let currentLine = ''
+
+  for (const word of words) {
+    const candidate = currentLine ? `${currentLine} ${word}` : word
+    if (candidate.length <= maxCharsPerLine || currentLine.length === 0) {
+      currentLine = candidate
+      continue
+    }
+
+    lines.push(currentLine)
+    currentLine = word
+  }
+
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+
+  return lines
+}
+
+function getNumericAttribute(element: Element, name: string, fallback: number): number {
+  const value = Number.parseFloat(element.getAttribute(name) ?? '')
+  return Number.isFinite(value) ? value : fallback
+}
+
+function resizeNodeRectToFitLabel(node: Element, lines: readonly string[]): void {
+  const rect = node.querySelector('rect')
+  if (!rect || lines.length === 0) {
+    return
+  }
+
+  const currentWidth = getNumericAttribute(rect, 'width', 0)
+  const currentHeight = getNumericAttribute(rect, 'height', 0)
+  const currentX = getNumericAttribute(rect, 'x', -currentWidth / 2)
+  const currentY = getNumericAttribute(rect, 'y', -currentHeight / 2)
+  const centerX = currentX + currentWidth / 2
+  const centerY = currentY + currentHeight / 2
+  const longestLine = Math.max(...lines.map((line) => line.length))
+  const requiredWidth = longestLine * NODE_LABEL_CHARACTER_WIDTH + NODE_LABEL_HORIZONTAL_PADDING
+  const requiredHeight = lines.length * NODE_LABEL_LINE_HEIGHT + NODE_LABEL_VERTICAL_PADDING
+  const nextWidth = Math.max(currentWidth, requiredWidth)
+  const nextHeight = Math.max(currentHeight, requiredHeight)
+
+  if (nextWidth !== currentWidth) {
+    rect.setAttribute('width', String(nextWidth))
+    rect.setAttribute('x', String(centerX - nextWidth / 2))
+  }
+
+  if (nextHeight !== currentHeight) {
+    rect.setAttribute('height', String(nextHeight))
+    rect.setAttribute('y', String(centerY - nextHeight / 2))
+  }
+}
+
+function wrapNodeInternalLabels(svg: Element): void {
+  const nodeLabelTexts = svg.querySelectorAll('.node text')
+
+  for (const text of Array.from(nodeLabelTexts)) {
+    const label = text.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+    const lines = wrapLabelText(label, NODE_LABEL_MAX_CHARS_PER_LINE)
+    if (lines.length <= 1) {
+      continue
+    }
+
+    text.replaceChildren()
+    text.setAttribute('text-anchor', 'middle')
+    text.setAttribute('dominant-baseline', 'middle')
+
+    const firstLineY = -((lines.length - 1) * NODE_LABEL_LINE_HEIGHT) / 2
+    for (const [index, line] of lines.entries()) {
+      const tspan = text.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'tspan')
+      tspan.setAttribute('x', '0')
+      tspan.setAttribute('y', String(firstLineY + index * NODE_LABEL_LINE_HEIGHT))
+      tspan.textContent = line
+      text.appendChild(tspan)
+    }
+
+    const node = text.closest('.node')
+    if (node) {
+      resizeNodeRectToFitLabel(node, lines)
     }
   }
 }
@@ -291,6 +388,7 @@ export function applyReadableMermaidTheme(svgString: string): string {
   setPresentationAttributes(svg.querySelectorAll(MERMAID_TEXT_SELECTOR), {
     fill: READABLE_MERMAID_PRESENTATION.textFill,
   })
+  wrapNodeInternalLabels(svg)
 
   return new XMLSerializer().serializeToString(svg)
 }

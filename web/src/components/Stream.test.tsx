@@ -33,6 +33,12 @@ flowchart TD
   B -->|publishes| C[Event Bus]
 \`\`\``
 
+const LONG_LABELED_MERMAID_MARKDOWN = `\`\`\`mermaid
+flowchart TD
+  FM[Human Facility Manager] --> LPA[Lease & Policy Authority]
+  LPA -->|governs| DCIM[DCIM Cognitive Core / Agent Fleet]
+\`\`\``
+
 describe('Stream live region announcements', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -271,6 +277,57 @@ describe('Stream Mermaid Markdown rendering', () => {
     )
     expect(diagram?.querySelector('foreignObject')).not.toBeInTheDocument()
     expect(diagram?.querySelector('style')).not.toBeInTheDocument()
+  })
+
+  it('wraps long node-internal Mermaid labels with SVG tspans while keeping unsafe tags absent', async () => {
+    const mermaidSaying: Saying = {
+      ...makeSaying(1),
+      content: LONG_LABELED_MERMAID_MARKDOWN,
+    }
+
+    const { container } = render(
+      <Stream sayings={[mermaidSaying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector('.mc-mermaid-diagram svg .node text tspan')).toBeInTheDocument()
+    })
+
+    const diagram = container.querySelector('.mc-mermaid-diagram svg')
+    const nodeLabelTexts = Array.from(diagram?.querySelectorAll('.node text') ?? [])
+    const wrappedNodeLabels = nodeLabelTexts.map((text) =>
+      Array.from(text.querySelectorAll('tspan')).map((tspan) => tspan.textContent?.trim())
+    )
+
+    expect(wrappedNodeLabels).toEqual(
+      expect.arrayContaining([
+        ['Human Facility', 'Manager'],
+        ['Lease & Policy', 'Authority'],
+        ['DCIM Cognitive', 'Core /Agent Fleet'],
+      ])
+    )
+    expect(
+      nodeLabelTexts.every((text) =>
+        Array.from(text.querySelectorAll('tspan')).every(
+          (tspan) => (tspan.textContent?.length ?? 0) <= 18
+        )
+      )
+    ).toBe(true)
+    for (const text of nodeLabelTexts) {
+      const lines = Array.from(text.querySelectorAll('tspan')).map(
+        (tspan) => tspan.textContent?.trim() ?? ''
+      )
+      const rect = text.closest('.node')?.querySelector('rect')
+      const requiredWidth = Math.max(...lines.map((line) => line.length)) * 8 + 32
+      expect(Number(rect?.getAttribute('width'))).toBeGreaterThanOrEqual(requiredWidth)
+    }
+    const edgeLabelTexts = Array.from(diagram?.querySelectorAll('.edgeLabel') ?? []).map((label) =>
+      label.textContent?.replace(/\s+/g, ' ').trim()
+    )
+    expect(edgeLabelTexts).toContain('governs')
+    expect(diagram?.querySelector('foreignObject')).not.toBeInTheDocument()
+    expect(diagram?.querySelector('style')).not.toBeInTheDocument()
+    expect(diagram?.querySelector('[style]')).not.toBeInTheDocument()
   })
 
   it('preserves raw HTML escaping, inline code, and non-Mermaid fenced code', () => {

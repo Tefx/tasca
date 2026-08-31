@@ -48353,7 +48353,7 @@ phases:
       - No empty commit created.'
 - id: gcp-single-vm-deployment
   name: GCP single-VM deployment
-  status: in_progress
+  status: done
   steps:
   - id: gcp-single-vm-deployment.provision-single-writer-service
     name: provision-single-writer-service
@@ -48396,7 +48396,7 @@ phases:
       secrets delete tasca-admin-token; gcloud iam service-accounts delete tasca-vm@rda-engineering.iam.gserviceaccount.com.'
   - id: verify-remote-mcp
     name: verify-remote-mcp
-    status: claimed
+    status: done
     description: Verify public health and authenticate to the new remote Tasca MCP
       endpoint, then create/read one isolated test table and report the endpoint without
       exposing the token.
@@ -48419,3 +48419,13 @@ phases:
     - gcp-single-vm-deployment.provision-single-writer-service
     claimed_by: general
     claimed_at: '2026-08-31T07:48:02.712052Z'
+    done_at: '2026-08-31T07:49:51.060071+00:00'
+    evidence: 'Public check: curl http://34.1.134.239:8000/api/v1/health => {"status":"healthy","version":"0.1.29"}.
+      Authenticated MCP protocol verifier connected to http://34.1.134.239:8000/mcp/,
+      completed initialize, notifications/initialized, tools/list (17 tools), table_create,
+      and table_get; it created verification table lucky-dog-soars and read it successfully.
+      Persistence verification: restarted the systemd tasca service, observed systemctl
+      is-active tasca => active, observed public health recovery, then started a new
+      authenticated MCP session and table_get for lucky-dog-soars succeeded. The token
+      was read directly from Secret Manager into a process environment variable and
+      never emitted in commands, helper output, evidence, or final report.'

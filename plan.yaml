@@ -48364,9 +48364,15 @@ phases:
       or replicas.
     verification: Record exact gcloud resources, systemd active status, local health
       response, and a rollback command list.
-    evidence_template: '## Provision evidence\n- Project/region/zone/VM/disk/firewall/secret
-      identifiers: <values>\n- : <output>\n- : <output>\n- Rollback commands that
-      delete only created resources: <commands>'
+    evidence_template: '## Provision evidence
+
+      - Project/region/zone/VM/disk/firewall/secret identifiers: values
+
+      - systemctl is-active tasca output: output
+
+      - curl http://127.0.0.1:8000/api/v1/health output: output
+
+      - Rollback commands that delete only created resources: commands'
     refs:
     - README.md
     - docs/deployment-ops-v0.1.md

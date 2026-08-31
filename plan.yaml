@@ -48442,7 +48442,7 @@ phases:
   steps:
   - id: viewer_auth_release.backend-rest-auth
     name: Implement optional viewer/admin REST authorization contract
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -48533,6 +48533,42 @@ phases:
     agent: python-senior
     claimed_by: python-senior
     claimed_at: '2026-08-31T09:44:28.111577Z'
+    done_at: '2026-08-31T10:22:43.827463+00:00'
+    evidence: 'Candidate beaefd6d45c0c8127994bf908199e9a4d39c5c05 was implemented
+      in pristine worktree and fast-forward integrated into canonical main.
+
+
+      Changed refs: config/auth/app/auth+health routes, main/CLI banners, backend
+      auth/API/MCP tests, API/technical docs.
+
+
+      Normalization: viewer token absent/whitespace/null/none/clear disables auth;
+      other normalized value enables; normalized equality with admin fails startup
+      without values. Admin absent/clear still auto-generates; explicit process env/.env/constructor
+      admin sources are redacted.
+
+
+      REST matrix: 18 resource routes. Enabled: missing/invalid => 401 PermissionDenied
+      details {}; viewer reaches 12 baseline routes and receives 401 on 6 admin mutations;
+      admin passes all auth gates. Disabled: 12 baseline routes remain public and
+      6 admin mutations stay protected. health/ready/docs/OpenAPI/SPA shell/assets
+      remain public. Health returns status/version/viewer_auth_required. `/api/v1/auth/validate`:
+      enabled viewer/admin roles and 401 missing/invalid; disabled no credential =>
+      viewer, admin => admin, supplied stale/invalid => 401.
+
+
+      MCP HTTP rejects viewer and accepts admin; STDIO remains available. Configured
+      credentials are absent from banners/logs/errors/OpenAPI; only generated local
+      admin remains discoverable. SQLite/domain/MCP schemas unchanged.
+
+
+      Verification from clean candidate worktree: `uv sync --frozen --group dev` exit
+      0 (118 packages); required pytest command exit 0 (247 passed); `uvx --from invar-tools==1.20.1
+      invar guard --all` exit 0 (0 errors, doctest passed, CrossHair verified/cached,
+      Hypothesis 113/113, 10,000 examples). Canonical `git diff --check` exit 0. Canonical
+      full guard also scans preserved untracked `.artifacts/gcp-tasca-deploy/verify_remote_mcp.py`
+      and fails only on that pre-existing later-step helper; the required clean-checkout
+      gate passes.'
   - id: viewer_auth_release.web-credential-flow
     name: Implement validated Web credential gate and admin elevation
     status: pending

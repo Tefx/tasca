@@ -48354,3 +48354,21 @@ phases:
 - id: gcp-single-vm-deployment
   name: GCP single-VM deployment
   status: pending
+  steps:
+  - id: gcp-single-vm-deployment.provision-single-writer-service
+    name: provision-single-writer-service
+    status: pending
+    description: Create the user-authorized GCP Compute Engine VM, persistent SQLite
+      disk, Secret Manager token, and restricted TCP/8000 firewall rule; install one
+      Tasca process with durable systemd configuration. Do not create extra workers
+      or replicas.
+    verification: Record exact gcloud resources, systemd active status, local health
+      response, and a rollback command list.
+    evidence_template: '## Provision evidence\n- Project/region/zone/VM/disk/firewall/secret
+      identifiers: <values>\n- : <output>\n- : <output>\n- Rollback commands that
+      delete only created resources: <commands>'
+    refs:
+    - README.md
+    - docs/deployment-ops-v0.1.md
+    - src/tasca/main.py
+    - src/tasca/config.py

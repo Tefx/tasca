@@ -48429,3 +48429,429 @@ phases:
       authenticated MCP session and table_get for lucky-dog-soars succeeded. The token
       was read directly from Secret Manager into a process environment variable and
       never emitted in commands, helper output, evidence, or final report.'
+- id: viewer_auth_release
+  name: Optional viewer authentication — implementation and release
+  status: pending
+  steps:
+  - id: viewer_auth_release.backend-rest-auth
+    name: Implement optional viewer/admin REST authorization contract
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver:
+
+      - Add TASCA_VIEWER_TOKEN normalization with absent, whitespace-empty, and existing
+      clear sentinels disabling viewer authentication; preserve admin-token generation
+      and reject normalized viewer/admin equality during Settings startup without
+      exposing either value.
+
+      - When viewer auth is disabled, preserve current public baseline REST behavior.
+      When enabled, require a valid viewer or admin Bearer token for every patrons,
+      tables, sayings, seats, search, and export route; retain the stricter admin
+      dependency on every existing admin-only mutation.
+
+      - Keep /api/v1/health, /api/v1/ready, /docs, and /openapi.json public. Add a
+      non-secret viewer_auth_required signal to health and a side-effect-free /api/v1/auth/validate
+      contract that returns the validated viewer/admin role, rejects submitted invalid
+      credentials with the standard PermissionDenied envelope, and permits unauthenticated
+      viewer validation only when viewer auth is disabled.
+
+      - Keep the SPA/static shell public. Keep MCP HTTP bound only to TASCA_ADMIN_TOKEN
+      and STDIO unchanged. Do not change MCP tool schemas.
+
+      - Prevent environment-sourced viewer/admin credentials from appearing in startup
+      banners, service logs, errors, OpenAPI examples, or test/release evidence; retain
+      only the existing safe local generated-admin discoverability needed for local
+      use.
+
+      - Add behavioral tests covering disabled modes (absent, empty, clear-equivalent),
+      configured viewer/admin/invalid/missing Bearer matrices across the complete
+      non-health REST route inventory, admin-only mutations, equality startup failure,
+      public operational/schema/static surfaces, auth validation, MCP viewer rejection/admin
+      acceptance, STDIO continuity, and credential-free output.
+
+
+      Boundary: python-senior owns backend configuration, REST/OpenAPI wiring, CLI/banner
+      behavior, backend tests, and corresponding API/technical docs. SQLite/domain
+      schemas, persistence semantics, MCP schemas/tools, and unrelated routes are
+      excluded. R1 repository-only change; no credentials or external deployment effects.
+
+
+      Admit: the accepted endpoint/public-surface contract in the change brief and
+      the current 0.1.29 behavior are authoritative. A 401 must use the existing PermissionDenied
+      envelope; 403 or token-bearing diagnostics do not satisfy acceptance.
+
+
+      Recovery: revert this repository transaction as one unit if public-disabled
+      compatibility, admin-only enforcement, MCP isolation, or secret-free output
+      cannot be proven; do not compensate with data migrations or MCP changes.'
+    verification: 'From a clean checkout: `uv sync --frozen --group dev`; `uv run
+      pytest tests/unit/api tests/unit/test_cli.py tests/integration/test_api.py tests/integration/test_mcp.py
+      -q`; `uvx --from invar-tools==1.20.1 invar guard --all`. The pytest evidence
+      must include a route-by-route matrix for disabled viewer auth and configured
+      viewer/admin/missing/invalid Bearer behavior, normalized equality startup rejection,
+      public health/ready/docs/openapi/static shell, auth-role validation, admin-only
+      mutations, MCP viewer rejection/admin acceptance, STDIO continuity, and assertions
+      that captured output contains no configured token values.'
+    evidence_template: Record changed refs; the exact normalized-token decision table;
+      the complete REST route matrix with observed status/envelope; /api/v1/health
+      and /api/v1/auth/validate response shapes with secrets redacted; MCP HTTP viewer/admin
+      results and STDIO result; CLI/service-output capture proving configured values
+      absent; exact commands, exits, pass counts, and `invar guard --all` summary.
+      State explicitly that SQLite/domain/MCP schemas were unchanged.
+    refs:
+    - src/tasca/config.py
+    - src/tasca/shell/api/auth.py
+    - src/tasca/shell/api/app.py
+    - src/tasca/shell/api/routes/health.py
+    - src/tasca/shell/api/routes/patrons.py
+    - src/tasca/shell/api/routes/tables.py
+    - src/tasca/shell/api/routes/tables_control.py
+    - src/tasca/shell/api/routes/sayings.py
+    - src/tasca/shell/api/routes/seats.py
+    - src/tasca/shell/api/routes/search.py
+    - src/tasca/shell/api/routes/export.py
+    - src/tasca/main.py
+    - src/tasca/cli.py
+    - tests/integration/conftest.py
+    - tests/integration/test_api.py
+    - tests/integration/test_mcp.py
+    - tests/unit/api/
+    - tests/unit/test_cli.py
+    - docs/tasca-http-api-v0.1.md
+    - docs/tasca-technical-design-v0.1.md
+    agent: python-senior
+  - id: viewer_auth_release.web-credential-flow
+    name: Implement validated Web credential gate and admin elevation
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver:
+
+      - Discover viewer_auth_required through the public health contract before loading
+      discussion data. Show the credential gate only when configured; when disabled,
+      preserve the direct public Viewer experience.
+
+      - Validate every submitted credential through /api/v1/auth/validate before writing
+      sessionStorage or enabling API requests. Invalid credentials remain unpersisted,
+      display an accessible error, and cannot reveal discussion data.
+
+      - Persist only validated credential state and role for the current tab. Send
+      the active validated viewer or admin Bearer on baseline REST calls. Do not trust
+      the legacy admin-token storage entry until server validation succeeds.
+
+      - Permit a validated Viewer session to elevate later by submitting an admin
+      credential; replace role/token state only after admin validation succeeds. Preserve
+      existing admin controls only for the admin role and allow safe credential clearing.
+
+      - Keep the delivered HTML, SPA shell, assets, and credential UI publicly loadable.
+      Never log, render, place in URLs, or include token values in test snapshots.
+
+      - Add meaningful component/context/client tests for gate visibility in configured
+      and disabled modes, failed validation with zero sessionStorage writes, valid
+      viewer persistence and authenticated reads, reload revalidation, admin elevation
+      success/failure, credential clearing, and API-header role transitions.
+
+
+      Boundary: frontend-engineer owns React/TypeScript auth state, gate/elevation
+      UI, client wiring, frontend tests, and Web UI contract docs. Backend semantics
+      are consumed from the prior step; no backend, SQLite/domain, MCP, rendering-security,
+      or unrelated UX changes. R1 repository-only change.
+
+
+      Admit: the backend health and validation response contracts are complete and
+      their tests are green before frontend implementation. Browser tests may fake
+      network responses to drive UI states, but the later packaged/live checks own
+      real HTTP/browser wiring.
+
+
+      Recovery: remove the gate/state migration as one frontend transaction and fall
+      back to the prior Viewer/Admin UI only if the backend release is also reverted;
+      never persist an unvalidated credential as a fallback.'
+    verification: 'From `web/` in a clean checkout: `npm ci`; `npm test`; `npm run
+      lint`; `npm run build`. Tests must render the provider/gate and exercise fetch
+      plus real sessionStorage behavior for configured/disabled discovery, invalid
+      submission with no write, viewer login/reload, failed and successful admin elevation,
+      clear/logout, and Authorization-header transitions; a token-presence snapshot
+      or mocked self-report is insufficient.'
+    evidence_template: Record changed refs; Vitest case names and pass counts for
+      each required state; sessionStorage before/after evidence with values redacted;
+      observed request paths, roles, and header presence without values; accessible
+      error/focus behavior; lint/build exits; and the built SPA asset path. State
+      whether rendered browser follow-up remains for the remote verification step.
+    refs:
+    - web/src/App.tsx
+    - web/src/auth/AuthContext.tsx
+    - web/src/api/AuthConnector.tsx
+    - web/src/api/client.ts
+    - web/src/components/ModeIndicator.tsx
+    - web/src/components/ModeIndicator.css
+    - web/src/routes/Taproom.tsx
+    - web/src/routes/Table.tsx
+    - web/src/test/setup.ts
+    - web/package.json
+    - web/package-lock.json
+    - web/vite.config.ts
+    - docs/tasca-web-uiux-v0.1.md
+    - docs/frontend-stack-and-integration-v0.1.md
+    depends_on:
+    - viewer_auth_release.backend-rest-auth
+    agent: frontend-engineer
+  - id: viewer_auth_release.package-release
+    name: Package and prove the 0.1.30 release plus tracked GCP rollout producers
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver:
+
+      - Integrate the backend and Web transactions, set Tasca version 0.1.30, rebuild
+      the packaged SPA, and produce wheel/sdist artifacts from tracked source. Do
+      not publish to a registry or deploy in this step.
+
+      - Promote the current one-off GCP startup/verifier logic into tracked, tested
+      producers under scripts/gcp for an in-place viewer-auth rollout, rollback to
+      0.1.29, and redacted remote verification. The rollout must consume an exact
+      0.1.30 wheel plus SHA-256 and must never execute untracked .artifacts code on
+      the VM.
+
+      - Make the deployment producer preserve the existing rda-engineering single-VM/single-writer
+      target and persistent SQLite disk, stage TLS before viewer-secret use, inject
+      admin/viewer secrets without command-line or log exposure, restrict backend
+      port 8000 to loopback/private reachability, and restore the prior 0.1.29 unit/environment/public-read
+      state on rollback without touching SQLite bytes.
+
+      - Synchronize README, README_CN, .env.example, HTTP/technical/Web/deployment
+      docs with optional viewer semantics, public health/ready/docs/openapi/static
+      surfaces, validation/elevation, HTTPS-only credential transport, secret creation/rotation,
+      release installation, and rollback. Correct the stale claim that an unset admin
+      token disables auth.
+
+      - Add deterministic tests for package contents/fresh installation and for rollout/rollback
+      producer rendering, ordering, redaction, version/hash binding, secret absence/clear
+      behavior, and no-database-change contract.
+
+
+      Boundary: general owns integrated release metadata, packaged Web bytes, tracked
+      deployment/verification producers, release tests, and operator docs. No registry
+      publication, GCP mutation, credential access, SQLite/domain/MCP schema change,
+      or remote probe. R1 repository-only release transaction.
+
+
+      Admit: both implementation steps are green. The selected deployment identity
+      is the exact wheel filename, version, SHA-256, and tracked producer revision
+      recorded by this step; the deployment phase may not substitute ambient PyPI/latest
+      bytes or untracked helpers.
+
+
+      Recovery: discard the 0.1.30 release candidate and tracked producer changes
+      together if fresh-install behavior or redaction/order tests fail; 0.1.29 remains
+      the deployable baseline.'
+    verification: 'From a clean checkout: `uv sync --frozen --group dev`; `(cd web
+      && npm ci && npm test && npm run lint && npm run build)`; `uv run pytest -q`;
+      `uvx --from invar-tools==1.20.1 invar guard --all`; `uv build`; `uvx --from
+      ./dist/tasca-0.1.30-py3-none-any.whl tasca --help`. Execute the tracked release/deployment
+      contract tests to prove wheel SPA inclusion, runtime version 0.1.30, exact wheel/hash
+      selection, TLS-before-secret ordering, rollback rendering to 0.1.29, redacted
+      outputs, and no SQLite mutation path.'
+    evidence_template: Record version files and doc refs changed; all frontend/backend
+      command exits and pass counts; wheel/sdist filenames, byte counts, and SHA-256;
+      fresh-wheel CLI/server/static-shell smoke results; tracked scripts/gcp producer
+      paths and revision; deployment-producer test cases for TLS gate, secret redaction,
+      port restriction, rollback, and SQLite preservation; confirmation that no package
+      publish, credential read, GCP call, or deployment occurred.
+    refs:
+    - pyproject.toml
+    - uv.lock
+    - web/package.json
+    - web/package-lock.json
+    - src/tasca/web/dist/
+    - scripts/
+    - .artifacts/gcp-tasca-deploy/startup.sh
+    - .artifacts/gcp-tasca-deploy/verify_remote_mcp.py
+    - tests/
+    - README.md
+    - README_CN.md
+    - .env.example
+    - docs/tasca-http-api-v0.1.md
+    - docs/tasca-technical-design-v0.1.md
+    - docs/tasca-web-uiux-v0.1.md
+    - docs/deployment-ops-v0.1.md
+    depends_on:
+    - viewer_auth_release.backend-rest-auth
+    - viewer_auth_release.web-credential-flow
+    agent: general
+- id: viewer_auth_gcp
+  name: Optional viewer authentication — HTTPS GCP rollout and proof
+  status: locked
+  gate: Before TASCA_VIEWER_TOKEN is injected, read by a remote client, or distributed,
+    the approved HTTPS hostname must present a valid certificate and public TCP/8000
+    must be closed. Completion additionally requires the exact 0.1.30 release, both
+    GCP secrets, a rehearsed 0.1.29/public-read rollback that leaves the SQLite disk
+    unchanged, final 0.1.30 restoration, and independent redacted remote verification.
+  depends_on:
+  - viewer_auth_release
+  steps:
+  - id: viewer_auth_gcp.https-secret-rollout
+    name: Roll out HTTPS, GCP viewer secret, 0.1.30, and rehearse rollback
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: no_repo_change
+
+
+      Deliver:
+
+      - On the existing GCP target rda-engineering / asia-southeast1-b / tasca-mcp,
+      preflight the running 0.1.29 service, tasca-data persistent disk, current systemd/environment
+      state, static IP, service account, admin secret, and rollback inputs before
+      any mutation.
+
+      - Establish certificate-valid HTTPS on the approved hostname and move Tasca''s
+      single backend process to loopback/private port 8000. Remove public TCP/8000
+      reachability before creating/injecting/reading the viewer secret or sending
+      any credential; an HTTP listener may only redirect credential-free requests
+      to HTTPS.
+
+      - Create or rotate tasca-viewer-token in GCP Secret Manager, retain tasca-admin-token,
+      prove their normalized values differ without printing either, and inject both
+      into the root-owned systemd environment through secret-safe channels. Install
+      only the selected 0.1.30 wheel/hash and tracked rollout producer from viewer_auth_release.package-release.
+
+      - Preserve one Tasca process and the existing tasca-data SQLite disk. Do not
+      format, migrate, copy, delete, or replace the database.
+
+      - Rehearse rollback through the tracked producer: restore the captured 0.1.29
+      unit/environment with TASCA_VIEWER_TOKEN absent, verify public REST baseline
+      and the same SQLite disk, then reapply the exact 0.1.30 release and viewer secret.
+      Leave the final service on 0.1.30 over HTTPS with public port 8000 closed.
+
+
+      Boundary: general owns one reversible R3 lifecycle on the named existing VM,
+      same-host TLS termination/firewall, two named Secret Manager secrets, systemd
+      configuration, release activation, rollback rehearsal, and final reconciliation.
+      No new VM/worker/database, disk mutation, package publication, token disclosure,
+      DNS-zone change beyond the witnessed hostname, or unrelated GCP resource change.
+
+
+      Admit: require witnessed control of the approved HTTPS hostname/DNS, current
+      target/resource identity, credential authority for the named GCP project, the
+      release wheel/hash/producer receipt, captured 0.1.29 rollback bytes, and a secret-safe
+      execution channel. Stop before effects if any identity, hostname, rollback input,
+      or certificate path is unresolved.
+
+
+      Recovery: on any failure after effects, stop unrelated probes, remove viewer
+      credentials from the service environment, restore captured 0.1.29 unit/environment
+      and public-read behavior, retain the existing disk and secrets unless explicit
+      deletion is separately authorized, verify service health, and report exact reconciled
+      resources. Never reopen public TCP/8000 for credential traffic.'
+    verification: 'Use the tracked producer only: `env PROJECT_ID=rda-engineering
+      ZONE=asia-southeast1-b VM=tasca-mcp TASCA_HTTPS_HOST=<witnessed-host> RELEASE_WHEEL=dist/tasca-0.1.30-py3-none-any.whl
+      RELEASE_SHA256=<release-receipt-sha256> scripts/gcp/viewer-auth-rollout.sh apply
+      --require-version 0.1.30 --rollback-version 0.1.29 --rehearse-rollback`. Required
+      observations: certificate-valid HTTPS before first viewer-secret access; GCP
+      firewall has no public TCP/8000 path; local backend is single-process and loopback/private;
+      Secret Manager has both named secrets with normalized inequality reported only
+      as a boolean; 0.1.29 rollback restores public REST reads on the unchanged tasca-data
+      disk; final health reports 0.1.30; service logs/evidence contain neither token
+      value.'
+    evidence_template: Record pre/post gcloud resource identities; approved hostname
+      and certificate issuer/validity without credentials; timestamped proof that
+      HTTPS and port-8000 closure preceded viewer-secret access; secret resource/version
+      names and redacted inequality result; selected wheel filename/SHA-256/producer
+      revision; systemd process count/bind address; rollback rehearsal observations
+      for 0.1.29 public read and unchanged tasca-data device/path; final 0.1.30 health;
+      log redaction scan; exact commands/exits; final or recovered state. Never paste
+      token values.
+    refs:
+    - scripts/
+    - .artifacts/gcp-tasca-deploy/startup.sh
+    - .artifacts/gcp-tasca-deploy/verify_remote_mcp.py
+    - docs/deployment-ops-v0.1.md
+    - pyproject.toml
+    agent: general
+  - id: viewer_auth_gcp.remote-verification
+    name: Independently verify remote HTTPS viewer/admin behavior and cleanup
+    status: pending
+    description: 'step_type: verification
+
+      repo_change_policy: no_repo_change
+
+
+      Deliver:
+
+      - Run the tracked redacted verifier against only the certificate-valid HTTPS
+      endpoint; never send credentials to the public IP on port 8000 or another HTTP
+      URL.
+
+      - Prove public /api/v1/health, /api/v1/ready, /docs, /openapi.json, SPA shell,
+      and static assets; health must report 0.1.30 and viewer_auth_required=true.
+
+      - Exercise the documented non-health REST route inventory: missing/invalid Bearer
+      receives 401 PermissionDenied, viewer and admin can perform baseline reads,
+      viewer cannot perform an admin-only mutation, and admin can create and clean
+      up one isolated verification table.
+
+      - Prove /api/v1/auth/validate returns viewer/admin roles for the corresponding
+      credential and persists no server-side secret material.
+
+      - Prove MCP HTTP rejects viewer and accepts admin through a real session/tool
+      call; do not alter MCP tool schemas or use STDIO as a substitute for remote
+      HTTP proof.
+
+      - Confirm public TCP/8000 is unreachable, certificate validation is enabled,
+      configured tokens do not appear in response bodies, service logs, verifier output,
+      or retained evidence, and all verification data is cleaned up.
+
+
+      Boundary: integration-verifier owns independent L3 observation and the isolated
+      create/read/delete verification data only. It may read the two named GCP secrets
+      through the approved secret-safe verifier but may not edit repository/deployment
+      state, rotate/distribute secrets, change firewall/systemd/DNS, or touch SQLite
+      directly.
+
+
+      Admit: the rollout receipt identifies final 0.1.30 state, HTTPS hostname, exact
+      verifier producer, secret resource names, and cleanup authority. If TLS, port
+      closure, target identity, or secret-safe observation is missing, stop before
+      credential use and return BLOCKED on this step.
+
+
+      Recovery: always attempt bounded cleanup of the isolated table with the admin
+      credential. On probe failure, stop at the first material unmet boundary, report
+      any possible residual table ID without token data, and leave deployment recovery
+      to viewer_auth_gcp.https-secret-rollout; do not broaden targets or fall back
+      to HTTP.'
+    verification: 'Run exactly the tracked verifier selected by the release receipt:
+      `env TASCA_HTTPS_BASE_URL=https://<witnessed-host> uv run python scripts/gcp/verify_viewer_auth_remote.py
+      --project rda-engineering --viewer-secret tasca-viewer-token --admin-secret
+      tasca-admin-token --expected-version 0.1.30 --check-direct-port 34.1.134.239:8000
+      --cleanup`. Require certificate verification, public-surface responses, route-inventory
+      401/viewer/admin matrix, viewer mutation rejection, admin create/delete, auth-role
+      validation, MCP viewer rejection/admin real-session success, direct-port refusal,
+      cleanup success, and a redaction scan with zero configured-token matches.'
+    evidence_template: Record verifier path/revision and exact argv; HTTPS host/certificate
+      result; health/ready/docs/openapi/SPA/assets status table; complete non-health
+      REST matrix with methods/paths/status/envelope and tokens represented only as
+      viewer/admin/invalid; auth validation roles; MCP HTTP session/tool results;
+      direct-port refusal; isolated table ID and cleanup result; service/verifier
+      redaction scan; command exits and L3 verdict. Any token value in evidence is
+      an immediate FAIL requiring evidence quarantine.
+    refs:
+    - scripts/
+    - .artifacts/gcp-tasca-deploy/verify_remote_mcp.py
+    - docs/tasca-http-api-v0.1.md
+    - docs/deployment-ops-v0.1.md
+    - README.md
+    depends_on:
+    - viewer_auth_gcp.https-secret-rollout
+    agent: integration-verifier

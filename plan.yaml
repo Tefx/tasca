@@ -48512,7 +48512,7 @@ phases:
       gate passes.'
   - id: viewer_auth_release.web-credential-flow
     name: Implement validated Web credential gate and admin elevation
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -48591,6 +48591,47 @@ phases:
     agent: frontend-engineer
     claimed_by: frontend-engineer
     claimed_at: '2026-08-31T10:23:33.156967Z'
+    done_at: '2026-08-31T10:55:45.675871+00:00'
+    evidence: 'Frontend candidate 599a607cd8b3a41149a6293c29b45363d9f4676e was implemented
+      in pristine worktree and fast-forward integrated into canonical main.
+
+
+      Changed refs: App gate + tests; AuthContext; AuthConnector; shared client +
+      tests; ModeIndicator/CSS; authenticated TableControls export + tests; tables
+      API; Web UI/integration docs.
+
+
+      Behavioral evidence (`npm test` exit 0, 10 files/214 tests): configured health
+      discovery blocks Taproom before data; disabled discovery renders public Viewer
+      and sends no Authorization; invalid credential returns accessible alert with
+      zero sessionStorage writes; valid Viewer is validated at `/api/v1/auth/validate`,
+      stored under `tasca_web_access_token` with validated role, and sent on baseline
+      reads; legacy `tasca_admin_token` is ignored; reload revalidates before data;
+      transient 5xx preserves stored credential and Retry succeeds; failed elevation
+      preserves Viewer; successful elevation replaces role/token only after admin
+      response; Viewer UI mode retains validated admin header; pending elevation disables/ignores
+      overlay/Escape/logout dismissal; delayed stale Viewer 401 cannot clear a newer
+      Admin credential; current-token 401 clears state; logout clears validated state;
+      authenticated export uses fetch/blob with Authorization and no token in URL;
+      standard and legacy non-auth error details remain available.
+
+
+      Storage evidence: invalid submission caused no setItem; validated Viewer/Admin
+      wrote current-tab token+role only; logout/401 removed both; values were not
+      rendered/logged/snapshotted. Request evidence: health had no Authorization;
+      validation used explicit Bearer; resource/export calls carried active validated
+      Bearer; evidence redacts values.
+
+
+      Accessibility: labeled password fields, role=alert/status, aria-busy, modal
+      semantics, disabled pending controls, and Escape dismissal outside pending validation.
+
+
+      Verification from clean worktree: `npm ci` exit 0; `npm test` exit 0 (214 passed);
+      `npm run lint` exit 0 with 12 pre-existing Fast Refresh warnings; `npm run build`
+      exit 0. Integrated canonical `npm run build` also exited 0 and emitted `src/tasca/web/dist/index.html`
+      plus hashed assets. Live rendered/backend-browser verification remains assigned
+      to the later remote verification step.'
   - id: viewer_auth_release.package-release
     name: Package and prove the 0.1.30 release plus tracked GCP rollout producers
     status: pending

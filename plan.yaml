@@ -48353,11 +48353,11 @@ phases:
       - No empty commit created.'
 - id: gcp-single-vm-deployment
   name: GCP single-VM deployment
-  status: pending
+  status: in_progress
   steps:
   - id: gcp-single-vm-deployment.provision-single-writer-service
     name: provision-single-writer-service
-    status: pending
+    status: claimed
     description: Create the user-authorized GCP Compute Engine VM, persistent SQLite
       disk, Secret Manager token, and restricted TCP/8000 firewall rule; install one
       Tasca process with durable systemd configuration. Do not create extra workers
@@ -48378,6 +48378,8 @@ phases:
     - docs/deployment-ops-v0.1.md
     - src/tasca/main.py
     - src/tasca/config.py
+    claimed_by: general
+    claimed_at: '2026-08-31T07:39:38.339156Z'
   - id: verify-remote-mcp
     name: verify-remote-mcp
     status: pending

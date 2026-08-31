@@ -48431,11 +48431,11 @@ phases:
       never emitted in commands, helper output, evidence, or final report.'
 - id: viewer_auth_release
   name: Optional viewer authentication — implementation and release
-  status: pending
+  status: in_progress
   steps:
   - id: viewer_auth_release.backend-rest-auth
     name: Implement optional viewer/admin REST authorization contract
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -48524,6 +48524,8 @@ phases:
     - docs/tasca-http-api-v0.1.md
     - docs/tasca-technical-design-v0.1.md
     agent: python-senior
+    claimed_by: python-senior
+    claimed_at: '2026-08-31T09:44:28.111577Z'
   - id: viewer_auth_release.web-credential-flow
     name: Implement validated Web credential gate and admin elevation
     status: pending

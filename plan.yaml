@@ -48400,15 +48400,15 @@ phases:
     description: Verify public health and authenticate to the new remote Tasca MCP
       endpoint, then create/read one isolated test table and report the endpoint without
       exposing the token.
-    verification: Record HTTPS health response, MCP connect result, and a table read
-      that confirms persistence through the remote endpoint.
+    verification: Record public HTTP health response, authenticated MCP connection
+      result, and a table read that confirms persistence through the remote endpoint.
     evidence_template: '## Remote verification
 
-      - Public health command and redacted output: output
+      - Public HTTP health command and redacted output: output
 
-      - Remote tasca.connect result: output
+      - Authenticated remote MCP protocol result: output
 
-      - Test table ID and table_get/table_list result: output
+      - Test table ID and table_get result: output
 
       - Token redaction confirmed: yes/no'
     refs:

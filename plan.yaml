@@ -48886,3 +48886,100 @@ phases:
     depends_on:
     - viewer_auth_gcp.https-secret-rollout
     agent: integration-verifier
+- id: seat_presence_fix
+  name: Seat presence active filtering repair
+  status: locked
+  depends_on:
+  - viewer_auth_release
+  steps:
+  - id: seat_presence_fix.exclude-departed-seats
+    name: Exclude departed seats from active seat results and counts
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver:
+
+      - Repair the shared active-seat predicate so a seat is active only when it is
+      in the current internal active state (`SeatState.JOINED`) and its heartbeat
+      is within TTL. Always exclude `SeatState.LEFT` from active results and counts
+      while preserving its separate non-expired/GC semantics.
+
+      - Preserve the existing state contract and mappings: protocol `running` and
+      `idle` map to `JOINED`, and `done` maps to `LEFT`. Do not add states or change
+      SQLite, REST, MCP tool, or response schemas.
+
+      - Make `seat_list(active_only=true)` return only active seats. When every seat
+      has departed it must return `seats=[]` and `active_count=0`. Make `active_only=false`
+      return the complete seat set, including departed and expired seats, while `active_count`
+      still uses the same active predicate and equals the `active_only=true` result
+      length for the same stable data.
+
+      - Apply the shared predicate consistently to MCP seat listing, REST seat listing,
+      repository/table active counts, and their existing tests. Replace contradictory
+      assertions that count/include `LEFT` as active, add mixed-state and all-departed
+      coverage, and synchronize the MCP contract documentation where it defines `active_only`
+      and `active_count`.
+
+
+      Boundary: `python-executor` owns the cohesive Python core/shell test and contract-document
+      transaction. No GCP or other runtime mutation, credential access, package publication,
+      deployment, database/schema migration, new state model, or viewer-auth release-candidate
+      change. This phase follows completion of the existing viewer-auth repository
+      release transaction to avoid overlapping its broad package/test surface.
+
+
+      Admit: use `SeatState`, `SPEC_STATE_TO_INTERNAL`, and `INTERNAL_STATE_TO_SPEC`
+      as the authoritative state set and mapping. Tests must derive or cover every
+      currently supported state classification rather than introduce suggested states.
+      Add a real HTTP MCP regression that sends JSON-RPC `tools/call` requests through
+      `/mcp`, transitions seats through the supported heartbeat states, and witnesses
+      both `active_only` modes, mixed active/departed data, count equality, and the
+      all-departed zero result. Direct function tests alone do not satisfy the HTTP
+      MCP evidence requirement.
+
+
+      Recovery: revert the repository transaction if predicate, schema-preservation,
+      state-mapping, or HTTP MCP checks fail; no external state requires reconciliation.'
+    verification: 'From a clean checkout with tracked dependencies: `uv sync --frozen
+      --group dev`; `uv run pytest -q tests/unit/test_seat_ttl.py tests/unit/api/test_seats_routes.py
+      tests/unit/storage/test_table_repo.py tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py`;
+      `uv run ruff check src/tasca/core/domain/seat.py src/tasca/core/services/seat_service.py
+      src/tasca/shell/storage/seat_repo.py src/tasca/shell/storage/table_repo.py src/tasca/shell/api/routes/seats.py
+      src/tasca/shell/mcp/entrypoint_session_tools.py tests/unit/test_seat_ttl.py
+      tests/unit/api/test_seats_routes.py tests/unit/storage/test_table_repo.py tests/unit/mcp/test_mcp_server.py
+      tests/integration/test_mcp.py`; `uvx --from invar-tools==1.20.1 invar guard
+      --all`. The integration evidence must identify the HTTP MCP regression test
+      and show successful `/mcp` `tools/call` assertions for active_only=true/false,
+      mixed states, all-departed zero, and active_count equality.'
+    evidence_template: '- Authoritative state contract used (`SeatState` and protocol
+      mapping cases) and schema-preservation note
+
+      - Core/REST/repository/MCP focused test commands and pass counts
+
+      - HTTP MCP regression test name plus passing output; summarize witnessed active_only=true,
+      active_only=false, mixed-state count equality, and all-departed `seats=[]`/`active_count=0`
+      assertions
+
+      - Ruff output
+
+      - Full Invar guard output
+
+      - Any untested boundary or baseline-only failure, without expanding scope'
+    refs:
+    - src/tasca/core/domain/seat.py
+    - src/tasca/core/services/seat_service.py
+    - src/tasca/shell/storage/seat_repo.py
+    - src/tasca/shell/storage/table_repo.py
+    - src/tasca/shell/api/routes/seats.py
+    - src/tasca/shell/mcp/entrypoint_session_tools.py
+    - src/tasca/shell/mcp/tool_contracts.py
+    - tests/unit/test_seat_ttl.py
+    - tests/unit/api/test_seats_routes.py
+    - tests/unit/storage/test_table_repo.py
+    - tests/unit/mcp/test_mcp_server.py
+    - tests/integration/test_mcp.py
+    - docs/tasca-mcp-interface-v0.1.md
+    agent: python-executor

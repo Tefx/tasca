@@ -48396,7 +48396,7 @@ phases:
       secrets delete tasca-admin-token; gcloud iam service-accounts delete tasca-vm@rda-engineering.iam.gserviceaccount.com.'
   - id: verify-remote-mcp
     name: verify-remote-mcp
-    status: pending
+    status: claimed
     description: Verify public health and authenticate to the new remote Tasca MCP
       endpoint, then create/read one isolated test table and report the endpoint without
       exposing the token.
@@ -48417,3 +48417,5 @@ phases:
     - src/tasca/shell/mcp/proxy.py
     depends_on:
     - gcp-single-vm-deployment.provision-single-writer-service
+    claimed_by: general
+    claimed_at: '2026-08-31T07:48:02.712052Z'

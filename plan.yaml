@@ -48512,7 +48512,7 @@ phases:
       gate passes.'
   - id: viewer_auth_release.web-credential-flow
     name: Implement validated Web credential gate and admin elevation
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -48589,6 +48589,8 @@ phases:
     depends_on:
     - viewer_auth_release.backend-rest-auth
     agent: frontend-engineer
+    claimed_by: frontend-engineer
+    claimed_at: '2026-08-31T10:23:33.156967Z'
   - id: viewer_auth_release.package-release
     name: Package and prove the 0.1.30 release plus tracked GCP rollout producers
     status: pending

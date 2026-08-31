@@ -257,10 +257,10 @@ class TestAppendSaying:
             json={"speaker_name": "Alice", "content": "Hello"},
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 409
         assert_detail_error(
             response,
-            code="PermissionDenied",
+            code="TableClosed",
             message_contains="Cannot add saying to table with status 'closed'. Table must be OPEN or PAUSED.",
             details={"table_status": "closed"},
         )
@@ -658,10 +658,10 @@ class TestStateGuards:
             json={"speaker_name": "User", "content": "This should fail"},
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 409
         assert_detail_error(
             response,
-            code="PermissionDenied",
+            code="TableClosed",
             message_contains="closed",
             details={"table_status": "closed"},
         )

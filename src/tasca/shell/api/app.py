@@ -16,16 +16,17 @@ from returns.result import Failure
 # imports to allow static analysis and doctest collection in environments where
 # it's not installed (e.g., during guard runs or in minimal test environments).
 if TYPE_CHECKING:
-    from fastapi import FastAPI, HTTPException, Request, Response
+    from fastapi import Depends, FastAPI, HTTPException, Request, Response
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.staticfiles import StaticFiles
 else:
     try:
-        from fastapi import FastAPI, HTTPException, Request, Response
+        from fastapi import Depends, FastAPI, HTTPException, Request, Response
         from fastapi.middleware.cors import CORSMiddleware
         from fastapi.staticfiles import StaticFiles
     except ImportError:
         # For static analysis/doctest collection in environments without fastapi
+        Depends = None  # type: ignore[misc,assignment]
         FastAPI = None  # type: ignore[misc,assignment]
         HTTPException = Exception  # type: ignore[misc,assignment]
         Request = None  # type: ignore[misc,assignment]
@@ -53,7 +54,7 @@ else:
         Send = None
 
 from tasca.config import settings
-from tasca.shell.api.auth import validate_bearer_token
+from tasca.shell.api.auth import validate_bearer_token, verify_viewer_or_admin
 from tasca.shell.mcp import mcp
 
 logger = logging.getLogger(__name__)
@@ -194,8 +195,9 @@ def create_app() -> FastAPI:
     For stdio transport, use the tasca-mcp command directly.
 
     Authentication:
-    - MCP HTTP endpoint requires Bearer token if admin_token is configured.
-    - If admin_token is None/empty, authentication is bypassed.
+    - Configured viewer auth protects REST resource routers with a viewer or
+      admin Bearer credential; admin-only mutations remain admin-only.
+    - MCP HTTP accepts only the admin Bearer credential.
     - STDIO transport (tasca-mcp command) is unaffected by HTTP auth.
     """
     if FastAPI is None:
@@ -204,7 +206,7 @@ def create_app() -> FastAPI:
             "Install tasca with API dependencies."
         )
 
-    from tasca.shell.api.routes import export, health, patrons, sayings, search, seats, tables
+    from tasca.shell.api.routes import auth, export, health, patrons, sayings, search, seats, tables
 
     # Get MCP HTTP app first - we need its lifespan
     mcp_app = mcp.http_app(path="/")
@@ -240,20 +242,46 @@ def create_app() -> FastAPI:
     # In production: restrictive CSP; In development: permissive for debugging
     app.add_middleware(CSPMiddleware)
 
-    # Include routers under /api/v1 prefix
+    # Include public utility routers and viewer-protected resource routers.
     API_V1_PREFIX = "/api/v1"
+    viewer_access_dependencies = [Depends(verify_viewer_or_admin)]
     app.include_router(health.router, prefix=API_V1_PREFIX, tags=["health"])
-    app.include_router(patrons.router, prefix=f"{API_V1_PREFIX}/patrons", tags=["patrons"])
-    app.include_router(tables.router, prefix=f"{API_V1_PREFIX}/tables", tags=["tables"])
+    app.include_router(auth.router, prefix=f"{API_V1_PREFIX}/auth", tags=["auth"])
     app.include_router(
-        sayings.router, prefix=f"{API_V1_PREFIX}/tables/{{table_id}}/sayings", tags=["sayings"]
+        patrons.router,
+        prefix=f"{API_V1_PREFIX}/patrons",
+        tags=["patrons"],
+        dependencies=viewer_access_dependencies,
     )
     app.include_router(
-        seats.router, prefix=f"{API_V1_PREFIX}/tables/{{table_id}}/seats", tags=["seats"]
+        tables.router,
+        prefix=f"{API_V1_PREFIX}/tables",
+        tags=["tables"],
+        dependencies=viewer_access_dependencies,
     )
-    app.include_router(search.router, prefix=f"{API_V1_PREFIX}/search", tags=["search"])
     app.include_router(
-        export.router, prefix=f"{API_V1_PREFIX}/tables/{{table_id}}/export", tags=["export"]
+        sayings.router,
+        prefix=f"{API_V1_PREFIX}/tables/{{table_id}}/sayings",
+        tags=["sayings"],
+        dependencies=viewer_access_dependencies,
+    )
+    app.include_router(
+        seats.router,
+        prefix=f"{API_V1_PREFIX}/tables/{{table_id}}/seats",
+        tags=["seats"],
+        dependencies=viewer_access_dependencies,
+    )
+    app.include_router(
+        search.router,
+        prefix=f"{API_V1_PREFIX}/search",
+        tags=["search"],
+        dependencies=viewer_access_dependencies,
+    )
+    app.include_router(
+        export.router,
+        prefix=f"{API_V1_PREFIX}/tables/{{table_id}}/export",
+        tags=["export"],
+        dependencies=viewer_access_dependencies,
     )
 
     # Mount MCP server at /mcp
@@ -295,6 +323,7 @@ def create_app() -> FastAPI:
         )
 
     logger.info("MCP server mounted at /mcp (endpoint: POST /mcp/)")
+    logger.info("REST viewer authentication required=%s", settings.viewer_auth_required)
 
     # Serve the React SPA from web/dist (if built).
     # /assets → static files; everything else → index.html (React Router).

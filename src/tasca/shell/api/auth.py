@@ -1,8 +1,9 @@
 """
-Authentication for admin operations.
+Authentication dependencies for REST and MCP HTTP operations.
 
-This module provides token validation for admin-protected endpoints
-and exports the OpenAPI security scheme for Bearer token authentication.
+REST resource routes accept a configured viewer or admin credential. Existing
+admin-only mutations retain their admin-only dependency. MCP HTTP always
+accepts only the admin credential.
 
 Escape Hatch Convention (shell_result):
     Auth helpers return bool or raise HTTPException, not Result[T, E].
@@ -10,7 +11,7 @@ Escape Hatch Convention (shell_result):
 """
 
 import hmac
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, NoReturn
 
 from returns.result import Failure, Result, Success
 
@@ -78,7 +79,7 @@ def _get_bearer_scheme() -> Result["HTTPBearer", str]:
     """Lazy initialization of HTTPBearer to avoid import-time errors without fastapi."""
     return Success(HTTPBearer(
         scheme_name="bearerAuth",
-        description="Admin Bearer token authentication",
+        description="Viewer or admin Bearer token authentication",
         auto_error=False,  # verify_admin_token shapes all auth failures consistently
     ))
 
@@ -110,49 +111,84 @@ else:
     _credentials_dependency = None
 
 
-# @shell_orchestration: FastAPI dependency that validates HTTP Authorization header and raises HTTPException
-# @shell_complexity: Auth validation requires multiple branches (disabled, missing, malformed, invalid)
+AuthRole = Literal["viewer", "admin"]
+
+
+# @invar:allow shell_result: Deterministic HTTP auth comparison returns a boolean for FastAPI dependencies.
+def _token_matches(token: str | None, expected: str | None) -> bool:
+    """Return whether a credential matches its expected token."""
+    validation = validate_bearer_token(token, expected)
+    return not isinstance(validation, Failure) and validation.unwrap()
+
+
+# @invar:allow shell_result: HTTP auth role selection is deterministic dependency wiring.
+def _credential_role(token: str | None, *, allow_viewer: bool) -> AuthRole | None:
+    """Resolve the role for a valid token without exposing credential values."""
+    if _token_matches(token, settings.admin_token):
+        return "admin"
+    if allow_viewer and _token_matches(token, settings.viewer_token):
+        return "viewer"
+    return None
+
+
+# @invar:allow shell_result: HTTP auth failure must raise FastAPI's standard exception.
+def _raise_permission_denied() -> NoReturn:
+    """Raise the standard REST authorization failure without token details."""
+    from tasca.shell.api.errors import error_envelope
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=error_envelope("PermissionDenied", "Invalid or missing token"),
+    )
+
+
+# @shell_orchestration: FastAPI dependency validates an admin-only mutation credential.
 async def verify_admin_token(
     credentials: "HTTPAuthorizationCredentials | None" = _credentials_dependency,
 ) -> None:
-    """
-    Verify admin Bearer token for protected endpoints.
-
-    HTTPBearer extracts and validates the Bearer token format,
-    then this function validates the token value.
-
-    Args:
-        credentials: HTTPAuthorizationCredentials from HTTPBearer
-            (contains .scheme and .credentials attributes).
-
-    Returns:
-        None on success (valid token).
-
-    Raises:
-        HTTPException: 401 if token is missing or invalid.
-
-    Security:
-        Token value is never logged or exposed in error messages.
-
-    Examples:
-        >>> # Valid token
-        >>> # Authorization: "Bearer correct-token"
-        >>> # Returns None
-
-        >>> # Invalid token
-        >>> # Authorization: "Bearer wrong-token"
-        >>> # Raises HTTPException(401, "Invalid or missing token")
-    """
-    # Validate token using constant-time comparison (never log or print the token value)
+    """Require the configured admin credential for an admin-only endpoint."""
     token = credentials.credentials if credentials else None
-    validation = validate_bearer_token(token, settings.admin_token)
-    if isinstance(validation, Failure) or not validation.unwrap():
-        from tasca.shell.api.errors import error_envelope
+    if not _token_matches(token, settings.admin_token):
+        _raise_permission_denied()
 
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=error_envelope("PermissionDenied", "Invalid or missing token"),
-        )
 
-    # Valid token - return None to allow request to proceed
-    return None
+# @shell_orchestration: FastAPI dependency adds optional viewer authentication at router boundaries.
+# @invar:allow shell_result: FastAPI dependency returns a role or raises HTTPException.
+async def verify_viewer_or_admin(
+    credentials: "HTTPAuthorizationCredentials | None" = _credentials_dependency,
+) -> AuthRole | None:
+    """Allow REST resource access to a viewer or admin when viewer auth is enabled.
+
+    Disabled viewer auth deliberately returns without examining credentials so
+    existing public REST reads and non-admin operations keep their baseline
+    behavior.
+    """
+    if not settings.viewer_auth_required:
+        return None
+
+    token = credentials.credentials if credentials else None
+    role = _credential_role(token, allow_viewer=True)
+    if role is None:
+        _raise_permission_denied()
+    return role
+
+
+# @shell_orchestration: FastAPI dependency validates the side-effect-free auth probe.
+# @invar:allow shell_result: FastAPI dependency returns a role or raises HTTPException.
+async def validate_authentication_token(
+    credentials: "HTTPAuthorizationCredentials | None" = _credentials_dependency,
+) -> AuthRole:
+    """Return the authenticated role for GET /api/v1/auth/validate.
+
+    Without configured viewer auth, absent credentials identify the public
+    baseline viewer role. A supplied credential must still be valid: admin
+    remains valid in either mode and viewer credentials work only when enabled.
+    """
+    if credentials is None and not settings.viewer_auth_required:
+        return "viewer"
+
+    token = credentials.credentials if credentials else None
+    role = _credential_role(token, allow_viewer=settings.viewer_auth_required)
+    if role is None:
+        _raise_permission_denied()
+    return role

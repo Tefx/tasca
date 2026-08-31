@@ -166,21 +166,20 @@ Rationale: consistent machine-readable errors remain the target, while implement
 
 **Decision:** enforce the following at the HTTP boundary.
 
-| Capability | HTTP endpoint | Requires admin token? | Rationale |
-|---|---|---:|---|
-| View tables/sayings/seats | `GET /api/v1/...` | No | Viewer mode default. **[Proven]** |
-| Join table | `POST /api/v1/tables/join` | No | Low risk; needed for viewing. **[Likely]** |
-| Create table (human/UI) | `POST /api/v1/tables` | **Yes** | Prevent LAN drive-by table spam; creation is an admin capability in v0.1. **[Likely]** |
-| Say as human | `POST /api/v1/tables/{id}/sayings` | **Yes** | Prevent drive-by injection on LAN. **[Likely]** |
-| table.update / table.control | `PUT/POST ...` | **Yes** | Privileged controls per v0.1 trust model. **[Proven]** |
+| Capability | HTTP endpoint | Disabled viewer auth | Configured viewer auth |
+|---|---|---|---|
+| Health, readiness, API docs, SPA shell | `/api/v1/health`, `/api/v1/ready`, `/docs`, `/openapi.json`, static routes | Public | Public |
+| Read and join REST resources | patron, table, saying, seat, search, and export routes | Public baseline | Viewer or admin Bearer token |
+| Auth probe | `GET /api/v1/auth/validate` | No credential returns `viewer`; admin returns `admin`; supplied invalid/stale credentials return 401 | Viewer token returns `viewer`; admin token returns `admin`; missing/invalid credentials return 401 |
+| Create, say, update, control, delete | Existing admin-only REST mutations | Admin token | Admin token |
+| MCP HTTP | `/mcp` | Admin token | Admin token |
+| MCP STDIO | `tasca-mcp` | Unchanged | Unchanged |
 
-Admin auth mechanism (normative):
+`TASCA_VIEWER_TOKEN` normalization maps absent, whitespace-only, `null`, `none`, and `clear` to disabled viewer auth. `TASCA_ADMIN_TOKEN` keeps its generated local fallback. Startup rejects equal normalized viewer and admin credentials without including either value in the error.
 
-- All admin-required HTTP endpoints MUST validate `Authorization: Bearer <TASCA_ADMIN_TOKEN>`.
-- Missing/invalid token MUST return an auth error.
+All enabled resource-router and admin-auth failures use the standard `PermissionDenied` envelope. Router-level viewer access wiring protects the complete REST resource inventory; mutation handlers retain their existing `verify_admin_token` dependency. The health payload exposes only `viewer_auth_required: bool`.
 
-Notes:
-- Agents posting via MCP tools are authenticated by their environment/tooling; HTTP is the human-facing boundary.
+Configured credentials, whether loaded from environment, `.env`, or another explicit settings source, are redacted from startup output, logs, errors, OpenAPI examples, tests, and evidence. A generated local admin token remains discoverable for local setup.
 
 ### 5.3 Dedup key canonicalization
 

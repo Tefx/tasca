@@ -378,10 +378,10 @@ class TestPrintStartupBanner:
         assert '"mcpServers"' in output
         assert '"url":"http://192.168.1.42:8000/mcp"' in output
 
-    def test_token_from_env_shows_different_message(
+    def test_token_from_env_is_redacted(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Shows different message when token comes from env."""
+        """Configured admin tokens never appear in startup output."""
         table_data = {
             "id": "test-id",
             "question": "Test?",
@@ -401,10 +401,33 @@ class TestPrintStartupBanner:
         )
 
         output = capsys.readouterr().out
-        # When token from env, the admin token line shows the source indicator
-        assert "(from TASCA_ADMIN_TOKEN env)" in output
-        # Token is still shown in both places (human needs to tell agent)
-        assert "tk_test" in output
+        assert "configured via TASCA_ADMIN_TOKEN (redacted)" in output
+        assert "<TASCA_ADMIN_TOKEN>" in output
+        assert "tk_test" not in output
+
+    def test_main_redacts_explicitly_configured_admin_token(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The default server banner hides constructor-supplied credentials."""
+        import tasca.main as main_module
+        from returns.result import Success
+        from tasca.config import Settings
+
+        configured_token = "configured-admin-token"
+        monkeypatch.delenv("TASCA_ADMIN_TOKEN", raising=False)
+        configured_settings = Settings(admin_token=configured_token)
+        assert configured_settings.admin_token_from_env is True
+
+        with patch.object(main_module, "settings", configured_settings):
+            with patch.object(main_module, "get_lan_ip", return_value=Success("127.0.0.1")):
+                with patch.object(main_module, "create_app"):
+                    with patch.object(main_module.uvicorn, "run"):
+                        with patch.object(main_module.sys, "argv", ["tasca"]):
+                            main_module.main()
+
+        output = capsys.readouterr().out
+        assert "configured via TASCA_ADMIN_TOKEN (redacted)" in output
+        assert configured_token not in output
 
     def test_ctrlc_message_present(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Ctrl+C message is present."""

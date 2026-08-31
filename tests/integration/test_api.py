@@ -10,6 +10,8 @@ Usage:
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -19,6 +21,8 @@ import pytest
 # We cannot capture _settings.admin_token at module import time because the autouse
 # fixture runs after module collection; the token seen here would be stale by test time.
 from tests.integration.conftest import TEST_ADMIN_TOKEN as _ADMIN_TOKEN
+
+_VIEWER_TOKEN = "test-viewer-token-fixture"
 
 try:
     from tasca.shell.api.app import create_app as _create_app
@@ -211,6 +215,191 @@ async def test_readiness_check() -> None:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ready"
+
+
+# =============================================================================
+# Viewer Authentication Tests
+# =============================================================================
+
+# Every REST resource endpoint mounted by create_app. The final flag records
+# handlers that retain their existing verify_admin_token requirement.
+_RESOURCE_ROUTE_MATRIX: tuple[tuple[str, str, str, dict[str, Any], bool], ...] = (
+    ("patron register", "POST", "/api/v1/patrons", {"json": {"name": "Viewer test"}}, False),
+    ("patron get", "GET", "/api/v1/patrons/missing", {}, False),
+    ("table create", "POST", "/api/v1/tables", {"json": {"question": "Viewer test"}}, True),
+    ("table list", "GET", "/api/v1/tables", {}, False),
+    ("table join", "POST", "/api/v1/tables/join", {"json": {}}, False),
+    ("table get", "GET", "/api/v1/tables/missing", {}, False),
+    ("table update", "PUT", "/api/v1/tables/missing?expected_version=1", {"json": {"question": "x", "context": None, "status": "open"}}, True),
+    ("table delete", "DELETE", "/api/v1/tables/missing", {}, True),
+    ("table batch delete", "POST", "/api/v1/tables/actions/batch-delete", {"json": {"ids": ["missing"]}}, True),
+    ("table control", "POST", "/api/v1/tables/missing/control", {"json": {"action": "close"}}, True),
+    ("saying append", "POST", "/api/v1/tables/missing/sayings", {"json": {"speaker_name": "Admin", "content": "x"}}, True),
+    ("saying list", "GET", "/api/v1/tables/missing/sayings", {}, False),
+    ("saying wait", "GET", "/api/v1/tables/missing/sayings/wait?since_sequence=-1&timeout=0", {}, False),
+    ("seat heartbeat", "POST", "/api/v1/tables/missing/seats/missing/heartbeat", {}, False),
+    ("seat list", "GET", "/api/v1/tables/missing/seats", {}, False),
+    ("search", "GET", "/api/v1/search?q=viewer", {}, False),
+    ("export jsonl", "GET", "/api/v1/tables/missing/export/jsonl", {}, False),
+    ("export markdown", "GET", "/api/v1/tables/missing/export/markdown", {}, False),
+)
+
+
+def _bearer_headers(token: str | None) -> dict[str, str]:
+    """Build an Authorization header for a matrix credential."""
+    return {} if token is None else {"Authorization": f"Bearer {token}"}
+
+
+async def _resource_request(
+    client: httpx.AsyncClient,
+    route: tuple[str, str, str, dict[str, Any], bool],
+    token: str | None,
+) -> httpx.Response:
+    """Issue a configured matrix request with one credential."""
+    _name, method, path, request_kwargs, _admin_only = route
+    return await client.request(method, path, headers=_bearer_headers(token), **request_kwargs)
+
+
+def _assert_permission_denied(response: httpx.Response) -> None:
+    """Assert the standard token failure envelope shared by REST dependencies."""
+    assert response.status_code == 401
+    error = response.json()["error"]
+    assert error["code"] == "PermissionDenied"
+    assert error["details"] == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", _RESOURCE_ROUTE_MATRIX, ids=[route[0] for route in _RESOURCE_ROUTE_MATRIX])
+async def test_viewer_auth_matrix_covers_every_rest_resource_router(
+    monkeypatch: pytest.MonkeyPatch,
+    route: tuple[str, str, str, dict[str, Any], bool],
+) -> None:
+    """Configured viewer auth gates all resource routers and preserves admin mutations."""
+    from tasca.config import settings
+    from tasca.shell.api.app import create_app
+
+    monkeypatch.setattr(settings, "viewer_token", _VIEWER_TOKEN)
+    transport = httpx.ASGITransport(app=create_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        missing = await _resource_request(client, route, None)
+        invalid = await _resource_request(client, route, "invalid-viewer-token")
+        viewer = await _resource_request(client, route, _VIEWER_TOKEN)
+        admin = await _resource_request(client, route, _ADMIN_TOKEN)
+
+    _assert_permission_denied(missing)
+    _assert_permission_denied(invalid)
+    if route[4]:
+        _assert_permission_denied(viewer)
+    else:
+        assert viewer.status_code != 401
+    assert admin.status_code != 401
+
+
+@pytest.mark.asyncio
+async def test_disabled_viewer_auth_preserves_resource_route_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only existing admin-only mutations reject an anonymous baseline request."""
+    from tasca.config import settings
+    from tasca.shell.api.app import create_app
+
+    monkeypatch.setattr(settings, "viewer_token", None)
+    transport = httpx.ASGITransport(app=create_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        health = await client.get("/api/v1/health")
+        assert health.status_code == 200
+        assert health.json()["viewer_auth_required"] is False
+
+        for route in _RESOURCE_ROUTE_MATRIX:
+            response = await _resource_request(client, route, None)
+            if route[4]:
+                _assert_permission_denied(response)
+            else:
+                assert response.status_code != 401, route[0]
+
+
+@pytest.mark.asyncio
+async def test_auth_validation_reports_enabled_and_public_viewer_roles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The auth probe validates roles without mutating service state."""
+    from tasca.config import settings
+    from tasca.shell.api.app import create_app
+
+    monkeypatch.setattr(settings, "viewer_token", _VIEWER_TOKEN)
+    enabled_transport = httpx.ASGITransport(app=create_app())
+    async with httpx.AsyncClient(transport=enabled_transport, base_url="http://test") as client:
+        _assert_permission_denied(await client.get("/api/v1/auth/validate"))
+        _assert_permission_denied(
+            await client.get("/api/v1/auth/validate", headers=_bearer_headers("invalid-viewer-token"))
+        )
+        assert (await client.get("/api/v1/auth/validate", headers=_bearer_headers(_VIEWER_TOKEN))).json() == {"role": "viewer"}
+        assert (await client.get("/api/v1/auth/validate", headers=_bearer_headers(_ADMIN_TOKEN))).json() == {"role": "admin"}
+
+    monkeypatch.setattr(settings, "viewer_token", None)
+    disabled_transport = httpx.ASGITransport(app=create_app())
+    async with httpx.AsyncClient(transport=disabled_transport, base_url="http://test") as client:
+        assert (await client.get("/api/v1/auth/validate")).json() == {"role": "viewer"}
+        assert (await client.get("/api/v1/auth/validate", headers=_bearer_headers(_ADMIN_TOKEN))).json() == {"role": "admin"}
+        _assert_permission_denied(
+            await client.get("/api/v1/auth/validate", headers=_bearer_headers(_VIEWER_TOKEN))
+        )
+        _assert_permission_denied(
+            await client.get("/api/v1/auth/validate", headers=_bearer_headers("invalid-viewer-token"))
+        )
+
+
+@pytest.mark.asyncio
+async def test_public_routes_and_static_shell_stay_public_without_token(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Utility routes and the SPA shell stay public when viewer auth is configured."""
+    import tasca.shell.api.app as app_module
+    from tasca.config import settings
+
+    monkeypatch.setattr(settings, "viewer_token", _VIEWER_TOKEN)
+    source_path = tmp_path / "src" / "tasca" / "shell" / "api" / "app.py"
+    source_path.parent.mkdir(parents=True)
+    source_path.touch()
+    web_dist = tmp_path / "src" / "tasca" / "web" / "dist"
+    (web_dist / "assets").mkdir(parents=True)
+    (web_dist / "index.html").write_text("<html>viewer shell</html>", encoding="utf-8")
+    (web_dist / "assets" / "app.css").write_text("body {}", encoding="utf-8")
+    monkeypatch.setattr(app_module, "Path", lambda _value: source_path)
+
+    transport = httpx.ASGITransport(app=app_module.create_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        health = await client.get("/api/v1/health")
+        ready = await client.get("/api/v1/ready")
+        docs = await client.get("/docs")
+        openapi = await client.get("/openapi.json")
+        shell = await client.get("/")
+        shell_route = await client.get("/tables/any-table")
+        asset = await client.get("/assets/app.css")
+
+    assert health.status_code == 200
+    assert health.json()["viewer_auth_required"] is True
+    assert ready.status_code == docs.status_code == openapi.status_code == 200
+    assert shell.status_code == shell_route.status_code == asset.status_code == 200
+    assert "viewer shell" in shell.text and "viewer shell" in shell_route.text
+    assert _VIEWER_TOKEN not in openapi.text
+
+
+def test_viewer_auth_logging_contains_only_state(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """App startup records viewer-auth state without credential values."""
+    from tasca.config import settings
+    from tasca.shell.api.app import create_app
+
+    monkeypatch.setattr(settings, "viewer_token", _VIEWER_TOKEN)
+    caplog.set_level(logging.INFO, logger="tasca.shell.api.app")
+    create_app()
+
+    assert "REST viewer authentication required=True" in caplog.text
+    assert _VIEWER_TOKEN not in caplog.text
 
 
 # =============================================================================

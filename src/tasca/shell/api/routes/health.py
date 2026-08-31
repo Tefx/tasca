@@ -11,16 +11,17 @@ router = APIRouter()
 
 
 @router.get("/health")
-async def health_check() -> dict[str, str]:
+async def health_check() -> dict[str, str | bool]:
     """
     Health check endpoint.
 
-    Returns basic health status and version.
-    Does not expose any secrets.
+    Returns basic health status, version, and viewer-auth state.
+    Does not expose credentials.
     """
     return {
         "status": "healthy",
         "version": settings.version,
+        "viewer_auth_required": settings.viewer_auth_required,
     }
 
 

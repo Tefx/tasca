@@ -30,35 +30,47 @@ def _get_version_result() -> Result[str, str]:
         return Failure(str(exc))
 
 
-_ADMIN_TOKEN_CLEAR_SENTINELS = {"null", "none", "clear"}
+_TOKEN_CLEAR_SENTINELS = {"null", "none", "clear"}
 
 
-def _normalize_admin_token(raw: str | None) -> Result[str | None, str]:
-    """Normalize TASCA_ADMIN_TOKEN input from environment.
-
-    Explicit clear/null sentinels are treated as unset for safe fallback.
+def _normalize_token(raw: str | None) -> Result[str | None, str]:
+    """Normalize an optional environment token without retaining clear sentinels.
 
     Examples:
-        >>> _normalize_admin_token(None).unwrap() is None
+        >>> _normalize_token(None).unwrap() is None
         True
-        >>> _normalize_admin_token("  tk_secret  ").unwrap()
+        >>> _normalize_token("  tk_secret  ").unwrap()
         'tk_secret'
-        >>> _normalize_admin_token("").unwrap() is None
+        >>> _normalize_token("").unwrap() is None
         True
-        >>> _normalize_admin_token(" null ").unwrap() is None
+        >>> _normalize_token(" null ").unwrap() is None
         True
     """
     if raw is None:
         return Success(None)
 
     normalized = raw.strip()
-    if not normalized:
-        return Success(None)
-
-    if normalized.lower() in _ADMIN_TOKEN_CLEAR_SENTINELS:
+    if not normalized or normalized.lower() in _TOKEN_CLEAR_SENTINELS:
         return Success(None)
 
     return Success(normalized)
+
+
+def _normalize_admin_token(raw: str | None) -> Result[str | None, str]:
+    """Normalize TASCA_ADMIN_TOKEN input from environment."""
+    return _normalize_token(raw)
+
+
+def _normalize_viewer_token(raw: str | None) -> Result[str | None, str]:
+    """Normalize optional TASCA_VIEWER_TOKEN input from environment.
+
+    Examples:
+        >>> _normalize_viewer_token(" viewer-token ").unwrap()
+        'viewer-token'
+        >>> _normalize_viewer_token("clear").unwrap() is None
+        True
+    """
+    return _normalize_token(raw)
 
 
 class Settings(BaseSettings):
@@ -86,32 +98,60 @@ class Settings(BaseSettings):
     # Security
     # Auto-generate a secure tk_-prefixed token if not set via env var
     # Format: tk_<32-hex-chars> (total 35 chars)
-    admin_token: str = Field(default_factory=lambda: f"tk_{secrets.token_hex(16)}")
-    admin_token_from_env: bool = False  # Set by model_validator if token came from env var
+    admin_token: str = Field(
+        default_factory=lambda: f"tk_{secrets.token_hex(16)}",
+        repr=False,
+    )
+    # True when a non-clear source configured the token; used to redact startup output.
+    admin_token_from_env: bool = False
+    viewer_token: str | None = Field(default=None, repr=False)
 
     @model_validator(mode="after")
-    def set_admin_token_from_env(self) -> "Settings":
-        """Resolve admin token precedence between env input and safe fallback.
+    def resolve_auth_tokens(self) -> "Settings":
+        """Resolve environment credentials and reject ambiguous viewer access.
 
-        Precedence contract (step: guard_followup2_boundary.auth-config-boundary-fix):
-        1) Non-empty TASCA_ADMIN_TOKEN environment value wins.
-        2) Empty/clear/null TASCA_ADMIN_TOKEN is treated as explicit clear and does NOT disable auth.
-        3) If resolved token is empty, generate a secure default token.
+        TASCA_ADMIN_TOKEN retains its secure local fallback. TASCA_VIEWER_TOKEN
+        is optional: absent, blank, and clear-sentinel values disable viewer
+        authentication. A configured viewer credential must differ from the
+        normalized admin credential.
         """
-        raw_env_token = os.getenv("TASCA_ADMIN_TOKEN")
-        normalized_env_token = _normalize_admin_token(raw_env_token).unwrap()
+        admin_token_was_explicit = "admin_token" in self.model_fields_set
+        raw_admin_token = os.getenv("TASCA_ADMIN_TOKEN")
+        normalized_env_token = _normalize_admin_token(raw_admin_token).unwrap()
+        configured_admin_token = _normalize_admin_token(self.admin_token).unwrap()
 
         if normalized_env_token is not None:
             self.admin_token = normalized_env_token
             self.admin_token_from_env = True
-            return self
+        elif admin_token_was_explicit and configured_admin_token is not None:
+            self.admin_token = configured_admin_token
+            self.admin_token_from_env = True
+        else:
+            self.admin_token_from_env = False
+            self.admin_token = (
+                configured_admin_token
+                if configured_admin_token is not None
+                else f"tk_{secrets.token_hex(16)}"
+            )
 
-        self.admin_token_from_env = False
-        admin_token_normalized = self.admin_token.strip().lower()
-        if not self.admin_token.strip() or admin_token_normalized in _ADMIN_TOKEN_CLEAR_SENTINELS:
-            self.admin_token = f"tk_{secrets.token_hex(16)}"
+        raw_viewer_token = os.getenv("TASCA_VIEWER_TOKEN")
+        configured_viewer_token = (
+            raw_viewer_token if raw_viewer_token is not None else self.viewer_token
+        )
+        self.viewer_token = _normalize_viewer_token(configured_viewer_token).unwrap()
 
         return self
+
+    def __init__(self, **values: object) -> None:
+        """Initialize settings and reject equal resolved credentials without echoing them."""
+        super().__init__(**values)
+        if self.viewer_token is not None and self.viewer_token == self.admin_token:
+            raise ValueError("TASCA_VIEWER_TOKEN must differ from TASCA_ADMIN_TOKEN")
+
+    @property
+    def viewer_auth_required(self) -> bool:
+        """Whether REST viewer authentication is configured."""
+        return self.viewer_token is not None
 
     # CORS
     cors_origins: list[str] = []  # Empty = CORS disabled; ["*"] = allow all (no credentials)

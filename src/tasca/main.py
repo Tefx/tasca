@@ -19,6 +19,7 @@ from tasca.shell.api.app import create_app
 CLI_COMMANDS = {"new", "mcp", "version", "export", "skills"}
 
 
+# @shell_complexity: CLI delegation, help, and credential-provenance output are entry-point branches.
 def main() -> None:
     """Main entry point for the Tasca service and CLI.
 
@@ -57,7 +58,8 @@ def main() -> None:
         print("  TASCA_API_HOST    Host to bind (default: 0.0.0.0)")
         print("  TASCA_API_PORT    Port to bind (default: 8000)")
         print("  TASCA_DB_PATH     Database path (default: ~/.tasca/tasca.db)")
-        print("  TASCA_ADMIN_TOKEN Admin token for API auth (auto-generated if not set)")
+        print("  TASCA_ADMIN_TOKEN Admin token for API and MCP HTTP auth (auto-generated if not set)")
+        print("  TASCA_VIEWER_TOKEN Optional viewer token for REST resource routes")
         print()
         print("Options:")
         print("  -v, --verbose     Show per-request access logs")
@@ -69,17 +71,23 @@ def main() -> None:
     lan_ip_result = get_lan_ip()
     lan_ip = lan_ip_result.value_or("localhost")
     port = settings.api_port
-    token = settings.admin_token
-
     print(f"Tasca v{settings.version} | {settings.db_path}")
     print()
     print(f"  MCP:     http://{lan_ip}:{port}/mcp/")
     print(f"  Web UI:  http://localhost:{port}/")
-    print(f"  Token:   {token}")
+    if settings.admin_token_from_env:
+        print("  Token:   configured via TASCA_ADMIN_TOKEN (redacted)")
+    else:
+        print(f"  Token:   {settings.admin_token}")
     print()
     print("  ── Paste to agent ──────────────────────────────────────────")
-    print('  Tasca MCP server is running.')
-    print(f"  connect(url=\"http://{lan_ip}:{port}/mcp/\", token=\"{token}\")")
+    print("  Tasca MCP server is running.")
+    if settings.admin_token_from_env:
+        print("  Configure the client with its TASCA_ADMIN_TOKEN value.")
+    else:
+        print(
+            f'  connect(url="http://{lan_ip}:{port}/mcp/", token="{settings.admin_token}")'
+        )
     print("  ────────────────────────────────────────────────────────────")
     print()
 

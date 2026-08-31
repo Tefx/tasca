@@ -10,14 +10,16 @@
 - Transport: JSON over HTTP
 - Real-time: REST long polling via `GET /api/v1/tables/{table_id}/sayings/wait` using the HTTP `timeout` query parameter in seconds (default `30.0`, allowed `0.0..120.0`). This is the REST transport binding for MCP `table_wait`; it does not expose MCP-only `wait_ms`, `limit`, or `include_table` query fields.
 - Ownership: HTTP routes are transport adapters. Shared shell-application operations own reusable business behavior where implemented (for example patron registration, table creation, table control, table_say append/limits, batch delete, and export orchestration); routes own HTTP auth, request/response models, status-code mapping, logging, and download/header shaping.
-- Auth model (v0.1):
-  - Viewer: no auth (read-only)
-  - Admin: `Authorization: Bearer <TASCA_ADMIN_TOKEN>` for privileged actions
+- Auth model (v0.1): `TASCA_VIEWER_TOKEN` is optional. Absent, blank, `null`, `none`, and `clear` disable viewer authentication; otherwise resource routers accept a viewer or admin Bearer credential. Admin-only mutations always require the admin credential. MCP HTTP accepts only the admin credential, while MCP STDIO has no HTTP Bearer check.
 
 ### Authorization (normative, v0.1)
 
-- Admin-required endpoints MUST validate: `Authorization: Bearer <TASCA_ADMIN_TOKEN>`
-- Missing/invalid token MUST return an error response using the standard error envelope.
+- Resource-route authentication MUST accept only a configured viewer token or the admin token.
+- Admin-required endpoints MUST validate `Authorization: Bearer <TASCA_ADMIN_TOKEN>` after any resource-route access check.
+- Missing or invalid credentials for an enabled viewer-auth resource route or an admin-required route MUST return the standard `PermissionDenied` error envelope.
+- `GET /api/v1/auth/validate` without a credential returns the public `viewer` role only while viewer auth is disabled. With viewer auth enabled, or when a supplied Bearer credential is invalid, it returns the standard HTTP `401 PermissionDenied` envelope.
+- `/api/v1/health`, `/api/v1/ready`, `/docs`, `/openapi.json`, and the static SPA shell are public.
+- Tokens MUST NOT appear in startup banners, service logs, errors, OpenAPI examples, test evidence, or technical documentation. Locally generated admin tokens may be displayed for local connection setup; configured admin tokens are redacted.
 
 ### Admin-required operations (v0.1) (normative)
 
@@ -56,6 +58,13 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
 - MCP-only request fields and response guidance such as `_next_action`, MCP envelopes, and `wait_ms` are not automatically exposed by HTTP endpoints.
 
 ## 3) Endpoints
+### Authentication
+
+- `GET /api/v1/auth/validate` validates a Bearer credential without changing state.
+  - Configured viewer token → `{ "role": "viewer" }` while viewer auth is enabled.
+  - Admin token → `{ "role": "admin" }` whether viewer auth is enabled or disabled.
+  - With viewer auth disabled, no credential → `{ "role": "viewer" }`.
+  - A supplied invalid or stale Bearer credential, including a former viewer credential while viewer auth is disabled, returns the standard HTTP `401 PermissionDenied` envelope.
 
 ### Patron (Identity)
 

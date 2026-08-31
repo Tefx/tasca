@@ -193,6 +193,48 @@ def test_mcp_auth_invalid_token_returns_401(mcp_test_client) -> None:
     assert response.json()["error"]["details"] == {}
 
 
+def test_mcp_http_rejects_viewer_token_and_accepts_admin_token(
+    mcp_test_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MCP HTTP stays admin-only when REST viewer auth is configured."""
+    from tasca.config import settings
+    from tests.integration.conftest import TEST_ADMIN_TOKEN
+
+    viewer_token = "test-viewer-token-fixture"
+    monkeypatch.setattr(settings, "viewer_token", viewer_token)
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "0.1.0"},
+        },
+    }
+
+    viewer_response = mcp_test_client.post(
+        "/mcp",
+        json=request,
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {viewer_token}",
+        },
+    )
+    admin_response = mcp_test_client.post(
+        "/mcp",
+        json={**request, "id": 2},
+        headers={
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {TEST_ADMIN_TOKEN}",
+        },
+    )
+
+    assert viewer_response.status_code == 401
+    assert viewer_response.json()["error"]["code"] == "PermissionDenied"
+    assert admin_response.status_code == 200
+
+
 def test_mcp_auth_valid_token_succeeds(mcp_test_client) -> None:
     """Test MCP HTTP endpoint succeeds with valid Bearer token.
 
@@ -669,6 +711,20 @@ def test_mcp_seat_list(mcp_session: MCPSession) -> None:
 # =============================================================================
 # MCP STDIO Transport Tests
 # =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.timeout(10)  # STDIO tests should complete quickly
+async def test_mcp_stdio_continues_with_viewer_token_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Viewer auth affects REST only; STDIO MCP remains available."""
+    monkeypatch.setenv("TASCA_VIEWER_TOKEN", "test-viewer-token-fixture")
+
+    async with MCPSTDIOHarness() as harness:
+        response = await harness.initialize()
+
+    assert "result" in response
 
 
 @pytest.mark.asyncio

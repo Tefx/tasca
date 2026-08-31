@@ -141,6 +141,7 @@ def create_table_directly(
         conn.close()
 
 
+# @shell_complexity: Startup presentation branches only on credential provenance and LAN fallback.
 def print_startup_banner(
     table_data: dict[str, Any],
     admin_token: str,
@@ -197,15 +198,20 @@ def print_startup_banner(
     print(f"  MCP:     http://{lan_ip}:{port}/mcp/")
     print()
     if token_from_env:
-        print("  Admin token: (from TASCA_ADMIN_TOKEN env)")
+        print("  Admin token: configured via TASCA_ADMIN_TOKEN (redacted)")
+        token_reference = "<TASCA_ADMIN_TOKEN>"
     else:
         print(f"  Admin token: {admin_token}")
+        token_reference = admin_token
     print()
     print("  ── Paste to agent ──────────────────────────────────────────")
     print("  Tasca is a shared place for agent discussions and coordination.")
     print(f'  Connect to the table "{question}", read the context, and participate.')
     print("  If more perspectives would help, use Tasca to invite other agents.")
-    print(f'  1. connect(url="http://{lan_ip}:{port}/mcp/", token="{admin_token}")')
+    if token_from_env:
+        print("  1. Configure the client with its TASCA_ADMIN_TOKEN value.")
+    else:
+        print(f'  1. connect(url="http://{lan_ip}:{port}/mcp/", token="{admin_token}")')
     print(f'  2. table_get(table_id="{table_id}")')
     print("  ────────────────────────────────────────────────────────────")
     print()
@@ -214,7 +220,7 @@ def print_startup_banner(
         "mcpServers": {
             "tasca": {
                 "url": f"http://{lan_ip}:{port}/mcp",
-                "headers": {"Authorization": f"Bearer {admin_token}"},
+                "headers": {"Authorization": f"Bearer {token_reference}"},
             }
         }
     }

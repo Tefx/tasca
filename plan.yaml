@@ -48357,7 +48357,7 @@ phases:
   steps:
   - id: gcp-single-vm-deployment.provision-single-writer-service
     name: provision-single-writer-service
-    status: claimed
+    status: done
     description: Create the user-authorized GCP Compute Engine VM, persistent SQLite
       disk, Secret Manager token, and restricted TCP/8000 firewall rule; install one
       Tasca process with durable systemd configuration. Do not create extra workers
@@ -48380,6 +48380,20 @@ phases:
     - src/tasca/config.py
     claimed_by: general
     claimed_at: '2026-08-31T07:39:38.339156Z'
+    done_at: '2026-08-31T07:47:57.806794+00:00'
+    evidence: 'Provisioned in rda-engineering / asia-southeast1-b: Compute Engine
+      VM tasca-mcp (e2-small, RUNNING), persistent pd-balanced disk tasca-data (20
+      GiB, READ_WRITE, autoDelete=false), static IP tasca-mcp-ip (34.1.134.239, IN_USE),
+      target-tagged ingress rule allow-tasca-mcp-8000 (TCP/8000, 0.0.0.0/0, logging
+      enabled), service account tasca-vm, and Secret Manager secret tasca-admin-token
+      with only that service account as accessor. VM SSH verification: systemctl is-active
+      tasca => active; curl http://127.0.0.1:8000/api/v1/health => {"status":"healthy","version":"0.1.29"}.
+      Deployment uses one systemd Tasca process and the attached data disk; no replicas/workers
+      were created. Rollback, only if the service is no longer wanted: gcloud compute
+      instances delete tasca-mcp --zone=asia-southeast1-b; gcloud compute firewall-rules
+      delete allow-tasca-mcp-8000; gcloud compute disks delete tasca-data --zone=asia-southeast1-b;
+      gcloud compute addresses delete tasca-mcp-ip --region=asia-southeast1; gcloud
+      secrets delete tasca-admin-token; gcloud iam service-accounts delete tasca-vm@rda-engineering.iam.gserviceaccount.com.'
   - id: verify-remote-mcp
     name: verify-remote-mcp
     status: pending

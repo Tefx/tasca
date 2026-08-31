@@ -15,48 +15,56 @@ import './ModeIndicator.css'
  * ```
  */
 export function ModeIndicator() {
-  const { mode, hasToken, setToken, clearToken, enterAdminMode, enterViewerMode } = useAuth()
+  const { mode, role, hasToken, clearToken, enterAdminMode, enterViewerMode, elevateToAdmin } = useAuth()
   const [showTokenInput, setShowTokenInput] = useState(false)
   const [tokenInput, setTokenInput] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSwitchToAdmin = useCallback(() => {
-    if (hasToken) {
-      // Already have token, just switch mode
+    if (role === 'admin' && hasToken) {
       enterAdminMode()
-    } else {
-      // Need to enter token
-      setShowTokenInput(true)
-      setError(null)
+      return
     }
-  }, [hasToken, enterAdminMode])
+    setShowTokenInput(true)
+    setError(null)
+  }, [hasToken, enterAdminMode, role])
 
   const handleSwitchToViewer = useCallback(() => {
+    if (isSubmitting) return
     enterViewerMode()
     setShowTokenInput(false)
-  }, [enterViewerMode])
+  }, [enterViewerMode, isSubmitting])
 
   const handleLogout = useCallback(() => {
+    if (isSubmitting) return
     clearToken()
     setShowTokenInput(false)
     setTokenInput('')
     setError(null)
-  }, [clearToken])
+  }, [clearToken, isSubmitting])
 
   const handleTokenSubmit = useCallback(
-    (e: FormEvent) => {
+    async (e: FormEvent) => {
       e.preventDefault()
+      if (isSubmitting) return
       const trimmed = tokenInput.trim()
       if (!trimmed) {
-        setError('Token cannot be empty')
+        setError('Enter an admin credential.')
         return
       }
-      setToken(trimmed)
-      setShowTokenInput(false)
-      setTokenInput('')
+      setIsSubmitting(true)
       setError(null)
+      const result = await elevateToAdmin(trimmed)
+      if (!result.ok) {
+        setError(result.message)
+      } else {
+        setShowTokenInput(false)
+        setTokenInput('')
+      }
+      setIsSubmitting(false)
     },
-    [tokenInput, setToken]
+    [elevateToAdmin, isSubmitting, tokenInput]
   )
 
   const handleTokenChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
@@ -65,10 +73,11 @@ export function ModeIndicator() {
   }, [])
 
   const handleCloseDialog = useCallback(() => {
+    if (isSubmitting) return
     setShowTokenInput(false)
     setTokenInput('')
     setError(null)
-  }, [])
+  }, [isSubmitting])
 
   return (
     <>
@@ -84,33 +93,35 @@ export function ModeIndicator() {
               className="mode-btn mode-btn--enter-admin"
               onClick={handleSwitchToAdmin}
               aria-label="Switch to admin mode"
-              title="Enter admin mode with token"
+              title="Validate an admin credential"
             >
               Admin
             </button>
           )}
 
           {mode === 'admin' && (
-            <>
-              <button
-                type="button"
-                className="mode-btn mode-btn--viewer"
-                onClick={handleSwitchToViewer}
-                aria-label="Switch to viewer mode"
-                title="Switch to viewer mode (keep token)"
-              >
-                Viewer
-              </button>
-              <button
-                type="button"
-                className="mode-btn mode-btn--logout"
-                onClick={handleLogout}
-                aria-label="Clear admin token and logout"
-                title="Clear token and logout"
-              >
-                Logout
-              </button>
-            </>
+            <button
+              type="button"
+              className="mode-btn mode-btn--viewer"
+              onClick={handleSwitchToViewer}
+              aria-label="Switch to viewer mode"
+              title="Switch to viewer mode (keep credential)"
+              disabled={isSubmitting}
+            >
+              Viewer
+            </button>
+          )}
+          {hasToken && (
+            <button
+              type="button"
+              className="mode-btn mode-btn--logout"
+              onClick={handleLogout}
+              aria-label="Clear credential and logout"
+              title="Clear credential and logout"
+              disabled={isSubmitting}
+            >
+              Logout
+            </button>
           )}
         </div>
       </div>
@@ -128,18 +139,18 @@ export function ModeIndicator() {
             className="token-dialog"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') handleCloseDialog()
+              if (e.key === 'Escape' && !isSubmitting) handleCloseDialog()
             }}
           >
             <h2 id="token-dialog-title" className="token-dialog-title">
-              Enter Admin Token
+              Enter Admin Credential
             </h2>
             <p className="token-dialog-hint">
-              Token will be stored in session storage and cleared when you close this tab.
+              The credential is validated before Admin controls are enabled.
             </p>
             <form onSubmit={handleTokenSubmit} className="token-form">
               <label htmlFor="token-input" className="token-label">
-                Admin Token
+                Admin credential
               </label>
               <input
                 id="token-input"
@@ -147,11 +158,12 @@ export function ModeIndicator() {
                 className="token-input"
                 value={tokenInput}
                 onChange={handleTokenChange}
-                placeholder="Enter your admin token"
+                placeholder="Enter your admin credential"
                 autoFocus
                 autoComplete="off"
                 aria-describedby={error ? 'token-error' : undefined}
                 aria-invalid={!!error}
+                disabled={isSubmitting}
               />
               {error && (
                 <p id="token-error" className="token-error" role="alert">
@@ -163,15 +175,16 @@ export function ModeIndicator() {
                   type="button"
                   className="token-btn token-btn--cancel"
                   onClick={handleCloseDialog}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   className="token-btn token-btn--submit"
-                  disabled={!tokenInput.trim()}
+                  disabled={!tokenInput.trim() || isSubmitting}
                 >
-                  Enter Admin Mode
+                  {isSubmitting ? 'Checking…' : 'Enter Admin Mode'}
                 </button>
               </div>
             </form>

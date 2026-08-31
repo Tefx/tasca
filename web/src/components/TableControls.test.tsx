@@ -1,21 +1,8 @@
-import { describe, it, expect, vi, type Mock } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { TableControls } from './TableControls'
-import { getExportUrl, type Table as TableType } from '../api/tables'
-
-vi.mock('../auth/AuthContext', () => ({
-  useAuth: vi.fn(),
-}))
-
-vi.mock('../api/tables', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../api/tables')>()
-  return {
-    ...actual,
-    closeTable: vi.fn(),
-  }
-})
-
-import { useAuth } from '../auth/AuthContext'
+import { setAuthToken } from '../api/client'
+import { type Table as TableType } from '../api/tables'
 
 function makeTable(overrides: Partial<TableType> = {}): TableType {
   return {
@@ -30,65 +17,36 @@ function makeTable(overrides: Partial<TableType> = {}): TableType {
   }
 }
 
-/**
- * Mock useAuth to return admin mode for testing.
- * @example
- * // In a test
- * asAdmin()
- * render(<TableControls table={mockTable} />)
- */
-function asAdmin() {
-  ;(useAuth as Mock).mockReturnValue({
-    mode: 'admin',
-    hasToken: true,
-    setToken: vi.fn(),
-    clearToken: vi.fn(),
-    enterAdminMode: vi.fn(),
-    enterViewerMode: vi.fn(),
-    getToken: vi.fn(() => 'token'),
-  })
-}
-
-function asViewer() {
-  ;(useAuth as Mock).mockReturnValue({
-    mode: 'viewer',
-    hasToken: false,
-    setToken: vi.fn(),
-    clearToken: vi.fn(),
-    enterAdminMode: vi.fn(),
-    enterViewerMode: vi.fn(),
-    getToken: vi.fn(() => null),
-  })
-}
-
-describe('getExportUrl', () => {
-  it('returns markdown export endpoint with download=true query', () => {
-    expect(getExportUrl('table-001', 'markdown')).toBe(
-      '/api/v1/tables/table-001/export/markdown?download=true'
-    )
-  })
+afterEach(() => {
+  setAuthToken(null)
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('TableControls download action', () => {
-  it('renders download link for viewer mode', () => {
-    asViewer()
-    render(<TableControls table={makeTable()}  />)
+  it('downloads through authenticated fetch instead of a raw export href', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('table export', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const createObjectUrl = vi.fn(() => 'blob:table-export')
+    const revokeObjectUrl = vi.fn()
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectUrl })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectUrl })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    setAuthToken('validated-test-credential')
 
-    const link = screen.getByRole('link', { name: /^download$/i })
-    expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute(
-      'href',
-      '/api/v1/tables/table-001/export/markdown?download=true'
+    render(<TableControls table={makeTable()} />)
+    fireEvent.click(screen.getByRole('button', { name: /^download$/i }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/tables/table-001/export/markdown?download=true',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer validated-test-credential' }),
+      })
     )
-    expect(link).toHaveAttribute('download')
-  })
-
-  it('renders download link for admin mode and click is not canceled', () => {
-    asAdmin()
-    render(<TableControls table={makeTable()}  />)
-
-    const link = screen.getByRole('link', { name: /^download$/i })
-    expect(link).toBeInTheDocument()
-    expect(fireEvent.click(link)).toBe(true)
+    expect(screen.queryByRole('link', { name: /^download$/i })).not.toBeInTheDocument()
+    expect(click).toHaveBeenCalledOnce()
+    expect(createObjectUrl).toHaveBeenCalledOnce()
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:table-export')
   })
 })

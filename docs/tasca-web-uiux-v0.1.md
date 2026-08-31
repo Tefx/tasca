@@ -287,19 +287,25 @@ Security notes:
 
 See: `adr-002-mermaid-svg-sanitization.md` for the v0.1 allowlist policy.
 ## Admin mode (Human trust model)
+The UI starts as Viewer and discovers `viewer_auth_required` through the public health response before loading any discussion route or data.
 
-The UI supports two modes:
+- When viewer authentication is disabled, the Taproom opens directly in public Viewer mode.
+- When it is enabled, the SPA shows an access gate with a password-masked credential field. Invalid credentials leave the gate in place and announce an error.
+- The gate accepts a server-validated Viewer or Admin credential. Admin controls require the validated `admin` role; Viewer credentials remain read-only.
 
-- **Viewer mode** (default): read-only viewing.
-- **Admin mode**: enables controls and privileged edits.
+### Entering and leaving Admin mode
 
-### How to enter Admin mode (v0.1)
+- The header's Admin action validates the submitted credential with `GET /api/v1/auth/validate` before enabling Admin controls.
+- A failed elevation preserves the existing Viewer credential and role. A successful Admin validation replaces them.
+- A validated Admin can switch the visible UI back to Viewer without dropping the credential used for baseline reads. Logout clears the credential and returns configured deployments to the gate.
+- URL credentials are not supported.
 
-Support both:
+### Token handling guidance
 
-1) **URL token**: `/?token=TASCA_ADMIN_TOKEN` (or `?admin_token=`)
-   - UI stores the token locally for the session.
-2) **In-UI token entry**: a small "Enter Admin Token" input in the header/menu.
+- The Web client stores only validated credentials in current-tab `sessionStorage` under `tasca_web_access_token`; it records the validated role beside it.
+- On reload, the stored credential is revalidated before routes or data load. The legacy `tasca_admin_token` entry is ignored.
+- Credentials never appear in UI text, URLs, logs, or test snapshots.
+- Export downloads use authenticated fetch and a generated Blob download because a raw link cannot attach the required Bearer header.
 
 ### Admin-only capabilities
 
@@ -308,9 +314,3 @@ Support both:
 - `Request summary` (as a human saying)
 - `End meeting`
 - Edit board/policy/hosts (if exposed in UI)
-
-### Token handling guidance
-
-- Prefer storing tokens in `sessionStorage` (clears on tab close).
-- Never display the token once stored.
-- Provide a "Leave Admin mode" action that clears local storage.

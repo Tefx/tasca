@@ -9,8 +9,9 @@
  * Design source: Task web_fix.s1-pause-resume-footer (Spec §E Controls)
  */
 
+import { useState } from 'react'
 import {
-  getExportUrl,
+  downloadTableExport,
   type Table as TableType,
   type TableStatus,
 } from '../api/tables'
@@ -69,7 +70,21 @@ function statusLabel(status: TableStatus): string {
  * <TableControls table={{ ...tableData, status: 'closed' }} />
  */
 export function TableControls({ table }: TableControlsProps) {
-  const exportMarkdownUrl = getExportUrl(table.id, 'markdown')
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+
+  const handleDownload = async () => {
+    if (isDownloading) return
+    setIsDownloading(true)
+    setDownloadError(null)
+    try {
+      await downloadTableExport(table.id, 'markdown')
+    } catch {
+      setDownloadError('Transcript download failed. Try again.')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
 
   return (
     <div className="mc-table-controls">
@@ -84,15 +99,18 @@ export function TableControls({ table }: TableControlsProps) {
       </div>
 
       <div className="mc-table-controls-actions">
-        <a
-          href={exportMarkdownUrl}
-          download
+        <button
+          type="button"
           className="mc-control-btn mc-control-btn--download"
+          onClick={handleDownload}
+          disabled={isDownloading}
           title="Download table transcript as Markdown"
         >
-          Download
-        </a>
+          {isDownloading ? 'Downloading…' : 'Download'}
+        </button>
       </div>
+
+      {downloadError && <p role="alert">{downloadError}</p>}
 
       {/* Closed timestamp */}
       {table.status === 'closed' && (

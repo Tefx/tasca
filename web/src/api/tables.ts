@@ -6,9 +6,7 @@
  * Search types sourced from: src/tasca/shell/api/routes/search.py
  */
 
-import { apiClient, ApiError } from './client'
-
-const API_BASE = '/api/v1'
+import { apiClient, apiFetch, ApiError } from './client'
 
 // =============================================================================
 // Domain Types (mirror backend Table pydantic model)
@@ -88,7 +86,7 @@ export interface SearchResponse {
 // API Functions
 // =============================================================================
 
-/** 
+/**
  * Fetch a single table by ID. Backend endpoint: GET /tables/{tableId}
  *
  * @example
@@ -140,21 +138,35 @@ export function searchTables(
   return apiClient<SearchResponse>(`/search?${params.toString()}`)
 }
 
+/** Formats supported by the table transcript download endpoint. */
+export type ExportFormat = 'markdown' | 'jsonl'
+
+function exportPath(tableId: string, format: ExportFormat): string {
+  return `/tables/${encodeURIComponent(tableId)}/export/${format}?download=true`
+}
+
 /**
- * Build export URL for table transcript downloads.
+ * Download a table transcript through authenticated fetch.
+ *
+ * A raw anchor cannot attach the active Bearer credential, so the client
+ * fetches the export, creates a Blob URL, and invokes a temporary download.
  *
  * @example
  * ```typescript
- * const markdownUrl = getExportUrl(tableId, 'markdown')
- * window.open(markdownUrl, '_blank')
- *
- * const jsonUrl = getExportUrl(tableId, 'jsonl')
+ * await downloadTableExport(tableId, 'markdown')
  * ```
  */
-export function getExportUrl(tableId: string, format: string): string {
-  const encodedTableId = encodeURIComponent(tableId)
-  const encodedFormat = encodeURIComponent(format)
-  return `${API_BASE}/tables/${encodedTableId}/export/${encodedFormat}?download=true`
+export async function downloadTableExport(tableId: string, format: ExportFormat): Promise<void> {
+  const response = await apiFetch(exportPath(tableId, format))
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = `tasca-table-${tableId}.${format === 'markdown' ? 'md' : 'jsonl'}`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(objectUrl)
 }
 
 // =============================================================================

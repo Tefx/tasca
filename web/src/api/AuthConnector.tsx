@@ -1,37 +1,25 @@
-/**
- * AuthConnector - Bridges AuthContext with API client.
- *
- * This component listens to auth state changes and updates the
- * API client's token. It renders nothing but must be placed
- * inside AuthProvider.
- */
+/** Bridges validated AuthContext state with the shared API client. */
 
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { useAuth } from '../auth/AuthContext'
-import { setAuthToken } from './client'
+import { setAuthToken, setUnauthorizedHandler } from './client'
 
 /**
- * Connects AuthContext to the API client.
- *
- * Listens to auth state changes and updates the API client's token.
- * Renders nothing but must be placed inside AuthProvider.
- *
- * @example
- * ```tsx
- * // Place inside AuthProvider in your app root
- * <AuthProvider>
- *   <AuthConnector />
- *   <App />
- * </AuthProvider>
- * ```
+ * Configures request credentials before route effects can load discussion data.
+ * It also turns later resource-route 401 responses into AuthContext recovery.
  */
 export function AuthConnector(): null {
-  const { getToken } = useAuth()
+  const { getToken, handleUnauthorized } = useAuth()
 
-  useEffect(() => {
-    // Update API client token whenever auth state changes
+  useLayoutEffect(() => {
     setAuthToken(getToken())
-  }, [getToken])
+    setUnauthorizedHandler(handleUnauthorized)
+
+    return () => {
+      setAuthToken(null)
+      setUnauthorizedHandler(null)
+    }
+  }, [getToken, handleUnauthorized])
 
   return null
 }

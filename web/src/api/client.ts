@@ -9,6 +9,7 @@ const API_BASE = '/api/v1'
 
 /** Module-level auth token (set by AuthContext, used by apiClient) */
 let authToken: string | null = null
+let unauthorizedHandler: (() => void) | null = null
 
 /**
  * Set the auth token for subsequent API requests.
@@ -28,6 +29,11 @@ export function setAuthToken(token: string | null): void {
   authToken = token
 }
 
+/** Registers AuthContext recovery for resource-route 401 responses. */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler
+}
+
 /**
  * Get the current auth token (for debugging/inspection).
  * Returns 'set' or 'not set' - never returns the actual token.
@@ -44,71 +50,126 @@ export function getAuthTokenStatus(): 'set' | 'not set' {
   return authToken ? 'set' : 'not set'
 }
 
-/**
- * HTTP client for API requests.
- *
- * Automatically includes Authorization header when token is set.
- * Handles common error cases including 401 (auth failure).
- *
- * @example
- * ```typescript
- * // GET request
- * const tables = await apiClient<Table[]>('/tables')
- *
- * // POST request
- * const newTable = await apiClient<Table>('/tables', {
- *   method: 'POST',
- *   body: JSON.stringify({ question: 'What to discuss?' })
- * })
- * ```
- */
-export async function apiClient<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
+/** Build request headers without exposing the credential value to callers. */
+function requestHeaders(options?: RequestInit): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string> | undefined),
   }
 
-  // Add Authorization header if token is set
   if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`
+    headers.Authorization = `Bearer ${authToken}`
   }
 
+  return headers
+}
+
+function responseDetail(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null) return null
+  if ('detail' in body && typeof body.detail === 'string') return body.detail
+  if (
+    'error' in body &&
+    typeof body.error === 'object' &&
+    body.error !== null &&
+    'message' in body.error &&
+    typeof body.error.message === 'string'
+  ) {
+    return body.error.message
+  }
+  return null
+}
+
+async function requestError(response: Response, dispatchedToken: string | null): Promise<never> {
+  if (response.status === 401) {
+    // A delayed Viewer request must not clear a credential installed by elevation.
+    if (authToken === dispatchedToken) {
+      authToken = null
+      unauthorizedHandler?.()
+    }
+    throw new AuthError('Access credential was not accepted')
+  }
+
+  let detail = `${response.status} ${response.statusText}`
+  try {
+    detail = responseDetail(await response.json()) ?? detail
+  } catch {
+    // Keep the HTTP status fallback when the error body is not JSON.
+  }
+  throw new ApiError(`API Error: ${detail}`, response.status)
+}
+
+/**
+ * Make an authenticated API request and return its raw successful response.
+ * Use this for downloads or other non-JSON responses.
+ */
+export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
+  const dispatchedToken = authToken
   const response = await fetch(`${API_BASE}${path}`, {
-    headers,
     ...options,
+    headers: requestHeaders(options),
   })
 
   if (!response.ok) {
-    // Special handling for 401 - auth error
-    if (response.status === 401) {
-      throw new AuthError('Invalid or missing admin token')
-    }
-
-    // Try to get error details from response
-    let detail = `${response.status} ${response.statusText}`
-    try {
-      const body = await response.json()
-      if (body.detail) {
-        detail = typeof body.detail === 'string' 
-          ? body.detail 
-          : JSON.stringify(body.detail)
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-
-    throw new ApiError(`API Error: ${detail}`, response.status)
+    return requestError(response, dispatchedToken)
   }
 
-  // Handle 204 No Content
+  return response
+}
+
+/**
+ * HTTP client for JSON API requests.
+ *
+ * Automatically includes a validated Authorization header when configured and
+ * handles resource-route 401 recovery through AuthContext.
+ *
+ * @example
+ * ```typescript
+ * const tables = await apiClient<Table[]>('/tables')
+ * const newTable = await apiClient<Table>('/tables', {
+ *   method: 'POST',
+ *   body: JSON.stringify({ question: 'What to discuss?' }),
+ * })
+ * ```
+ */
+export async function apiClient<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await apiFetch(path, options)
+
   if (response.status === 204) {
     return undefined as T
   }
 
-  return response.json()
+  return response.json() as Promise<T>
+}
+
+export type AccessRole = 'viewer' | 'admin'
+
+/**
+ * Validate a submitted or restored credential without changing client state.
+ * Callers persist it only after this returns a recognized role.
+ */
+export async function validateAccessCredential(credential: string): Promise<AccessRole> {
+  const response = await fetch(`${API_BASE}/auth/validate`, {
+    headers: { Authorization: `Bearer ${credential}` },
+  })
+
+  if (response.status === 401) {
+    throw new AuthError('Credential was not accepted')
+  }
+  if (!response.ok) {
+    throw new ApiError(`Credential validation failed (${response.status})`, response.status)
+  }
+
+  const payload: unknown = await response.json()
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    !('role' in payload) ||
+    (payload.role !== 'viewer' && payload.role !== 'admin')
+  ) {
+    throw new ApiError('Credential validation returned an invalid role', response.status)
+  }
+
+  return payload.role
 }
 
 /**

@@ -48351,3 +48351,6 @@ phases:
       - No blockers remain for B1/B2/B3/R8.
 
       - No empty commit created.'
+- id: gcp-single-vm-deployment
+  name: GCP single-VM deployment
+  status: pending

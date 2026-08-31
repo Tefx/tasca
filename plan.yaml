@@ -10,57 +10,64 @@ version: 1
 project: tasca
 context: Implementation plan for tasca.
 clipboard:
-  author: gate-reviewer
-  summary: cli_tasca_new gate review FAIL — 4 P0 blockers, all steps rejected for
-    rework
-  content: "# cli_tasca_new Gate Review — FAIL\n\n**Date**: 2026-02-22  \n**Reviewer**:\
-    \ gate-reviewer  \n**Verdict**: NEEDS REVISION — all 4 steps rejected\n\n---\n\
-    \n## Why REJECT (not a new fix phase)\n\nB1–B3 are the *primary deliverables*\
-    \ of this phase, not edge cases:\n- The banner IS the output of `tasca new`\n\
-    - Foreground blocking IS the stated behavior (\"Ctrl+C to stop\")\n- LAN IP IS\
-    \ what enables cross-machine agent connection\n\nMarking done when these are absent\
-    \ is a scope miss, not a polish gap.\nA fix phase would signal \"mostly done,\
-    \ needs polish\" — that's not accurate.\n\n---\n\n## P0 Blockers (must fix before\
-    \ re-completing)\n\n### B1 — Startup banner absent\n- **File**: `src/tasca/cli.py:390`\n\
-    - **Actual**: `print(table_id)` — only bare UUID printed\n- **Required**: Full\
-    \ banner per `tasca-interaction-design-v0.2.md §3`:\n  - Box header (version +\
-    \ db path)\n  - Table question, ID, status\n  - Web UI URL (`http://localhost:8000/table/<id>`)\n\
-    \  - MCP URL with LAN IP (`http://192.168.x.x:8000/mcp`)\n  - Admin token (`tk_...`)\n\
-    \  - \"For agents already configured...\" message\n  - STDIO MCP JSON config block\
-    \ (NO ANSI colors)\n  - \"Ctrl+C to stop. Logs below.\" separator\n\n### B2 —\
-    \ Server runs in background, not foreground\n- **File**: `src/tasca/cli.py:54-88,\
-    \ 369`\n- **Actual**: `start_server_background()` uses `subprocess.Popen` with\
-    \ PIPE detachment; CLI returns immediately\n- **Required**: After banner, block\
-    \ in foreground until Ctrl+C (e.g., `uvicorn.run(app, ...)` in-process)\n- Signal\
-    \ handler exists at `cli.py:142-149` but not wired to foreground blocking\n\n\
-    ### B3 — LAN IP detection not implemented\n- **File**: entire `cli.py` (no `socket`\
-    \ import)\n- **Required**: Detect first non-loopback IPv4 (e.g., `socket.gethostbyname(socket.gethostname())`)\n\
-    - Used in MCP URL shown in the banner for remote agent access\n\n### B4 — Token\
-    \ missing `tk_` prefix\n- **File**: `src/tasca/config.py:38`\n- **Actual**: `Field(default_factory=lambda:\
-    \ secrets.token_hex(32))` → 64-char hex, no prefix\n- **Required**: `tk_`-prefixed\
-    \ token per spec (e.g., `\"tk_\" + secrets.token_urlsafe(12)`)\n- Note: starting\
-    \ uvicorn in-process (B2 fix) also resolves the cross-process token visibility\
-    \ issue\n\n---\n\n## P1 Should-Fix (address during rework, not separate phase)\n\
-    \n- **S1** `cli.py:188` — ruff F541: f-string `f\"Make sure the server is running:\
-    \ tasca\"` has no placeholders → remove `f` prefix\n- **S2** `cli.py:203, 322,\
-    \ 323, 467` — mypy `no-any-return`: `response.json()` / `json.loads()` return\
-    \ `Any`; add `cast(dict[str, Any], ...)` \n- **S3** `cli.py:138-149` — signal\
-    \ handlers + `atexit.register` fire at import time; move inside `cmd_new` or guard\
-    \ with `__name__ == \"__main__\"` equivalent\n- **S4** `cli.py:362-365` — `--no-start`\
-    \ with no running server gives cryptic connection error; add explicit check +\
-    \ clear message\n\n---\n\n## Suggestions (optional)\n\n- `cli.py` will exceed\
-    \ 500 lines after adding banner (~50 lines) + LAN IP (~20 lines). Pre-extract\
-    \ server lifecycle (`is_server_running`, `start_server_background`, `wait_for_server_ready`,\
-    \ `stop_server`) into `src/tasca/shell/server_lifecycle.py`\n- `create_table_via_mcp`\
-    \ at 121 lines exceeds function size guideline; extract subprocess I/O loop into\
-    \ helper\n\n---\n\n## Spec References\n\n- Banner format: `docs/tasca-interaction-design-v0.2.md\
-    \ §3` (lines 92–116)\n- Foreground behavior: `docs/tasca-interaction-design-v0.2.md\
-    \ §3` (\"Behavior\" item 1)\n- LAN IP: step description + `docs/tasca-interaction-design-v0.2.md:121`\n\
-    - Token prefix: `docs/tasca-interaction-design-v0.2.md:105, 136`\n\n---\n\n##\
-    \ Status\n\nAll 4 steps rejected via `uvx vectl reject`. Phase is back to `pending`.\n\
-    Claimable immediately — no upstream dependency changes needed.\n"
-  written_at: '2026-02-22T07:17:45.418816Z'
-  expires_at: '2026-02-25T07:17:45.418816Z'
+  author: vectl-orchestrator
+  summary: backend viewer auth completion evidence
+  content: 'Step viewer_auth_release.backend-rest-auth candidate beaefd6d45c0c8127994bf908199e9a4d39c5c05
+    was implemented by python-senior in pristine worktree /Users/tefx/Projects/tasca/.vectl/worktrees/viewer-auth-backend
+    and fast-forward integrated into canonical main.
+
+
+    Changed refs: src/tasca/config.py; src/tasca/shell/api/auth.py; src/tasca/shell/api/app.py;
+    src/tasca/shell/api/routes/auth.py; src/tasca/shell/api/routes/health.py; src/tasca/main.py;
+    src/tasca/cli.py; tests/integration/test_api.py; tests/integration/test_mcp.py;
+    tests/unit/api/test_auth.py; tests/unit/api/test_sayings_routes.py; tests/unit/test_cli.py;
+    docs/tasca-http-api-v0.1.md; docs/tasca-technical-design-v0.1.md.
+
+
+    Normalization decision table: TASCA_VIEWER_TOKEN absent/whitespace/`null`/`none`/`clear`
+    => viewer auth disabled and baseline REST remains public; other normalized value
+    => viewer auth enabled; normalized equality with admin => startup ValueError with
+    key names only. Admin absent/clear still auto-generates. Explicit admin from process
+    env, .env, or constructor is marked configured and redacted.
+
+
+    REST matrix observed in tests: 18 patrons/tables/sayings/seats/search/export routes.
+    Enabled: missing+invalid => 401 PermissionDenied with details {}; viewer reaches
+    12 baseline routes and receives the same 401 on 6 admin mutations; admin passes
+    auth on all 18. Disabled: 12 baseline routes preserve non-401 behavior; 6 admin
+    mutations remain 401 without admin. Public: health, ready, docs, OpenAPI, SPA
+    shell/fallback/assets. Health shape includes status/version/viewer_auth_required.
+    GET /api/v1/auth/validate: enabled viewer=>{role:viewer}, admin=>{role:admin},
+    missing/invalid=>401; disabled no credential=>{role:viewer}, admin=>{role:admin},
+    supplied stale/invalid=>401.
+
+
+    MCP: HTTP viewer token rejected 401; admin initialize accepted 200; STDIO initialize
+    remains available with viewer config. No MCP tool/schema changes.
+
+
+    Credential output: configured admin values are absent from main/CLI banners; output
+    uses a redacted source indicator or placeholder. Viewer-auth log contains only
+    a boolean. OpenAPI/error evidence contains no configured values. Generated local
+    admin token remains discoverable.
+
+
+    Verification from the clean candidate worktree: `uv sync --frozen --group dev`
+    exit 0 (118 packages checked); `uv run pytest tests/unit/api tests/unit/test_cli.py
+    tests/integration/test_api.py tests/integration/test_mcp.py -q` exit 0 (247 passed);
+    `uvx --from invar-tools==1.20.1 invar guard --all` exit 0 (0 errors, doctest passed,
+    CrossHair verified/cached, Hypothesis 113/113 and 10,000 examples). `git diff
+    --check` after canonical integration exited 0. Canonical main full guard additionally
+    scans preserved untracked `.artifacts/gcp-tasca-deploy/verify_remote_mcp.py` and
+    fails on that pre-existing helper; the clean-checkout gate required by this step
+    passes, and the helper belongs to the later package/deployment producer step.
+
+
+    Two stale unit assertions were corrected to the authoritative existing HTTP 409/TableClosed
+    contract; production saying code was unchanged. SQLite/domain schemas, persistence
+    semantics, and MCP schemas/tools were unchanged.'
+  written_at: '2026-08-31T10:22:19.435908Z'
+  expires_at: '2026-09-01T10:22:19.435908Z'
 phases:
 - id: core
   name: Core invariants + storage

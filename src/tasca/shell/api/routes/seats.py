@@ -59,11 +59,13 @@ class SeatListResponse(BaseModel):
 
     Attributes:
         seats: List of seats for the table.
-        active_count: Number of active (non-expired) seats.
+        active_count: Number of JOINED seats whose heartbeats are within TTL.
     """
 
     seats: list[Seat]
-    active_count: int = Field(..., description="Number of active (non-expired) seats")
+    active_count: int = Field(
+        ..., description="Number of JOINED seats whose heartbeats are within TTL"
+    )
 
 
 # =============================================================================
@@ -182,10 +184,13 @@ async def heartbeat_seat_endpoint(
 @router.get("", response_model=SeatListResponse)
 async def list_seats_endpoint(
     table_id: str,
-    active_only: bool = Query(default=True, description="Exclude expired seats"),
+    active_only: bool = Query(
+        default=True,
+        description="If true, return only JOINED seats within TTL; false returns all seats",
+    ),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> SeatListResponse:
-    """List seats for a table, optionally filtering expired seats."""
+    """List seats for a table, optionally filtering departed and expired seats."""
     result = _seat_list_response(conn, table_id, active_only, datetime.now(UTC))
     if isinstance(result, Failure):
         raise result.failure()

@@ -612,6 +612,12 @@ Runtime tool: `seat_list`; conceptual spec name: `tasca.seat.list`.
 
 Default: `active_only = true`.
 
+When `active_only` is `true`, the `seats` array contains only internally
+`JOINED` seats whose last heartbeat is within the configured TTL. When it is
+`false`, `seats` contains the complete stored seat set, including `done`/departed
+and expired seats. `active_count` always counts only `JOINED` seats within TTL,
+so it equals the `seats` length from the same table with `active_only = true`.
+
 **out**
 ```json
 { "seats": [ { "patron_id": "...", "state": "running|idle|done", "last_heartbeat": "...", "expires_at": "..." } ], "active_count": 0 }

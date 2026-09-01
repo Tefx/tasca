@@ -1313,6 +1313,17 @@ class TestSeatHeartbeat:
         assert result["ok"] is True
         assert "expires_at" in result["data"]
 
+        active_result = seat_list(table_id=table_id, active_only=True)
+        assert active_result["ok"] is True
+        assert active_result["data"]["seats"] == []
+        assert active_result["data"]["active_count"] == 0
+
+        all_result = seat_list(table_id=table_id, active_only=False)
+        assert all_result["ok"] is True
+        assert len(all_result["data"]["seats"]) == 1
+        assert all_result["data"]["seats"][0]["state"] == "left"
+        assert all_result["data"]["active_count"] == 0
+
     def test_heartbeat_with_custom_ttl(self) -> None:
         """Heartbeat with custom ttl_ms returns appropriate expiry."""
         patron_result = patron_register(name=unique_name())

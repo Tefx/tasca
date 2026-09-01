@@ -264,7 +264,7 @@ def filter_active_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> l
     """Filter seats that are still active (not expired).
 
     Active seats are those with valid heartbeats and JOINED state.
-    LEFT seats are also included (they explicitly left, not expired).
+    LEFT seats are excluded even though they remain non-expired for GC.
 
     Args:
         seats: List of seats to filter.
@@ -296,8 +296,20 @@ def filter_active_seats(seats: list[Seat], ttl_seconds: int, now: datetime) -> l
         1
         >>> active[0].id == SeatId("active")
         True
+        >>> left = Seat(
+        ...     id=SeatId("left"), table_id="t1", patron_id="p3",
+        ...     state=SeatState.LEFT,
+        ...     last_heartbeat=datetime(2024, 1, 1, 11, 0, 0),
+        ...     joined_at=datetime(2024, 1, 1, 11, 0, 0)
+        ... )
+        >>> filter_active_seats([left], 60, datetime(2024, 1, 1, 12, 1, 0))
+        []
     """
-    return [seat for seat in seats if not is_seat_expired(seat, ttl_seconds, now)]
+    return [
+        seat
+        for seat in seats
+        if seat.state == SeatState.JOINED and not is_seat_expired(seat, ttl_seconds, now)
+    ]
 
 
 @deal.pre(lambda seat, now: seat is not None and now is not None)

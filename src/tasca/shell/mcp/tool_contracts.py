@@ -397,10 +397,15 @@ TOOL_CONTRACTS: Final[tuple[ToolContract, ...]] = (
         "seat_list",
         "tasca.seat.list",
         "List seats at a table to see who is present.",
-        "Returns seats array (with patron_id, state, last_heartbeat) and active_count.",
+        "Returns seats array (with patron_id, state, last_heartbeat) and active_count. Active seats are JOINED with heartbeats within TTL; active_count is unchanged when active_only is false.",
         (
             P("table_id", "UUID of the table", True),
-            P("active_only", "If true (default), filter out expired/departed seats", False, True),
+            P(
+                "active_only",
+                "If true (default), return only JOINED seats within TTL; false returns all seats including departed and expired seats",
+                False,
+                True,
+            ),
         ),
         f"{TOOLS_SPEC_ANCHOR}/5-4-seat-presence/tasca-seat-list",
         "tasca.shell.mcp.entrypoints.seat_list",

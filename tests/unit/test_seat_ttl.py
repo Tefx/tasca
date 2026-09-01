@@ -270,8 +270,8 @@ class TestFilterActiveSeats:
         assert len(active) == 1
         assert active[0].id == SeatId("active")
 
-    def test_filter_includes_left_seats(self) -> None:
-        """LEFT seats are included as active (not expired)."""
+    def test_filter_excludes_left_seats(self) -> None:
+        """LEFT seats are excluded from active results despite non-expired GC semantics."""
         seats = [
             Seat(
                 id=SeatId("left"),
@@ -284,8 +284,7 @@ class TestFilterActiveSeats:
         ]
         now = datetime(2024, 1, 1, 12, 1, 0)  # 1 hour later
         active = filter_active_seats(seats, 60, now)
-        assert len(active) == 1
-        assert active[0].state == SeatState.LEFT
+        assert active == []
 
 
 class TestHeartbeatUpdate:
@@ -652,8 +651,18 @@ class TestCountActiveSeats:
             last_heartbeat=datetime(2024, 1, 1, 11, 0, 0),
             joined_at=datetime(2024, 1, 1, 11, 0, 0),
         )
+        # Departed seat remains stored for GC semantics but is never active.
+        seat3 = Seat(
+            id=SeatId("left"),
+            table_id="t1",
+            patron_id="p3",
+            state=SeatState.LEFT,
+            last_heartbeat=datetime(2024, 1, 1, 11, 0, 0),
+            joined_at=datetime(2024, 1, 1, 11, 0, 0),
+        )
         create_seat(db_conn, seat1)
         create_seat(db_conn, seat2)
+        create_seat(db_conn, seat3)
 
         result = count_active_seats(db_conn, "t1", 60, datetime(2024, 1, 1, 12, 1, 0))
         assert isinstance(result, Success)

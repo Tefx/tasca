@@ -322,7 +322,7 @@ def list_tables_with_seat_counts(
     """List all open tables with active seat counts.
 
     Queries all tables with status='open' and joins seats to compute
-    active_count per table (excluding expired seats based on TTL).
+    active_count per table (excluding departed and expired seats based on TTL).
 
     Args:
         conn: Database connection.
@@ -338,7 +338,7 @@ def list_tables_with_seat_counts(
             - version: Version number for optimistic concurrency
             - created_at: Creation timestamp (ISO format string)
             - updated_at: Last update timestamp (ISO format string)
-            - active_count: Number of active (non-expired) seats
+            - active_count: Number of JOINED seats whose heartbeats are within TTL
 
     Example:
         >>> import sqlite3
@@ -357,16 +357,15 @@ def list_tables_with_seat_counts(
 
     try:
         # Compute the cutoff ISO string: seats with last_heartbeat + ttl >= now are active.
-        # A JOINED seat is expired when: now > last_heartbeat + ttl_seconds
-        # A LEFT seat is never expired (always counts as active).
+        # A JOINED seat is expired when: now > last_heartbeat + ttl_seconds.
+        # LEFT seats remain stored and non-expired for GC, but are never active.
         # We mirror filter_active_seats / is_seat_expired semantics exactly in SQL.
         cutoff = (now - timedelta(seconds=ttl_seconds)).isoformat()
 
         # Single JOIN query: COUNT only active seats per open table.
-        # Active seat condition (matching is_seat_expired logic):
-        #   state = 'left'  → always active (LEFT seats are never expired)
+        # Active seat condition (matching filter_active_seats):
         #   state = 'joined' AND last_heartbeat >= cutoff  → within TTL, not expired
-        #   state = 'joined' AND last_heartbeat < cutoff   → expired, not counted
+        #   state = 'left'                                 → departed, not counted
         # The cutoff is now - ttl_seconds; a seat with last_heartbeat == cutoff is
         # not expired (expiry requires now > last_heartbeat + ttl, i.e. strict gt).
         cursor = conn.execute(
@@ -381,7 +380,6 @@ def list_tables_with_seat_counts(
                 t.updated_at,
                 COUNT(
                     CASE
-                        WHEN s.state = 'left' THEN 1
                         WHEN s.state = 'joined'
                              AND s.last_heartbeat >= ?
                         THEN 1

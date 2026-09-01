@@ -328,10 +328,10 @@ class TestListSeats:
         # active_count still counts only active
         assert data["active_count"] == 1
 
-    def test_list_seats_left_state_not_expired(
+    def test_list_seats_left_state_excluded_from_active_results_but_included_unfiltered(
         self, client: TestClient, test_db: sqlite3.Connection
     ) -> None:
-        """Seats in LEFT state are not considered expired (they explicitly left)."""
+        """LEFT seats stay stored but are excluded only from active results."""
         # Setup
         create_test_table(test_db, "table-1")
         now = datetime.now(UTC)
@@ -349,12 +349,20 @@ class TestListSeats:
         # Execute (active_only=true)
         response = client.get("/tables/table-1/seats")
 
-        # Verify - LEFT seats are active (not expired)
+        # LEFT seats are not active, even though they remain non-expired for GC.
+        assert response.status_code == 200
         data = response.json()
-        # LEFT seats with old heartbeat are still included
-        assert len(data["seats"]) == 1
-        assert data["seats"][0]["id"] == "left-seat"
-        assert data["seats"][0]["state"] == "left"
+        assert data["seats"] == []
+        assert data["active_count"] == 0
+
+        # active_only=false still returns the complete stored seat set.
+        response_all = client.get("/tables/table-1/seats?active_only=false")
+        assert response_all.status_code == 200
+        all_data = response_all.json()
+        assert len(all_data["seats"]) == 1
+        assert all_data["seats"][0]["id"] == "left-seat"
+        assert all_data["seats"][0]["state"] == "left"
+        assert all_data["active_count"] == 0
 
     def test_list_seats_multiple_tables(
         self, client: TestClient, test_db: sqlite3.Connection

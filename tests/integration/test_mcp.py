@@ -708,6 +708,102 @@ def test_mcp_seat_list(mcp_session: MCPSession) -> None:
     assert "result" in data
 
 
+def test_mcp_http_seat_list_active_filtering(mcp_session: MCPSession) -> None:
+    """HTTP MCP seat_list filters departed seats and keeps count semantics stable.
+
+    Every supported heartbeat state is sent through JSON-RPC ``tools/call``.
+    The assertions cover both active_only modes and the all-departed result.
+    """
+    from tasca.core.domain.seat import INTERNAL_STATE_TO_SPEC, SPEC_STATE_TO_INTERNAL, SeatState
+
+    request_counter = [2]
+    call_tool = make_call_tool(mcp_session, request_counter, _extract_tool_result_strict)
+    supported_states = tuple(SPEC_STATE_TO_INTERNAL)
+    assert set(SPEC_STATE_TO_INTERNAL.values()) == set(INTERNAL_STATE_TO_SPEC)
+
+    patron_ids: list[str] = []
+    for index, _state in enumerate(supported_states):
+        patron_result = call_tool(
+            "patron_register",
+            {"name": f"SeatFilterAgent-{index}", "kind": "agent"},
+        )
+        assert patron_result["ok"] is True
+        patron_ids.append(patron_result["data"]["id"])
+
+    table_result = call_tool("table_create", {"question": "HTTP seat filter regression"})
+    assert table_result["ok"] is True
+    table_id = table_result["data"]["id"]
+
+    for patron_id in patron_ids:
+        join_result = call_tool(
+            "table_join",
+            {"table_id": table_id, "patron_id": patron_id},
+        )
+        assert join_result["ok"] is True
+
+    for patron_id, state in zip(patron_ids, supported_states, strict=True):
+        heartbeat_result = call_tool(
+            "seat_heartbeat",
+            {"table_id": table_id, "patron_id": patron_id, "state": state},
+        )
+        assert heartbeat_result["ok"] is True
+
+    expected_active = {
+        patron_id
+        for patron_id, state in zip(patron_ids, supported_states, strict=True)
+        if SPEC_STATE_TO_INTERNAL[state] == SeatState.JOINED
+    }
+    expected_departed = set(patron_ids) - expected_active
+    assert expected_active
+    assert expected_departed
+
+    active_result = call_tool(
+        "seat_list",
+        {"table_id": table_id, "active_only": True},
+    )
+    active_data = active_result["data"]
+    active_ids = {seat["patron_id"] for seat in active_data["seats"]}
+    assert active_ids == expected_active
+    assert active_ids.isdisjoint(expected_departed)
+    assert active_data["active_count"] == len(expected_active)
+    assert active_data["active_count"] == len(active_data["seats"])
+
+    all_result = call_tool(
+        "seat_list",
+        {"table_id": table_id, "active_only": False},
+    )
+    all_data = all_result["data"]
+    all_ids = {seat["patron_id"] for seat in all_data["seats"]}
+    assert all_ids == set(patron_ids)
+    assert all_data["active_count"] == active_data["active_count"]
+    all_by_patron = {seat["patron_id"]: seat for seat in all_data["seats"]}
+    for patron_id, state in zip(patron_ids, supported_states, strict=True):
+        assert all_by_patron[patron_id]["state"] == SPEC_STATE_TO_INTERNAL[state].value
+
+    for patron_id in patron_ids:
+        heartbeat_result = call_tool(
+            "seat_heartbeat",
+            {"table_id": table_id, "patron_id": patron_id, "state": "done"},
+        )
+        assert heartbeat_result["ok"] is True
+
+    all_departed_result = call_tool(
+        "seat_list",
+        {"table_id": table_id, "active_only": True},
+    )
+    assert all_departed_result["data"]["seats"] == []
+    assert all_departed_result["data"]["active_count"] == 0
+
+    all_departed_unfiltered = call_tool(
+        "seat_list",
+        {"table_id": table_id, "active_only": False},
+    )
+    assert {
+        seat["patron_id"] for seat in all_departed_unfiltered["data"]["seats"]
+    } == set(patron_ids)
+    assert all_departed_unfiltered["data"]["active_count"] == 0
+
+
 # =============================================================================
 # MCP STDIO Transport Tests
 # =============================================================================

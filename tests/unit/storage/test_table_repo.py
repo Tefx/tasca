@@ -338,13 +338,14 @@ class TestListTablesWithSeatCounts:
         )
         create_seat(db_conn, active_seat)
 
-        # Create LEFT seat (not active for counting)
+        # Create LEFT seat with an old heartbeat. It remains stored and non-expired for GC,
+        # but it is never active for counting.
         left_seat = create_test_seat(
             "seat-left",
             "table-1",
             "patron-2",
             state=SeatState.LEFT,
-            last_heartbeat=now,
+            last_heartbeat=now - timedelta(hours=1),
         )
         create_seat(db_conn, left_seat)
 
@@ -352,11 +353,7 @@ class TestListTablesWithSeatCounts:
 
         assert isinstance(result, Success)
         tables = result.unwrap()
-        # LEFT seats are filtered out by filter_active_seats
-        # (since is_seat_expired returns False for LEFT, they ARE included in active)
-        # But in the context of "active patrons", LEFT means they left
-        # Let's verify the behavior matches filter_active_seats
-        assert tables[0]["active_count"] == 2  # Both JOINED and LEFT are "active"
+        assert tables[0]["active_count"] == 1
 
     def test_exact_ttl_boundary(self, db_conn: sqlite3.Connection) -> None:
         """Seat at exact TTL boundary is still active (not expired)."""

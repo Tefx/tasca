@@ -408,7 +408,7 @@ def gc_expired_seats(
 def count_active_seats(
     conn: sqlite3.Connection, table_id: str, ttl_seconds: int, now: datetime
 ) -> Result[int, SeatError]:
-    """Count active (non-expired) seats at a table.
+    """Count active JOINED seats whose heartbeats are within TTL at a table.
 
     Args:
         conn: Database connection.

@@ -157,7 +157,11 @@ def seat_heartbeat_impl(
 
 
 def seat_list_impl(table_id: str, active_only: bool = True) -> Result[McpEnvelope, McpEnvelope]:
-    """Seat list implementation shared by MCP entrypoint wrapper."""
+    """List seats, counting only JOINED seats within TTL as active.
+
+    ``active_only=False`` returns every stored seat while ``active_count`` keeps
+    the shared active-seat predicate.
+    """
     conn = next(get_mcp_db())
     now = datetime.now(UTC)
     ttl = DEFAULT_SEAT_TTL_SECONDS

@@ -48915,13 +48915,13 @@ phases:
     agent: integration-verifier
 - id: seat_presence_fix
   name: Seat presence active filtering repair
-  status: in_progress
+  status: done
   depends_on:
   - viewer_auth_release
   steps:
   - id: seat_presence_fix.exclude-departed-seats
     name: Exclude departed seats from active seat results and counts
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49012,3 +49012,27 @@ phases:
     agent: python-executor
     claimed_by: python-executor
     claimed_at: '2026-09-01T20:24:32.636579Z'
+    done_at: '2026-09-01T20:58:02.960054+00:00'
+    evidence: 'Integrated exact Seat candidate `f199974cc990077a854a0578892037d3b451d061`
+      by fast-forward from claimed base `da58b6c4184bd9d8e4d65a7aed7a88af6543f107`;
+      retained ref `refs/vectl/candidates/seat-presence-fix/f199974`. Candidate range
+      excludes `plan.yaml`, release metadata/Web/GCP producers and passes `git diff
+      --check`; final worktree clean. `filter_active_seats` retains @deal.pre/@deal.post
+      and adds a LEFT-exclusion doctest; active now requires JOINED plus within TTL.
+      SeatState, running/idle→JOINED, done→LEFT, SQLite DDL, REST/MCP signatures and
+      response shapes were mechanically compared base-to-target and preserved. Implementation
+      focused suite: 212 passed; focused Ruff: all checks passed; full Invar: 0 errors,
+      doctest pass, 113/113 property functions and 10,000 examples pass, 48 warnings/4
+      infos. Independent `integration-verifier` report on immutable target returned
+      COMPLETED/PROVEN: all `SEAT-ACTIVE-01`, `SEAT-ALL-01`, `SEAT-HTTP-MCP-01`, `SEAT-CONSISTENCY-01`,
+      `SEAT-SCHEMA-01`, `SEAT-QUALITY-01` PROVEN, 0 findings/0 errors; report binding
+      validation returned `POSITIVE_EVIDENCE`. Exact HTTP `/mcp` JSON-RPC `tools/call`
+      regression `tests/integration/test_mcp.py::test_mcp_http_seat_list_active_filtering`
+      passed. Independent raw HTTP probe witnessed running/idle/done→joined/joined/left;
+      active_only=true returned 2 active/0 departed and active_count=2; active_only=false
+      returned all 3 including departed with active_count=2; all departed returned
+      active seats=[] and active_count=0 while unfiltered retained 3. Isolated SQLite
+      fixtures were removed; no external network, credentials, GCP, deployment, schema
+      migration, Plan change, or release-candidate effect. Verifier report `/tmp/larva-agent-artifacts/tasca-seat-verifier-f199974/report.json`,
+      SHA-256 `8ed18c361a2c0738697801aca4ff75e1158d8e3ee7ee778b6f95e189f1fdc90d`;
+      12 referenced evidence artifacts rehashed successfully.'

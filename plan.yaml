@@ -48669,10 +48669,10 @@ phases:
       behavior, and no-database-change contract.
 
 
-      Boundary: general owns integrated release metadata, packaged Web bytes, tracked
-      deployment/verification producers, release tests, and operator docs. No registry
-      publication, GCP mutation, credential access, SQLite/domain/MCP schema change,
-      or remote probe. R1 repository-only release transaction.
+      Boundary: devops-engineer owns integrated release metadata, packaged Web bytes,
+      tracked deployment/verification producers, release tests, and operator docs.
+      No registry publication, GCP mutation, credential access, SQLite/domain/MCP
+      schema change, or remote probe. R1 repository-only release transaction.
 
 
       Admit: both implementation steps are green. The selected deployment identity
@@ -48717,7 +48717,7 @@ phases:
     depends_on:
     - viewer_auth_release.backend-rest-auth
     - viewer_auth_release.web-credential-flow
-    agent: general
+    agent: devops-engineer
 - id: viewer_auth_gcp
   name: Optional viewer authentication — HTTPS GCP rollout and proof
   status: locked
@@ -48734,7 +48734,7 @@ phases:
     status: pending
     description: 'step_type: implementation
 
-      repo_change_policy: no_repo_change
+      repo_change_policy: runtime_state_only
 
 
       Deliver:
@@ -48764,8 +48764,8 @@ phases:
       Leave the final service on 0.1.30 over HTTPS with public port 8000 closed.
 
 
-      Boundary: general owns one reversible R3 lifecycle on the named existing VM,
-      same-host TLS termination/firewall, two named Secret Manager secrets, systemd
+      Boundary: devops-engineer owns one reversible R3 lifecycle on the named existing
+      VM, same-host TLS termination/firewall, two named Secret Manager secrets, systemd
       configuration, release activation, rollback rehearsal, and final reconciliation.
       No new VM/worker/database, disk mutation, package publication, token disclosure,
       DNS-zone change beyond the witnessed hostname, or unrelated GCP resource change.
@@ -48807,7 +48807,7 @@ phases:
     - .artifacts/gcp-tasca-deploy/verify_remote_mcp.py
     - docs/deployment-ops-v0.1.md
     - pyproject.toml
-    agent: general
+    agent: devops-engineer
   - id: viewer_auth_gcp.remote-verification
     name: Independently verify remote HTTPS viewer/admin behavior and cleanup
     status: pending

@@ -48747,7 +48747,7 @@ phases:
       untracked `.artifacts` execution occurred.'
 - id: viewer_auth_gcp
   name: Optional viewer authentication — HTTPS GCP rollout and proof
-  status: pending
+  status: in_progress
   gate: Before TASCA_VIEWER_TOKEN is injected, read by a remote client, or distributed,
     the approved HTTPS hostname must present a valid certificate and public TCP/8000
     must be closed. Completion additionally requires the exact 0.1.30 release, both
@@ -48758,7 +48758,7 @@ phases:
   steps:
   - id: viewer_auth_gcp.https-secret-rollout
     name: Roll out HTTPS, GCP viewer secret, 0.1.30, and rehearse rollback
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: runtime_state_only
@@ -48835,6 +48835,8 @@ phases:
     - docs/deployment-ops-v0.1.md
     - pyproject.toml
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-01T20:24:28.336662Z'
   - id: viewer_auth_gcp.remote-verification
     name: Independently verify remote HTTPS viewer/admin behavior and cleanup
     status: pending

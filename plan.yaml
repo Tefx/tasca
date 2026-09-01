@@ -48915,13 +48915,13 @@ phases:
     agent: integration-verifier
 - id: seat_presence_fix
   name: Seat presence active filtering repair
-  status: pending
+  status: in_progress
   depends_on:
   - viewer_auth_release
   steps:
   - id: seat_presence_fix.exclude-departed-seats
     name: Exclude departed seats from active seat results and counts
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49010,3 +49010,5 @@ phases:
     - tests/integration/test_mcp.py
     - docs/tasca-mcp-interface-v0.1.md
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-09-01T20:24:32.636579Z'

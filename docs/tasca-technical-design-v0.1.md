@@ -179,7 +179,7 @@ Rationale: consistent machine-readable errors remain the target, while implement
 
 All enabled resource-router and admin-auth failures use the standard `PermissionDenied` envelope. Router-level viewer access wiring protects the complete REST resource inventory; mutation handlers retain their existing `verify_admin_token` dependency. The health payload exposes only `viewer_auth_required: bool`.
 
-Configured credentials, whether loaded from environment, `.env`, or another explicit settings source, are redacted from startup output, logs, errors, OpenAPI examples, tests, and evidence. A generated local admin token remains discoverable for local setup.
+Configured credentials, whether loaded from environment, `.env`, or another explicit settings source, are redacted from startup output, logs, errors, OpenAPI examples, tests, and evidence. A generated local admin token remains discoverable for local setup. Remote deployments terminate certificate-valid HTTPS before credential use, bind the backend to loopback/private port 8000, and carry Bearer credentials only in HTTPS headers.
 
 ### 5.3 Dedup key canonicalization
 

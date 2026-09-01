@@ -304,7 +304,7 @@ The UI starts as Viewer and discovers `viewer_auth_required` through the public 
 
 - The Web client stores only validated credentials in current-tab `sessionStorage` under `tasca_web_access_token`; it records the validated role beside it.
 - On reload, the stored credential is revalidated before routes or data load. The legacy `tasca_admin_token` entry is ignored.
-- Credentials never appear in UI text, URLs, logs, or test snapshots.
+- Credentials never appear in UI text, URLs, logs, or test snapshots. Remote credential-bearing fetches require certificate-valid HTTPS; local HTTP is only for local development.
 - Export downloads use authenticated fetch and a generated Blob download because a raw link cannot attach the required Bearer header.
 
 ### Admin-only capabilities

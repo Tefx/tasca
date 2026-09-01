@@ -19,7 +19,7 @@
 - Missing or invalid credentials for an enabled viewer-auth resource route or an admin-required route MUST return the standard `PermissionDenied` error envelope.
 - `GET /api/v1/auth/validate` without a credential returns the public `viewer` role only while viewer auth is disabled. With viewer auth enabled, or when a supplied Bearer credential is invalid, it returns the standard HTTP `401 PermissionDenied` envelope.
 - `/api/v1/health`, `/api/v1/ready`, `/docs`, `/openapi.json`, and the static SPA shell are public.
-- Tokens MUST NOT appear in startup banners, service logs, errors, OpenAPI examples, test evidence, or technical documentation. Locally generated admin tokens may be displayed for local connection setup; configured admin tokens are redacted.
+- Tokens MUST NOT appear in startup banners, service logs, errors, OpenAPI examples, test evidence, or technical documentation. Locally generated admin tokens may be displayed for local connection setup; configured admin tokens are redacted. Remote credential-bearing requests MUST use certificate-valid HTTPS Authorization headers, never HTTP, URLs, or query parameters.
 
 ### Admin-required operations (v0.1) (normative)
 

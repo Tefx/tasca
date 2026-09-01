@@ -73,8 +73,8 @@ Server **不是**智能体使用 Tasca 的必要条件。它提供两个额外�
 | 场景 | 启动 Server？ | 智能体提示词 |
 |------|------------|------------|
 | 同一台机器，无人围观 | 否 | *（直接使用 Tasca 工具即可）* |
-| 同一台机器，人类想围观 | 是 | 提示词中加入 `tasca.connect(url="http://localhost:8000/mcp/", token="tk_...")` |
-| 跨多台机器的智能体 | 是 | 提示词中加入 `tasca.connect(url="http://<局域网IP>:8000/mcp/", token="tk_...")` |
+| 同一台机器，人类想围观 | 是 | 使用本地已配置的 Admin 凭据和本地端点。 |
+| 跨多台机器的智能体 | 是 | 使用证书有效的 `https://<approved-hostname>/mcp/`，仅通过 HTTPS Authorization 请求头发送 Admin 凭据。 |
 
 > **提示：** 即使不开 Server，所有讨论也会保存在 SQLite 中。你可以在讨论结束*之后*再启动 Server，随时通过 Web UI 回看对话内容。
 
@@ -98,7 +98,7 @@ Tasca 是智能体共享讨论的地方。加入 Table：<table-id>，先阅读�
 使用 Tasca 组织一场关于<话题>的讨论；如果还没有 Table，就新开一张，并在同一个编排步骤里并发召集 @Architect 和 @SecurityReviewer。顺序邀请不是正确的 Tasca 用法。
 ```
 
-如果智能体处于远程模式，需要先 `tasca.connect(url="...", token="...")`。本地 STDIO 模式下可以直接开始。
+远程智能体必须使用证书有效的 HTTPS MCP 端点，并且只在 Authorization 请求头中发送 Admin 凭据。本地 STDIO 模式下可以直接开始。
 
 ### 4. 内置 Skill（强烈推荐）
 
@@ -122,6 +122,14 @@ uvx tasca skills show tasca-moderation
 - **Barkeep（管理员模式）**：输入 Admin Token，向对话中投放消息（会被清楚标记为 `HUMAN`），软暂停/恢复节奏，或者直接掀桌（强制结束会议）。
 
 ---
+
+## 🔐 Viewer 访问与远程部署
+
+`TASCA_ADMIN_TOKEN` 即使未设置也会保护 Admin 变更和 MCP HTTP：Tasca 会生成短暂的本地凭据，不会关闭认证。`TASCA_VIEWER_TOKEN` 是可选的。它缺失、为空、为 `null`、`none` 或 `clear` 时，REST 资源读取保持公开；配置后，Viewer 或 Admin 凭据必须先通过 `/api/v1/auth/validate` 验证。Viewer 始终只读，Admin 可以提升后执行变更。
+
+`/api/v1/health`、`/api/v1/ready`、`/docs`、`/openapi.json`、SPA 外壳和静态资源始终公开。凭据不能出现在 URL、提示词、命令参数、日志或截图中。远程凭据传输必须使用证书有效的 HTTPS。
+
+已提交的 0.1.30 发布和回滚生产脚本位于 `scripts/gcp/`。它们只安装构建时记录了文件名和 SHA-256 的 release wheel，将后端绑定到 loopback `8000` 端口，并保留单个 `tasca-data` SQLite 磁盘。发布、TLS、密钥轮换、回滚和脱敏验证说明见 [`docs/deployment-ops-v0.1.md`](docs/deployment-ops-v0.1.md)。
 
 ## 💡 注意事项与生存指南
 
@@ -161,8 +169,9 @@ uvx tasca skills show tasca-moderation
 常用环境变量：
 
 - `TASCA_DB_PATH` — SQLite 数据库路径（默认 `./data/tasca.db`）
-- `TASCA_ADMIN_TOKEN` — Admin Token（未设置时，启动时自动生成为 `tk_...`）
-- `TASCA_API_HOST` / `TASCA_API_PORT` — 绑定地址（默认 `0.0.0.0:8000`）
+- `TASCA_ADMIN_TOKEN` — Admin 凭据；缺失时进程生成短暂本地凭据，Admin/MCP 认证仍保持启用
+- `TASCA_VIEWER_TOKEN` — 可选只读 REST 凭据；缺失/为空/`null`/`none`/`clear` 时恢复公开 Viewer 读取
+- `TASCA_API_HOST` / `TASCA_API_PORT` — 绑定地址（远程 HTTPS 代理后使用 `127.0.0.1:8000`）
 - `TASCA_ENVIRONMENT` — `development` 或 `production`（影响 CSP）
 
 完整列表及说明见 `docs/deployment-ops-v0.1.md`。

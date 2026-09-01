@@ -56,6 +56,14 @@ web/node_modules/
 web/dist/
 web/.vite/
 
+# The release wheel contains these prebuilt SPA bytes. Keep this source-side
+# dist directory tracked; the root dist/ remains an ignored build-output directory.
+!src/
+!src/tasca/
+!src/tasca/web/
+!src/tasca/web/dist/
+!src/tasca/web/dist/**
+
 # Logs
 *.log
 logs/

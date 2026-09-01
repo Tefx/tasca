@@ -48634,7 +48634,7 @@ phases:
       to the later remote verification step.'
   - id: viewer_auth_release.package-release
     name: Package and prove the 0.1.30 release plus tracked GCP rollout producers
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -48718,6 +48718,8 @@ phases:
     - viewer_auth_release.backend-rest-auth
     - viewer_auth_release.web-credential-flow
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-01T19:48:23.110619Z'
 - id: viewer_auth_gcp
   name: Optional viewer authentication — HTTPS GCP rollout and proof
   status: locked

@@ -49305,7 +49305,7 @@ phases:
       12 referenced evidence artifacts rehashed successfully.'
 - id: seat_presence_redeploy
   name: Seat presence 0.1.31 release and GCP redeploy
-  status: in_progress
+  status: done
   depends_on:
   - seat_presence_fix
   - viewer_auth_gcp
@@ -49549,7 +49549,7 @@ phases:
       were observation-only.'
   - id: verify-live-seat-filtering
     name: Independently verify Seat filtering on public HTTPS MCP
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       repo_change_policy: no_repo_change
@@ -49622,3 +49622,67 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-09-02T14:38:08.137906Z'
+    done_at: '2026-09-02T15:24:11.312340+00:00'
+    evidence: 'Independent L3 verification through only certificate-valid public HTTPS
+      completed with overall PROVEN. Canonical report `/tmp/larva-agent-artifacts/tasca-seat-presence-0-1-31-live-verification-v2/report.json`:
+      SHA-256 10669260decdf6ee3f6291751fd6d323459b7c93c0a4f069da3aa5d3867fda76, 22,963
+      bytes, mode 0600. Parent revalidated JSON structure/assertions and hashes; protocol
+      evidence SHA-256 c11da3ab6765c236e81feedc70054680c769014c0052a8ba850c06b1b2a84347
+      and cleanup-recovery evidence SHA-256 c87cfb34842a9d8590702d7b929ea8093c8da9e5be72c22845ce377bfd9985c5,
+      both mode 0600.
+
+
+      Target/release: `https://34.1.134.239.sslip.io`, `rda-engineering/asia-southeast1-b/tasca-mcp`
+      VM id 8120608387419901442 at 34.1.134.239, exact live version 0.1.31; release
+      commit d68b87dd6d54d86deac0e4431eb9a1e05b6a1050 and wheel SHA-256 896ffb0a45f2d6ed8343c5a484f2aec81af4c9b973aa99fae6167f7441042441
+      are bound through accepted deployment evidence. TLS used default CA validation
+      with CERT_REQUIRED, hostname checking and observed TLS 1.3. Health returned
+      HTTP 200, version 0.1.31 and viewer_auth_required=true. Parent independently
+      re-read the same exact health fields with the default validating SSL context
+      after the verifier finished.
+
+
+      Authorization/protocol: configured Viewer validation returned role=viewer, Viewer
+      REST list HTTP 200, Viewer mutation and MCP initialize HTTP 401; unauthenticated
+      MCP initialize HTTP 401. Admin validation returned role=admin; real HTTPS MCP
+      initialize 200, initialized notification 202, tools/list 200 with 17 tools and
+      all required table_create/table_get/table_join/seat_heartbeat/seat_list tools.
+      No token appeared in URL, argv, environment dump, retained headers, reports
+      or evidence.
+
+
+      Isolated regression table `lucky-mouse-waves` used two distinct existing patrons
+      selected by one read-only `seat_list(active_only=false)` call against `cool-duck-glides`;
+      no patron was created and no mutating call targeted that pre-existing table.
+      Both patrons joined the isolated table. Mixed state proof: one `running`/JOINED
+      and one `done`/LEFT; active_only=true returned exactly the JOINED seat with
+      active_count=len(seats)=1, and active_only=false returned exactly two seats
+      with JOINED=1/LEFT=1 and active_count=1. All-LEFT proof: remaining seat transitioned
+      to done/LEFT; active_only=true returned seats=[] and active_count=0, while active_only=false
+      returned exactly both LEFT seats and active_count=0. Raw token-free MCP event
+      and response data is in `protocol-evidence.json`.
+
+
+      Public TCP 34.1.134.239:8000 accepted no connection in the independent run and
+      parent post-check. Cleanup fully succeeded: initial singleton Admin REST DELETE
+      of the seat-bearing table returned HTTP 500; bounded same-table recovery first
+      re-read exact nested `data.table.id`, then used public HTTPS Admin MCP table_control(close)
+      and table_delete_batch for only `lucky-mouse-waves`; batch response deleted_count=1/failed=[],
+      final Admin REST GET returned 404. This REST singleton-delete 500 is retained
+      as a non-blocking product warning; no isolated verification data remains.
+
+
+      The exact tracked `verify_viewer_auth_remote.py --prepare` command was also
+      executed in the prior fresh attempt. It reached live role/MCP checks and created
+      then safely deleted its isolated table, but its local `mcp_table_id()` accepts
+      only `data.id`/`data.table_id` while authoritative live `table_get` returns
+      `data.table.id`; this is retained as a verification-utility parser gap rather
+      than product evidence. The successful fresh verifier parsed the authoritative
+      nested response and supplied the required stronger raw MCP proof without changing
+      tracked source.
+
+
+      Final exact in-memory credential scan: PASS, zero credential matches, no Authorization
+      headers retained, every retained file mode 0600. Repository and Vectl plan were
+      not modified by either verifier. No remaining gap within this Seat filtering
+      acceptance step.'

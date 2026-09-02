@@ -207,7 +207,7 @@ def run_action(
             "GCP_CREATE_DONE": str(tmp_path / "created"),
             "GCP_FIREWALL_EXISTS": "1",
             "GCP_ADMIN_ENABLED": admin_enabled or "projects/rda-engineering/secrets/tasca-admin-token/versions/1",
-            "GCP_VIEWER_ENABLED": viewer_enabled or "projects/rda-engineering/secrets/tasca-viewer-token/versions/1",
+            "GCP_VIEWER_ENABLED": viewer_enabled if viewer_enabled is not None else "1",
         }
     )
     if admin_state is not None:
@@ -524,19 +524,31 @@ def test_apply_rejects_created_deny_that_fails_target_vpc_readback(tmp_path: Pat
     assert "does not match the target VPC contract" in result.stderr
 
 
-def test_resume_rejects_viewer_secret_layout_other_than_exact_enabled_v1(tmp_path: Path) -> None:
-    """A matching version 1 plus any second enabled Viewer version cannot be safely resumed."""
-    result, commands = run_action(
-        tmp_path,
-        "resume",
-        viewer_enabled=(
-            "projects/rda-engineering/secrets/tasca-viewer-token/versions/1\n"
-            "projects/rda-engineering/secrets/tasca-viewer-token/versions/2"
-        ),
-    )
+def test_resume_accepts_gcloud_value_name_viewer_v1(tmp_path: Path) -> None:
+    """The real gcloud value(name) response identifies one enabled Viewer version as 1."""
+    result, commands = run_action(tmp_path, "resume", viewer_enabled="1")
+
+    assert result.returncode == 0, result.stderr
+    assert any("compute scp" in command for command in commands)
+
+
+@pytest.mark.parametrize(
+    "viewer_enabled",
+    [
+        pytest.param("", id="none"),
+        pytest.param("2", id="version-2"),
+        pytest.param("1\n2", id="multiple"),
+        pytest.param("projects/rda-engineering/secrets/tasca-viewer-token/versions/1", id="malformed-resource-name"),
+    ],
+)
+def test_resume_rejects_viewer_secret_layout_other_than_exact_enabled_v1(
+    tmp_path: Path, viewer_enabled: str
+) -> None:
+    """Resume rejects absent, ambiguous, wrong, and malformed value(name) output before staging."""
+    result, commands = run_action(tmp_path, "resume", viewer_enabled=viewer_enabled)
 
     assert result.returncode != 0
-    assert "exactly enabled Viewer secret version 1" in result.stderr
+    assert "Viewer secret version" in result.stderr
     assert not any("compute scp" in command for command in commands)
 
 

@@ -312,7 +312,8 @@ reconcile_public_backend_port() {
 }
 
 assert_resume_effects() {
-    local context network tags_json rule_json viewer_enabled
+    local context network tags_json rule_json viewer_enabled viewer_line
+    local -a viewer_versions=()
     context="$(vm_network_and_tags)" || die "could not reconcile the target VM VPC network"
     network="${context%%$'\n'*}"
     tags_json="${context#*$'\n'}"
@@ -327,7 +328,13 @@ assert_resume_effects() {
         || die "resume refuses a mismatched TCP/8000 deny rule"
     viewer_enabled="$(gcloud secrets versions list tasca-viewer-token --project="$PROJECT_ID" \
         --filter='state=ENABLED' --format='value(name)' --quiet)"
-    [[ "$viewer_enabled" == "projects/${PROJECT_ID}/secrets/tasca-viewer-token/versions/1" ]] \
+    [[ -n "$viewer_enabled" ]] || die "resume requires exactly enabled Viewer secret version 1"
+    while IFS= read -r viewer_line; do
+        [[ "$viewer_line" =~ ^[1-9][0-9]*$ ]] \
+            || die "resume found an invalid enabled Viewer secret version"
+        viewer_versions+=("$viewer_line")
+    done <<< "$viewer_enabled"
+    [[ "${#viewer_versions[@]}" == "1" && "${viewer_versions[0]}" == "1" ]] \
         || die "resume requires exactly enabled Viewer secret version 1"
 }
 

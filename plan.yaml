@@ -48936,7 +48936,7 @@ phases:
     agent: integration-verifier
   - id: viewer_auth_gcp.repair-rollout-producer
     name: Repair deterministic rollout and rollback producer
-    status: done
+    status: rejected
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49024,38 +49024,13 @@ phases:
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T05:52:58.399713Z'
     done_at: '2026-09-02T05:59:41.372405+00:00'
-    evidence: 'Integrated deterministic gcloud formatter repair at exact commit dfdd83938462288d1cfe3b6f700f6396914b5198
-      (parent 783d3184252610f3e72adcd6716c722fb9f74db3); retained ref refs/vectl/candidates/viewer-auth-gcp-producer-repair/dfdd839.
-      Viewer list, Admin list, and Admin add explicitly request `value(name.basename())`;
-      strict numeric parsing and all rotation recovery/disable ordering remain. Installed
-      SDK source established why list aliases and add raw-object formatting differ.
-      Tests assert the exact formatter on all three commands. Changed only tracked
-      rollout producer/test; clean candidate/integration. No live/GCP/credential effect
-      ran.
-
-
-      Checks: frozen sync 118 packages; shell syntax; exact focused tests 46/46; focused
-      Ruff; diff check; all passed. Authoritative Invar retained the six documented
-      pre-existing escape-hatch-budget errors (59 warnings/4 infos), zero new and
-      none on changed paths.
-
-
-      Final immutable rollback input: `/tmp/larva-agent-artifacts/tasca-viewer-auth-producer-repair-v4/output/tasca-0.1.29-rollback.tar.gz`,
-      SHA-256 c0e1e27af7f35d91d4504d5b76ddaca0b24a01dbd01c64fff80dcde05722cb7f; 0600
-      token-free receipt SHA-256 4836f94bc8d45c88268ff60bb60737f1b3f4d6e8c5f1f3fdbd6d8195e5a6d1ac;
-      exact 0.1.29 wheel SHA-256 e5ebeb8ae9157770a9e3ac334a809de186165f0276fa492f0fc17461b0353fc2.
-      Receipt binds producer dfdd839..., rollout digest b65e72070fb74da07bf2552d7c0eb17f6f6dac518293c5bf7e149a3aa88c8b3d,
-      unchanged remote/builder digests, Python >=3.13, httpx 0.28.1, FastMCP 3.4.7
-      (<4). Child and parent real Linux CPython 3.13 Docker `--network none` smoke
-      passed; parent repeated after integration: offline/hash-required install, exact
-      0.1.29 startup, public table read, viewer_auth_required=false, cleanup. Token
-      scan: zero credential-value findings.'
-    rejection_reason: Installed gcloud SDK source shows `versions list` installs Secret-version
-      display aliases, while `versions add` returns the raw API Version object. Therefore
-      bare `value(name)` is observed numeric for list but may remain a full resource
-      path for add. The producer should request `value(name.basename())` explicitly
-      for both list and add, then strictly parse numeric segments, so the first authorized
-      rotation does not create v2 and fail solely on formatter shape.
+    rejection_reason: 'Live rehearsal exposed two producer defects and a missing same-target
+      recovery branch: health checks run immediately after systemctl restart; exact
+      0.1.29 health lacks the 0.1.30 `viewer_auth_required` field; and resume cannot
+      continue from the reconciled exact public 0.1.29 plus Admin v1+v2 state without
+      replaying rollback. Add bounded health readiness, version-scoped legacy public-health
+      acceptance plus real public read, and idempotent reapply-from-reconciled-rollback
+      recovery that reuses v2, creates no v3, verifies 0.1.30, then disables v1.'
     rejection_history:
     - reason: Completion evidence recorded the rollback receipt SHA-256 incorrectly.
         The integrated implementation and artifacts remain accepted; re-complete with
@@ -49086,6 +49061,15 @@ phases:
         the first authorized rotation does not create v2 and fail solely on formatter
         shape.
       timestamp: '2026-09-02T05:52:48.939309+00:00'
+      reviewer: orchestrator
+    - reason: 'Live rehearsal exposed two producer defects and a missing same-target
+        recovery branch: health checks run immediately after systemctl restart; exact
+        0.1.29 health lacks the 0.1.30 `viewer_auth_required` field; and resume cannot
+        continue from the reconciled exact public 0.1.29 plus Admin v1+v2 state without
+        replaying rollback. Add bounded health readiness, version-scoped legacy public-health
+        acceptance plus real public read, and idempotent reapply-from-reconciled-rollback
+        recovery that reuses v2, creates no v3, verifies 0.1.30, then disables v1.'
+      timestamp: '2026-09-02T07:13:02.836442+00:00'
       reviewer: orchestrator
 - id: seat_presence_fix
   name: Seat presence active filtering repair

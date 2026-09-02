@@ -62,6 +62,46 @@ tasca==...`, PyPI `latest`, or untracked `.artifacts` helper is an installation
 input. Building creates local `dist/` artifacts only. It does not publish or
 deploy them.
 
+## Build and verify the immutable 0.1.29 rollback input
+
+The rollback input starts with a declared immutable wheelhouse for the target
+Linux/CPython 3.13 runtime. It must contain the exact
+`tasca-0.1.29-py3-none-any.whl` release wheel and every resolved dependency
+wheel, including `httpx`; do not ask `uvx`, `uv`, or pip to resolve a package at
+rollback time. Store these release inputs and generated output outside Git.
+
+From a clean committed checkout, build the content-addressed archive and its
+0600 token-free receipt. The command rejects a wheelhouse with missing declared
+dependencies, duplicate package versions, a non-0.1.29 Tasca wheel, a different
+wheel hash, no `httpx`, or a Tasca wheel whose `Requires-Python` is not
+`>=3.13`.
+
+```bash
+ROLLBACK_INPUT_DIR=/secure/local/immutable-tasca-0.1.29
+ROLLBACK_OUTPUT_DIR=/tmp/tasca-rollback-input
+mkdir -p "$ROLLBACK_OUTPUT_DIR"
+ROLLBACK_WHEEL="$ROLLBACK_INPUT_DIR/wheelhouse/tasca-0.1.29-py3-none-any.whl"
+ROLLBACK_WHEEL_SHA256="$(sha256sum "$ROLLBACK_WHEEL" | awk '{print $1}')"
+
+bash scripts/gcp/build-viewer-auth-rollback-bundle.sh build \
+  --wheel "$ROLLBACK_WHEEL" --wheel-sha256 "$ROLLBACK_WHEEL_SHA256" \
+  --wheelhouse "$ROLLBACK_INPUT_DIR/wheelhouse" \
+  --output "$ROLLBACK_OUTPUT_DIR/tasca-0.1.29-rollback.tar.gz" \
+  --receipt "$ROLLBACK_OUTPUT_DIR/tasca-0.1.29-rollback-receipt.json"
+
+TASCA_ROLLBACK_SHA256="$(sha256sum "$ROLLBACK_OUTPUT_DIR/tasca-0.1.29-rollback.tar.gz" | awk '{print $1}')"
+bash scripts/gcp/build-viewer-auth-rollback-bundle.sh verify \
+  --bundle "$ROLLBACK_OUTPUT_DIR/tasca-0.1.29-rollback.tar.gz" \
+  --sha256 "$TASCA_ROLLBACK_SHA256"
+```
+
+The archive and receipt bind the exact Tasca and dependency bytes, their
+SHA-256 values, `>=3.13`, and the revision plus SHA-256 values of the tracked
+rollout, remote, and bundle producers. The receipt contains no package paths,
+credentials, tokens, or environment values. Keep the archive SHA-256 with the
+release receipt; the later runtime command supplies it through
+`TASCA_ROLLBACK_BUNDLE` and `TASCA_ROLLBACK_SHA256`.
+
 ## Secret lifecycle
 
 Create the two Secret Manager resources once under the approved project, then
@@ -79,9 +119,14 @@ unset TASCA_NEW_TOKEN
 For an existing secret, omit the matching `gcloud secrets create` command and
 add a new version. Generate Admin and Viewer values independently, verify their
 normalized values differ without displaying either, and retain the prior Admin
-secret for rollback. A public Viewer rollout does not read the Viewer secret at
-all. A configured Viewer rollout reads it only after the TLS gate passes; the
-release environment is root-written without exposing either credential.
+secret until the new Admin version is active and final health succeeds. The
+explicit `resume --rotate-admin-secret-version` lifecycle creates one new
+`tasca-admin-token` version through a stdin channel, uses its `latest` value for
+the rollback rehearsal and final activation, then disables version 1 only after
+final health succeeds. A public Viewer rollout does not read the Viewer secret
+at all. A configured Viewer rollout reads it only after the TLS gate passes; the
+release environment is root-owned, group-readable only by `tasca`, and mode
+0640 without exposing either credential.
 
 ## Exact GCP rollout and rollback
 Before `apply`, witness that the chosen hostname points at the existing VM and
@@ -93,40 +138,57 @@ starts one loopback-bound systemd service. The denial preempts public allow rule
 without deleting them. It does not alter public HTTPS/443 or add an IP-specific
 TCP/8000 exception.
 
+The later runtime-only repair resumes the already-active partial target with the
+following exact command. `TASCA_PYTHON` names the admitted uv-managed CPython
+3.13 binary on the VM; the producer rejects `/usr/bin/python3`, any non-CPython
+runtime, and every minor version except 3.13 before TLS, credential, or service
+effects.
+
 ```bash
 env PROJECT_ID=rda-engineering ZONE=asia-southeast1-b VM=tasca-mcp \
-  TASCA_HTTPS_HOST=<approved-hostname> \
+  TASCA_HTTPS_HOST=34.1.134.239.sslip.io \
   TASCA_VIEWER_MODE=configured \
+  TASCA_PYTHON=/var/lib/tasca/.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13 \
   RELEASE_WHEEL=dist/tasca-0.1.30-py3-none-any.whl \
-  RELEASE_SHA256=<recorded-wheel-sha256> \
-  scripts/gcp/viewer-auth-rollout.sh apply \
-  --require-version 0.1.30 --rollback-version 0.1.29 --rehearse-rollback
+  RELEASE_SHA256=<release-receipt-sha256> \
+  TASCA_ROLLBACK_BUNDLE=<repair-receipt-artifact> \
+  TASCA_ROLLBACK_SHA256=<repair-receipt-sha256> \
+  scripts/gcp/viewer-auth-rollout.sh resume \
+  --require-version 0.1.30 --rollback-version 0.1.29 \
+  --rehearse-rollback --rotate-admin-secret-version
 ```
 
-`viewer-auth-rollout.sh` refuses a different project, zone, VM, version,
-filename, SHA-256, or dirty/untracked producer. Its release manifest binds the
-exact verifier revision and path:
-`scripts/gcp/verify_viewer_auth_remote.py`. It first SHA-256-verifies the staged
-tracked `viewer-auth-remote.sh` with local SSH logic, installs it, then invokes
-that installed producer. `TASCA_VIEWER_MODE=configured` enables the Viewer gate;
-omitted, `public`, `clear`, `null`, or `none` leaves Viewer reads public and
-does not fetch a Viewer secret.
+`resume` first performs read-only VM/VPC/tag, priority-0 TCP/8000 deny, Viewer
+secret-version-1, release-wheel, rollback-bundle, rollback-capture, local-health,
+and HTTPS-health reconciliation. A difference stops the lifecycle before a new
+runtime effect. When all state matches, it stages only the tracked producer and
+immutable bytes; it does not reconfigure Caddy, replay the matching firewall
+denial, or add/read a Viewer secret version. The explicit Admin rotation is
+one-time: it requires version 1 to be the only enabled Admin version, adds one
+new version from a secret-safe stdin channel, and disables version 1 only after
+the rollback rehearsal restores final 0.1.30 health.
 
-Before it captures rollback identity, the remote producer initializes and reads
-the active 0.1.29 database. Rollback restores the captured unit and environment
-byte-for-byte with their captured modes and enabled/disabled state. Preflight
-refuses a 0.1.29 baseline containing `TASCA_VIEWER_TOKEN`, preserving public
-Viewer reads. The rollback's final device/inode/size/SHA-256 assertion occurs
-after the public HTTPS table read, so WAL, schema, or migration writes caused by
-that read fail rollback verification.
+For a fresh 0.1.29 baseline, `apply` uses the same environment and immutable
+bundle with `apply --require-version 0.1.30 --rollback-version 0.1.29
+--rehearse-rollback`. It preflights the selected Python and rollback input before
+Caddy, credential, firewall, or service effects. Caddy TLS readiness verifies a
+valid certificate without requiring a healthy backend, allowing recovery from a
+502 while Tasca is stopped. Activation later requires both real local
+`127.0.0.1:8000` and certificate-valid HTTPS health responses from the exact
+0.1.30 service.
 
-To restore the captured 0.1.29 state, use the same target and hostname:
+Before capture, the remote producer initializes and reads the active 0.1.29
+database. It refuses a baseline containing `TASCA_VIEWER_TOKEN`. During
+rollback it installs the archive's hash-pinned wheel set with `uv --offline
+--no-index --require-hashes`, rewrites only the captured unit's `ExecStart` to
+the deterministic 0.1.29 venv, rewrites the environment with the current Admin
+secret and no Viewer token, and preserves captured service enablement plus
+restricted environment mode. The final device/inode/size/SHA-256 assertion
+occurs after the public HTTPS read, so WAL, schema, or migration writes caused
+by that read fail rollback verification.
 
-```bash
-env PROJECT_ID=rda-engineering ZONE=asia-southeast1-b VM=tasca-mcp \
-  TASCA_HTTPS_HOST=<approved-hostname> \
-  scripts/gcp/viewer-auth-rollout.sh rollback --rollback-version 0.1.29
-```
+To perform only the deterministic rollback, use the same explicit Python and
+bundle inputs with `viewer-auth-rollout.sh rollback --rollback-version 0.1.29`.
 ## Mandatory persistence verification protocol
 
 The verifier uses a 0600, token-free, bounded state receipt. It contains only
@@ -152,8 +214,11 @@ different local environments.
    ```bash
    env PROJECT_ID=rda-engineering ZONE=asia-southeast1-b VM=tasca-mcp \
      TASCA_HTTPS_HOST=<witnessed-host> TASCA_VIEWER_MODE=configured \
+     TASCA_PYTHON=<admitted-cpython-3.13-path> \
      RELEASE_WHEEL=dist/tasca-0.1.30-py3-none-any.whl \
      RELEASE_SHA256=<recorded-wheel-sha256> \
+     TASCA_ROLLBACK_BUNDLE=<immutable-rollback-bundle> \
+     TASCA_ROLLBACK_SHA256=<recorded-rollback-bundle-sha256> \
      scripts/gcp/viewer-auth-rollout.sh reapply \
        --require-version 0.1.30 --rollback-version 0.1.29 \
        --verification-state "${TASCA_VIEWER_AUTH_STATE_FILE:-${XDG_RUNTIME_DIR:-/tmp}/tasca-viewer-auth-state.json}"

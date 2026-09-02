@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# purpose: Render and apply the tracked 0.1.30 viewer-auth rollout to the existing GCE VM.
-# usage: PROJECT_ID=... ZONE=... VM=... TASCA_HTTPS_HOST=... RELEASE_WHEEL=... RELEASE_SHA256=... scripts/gcp/viewer-auth-rollout.sh apply --require-version 0.1.30 --rollback-version 0.1.29
-# effects: Transfers tracked producer/wheel bytes, reconciles effective public TCP/8000 access on the VM VPC, and invokes the installed producer. It never publishes a package or changes SQLite files.
-# requires: gcloud, sha256sum, git, a committed clean scripts/gcp producer, and the user-authorized rda-engineering target.
+# purpose: Reconcile or activate the tracked viewer-auth release on the existing GCE VM.
+# usage: Set the exact release, Python, and rollback-bundle inputs, then run apply, resume, reapply, rollback, or render.
+# effects: Transfers committed producer/artifact bytes and, only for a selected runtime action, changes the named existing VM and Admin Secret version. It never publishes a package or changes SQLite bytes.
+# requires: gcloud, sha256sum, git, Python 3 for local bundle verification, a committed clean scripts/gcp producer, and the authorized rda-engineering target.
 set -euo pipefail
 
 readonly RELEASE_VERSION="0.1.30"
@@ -12,6 +12,7 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 readonly REMOTE_PRODUCER="$SCRIPT_DIR/viewer-auth-remote.sh"
 readonly REMOTE_VERIFIER="$SCRIPT_DIR/verify_viewer_auth_remote.py"
+readonly BUNDLE_BUILDER="$SCRIPT_DIR/build-viewer-auth-rollback-bundle.sh"
 readonly REMOTE_STAGE_DIR="/var/tmp/tasca-viewer-auth-rollout"
 readonly FIREWALL_RULE="tasca-deny-public-8000"
 readonly FIREWALL_DENY_PRIORITY=0
@@ -20,15 +21,22 @@ usage() {
     cat <<'USAGE'
 Usage:
   viewer-auth-rollout.sh apply --require-version 0.1.30 --rollback-version 0.1.29 [--rehearse-rollback]
+  viewer-auth-rollout.sh resume --require-version 0.1.30 --rollback-version 0.1.29 --rehearse-rollback [--rotate-admin-secret-version]
   viewer-auth-rollout.sh reapply --require-version 0.1.30 --rollback-version 0.1.29 --verification-state <0600-token-free-state-file>
   viewer-auth-rollout.sh rollback --rollback-version 0.1.29
   viewer-auth-rollout.sh render --require-version 0.1.30 --rollback-version 0.1.29 [--rehearse-rollback]
 
-Required environment for apply, reapply, and render:
-  PROJECT_ID, ZONE, VM, TASCA_HTTPS_HOST, RELEASE_WHEEL, RELEASE_SHA256
+Required environment for all actions:
+  PROJECT_ID, ZONE, VM, TASCA_HTTPS_HOST, TASCA_PYTHON,
+  TASCA_ROLLBACK_BUNDLE, TASCA_ROLLBACK_SHA256
 
-TASCA_VIEWER_MODE is optional: absent, public, clear, null, and none select
-public Viewer reads; configured fetches the Viewer secret only after TLS is active.
+apply, reapply, resume, and render also require:
+  RELEASE_WHEEL, RELEASE_SHA256
+
+TASCA_PYTHON is an absolute remote CPython 3.13 path. The remote producer
+rejects /usr/bin/python3 and incompatible paths before TLS, credential, or
+service effects. TASCA_VIEWER_MODE is optional: absent, public, clear, null,
+and none select public Viewer reads; configured fetches Viewer only after TLS.
 USAGE
 }
 
@@ -50,13 +58,15 @@ normalize_viewer_mode() {
 
 require_environment() {
     local name
-    for name in PROJECT_ID ZONE VM TASCA_HTTPS_HOST; do
+    for name in PROJECT_ID ZONE VM TASCA_HTTPS_HOST TASCA_PYTHON TASCA_ROLLBACK_BUNDLE TASCA_ROLLBACK_SHA256; do
         [[ -n "${!name:-}" ]] || die "missing required environment: ${name}"
     done
     [[ "$PROJECT_ID" == "rda-engineering" ]] || die "PROJECT_ID must be rda-engineering"
     [[ "$VM" == "tasca-mcp" ]] || die "VM must be tasca-mcp"
     [[ "$ZONE" == "asia-southeast1-b" ]] || die "ZONE must be asia-southeast1-b"
     [[ "$TASCA_HTTPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || die "TASCA_HTTPS_HOST is invalid"
+    [[ "$TASCA_PYTHON" == /* && "$TASCA_PYTHON" != "/usr/bin/python3" ]] \
+        || die "TASCA_PYTHON must select a non-system absolute interpreter path"
 }
 
 require_release_inputs() {
@@ -67,6 +77,21 @@ require_release_inputs() {
     [[ "$RELEASE_SHA256" =~ ^[[:xdigit:]]{64}$ ]] || die "RELEASE_SHA256 must be a SHA-256 digest"
     [[ "$(sha256sum -- "$RELEASE_WHEEL" | awk '{print $1}')" == "$RELEASE_SHA256" ]] \
         || die "RELEASE_SHA256 does not match the release wheel"
+}
+
+rollback_bundle_name() {
+    basename -- "$TASCA_ROLLBACK_BUNDLE"
+}
+
+require_rollback_inputs() {
+    [[ -f "$TASCA_ROLLBACK_BUNDLE" ]] || die "TASCA_ROLLBACK_BUNDLE does not exist"
+    [[ "$TASCA_ROLLBACK_SHA256" =~ ^[[:xdigit:]]{64}$ ]] \
+        || die "TASCA_ROLLBACK_SHA256 must be a SHA-256 digest"
+    [[ "$(sha256sum -- "$TASCA_ROLLBACK_BUNDLE" | awk '{print $1}')" == "$TASCA_ROLLBACK_SHA256" ]] \
+        || die "TASCA_ROLLBACK_SHA256 does not match the rollback bundle"
+    bash "$BUNDLE_BUILDER" verify --bundle "$TASCA_ROLLBACK_BUNDLE" \
+        --sha256 "$TASCA_ROLLBACK_SHA256" >/dev/null \
+        || die "rollback bundle does not bind the current tracked producer"
 }
 
 producer_revision() {
@@ -81,11 +106,16 @@ verifier_sha256() {
     sha256sum -- "$REMOTE_VERIFIER" | awk '{print $1}'
 }
 
+bundle_builder_sha256() {
+    sha256sum -- "$BUNDLE_BUILDER" | awk '{print $1}'
+}
+
 require_committed_producer() {
     local file
     for file in \
         scripts/gcp/viewer-auth-rollout.sh \
         scripts/gcp/viewer-auth-remote.sh \
+        scripts/gcp/build-viewer-auth-rollback-bundle.sh \
         scripts/gcp/verify_viewer_auth_remote.py; do
         git -C "$REPO_ROOT" ls-files --error-unmatch "$file" >/dev/null
     done
@@ -98,27 +128,45 @@ emit_manifest() {
     local rehearse="$1"
     local viewer_mode="$2"
     python3 - "$WHEEL_NAME" "$RELEASE_SHA256" "$(producer_revision)" "$(producer_sha256)" \
-        "$(verifier_sha256)" "$rehearse" "$viewer_mode" <<'PY'
+        "$(verifier_sha256)" "$(bundle_builder_sha256)" "$TASCA_ROLLBACK_SHA256" \
+        "$(rollback_bundle_name)" "$rehearse" "$viewer_mode" <<'PY'
 import json
 import sys
 
-wheel, digest, revision, producer_digest, verifier_digest, rehearse, viewer_mode = sys.argv[1:]
+(
+    wheel,
+    digest,
+    revision,
+    remote_digest,
+    verifier_digest,
+    builder_digest,
+    rollback_digest,
+    rollback_bundle,
+    rehearse,
+    viewer_mode,
+) = sys.argv[1:]
 actions = [
+    "verify_tracked_rollback_bundle",
     "transfer_tracked_remote_producer",
     "verify_and_install_staged_producer",
-    "transfer_exact_wheel",
-    "capture_stabilized_0_1_29_rollback_inputs",
-    "stage_certificate_valid_https",
+    "transfer_exact_wheel_and_rollback_bundle",
+    "preflight_explicit_cpython_3_13_and_rollback_capture",
+    "stage_certificate_valid_https_without_backend_health",
     "resolve_vm_vpc_and_reconcile_effective_public_tcp_8000",
 ]
 if viewer_mode == "configured":
     actions.append("fetch_redacted_viewer_secret_after_tls")
 actions.append("install_exact_0_1_30_wheel")
 if rehearse == "true":
-    actions.extend(("restore_0_1_29_public_read", "reinstall_exact_0_1_30_wheel"))
+    actions.extend(("install_offline_0_1_29_bundle", "restore_0_1_29_public_read", "reinstall_exact_0_1_30_wheel"))
 print(json.dumps({
     "release": {"version": "0.1.30", "wheel": wheel, "sha256": digest},
-    "producer": {"revision": revision, "sha256": producer_digest},
+    "rollback": {"version": "0.1.29", "bundle": rollback_bundle, "sha256": rollback_digest},
+    "producer": {
+        "revision": revision,
+        "remote_sha256": remote_digest,
+        "rollback_builder_sha256": builder_digest,
+    },
     "verifier": {
         "path": "scripts/gcp/verify_viewer_auth_remote.py",
         "revision": revision,
@@ -126,12 +174,10 @@ print(json.dumps({
     },
     "actions": actions,
     "viewer": {"mode": viewer_mode, "credential": "redacted" if viewer_mode == "configured" else "absent"},
+    "python": {"selector": "TASCA_PYTHON", "required": "CPython 3.13"},
     "backend": {"bind": "127.0.0.1:8000", "writers": 1},
     "database": {"device": "tasca-data", "sqlite_bytes": "identity-checked"},
-    "persistence": {
-        "protocol": "prepare-rollout-reapply-cleanup",
-        "state": "0600-token-free",
-    },
+    "persistence": {"protocol": "prepare-rollout-reapply-cleanup", "state": "0600-token-free"},
 }, sort_keys=True))
 PY
 }
@@ -168,17 +214,12 @@ stage_tracked_inputs() {
     gcloud compute scp --project="$PROJECT_ID" --zone="$ZONE" --quiet \
         "$REMOTE_PRODUCER" "${VM}:${REMOTE_STAGE_DIR}/viewer-auth-remote.sh"
     bootstrap_staged_producer "$producer_digest"
+    if [[ -n "${RELEASE_WHEEL:-}" ]]; then
+        gcloud compute scp --project="$PROJECT_ID" --zone="$ZONE" --quiet \
+            "$RELEASE_WHEEL" "${VM}:${REMOTE_STAGE_DIR}/${WHEEL_NAME}"
+    fi
     gcloud compute scp --project="$PROJECT_ID" --zone="$ZONE" --quiet \
-        "$RELEASE_WHEEL" "${VM}:${REMOTE_STAGE_DIR}/${WHEEL_NAME}"
-}
-
-stage_producer_only() {
-    local producer_digest
-    producer_digest="$(producer_sha256)"
-    ensure_remote_stage
-    gcloud compute scp --project="$PROJECT_ID" --zone="$ZONE" --quiet \
-        "$REMOTE_PRODUCER" "${VM}:${REMOTE_STAGE_DIR}/viewer-auth-remote.sh"
-    bootstrap_staged_producer "$producer_digest"
+        "$TASCA_ROLLBACK_BUNDLE" "${VM}:${REMOTE_STAGE_DIR}/$(rollback_bundle_name)"
 }
 
 vm_network_and_tags() {
@@ -270,6 +311,25 @@ reconcile_public_backend_port() {
     validate_named_public_tcp_8000_deny "$network"
 }
 
+assert_resume_effects() {
+    local context network tags_json rule_json
+    context="$(vm_network_and_tags)" || die "could not reconcile the target VM VPC network"
+    network="${context%%$'\n'*}"
+    tags_json="${context#*$'\n'}"
+    [[ "$network" == */global/networks/* && "$tags_json" != "$context" ]] \
+        || die "target VM VPC network or tags are invalid"
+    python3 -c 'import json, sys; raise SystemExit(0 if "tasca-mcp" in json.loads(sys.argv[1]) else 1)' \
+        "$tags_json" || die "resume refuses a VM without the tasca-mcp firewall tag"
+    rule_json="$(gcloud compute firewall-rules describe "$FIREWALL_RULE" \
+        --project="$PROJECT_ID" --format=json --quiet)" \
+        || die "resume refuses a missing TCP/8000 deny rule"
+    printf '%s' "$rule_json" | firewall_rule_is_correct "$network" \
+        || die "resume refuses a mismatched TCP/8000 deny rule"
+    gcloud secrets versions describe 1 --project="$PROJECT_ID" --secret=tasca-viewer-token \
+        --format='value(state)' --quiet | grep -qx ENABLED \
+        || die "resume refuses a Viewer secret version other than enabled version 1"
+}
+
 mark_verification_reapplied() {
     local state_file="$1"
     [[ -f "$state_file" ]] || die "verification state file is missing"
@@ -301,12 +361,21 @@ os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 PY
 }
 
+remote_release_command() {
+    local action="$1"
+    local viewer_mode="$2"
+    remote_command "$action" --https-host "$TASCA_HTTPS_HOST" \
+        --wheel "${REMOTE_STAGE_DIR}/${WHEEL_NAME}" --wheel-sha "$RELEASE_SHA256" \
+        --release-version "$RELEASE_VERSION" --viewer-mode "$viewer_mode" \
+        --python "$TASCA_PYTHON" --rollback-bundle "${REMOTE_STAGE_DIR}/$(rollback_bundle_name)" \
+        --rollback-sha "$TASCA_ROLLBACK_SHA256"
+}
+
 activate_release() {
     local viewer_mode="$1"
     remote_command stage-tls --https-host "$TASCA_HTTPS_HOST"
     reconcile_public_backend_port
-    remote_command apply --https-host "$TASCA_HTTPS_HOST" --wheel "${REMOTE_STAGE_DIR}/${WHEEL_NAME}" \
-        --wheel-sha "$RELEASE_SHA256" --release-version "$RELEASE_VERSION" --viewer-mode "$viewer_mode"
+    remote_release_command apply "$viewer_mode"
 }
 
 apply_release() {
@@ -314,13 +383,11 @@ apply_release() {
     local viewer_mode="$2"
     require_committed_producer
     stage_tracked_inputs
-    remote_command preflight --rollback-version "$ROLLBACK_VERSION"
+    remote_command preflight --rollback-version "$ROLLBACK_VERSION" --python "$TASCA_PYTHON" \
+        --rollback-bundle "${REMOTE_STAGE_DIR}/$(rollback_bundle_name)" --rollback-sha "$TASCA_ROLLBACK_SHA256"
     activate_release "$viewer_mode"
     if [[ "$rehearse" == "true" ]]; then
-        remote_command rollback --rollback-version "$ROLLBACK_VERSION" --https-host "$TASCA_HTTPS_HOST"
-        reconcile_public_backend_port
-        remote_command apply --https-host "$TASCA_HTTPS_HOST" --wheel "${REMOTE_STAGE_DIR}/${WHEEL_NAME}" \
-            --wheel-sha "$RELEASE_SHA256" --release-version "$RELEASE_VERSION" --viewer-mode "$viewer_mode"
+        remote_release_command rehearse "$viewer_mode"
     fi
     printf 'viewer-auth rollout: exact %s staged with tracked producer %s\n' \
         "$RELEASE_VERSION" "$(producer_revision)"
@@ -336,12 +403,54 @@ reapply_release() {
     printf 'viewer-auth rollout: exact %s re-applied and persistence receipt marked\n' "$RELEASE_VERSION"
 }
 
+ROTATED_ADMIN_OLD_VERSION=""
+rotate_admin_secret_version() {
+    local enabled new_version
+    enabled="$(gcloud secrets versions list tasca-admin-token --project="$PROJECT_ID" \
+        --filter='state=ENABLED' --format='value(name)' --quiet)"
+    [[ "$enabled" =~ /versions/1$ && "$enabled" != *$'\n'* ]] \
+        || die "Admin rotation is one-time and requires only enabled version 1"
+    new_version="$(head -c 48 /dev/urandom | base64 | tr -d '\n' \
+        | gcloud secrets versions add tasca-admin-token --project="$PROJECT_ID" --data-file=- \
+            --format='value(name)' --quiet)"
+    [[ "$new_version" =~ /versions/[2-9][0-9]*$ ]] \
+        || die "Admin rotation did not create a new named secret version"
+    ROTATED_ADMIN_OLD_VERSION="${enabled##*/}"
+}
+
+disable_rotated_admin_version() {
+    [[ -n "$ROTATED_ADMIN_OLD_VERSION" ]] || return 0
+    gcloud secrets versions disable "$ROTATED_ADMIN_OLD_VERSION" --project="$PROJECT_ID" \
+        --secret=tasca-admin-token --quiet
+}
+
+resume_release() {
+    local rehearse="$1"
+    local rotate_admin="$2"
+    local viewer_mode="$3"
+    require_committed_producer
+    assert_resume_effects
+    stage_tracked_inputs
+    remote_release_command reconcile "$viewer_mode"
+    if [[ "$rotate_admin" == "true" ]]; then
+        [[ "$rehearse" == "true" ]] || die "Admin rotation requires --rehearse-rollback"
+        rotate_admin_secret_version
+    fi
+    if [[ "$rehearse" == "true" ]]; then
+        remote_release_command rehearse "$viewer_mode"
+    fi
+    disable_rotated_admin_version
+    printf 'viewer-auth rollout: existing %s state reconciled without TLS, firewall, or Viewer-secret replay\n' \
+        "$RELEASE_VERSION"
+}
+
 rollback_release() {
     require_committed_producer
-    stage_producer_only
-    reconcile_public_backend_port
-    remote_command rollback --rollback-version "$ROLLBACK_VERSION" --https-host "$TASCA_HTTPS_HOST"
-    printf 'viewer-auth rollout: %s public-read rollback restored\n' "$ROLLBACK_VERSION"
+    stage_tracked_inputs
+    remote_command rollback --rollback-version "$ROLLBACK_VERSION" --https-host "$TASCA_HTTPS_HOST" \
+        --python "$TASCA_PYTHON" --rollback-bundle "${REMOTE_STAGE_DIR}/$(rollback_bundle_name)" \
+        --rollback-sha "$TASCA_ROLLBACK_SHA256"
+    printf 'viewer-auth rollout: %s public-read rollback restored from immutable bundle\n' "$ROLLBACK_VERSION"
 }
 
 main() {
@@ -352,48 +461,58 @@ main() {
     local rollback_version=""
     local rehearse="false"
     local verification_state=""
+    local rotate_admin="false"
     while (($#)); do
         case "$1" in
             --require-version) required_version="${2:-}"; shift 2 ;;
             --rollback-version) rollback_version="${2:-}"; shift 2 ;;
             --rehearse-rollback) rehearse="true"; shift ;;
             --verification-state) verification_state="${2:-}"; shift 2 ;;
+            --rotate-admin-secret-version) rotate_admin="true"; shift ;;
             --help|-h) usage; return 0 ;;
             *) die "unknown argument: $1" ;;
         esac
     done
 
     require_environment
+    require_rollback_inputs
     local viewer_mode
     viewer_mode="$(normalize_viewer_mode)"
     [[ "$rollback_version" == "$ROLLBACK_VERSION" ]] || die "rollback version must be ${ROLLBACK_VERSION}"
     case "$action" in
-        apply|render|reapply)
+        apply|render|reapply|resume)
             [[ "$required_version" == "$RELEASE_VERSION" ]] || die "required version must be ${RELEASE_VERSION}"
             require_release_inputs
             ;;
-        rollback)
-            [[ "$rehearse" == "false" && -z "$verification_state" ]] \
-                || die "rollback does not accept reapply-only options"
-            ;;
+        rollback) ;;
         *) usage >&2; exit 2 ;;
     esac
 
     case "$action" in
         render)
-            [[ -z "$verification_state" ]] || die "render does not accept --verification-state"
+            [[ -z "$verification_state" && "$rotate_admin" == "false" ]] \
+                || die "render accepts no reapply or rotation options"
             emit_manifest "$rehearse" "$viewer_mode"
             ;;
         apply)
-            [[ -z "$verification_state" ]] || die "apply does not accept --verification-state; use reapply after prepare"
+            [[ -z "$verification_state" && "$rotate_admin" == "false" ]] \
+                || die "apply accepts no reapply or rotation options"
             apply_release "$rehearse" "$viewer_mode"
             ;;
         reapply)
-            [[ "$rehearse" == "false" && -n "$verification_state" ]] \
-                || die "reapply requires --verification-state and does not accept --rehearse-rollback"
+            [[ "$rehearse" == "false" && -n "$verification_state" && "$rotate_admin" == "false" ]] \
+                || die "reapply requires --verification-state and accepts no rollout rehearsal or rotation"
             reapply_release "$viewer_mode" "$verification_state"
             ;;
-        rollback) rollback_release ;;
+        resume)
+            [[ -z "$verification_state" ]] || die "resume does not accept --verification-state"
+            resume_release "$rehearse" "$rotate_admin" "$viewer_mode"
+            ;;
+        rollback)
+            [[ "$rehearse" == "false" && -z "$verification_state" && "$rotate_admin" == "false" ]] \
+                || die "rollback accepts no reapply, rehearsal, or rotation options"
+            rollback_release
+            ;;
     esac
 }
 

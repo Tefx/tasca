@@ -49477,18 +49477,23 @@ phases:
       database or environment/secrets, then read back service, HTTPS, SQLite, loopback,
       and public-port state. Report any unknown effect and do not replay activation
       until reconciled.'
-    verification: 'Run the package commit''s tracked deployment entrypoint with exact
-      bound inputs: `PROJECT_ID=rda-engineering`, `ZONE=asia-southeast1-b`, `VM=tasca-mcp`,
-      `TASCA_HTTPS_HOST=34.1.134.239.sslip.io`, `TASCA_PYTHON=/var/lib/tasca/.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13`,
-      exact package-step `RELEASE_WHEEL` and `RELEASE_SHA256`, `--require-version
-      0.1.31`, and `--rollback-version 0.1.30`, with no rollback-rehearsal or secret-rotation
-      option. Capture sanitized exact argv and exit status. Required readback: systemd
-      active with one process from the 0.1.31 release directory; interpreter and `importlib.metadata.version(''tasca'')`
-      identify 0.1.31; retained wheel SHA-256 equals package evidence; installed Seat
-      source digest equals the wheel member digest; `/var/lib/tasca/tasca.db` path/integrity/readiness
-      preserved; certificate-valid HTTPS health reports 0.1.31 and configured Viewer
-      auth; Caddy active; backend only on loopback; public `34.1.134.239:8000` refused;
-      0.1.30 release retained; no credential in command/output/evidence.'
+    verification: 'Run the package commit''s tracked entrypoint with exact bound inputs:
+      `RELEASE_WHEEL=/tmp/larva-agent-artifacts/tasca-seat-presence-0-1-31-package/output/tasca-0.1.31-py3-none-any.whl
+      RELEASE_SHA256=896ffb0a45f2d6ed8343c5a484f2aec81af4c9b973aa99fae6167f7441042441
+      scripts/gcp/seat-presence-forward-deploy.sh apply`. The committed producer constants
+      bind project `rda-engineering`, zone `asia-southeast1-b`, VM `tasca-mcp`, HTTPS
+      host `34.1.134.239.sslip.io`, remote CPython `/var/lib/tasca/.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13`,
+      release 0.1.31 and previous release 0.1.30; no runtime selector overrides, rollback
+      rehearsal, or secret rotation are accepted. Capture sanitized argv and exit
+      status. Required readback: systemd active with one process from the 0.1.31 release
+      directory; interpreter and `importlib.metadata.version(''tasca'')` identify
+      0.1.31; retained wheel SHA-256 equals package evidence; installed `tasca/core/services/seat_service.py`
+      digest equals wheel member SHA-256 62eb77ae9d294f1e19484c10f32f23c7ff5b53606a2077151d58f85b817e68ec
+      and contains the JOINED-state filter; `/var/lib/tasca/tasca.db` path/device/inode,
+      `integrity_check=ok`, exact schema and domain table count are preserved; certificate-valid
+      HTTPS health reports 0.1.31 and configured Viewer auth; Caddy active; backend
+      only on loopback; public `34.1.134.239:8000` refused; 0.1.30 release and unit
+      backup retained; no credential in command/output/evidence.'
     evidence_template: Record sanitized pre-state and exact target; package commit/wheel
       filename/bytes/SHA; explicit CPython 3.13; sanitized deployment argv/exit; systemd
       process/release path; running distribution version plus wheel and installed

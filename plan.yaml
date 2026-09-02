@@ -49688,13 +49688,13 @@ phases:
       acceptance step.'
 - id: mcp_0_1_31_full_matrix
   name: Tasca 0.1.31 live MCP 17-tool matrix
-  status: pending
+  status: in_progress
   depends_on:
   - seat_presence_redeploy
   steps:
   - id: mcp-full-matrix-producer
     name: Build a tracked fail-fast 17-tool live verifier
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49781,6 +49781,8 @@ phases:
     - src/tasca/shell/mcp/tool_contracts.py
     - docs/deployment-ops-v0.1.md
     agent: python-executor
+    claimed_by: python-executor
+    claimed_at: '2026-09-02T16:56:21.595737Z'
   - id: verify-live-mcp-17-tool-matrix
     name: Execute and prove the live HTTPS MCP 17-tool matrix
     status: pending

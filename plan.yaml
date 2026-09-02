@@ -48747,7 +48747,7 @@ phases:
       untracked `.artifacts` execution occurred.'
 - id: viewer_auth_gcp
   name: Optional viewer authentication — HTTPS GCP rollout and proof
-  status: in_progress
+  status: done
   gate: Before TASCA_VIEWER_TOKEN is injected, read by a remote client, or distributed,
     the approved HTTPS hostname must present a valid certificate and public TCP/8000
     must be closed. Completion additionally requires the exact 0.1.30 release, both
@@ -48892,7 +48892,7 @@ phases:
       evidence scans otherwise contain zero current-token matches. Journals were preserved.'
   - id: viewer_auth_gcp.remote-verification
     name: Independently verify remote HTTPS viewer/admin behavior and cleanup
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       repo_change_policy: no_repo_change
@@ -48972,6 +48972,39 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-09-02T12:19:37.863612Z'
+    done_at: '2026-09-02T12:44:33.612115+00:00'
+    evidence: 'Independent integration-verifier observed the immutable live target
+      `runtime:gcp/rda-engineering/asia-southeast1-b/tasca-mcp@vm-id=8120608387419901442;release=0.1.30;service-active=2026-09-02T09:11:57Z;wheel-sha256=4e412817e600be5889558d7ed859d91805e1ce7d1b931a1e82f93ddadba6c279`.
+      Canonical verifier.report.v2 `/tmp/larva-agent-artifacts/tasca-viewer-auth-remote-verification-final/report.json`
+      is mode 0600, 27061 bytes, SHA-256 595e96cafcd4e18b8dc7279c4334691fba97ff386e5492863ba256470310dac5.
+      Parent validator command `python3 ~/.pi/agent/scripts/review_report_validator.py
+      --kind verifier --binding .../binding.json .../report.json` exited 0 with valid=true,
+      binding_checked=true, evidence_disposition=POSITIVE_EVIDENCE. All report artifact
+      hash/byte references were independently recomputed: 10 unique references, zero
+      mismatches.
+
+
+      9/9 requirements PROVEN. Certificate-valid TLS 1.3 served public health/ready/docs/OpenAPI/SPA/referenced
+      asset; health exact 0.1.30 and viewer_auth_required=true. Missing/invalid REST
+      credentials returned 401 PermissionDenied; Viewer/Admin reads and exact role
+      validation passed; Viewer mutation was denied. Real HTTPS MCP denied unauthenticated
+      and Viewer clients, established Admin session, returned exact 17-tool inventory,
+      and completed isolated table_create plus exact-ID table_get. Admin REST cleanup
+      succeeded, exact GET returned 404, possible_residue=false, and baseline three-table
+      ID set/count was restored. Public 34.1.134.239:8000 refused connections. Viewer
+      v1 enabled; Admin v2 enabled; v1 disabled; no v3; credentials differ. Hash-checked
+      rollout pre/post evidence proved same database device/inode and three domain
+      tables across the 0.1.29-to-0.1.30 restart. Epoch-bounded journal query exited
+      0: exactly the two user-accepted historical 0.1.29 Admin events, zero Viewer
+      events, zero Admin events after final 0.1.30 activation. Forty-six HTTP components,
+      23 responses, report, binding, helpers, and retained evidence had zero configured-token
+      matches. Parent final read again observed exact 0.1.30 Viewer-auth health and
+      public TCP/8000 refusal.
+
+
+      Independent `uvx invar-tools guard --all` retained the documented pre-existing
+      repository-wide findings; no runtime acceptance requirement depends on them
+      and no target-bound finding remained.'
   - id: viewer_auth_gcp.repair-rollout-producer
     name: Repair deterministic rollout and rollback producer
     status: done

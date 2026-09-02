@@ -327,7 +327,7 @@ assert_resume_effects() {
     printf '%s' "$rule_json" | firewall_rule_is_correct "$network" \
         || die "resume refuses a mismatched TCP/8000 deny rule"
     viewer_enabled="$(gcloud secrets versions list tasca-viewer-token --project="$PROJECT_ID" \
-        --filter='state=ENABLED' --format='value(name)' --quiet)"
+        --filter='state=ENABLED' --format='value(name.basename())' --quiet)"
     [[ -n "$viewer_enabled" ]] || die "resume requires exactly enabled Viewer secret version 1"
     while IFS= read -r viewer_line; do
         [[ "$viewer_line" =~ ^[1-9][0-9]*$ ]] \
@@ -416,7 +416,7 @@ rotate_admin_secret_version() {
     local enabled new_version line version old_count post_version
     local -a versions=()
     enabled="$(gcloud secrets versions list tasca-admin-token --project="$PROJECT_ID" \
-        --filter='state=ENABLED' --format='value(name)' --quiet)"
+        --filter='state=ENABLED' --format='value(name.basename())' --quiet)"
     while IFS= read -r line; do
         [[ "$line" =~ ^[1-9][0-9]*$ ]] \
             || die "Admin rotation found an invalid enabled version"
@@ -428,7 +428,7 @@ rotate_admin_secret_version() {
             if [[ "$version" == "1" ]]; then
                 new_version="$(head -c 48 /dev/urandom | base64 | tr -d '\n' \
                     | gcloud secrets versions add tasca-admin-token --project="$PROJECT_ID" --data-file=- \
-                        --format='value(name)' --quiet)"
+                        --format='value(name.basename())' --quiet)"
                 [[ "$new_version" =~ ^([2-9]|[1-9][0-9]+)$ ]] \
                     || die "Admin rotation did not create a new named secret version"
                 ROTATED_ADMIN_OLD_VERSION="1"

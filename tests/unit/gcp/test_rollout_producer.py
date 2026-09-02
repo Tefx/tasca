@@ -407,9 +407,15 @@ def test_resume_creates_one_numeric_admin_v2_after_reconciliation(tmp_path: Path
     assert result.returncode == 0, result.stderr
     assert any("viewer-auth-remote.sh reconcile" in command for command in commands)
     assert any("viewer-auth-remote.sh rehearse" in command for command in commands)
+    formatter = "--format=value(name.basename())"
+    viewer_list = next(command for command in commands if "secrets versions list tasca-viewer-token" in command)
+    admin_list = next(command for command in commands if "secrets versions list tasca-admin-token" in command)
     additions = [command for command in commands if "secrets versions add tasca-admin-token" in command]
+    assert formatter in viewer_list
+    assert formatter in admin_list
     assert len(additions) == 1
     assert "--data-file=-" in additions[0]
+    assert formatter in additions[0]
     assert any("secrets versions disable 1" in command for command in commands)
     assert not any("instances add-tags" in command for command in commands)
     assert not any("firewall-rules create" in command or "firewall-rules delete" in command for command in commands)

@@ -472,6 +472,19 @@ resume_release() {
     require_committed_producer
     assert_resume_effects
     stage_tracked_inputs
+    if remote_command verify-public-read --https-host "$TASCA_HTTPS_HOST" --python "$TASCA_PYTHON" \
+        >/dev/null 2>&1; then
+        [[ "$rehearse" == "true" ]] \
+            || die "recovery from exact ${ROLLBACK_VERSION} public-read state requires --rehearse-rollback"
+        [[ "$rotate_admin" == "true" ]] \
+            || die "recovery from exact ${ROLLBACK_VERSION} public-read state requires --rotate-admin-secret-version"
+        rotate_admin_secret_version
+        remote_release_command apply "$viewer_mode"
+        disable_rotated_admin_version
+        printf 'viewer-auth rollout: exact %s public-read state recovered without rollback replay\n' \
+            "$ROLLBACK_VERSION"
+        return
+    fi
     remote_release_command reconcile "$viewer_mode"
     if [[ "$rotate_admin" == "true" ]]; then
         [[ "$rehearse" == "true" ]] || die "Admin rotation requires --rehearse-rollback"

@@ -153,6 +153,7 @@ def stub_commands(directory: Path) -> Path:
         "  *'firewall-rules describe'*)\n"
         "    [ \"${GCP_FIREWALL_EXISTS:-1}\" = 1 ] || exit 1\n"
         "    if [ -f \"$GCP_CREATE_DONE\" ]; then printf '%s\\n' \"$GCP_FIREWALL_AFTER_CREATE_JSON\"; else printf '%s\\n' \"$GCP_FIREWALL_JSON\"; fi ;;\n"
+        "  *'viewer-auth-remote.sh verify-public-read'*) [ \"${GCP_PUBLIC_ROLLBACK_READY:-0}\" = 1 ] || exit 1 ;;\n"
         "  *'secrets versions list tasca-viewer-token'*) printf '%s\\n' \"${GCP_VIEWER_ENABLED-1}\" ;;\n"
         "  *'secrets versions list tasca-admin-token'*)\n"
         "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then cat \"$GCP_ADMIN_STATE_FILE\"; else printf '%s\\n' \"${GCP_ADMIN_ENABLED-1}\"; fi ;;\n"
@@ -191,6 +192,8 @@ def run_action(
     admin_state: Path | None = None,
     verification_state: Path | None = None,
     failure: str | None = None,
+    public_rollback_ready: bool = False,
+    rehearse: bool = True,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     """Run one producer action through the transport seam and return call order."""
     bin_dir = tmp_path / "bin"
@@ -211,6 +214,7 @@ def run_action(
             "GCP_ADMIN_ENABLED": admin_enabled if admin_enabled is not None else "1",
             "GCP_ADMIN_CREATED": admin_created if admin_created is not None else "2",
             "GCP_VIEWER_ENABLED": viewer_enabled if viewer_enabled is not None else "1",
+            "GCP_PUBLIC_ROLLBACK_READY": "1" if public_rollback_ready else "0",
         }
     )
     if admin_state is not None:
@@ -226,7 +230,7 @@ def run_action(
         "--rollback-version",
         "0.1.29",
     ]
-    if action == "resume":
+    if action == "resume" and rehearse:
         command.append("--rehearse-rollback")
     if verification_state is not None:
         command.extend(("--verification-state", str(verification_state)))
@@ -405,6 +409,7 @@ def test_resume_creates_one_numeric_admin_v2_after_reconciliation(tmp_path: Path
     )
 
     assert result.returncode == 0, result.stderr
+    assert any("viewer-auth-remote.sh verify-public-read" in command for command in commands)
     assert any("viewer-auth-remote.sh reconcile" in command for command in commands)
     assert any("viewer-auth-remote.sh rehearse" in command for command in commands)
     formatter = "--format=value(name.basename())"
@@ -421,6 +426,69 @@ def test_resume_creates_one_numeric_admin_v2_after_reconciliation(tmp_path: Path
     assert not any("firewall-rules create" in command or "firewall-rules delete" in command for command in commands)
     assert not any("viewer-auth-remote.sh stage-tls" in command for command in commands)
     assert not any("secrets versions add tasca-viewer-token" in command for command in commands)
+
+
+def test_resume_recovers_reconciled_public_0_1_29_with_existing_admin_v2(tmp_path: Path) -> None:
+    """A verified public rollback re-applies 0.1.30 and retires v1 without creating v3."""
+    admin_state = tmp_path / "admin-enabled.txt"
+    admin_state.write_text("1\n2\n")
+
+    result, commands = run_action(
+        tmp_path,
+        "resume",
+        rotate_admin=True,
+        admin_state=admin_state,
+        public_rollback_ready=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    verification = next(
+        index for index, command in enumerate(commands) if "viewer-auth-remote.sh verify-public-read" in command
+    )
+    activation = next(index for index, command in enumerate(commands) if "viewer-auth-remote.sh apply" in command)
+    disabled = next(index for index, command in enumerate(commands) if "secrets versions disable 1" in command)
+    assert verification < activation < disabled
+    assert not any("viewer-auth-remote.sh reconcile" in command for command in commands)
+    assert not any("viewer-auth-remote.sh rehearse" in command for command in commands)
+    assert not any("viewer-auth-remote.sh rollback" in command for command in commands)
+    assert not any("secrets versions add tasca-admin-token" in command for command in commands)
+    assert admin_state.read_text() == "2\n"
+
+
+def test_resume_rejects_public_rollback_recovery_without_rehearsal_authority(tmp_path: Path) -> None:
+    """Recovery requires explicit rehearsal authority before any Admin or release mutation."""
+    result, commands = run_action(
+        tmp_path,
+        "resume",
+        rotate_admin=True,
+        admin_enabled="1\n2",
+        public_rollback_ready=True,
+        rehearse=False,
+    )
+
+    assert result.returncode != 0
+    assert "recovery from exact 0.1.29 public-read state requires --rehearse-rollback" in result.stderr
+    assert any("viewer-auth-remote.sh verify-public-read" in command for command in commands)
+    assert not any("viewer-auth-remote.sh apply" in command for command in commands)
+    assert not any("secrets versions add tasca-admin-token" in command for command in commands)
+    assert not any("secrets versions disable" in command for command in commands)
+
+
+def test_resume_unknown_state_fails_before_admin_rotation_or_rehearsal(tmp_path: Path) -> None:
+    """A failed public-state check followed by failed reconciliation cannot replay rollout effects."""
+    result, commands = run_action(
+        tmp_path,
+        "resume",
+        rotate_admin=True,
+        failure="viewer-auth-remote.sh reconcile",
+    )
+
+    assert result.returncode != 0
+    assert any("viewer-auth-remote.sh verify-public-read" in command for command in commands)
+    assert any("viewer-auth-remote.sh reconcile" in command for command in commands)
+    assert not any("viewer-auth-remote.sh rehearse" in command for command in commands)
+    assert not any("secrets versions add tasca-admin-token" in command for command in commands)
+    assert not any("secrets versions disable" in command for command in commands)
 
 
 @pytest.mark.parametrize(

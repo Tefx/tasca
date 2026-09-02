@@ -8,6 +8,7 @@ umask 077
 
 readonly RELEASE_VERSION="0.1.30"
 readonly ROLLBACK_VERSION="0.1.29"
+readonly HEALTH_ATTEMPTS=30
 readonly ROOT_PREFIX="${TASCA_ROLLOUT_TEST_ROOT:-}"
 readonly DATA_DIR="${ROOT_PREFIX}/var/lib/tasca"
 readonly ENV_FILE="${ROOT_PREFIX}/etc/tasca/tasca.env"
@@ -149,7 +150,12 @@ payload = json.load(sys.stdin)
 expected_version, expected_viewer = sys.argv[1:]
 if payload.get("version") != expected_version:
     raise SystemExit("health did not report the expected release version")
-if payload.get("viewer_auth_required") is not (expected_viewer == "true"):
+viewer = payload.get("viewer_auth_required")
+if expected_version == "0.1.29" and expected_viewer == "false" and "viewer_auth_required" not in payload:
+    raise SystemExit(0)
+if type(viewer) is not bool:
+    raise SystemExit("health did not report an explicit boolean Viewer mode")
+if viewer is not (expected_viewer == "true"):
     raise SystemExit("health did not report the expected Viewer mode")
 ' "$expected_version" "$expected_viewer"
 }
@@ -158,9 +164,18 @@ require_local_health() {
     local python="$1"
     local version="$2"
     local viewer="$3"
-    curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/health \
-        | health_payload "$python" "$version" "$viewer" \
-        || fail "local Tasca health is not the expected release"
+    local attempt retry_delay=1
+    [[ "${TASCA_ROLLOUT_TESTING:-}" == "1" ]] && retry_delay=0
+    for ((attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt++)); do
+        if curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/health \
+            | health_payload "$python" "$version" "$viewer"; then
+            return
+        fi
+        if ((attempt < HEALTH_ATTEMPTS && retry_delay > 0)); then
+            sleep "$retry_delay"
+        fi
+    done
+    fail "local Tasca health is not the expected release"
 }
 
 require_https_health() {
@@ -168,10 +183,19 @@ require_https_health() {
     local host="$2"
     local version="$3"
     local viewer="$4"
-    curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
-        "https://${host}/api/v1/health" \
-        | health_payload "$python" "$version" "$viewer" \
-        || fail "HTTPS Tasca health is not the expected release"
+    local attempt retry_delay=1
+    [[ "${TASCA_ROLLOUT_TESTING:-}" == "1" ]] && retry_delay=0
+    for ((attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt++)); do
+        if curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+            "https://${host}/api/v1/health" \
+            | health_payload "$python" "$version" "$viewer"; then
+            return
+        fi
+        if ((attempt < HEALTH_ATTEMPTS && retry_delay > 0)); then
+            sleep "$retry_delay"
+        fi
+    done
+    fail "HTTPS Tasca health is not the expected release"
 }
 
 rollback_runtime_state() {
@@ -707,10 +731,14 @@ verify_public_read() {
         esac
     done
     require_python "$python"
+    assert_backup_integrity
+    assert_database_identity
     ensure_tls "$host"
+    require_local_health "$python" "$ROLLBACK_VERSION" false
     require_https_health "$python" "$host" "$ROLLBACK_VERSION" false
     curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
         "https://${host}/api/v1/tables" >/dev/null
+    assert_database_identity
 }
 
 main() {

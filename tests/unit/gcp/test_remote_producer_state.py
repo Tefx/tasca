@@ -86,7 +86,22 @@ def write_fake_commands(directory: Path) -> None:
             "  *metadata.google.internal*service-accounts*) printf '{\\\"access_token\\\":\\\"fixture-access\\\"}' ;;\n"
             "  *secretmanager.googleapis.com*tasca-admin-token*) printf '{\\\"payload\\\":{\\\"data\\\":\\\"YWRtaW4tZml4dHVyZQ==\\\"}}' ;;\n"
             "  *secretmanager.googleapis.com*tasca-viewer-token*) printf '{\\\"payload\\\":{\\\"data\\\":\\\"dmlld2VyLWZpeHR1cmU=\\\"}}' ;;\n"
-            "  *'/api/v1/health'*) printf '{\\\"version\\\":\\\"%s\\\",\\\"viewer_auth_required\\\":%s}' \"${TASCA_FAKE_VERSION:-0.1.29}\" \"${TASCA_FAKE_VIEWER:-false}\" ;;\n"
+            "  *'/api/v1/health'*)\n"
+            "    case \"$*\" in\n"
+            "      *127.0.0.1*) counter=\"$TASCA_FAKE_LOCAL_HEALTH_COUNTER\"; failures=\"${TASCA_FAKE_LOCAL_HEALTH_FAILURES:-${TASCA_FAKE_HEALTH_FAILURES:-0}}\" ;;\n"
+            "      *) counter=\"$TASCA_FAKE_HTTPS_HEALTH_COUNTER\"; failures=\"${TASCA_FAKE_HTTPS_HEALTH_FAILURES:-${TASCA_FAKE_HEALTH_FAILURES:-0}}\" ;;\n"
+            "    esac\n"
+            "    seen=$(cat \"$counter\")\n"
+            "    if [ \"$seen\" -lt \"$failures\" ]; then\n"
+            "      printf '%s\\n' $((seen + 1)) > \"$counter\"\n"
+            "      exit 7\n"
+            "    fi\n"
+            "    if [ \"${TASCA_FAKE_OMIT_VIEWER:-0}\" = 1 ]; then\n"
+            "      printf '{\\\"version\\\":\\\"%s\\\"}' \"${TASCA_FAKE_VERSION:-0.1.29}\"\n"
+            "    else\n"
+            "      printf '{\\\"version\\\":\\\"%s\\\",\\\"viewer_auth_required\\\":%s}' \"${TASCA_FAKE_VERSION:-0.1.29}\" \"${TASCA_FAKE_VIEWER:-false}\"\n"
+            "    fi\n"
+            "    ;;\n"
             "  *'/api/v1/tables'*)\n"
             "    if [ \"${TASCA_MUTATE_DB_ON_TABLE_READ:-0}\" = 1 ]; then printf x >> \"$TASCA_TEST_DB_FILE\"; fi\n"
             "    printf '[]' ;;\n"
@@ -151,8 +166,12 @@ def fixture_environment(
     write_fake_commands(bin_dir)
     command_log = tmp_path / "commands.log"
     uv_log = tmp_path / "uv.log"
+    local_health_counter = tmp_path / "local-health-counter"
+    https_health_counter = tmp_path / "https-health-counter"
     command_log.write_text("")
     uv_log.write_text("")
+    local_health_counter.write_text("0\n")
+    https_health_counter.write_text("0\n")
     bundle, bundle_sha256 = rollback_bundle(tmp_path)
     release = tmp_path / "tasca-0.1.30-py3-none-any.whl"
     release.write_bytes(b"exact 0.1.30 fixture")
@@ -163,6 +182,8 @@ def fixture_environment(
             "TASCA_ROLLOUT_TESTING": "1",
             "TASCA_COMMAND_LOG": str(command_log),
             "TASCA_UV_LOG": str(uv_log),
+            "TASCA_FAKE_LOCAL_HEALTH_COUNTER": str(local_health_counter),
+            "TASCA_FAKE_HTTPS_HEALTH_COUNTER": str(https_health_counter),
             "TASCA_TEST_DB_FILE": str(database),
             "PATH": f"{bin_dir}:{environment['PATH']}",
             "TASCA_TEST_PYTHON": sys.executable,
@@ -318,6 +339,113 @@ def test_tls_certificate_gate_survives_backend_down_but_activation_requires_real
     logged = command_log.read_text()
     assert "curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/health" in logged
     assert "curl --fail --silent --show-error --proto =https --tlsv1.2 https://tasca.example.test/api/v1/health" in logged
+
+
+def test_apply_retries_health_until_ready_without_waiting_in_the_offline_fixture(tmp_path: Path) -> None:
+    """One transient local health failure is retried before release activation succeeds."""
+    environment, _root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    environment.update(
+        {
+            "TASCA_FAKE_VERSION": "0.1.30",
+            "TASCA_FAKE_VIEWER": "true",
+            "TASCA_FAKE_LOCAL_HEALTH_FAILURES": "1",
+        }
+    )
+
+    result = remote(environment, *release_arguments(environment, "apply"))
+
+    assert result.returncode == 0, result.stderr
+    assert int(Path(environment["TASCA_FAKE_LOCAL_HEALTH_COUNTER"]).read_text()) == 1
+    assert int(Path(environment["TASCA_FAKE_HTTPS_HEALTH_COUNTER"]).read_text()) == 0
+
+
+def test_apply_retries_https_health_until_ready_without_waiting_in_the_offline_fixture(tmp_path: Path) -> None:
+    """One transient HTTPS health failure is retried after local readiness succeeds."""
+    environment, _root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    environment.update(
+        {
+            "TASCA_FAKE_VERSION": "0.1.30",
+            "TASCA_FAKE_VIEWER": "true",
+            "TASCA_FAKE_HTTPS_HEALTH_FAILURES": "1",
+        }
+    )
+
+    result = remote(environment, *release_arguments(environment, "apply"))
+
+    assert result.returncode == 0, result.stderr
+    assert int(Path(environment["TASCA_FAKE_LOCAL_HEALTH_COUNTER"]).read_text()) == 0
+    assert int(Path(environment["TASCA_FAKE_HTTPS_HEALTH_COUNTER"]).read_text()) == 1
+
+
+def test_apply_stops_after_bounded_unready_health_attempts(tmp_path: Path) -> None:
+    """A service that never becomes ready fails after the fixed health-attempt budget."""
+    environment, _root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    environment.update(
+        {
+            "TASCA_FAKE_VERSION": "0.1.30",
+            "TASCA_FAKE_VIEWER": "true",
+            "TASCA_FAKE_LOCAL_HEALTH_FAILURES": "99",
+        }
+    )
+
+    result = remote(environment, *release_arguments(environment, "apply"))
+
+    assert result.returncode != 0
+    assert "local Tasca health is not the expected release" in result.stderr
+    assert int(Path(environment["TASCA_FAKE_LOCAL_HEALTH_COUNTER"]).read_text()) == 30
+
+
+@pytest.mark.parametrize(
+    ("omit_viewer", "viewer"),
+    [("1", "false"), ("0", "false"), ("0", '"true"')],
+)
+def test_apply_requires_explicit_boolean_viewer_health_for_0_1_30(
+    tmp_path: Path, omit_viewer: str, viewer: str
+) -> None:
+    """0.1.30 rejects absent, wrong-value, and wrong-type Viewer health fields."""
+    environment, _root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    environment.update(
+        {
+            "TASCA_FAKE_VERSION": "0.1.30",
+            "TASCA_FAKE_VIEWER": viewer,
+            "TASCA_FAKE_OMIT_VIEWER": omit_viewer,
+        }
+    )
+
+    result = remote(environment, *release_arguments(environment, "apply"))
+
+    assert result.returncode != 0
+    assert "local Tasca health is not the expected release" in result.stderr
+
+
+def test_verify_public_read_accepts_legacy_health_and_rechecks_database_identity(tmp_path: Path) -> None:
+    """The no-effect public-read verifier accepts old health and detects read-triggered SQLite writes."""
+    environment, root, _env_file, _unit_file, command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    environment["TASCA_FAKE_OMIT_VIEWER"] = "1"
+    arguments = [
+        "verify-public-read",
+        "--https-host",
+        "tasca.example.test",
+        "--python",
+        environment["TASCA_TEST_PYTHON"],
+    ]
+
+    verified = remote(environment, *arguments)
+
+    assert verified.returncode == 0, verified.stderr
+    assert "/api/v1/tables" in command_log.read_text()
+    assert "secretmanager.googleapis.com" not in command_log.read_text()
+    environment["TASCA_MUTATE_DB_ON_TABLE_READ"] = "1"
+    rejected = remote(environment, *arguments)
+
+    assert rejected.returncode != 0
+    assert "database device, inode, or size changed" in rejected.stderr
+    assert (root / "var/lib/tasca/tasca.db").read_bytes().endswith(b"x")
 
 
 def test_apply_chowns_private_venv_for_tasca_and_keeps_environment_restricted(tmp_path: Path) -> None:

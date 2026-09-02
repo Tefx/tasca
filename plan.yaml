@@ -48936,7 +48936,7 @@ phases:
     agent: integration-verifier
   - id: viewer_auth_gcp.repair-rollout-producer
     name: Repair deterministic rollout and rollback producer
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49023,7 +49023,37 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T08:07:24.870901Z'
-    done_at: '2026-09-02T07:42:36.056318+00:00'
+    done_at: '2026-09-02T09:04:22.083612+00:00'
+    evidence: 'Integrated user-authorized deployment-first SQLite recovery at exact
+      commit 6b8a0ac75ef2c7c63e080a7d907a570a587f4fb8 (parent c7e84816a1bfa4d0ed198d40f6ccee12e43adc16);
+      retained ref refs/vectl/candidates/viewer-auth-gcp-producer-repair/6b8a0ac.
+      Main-file size/SHA remain forensic metadata only. Runtime gates now enforce
+      authorized path/tasca-data/device/inode, read-only integrity_check=ok, exact
+      schema object names/types, and the domain `tables` count matching public REST.
+      A resume-only `--accept-current-sqlite-logical-state` performs exact-public-0.1.29
+      reseal to a small atomic 0600 token-free record, then existing recovery reuses
+      Admin v2/no-v3, reapplies exact 0.1.30, verifies schema/integrity/table count,
+      and disables v1. Runbook documents one-time reseal and retry semantics. No repository
+      worker live/GCP/SQLite/secret effect occurred.
+
+
+      Checks: frozen sync 118 packages; exact focused tests 79/79; shell syntax, Ruff,
+      diff check passed. Tests prove physical size/SHA and unrelated internal row
+      changes do not block deployment, while integrity/schema/path/device/inode/domain/API-count
+      mismatches fail before mutation; recovery ordering and 30-second readiness remain
+      covered. Authoritative Invar retained six documented pre-existing errors (59
+      warnings/4 infos), no changed-path findings.
+
+
+      Final immutable input: `/tmp/larva-agent-artifacts/tasca-viewer-auth-producer-repair-v6-final/output/tasca-0.1.29-rollback.tar.gz`,
+      SHA-256 bcade9e9cb3ffaadbaa6538bea8a36cb18d61bb95486eccc442f75fafb42776b; 0600
+      receipt SHA-256 799f08893171c73107f02b7b3a7522fafb4d478f57c00ea7a156edc22f17743a.
+      Receipt binds producer 6b8a0ac, rollout SHA-256 be7db722a17f54f8096787af6751776e39853915141dc9475b889e28676e86be,
+      remote SHA-256 d89a8fde010f29e40117044a08da74bbda25c7b7aba04994ca03c397013ff21b,
+      builder SHA-256 ae66760a76c760fa028d853a3db9ce7391e323e899af2eef7444086d7167c474,
+      exact 0.1.29 wheel e5ebeb8ae9157770a9e3ac334a809de186165f0276fa492f0fc17461b0353fc2,
+      Python >=3.13, httpx 0.28.1, FastMCP 3.4.7. Child and parent Docker `--network
+      none` smoke passed; parent repeated after integration. Token scan zero findings.'
     rejection_reason: 'Current user explicitly clarified deployment completion is
       the product requirement and main-file hash equality must not block valid SQLite
       WAL/checkpoint folding. Replace byte-size/hash recovery gating with a tracked

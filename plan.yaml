@@ -49686,3 +49686,189 @@ phases:
       headers retained, every retained file mode 0600. Repository and Vectl plan were
       not modified by either verifier. No remaining gap within this Seat filtering
       acceptance step.'
+- id: mcp_0_1_31_full_matrix
+  name: Tasca 0.1.31 live MCP 17-tool matrix
+  status: pending
+  depends_on:
+  - seat_presence_redeploy
+  steps:
+  - id: mcp-full-matrix-producer
+    name: Build a tracked fail-fast 17-tool live verifier
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver:
+
+      - Add one tracked Python verifier at `scripts/gcp/verify_remote_mcp_full_matrix.py`
+      that targets a caller-supplied certificate-valid HTTPS MCP endpoint and exercises
+      exactly the advertised Tasca 17-tool inventory through real Streamable HTTP
+      sessions. Produce a mode-0600 token-free JSON report with one row per tool,
+      semantic observations, target/version bindings, first failure, cleanup outcome,
+      and any residual table ID.
+
+      - Add focused unit tests for protocol parsing, exact tool-inventory enforcement,
+      fail-fast behavior after the first material unmet boundary, credential redaction,
+      safe no-argument `connect`, state-machine assertions, and unconditional close/delete/post-delete
+      reconciliation. Update `docs/deployment-ops-v0.1.md` only with the operator
+      command and cleanup contract consumed by this verifier.
+
+      - Pre-effect selection must confirm health version 0.1.31, Viewer auth configuration,
+      unauthenticated MCP=401, authenticated initialize/session, exactly the 17 expected
+      tool names, at least two reusable patrons discovered from the caller-selected
+      reference table, and cleanup authorization. No table may be created until all
+      preconditions pass.
+
+
+      Boundary:
+
+      - `python-executor` owns only the repository producer/test/operator-doc transaction.
+      Allowed paths are `scripts/gcp/verify_remote_mcp_full_matrix.py`, `tests/unit/gcp/test_remote_mcp_full_matrix.py`,
+      and `docs/deployment-ops-v0.1.md`. `plan.yaml`, product source, release/version
+      files, credentials, GCP state, live MCP calls, and any other path are blocked.
+
+      - The producer accepts the base URL, exact expected version, reference table,
+      report path, wait bound, and credential through runtime inputs. It never embeds
+      or emits token values. `connect` is invoked with no arguments only; self-proxy
+      or any other upstream URL is forbidden.
+
+
+      Admit:
+
+      - Treat `src/tasca/shell/mcp/tool_contracts.py` as the exact inventory/schema
+      contract and `scripts/gcp/verify_viewer_auth_remote.py` as the established HTTPS/session/redaction
+      pattern. The live owner must be able to run the verifier from a clean checkout
+      and tracked lock state without temporary executable logic.
+
+      - The stateful lifecycle reuses existing patrons and one isolated table. It
+      covers patron register/get; table create/join/get/list/update/say/listen/wait/export;
+      pause/resume/close; running/idle/done heartbeat; active-only true/false across
+      all-active, mixed JOINED+LEFT, and all-LEFT states; batch delete; post-delete
+      NOT_FOUND; no-argument connect plus local connection status. Markdown and JSONL
+      exports and representative NOT_FOUND/invalid-state errors are asserted without
+      multiplying Plan nodes.
+
+
+      Recovery:
+
+      - Before table creation, any failure exits without state effects. After creation,
+      the first unmet material assertion stops unrelated calls and enters one bounded
+      reconciliation path: attempt close if permitted, batch-delete only the recorded
+      isolated table, then require table_get NOT_FOUND. A failed cleanup returns FAIL
+      with the residual table ID and observed status; it must not broaden targets,
+      edit SQLite, or continue testing.'
+    verification: 'From a clean checkout with tracked dependencies: `uv sync --frozen
+      --group dev`; `uv run pytest -q tests/unit/gcp/test_remote_mcp_full_matrix.py`;
+      `uv run ruff check scripts/gcp/verify_remote_mcp_full_matrix.py tests/unit/gcp/test_remote_mcp_full_matrix.py`;
+      `uv run python scripts/gcp/verify_remote_mcp_full_matrix.py --help`. Unit tests
+      must use injected transports/state and must not contact GCP or any network target.'
+    evidence_template: '- Commit and exact changed paths
+
+      - Focused pytest and Ruff command outputs
+
+      - `--help` output proving explicit target/version/reference/report inputs
+
+      - Unit evidence for exact 17-tool inventory, pre-effect stop, safe no-arg connect,
+      fail-fast, token redaction, close/delete/post-delete cleanup, and residual-ID
+      failure reporting
+
+      - Documentation consumer/update or justified omission'
+    refs:
+    - scripts/gcp/verify_viewer_auth_remote.py
+    - tests/unit/gcp/test_remote_verifier.py
+    - src/tasca/shell/mcp/tool_contracts.py
+    - docs/deployment-ops-v0.1.md
+    agent: python-executor
+  - id: verify-live-mcp-17-tool-matrix
+    name: Execute and prove the live HTTPS MCP 17-tool matrix
+    status: pending
+    description: 'step_type: verification
+
+      repo_change_policy: no_repo_change
+
+
+      Deliver:
+
+      - Independently execute the tracked full-matrix verifier against `https://34.1.134.239.sslip.io/mcp/`
+      on `rda-engineering/asia-southeast1-b/tasca-mcp#8120608387419901442`, initially
+      requiring exact live version 0.1.31. Return PASS only when every one of the
+      17 advertised Tasca tools has a real semantic PASS row and the isolated runtime
+      state is removed.
+
+      - Separately prove one configured Tela `tasca_rda_*` call reaches the same HTTPS
+      provider after its current token handoff is loaded. A tools/list advertisement
+      alone does not satisfy any tool row.
+
+
+      Boundary:
+
+      - `integration-verifier` owns the live evidence and one isolated test-table
+      lifecycle. No repository edits, release/deploy changes, manual SQLite edits,
+      new patron creation, self-proxy, other upstream target, secret output, or non-test
+      table mutation. Reuse two existing patrons selected from `cool-duck-glides`;
+      `patron_register` must exercise the existing-display-name path without creating
+      another patron.
+
+      - External mutations are limited to the isolated table, its seats/sayings/idempotency
+      rows, and close/delete cleanup. The public HTTPS target, GCE instance, secrets,
+      Caddy, systemd, and other tables remain unchanged.
+
+
+      Admit:
+
+      - Consume the exact tracked verifier from `mcp-full-matrix-producer` and the
+      completed 0.1.31 release/deploy evidence. Before creation, witness healthy 0.1.31,
+      viewer_auth_required=true, public TCP/8000 unavailable, unauthenticated MCP=401,
+      authenticated initialize/session, exact 17-tool inventory, and two existing
+      reusable patrons.
+
+      - Required success matrix: `connect` no args and `connection_status=local`;
+      existing `patron_register` plus `patron_get`; table create, two joins, get/list,
+      optimistic update, say then listen and wait, markdown and JSONL export, pause/resume/close;
+      heartbeat running/idle/done; seat_list all-active, mixed and all-LEFT semantics
+      with active_count equality; batch-delete count=1/failed=[]; post-delete table_get=NOT_FOUND.
+      Require representative invalid-state or NOT_FOUND evidence and a successful
+      Tela-routed read.
+
+
+      Recovery:
+
+      - After table creation, stop unrelated testing at the first material unmet boundary
+      and run only the tracked reconciliation path. Always attempt close, batch-delete
+      exactly the isolated table, and post-delete NOT_FOUND. If cleanup or state truth
+      remains unknown, return BLOCKED with the residual table ID and exact next reconciliation
+      action. Do not hide a product defect by weakening assertions; hand a grounded
+      compatible finding batch back for same-target repair/release/retest.'
+    verification: Run the tracked verifier from the integrated producer commit with
+      `TASCA_HTTPS_BASE_URL=https://34.1.134.239.sslip.io`, `--expected-version 0.1.31`,
+      `--reference-table cool-duck-glides`, a fresh mode-0600 report path, and the
+      host runtime's existing credential handoff. Validate the report, require 17
+      unique PASS tool rows plus cleanup and post-delete NOT_FOUND, and perform one
+      successful `tela_tasca_rda_table_list(status=all)` or equivalent configured
+      Tela call. No credential value may appear in stdout, stderr, report, or Plan
+      evidence.
+    evidence_template: '- Exact target identity, live version, and public HTTPS/auth
+      preflight
+
+      - Tracked verifier commit and command with credential value omitted
+
+      - 17-row tool PASS matrix with semantic observations, not schema presence
+
+      - All-active/mixed/all-LEFT Seat results and active_count equality
+
+      - Negative-path outcomes
+
+      - Isolated table ID, close/delete result, and post-delete NOT_FOUND
+
+      - Tela routed-call evidence
+
+      - Report path and validation result; token-redaction result; any untested boundary'
+    refs:
+    - scripts/gcp/verify_viewer_auth_remote.py
+    - src/tasca/shell/mcp/tool_contracts.py
+    - docs/deployment-ops-v0.1.md
+    depends_on:
+    - mcp-full-matrix-producer
+    agent: integration-verifier

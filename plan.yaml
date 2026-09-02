@@ -48766,60 +48766,81 @@ phases:
 
       Deliver:
 
-      - On the existing GCP target rda-engineering / asia-southeast1-b / tasca-mcp,
-      preflight the running 0.1.29 service, tasca-data persistent disk, current systemd/environment
-      state, static IP, service account, admin secret, and rollback inputs before
-      any mutation.
+      - Reconcile the existing partial target rda-engineering / asia-southeast1-b
+      / tasca-mcp before any new effect. The admitted baseline is exact 0.1.30 healthy
+      through certificate-valid `34.1.134.239.sslip.io`, one Tasca process on `127.0.0.1:8000`,
+      priority-0 public TCP/8000 denial, unchanged `tasca-data` SQLite identity, Caddy
+      active, Viewer Secret version 1 enabled, Admin Secret version 1 enabled, and
+      no rollout credential temp or bootstrap helper.
 
-      - Establish certificate-valid HTTPS on the approved hostname and move Tasca''s
-      single backend process to loopback/private port 8000. Remove public TCP/8000
-      reachability before creating/injecting/reading the viewer secret or sending
-      any credential; an HTTP listener may only redirect credential-free requests
-      to HTTPS.
+      - Consume only the integrated tracked producer and immutable runtime-input receipt
+      from `viewer_auth_gcp.repair-rollout-producer`, the selected 0.1.30 wheel/hash
+      from `viewer_auth_release.package-release`, the explicit admitted CPython 3.13
+      path, and the digest-bound dependency-complete 0.1.29 rollback input. Refuse
+      mismatched bytes, target identity, rollback capture, interpreter, or live state
+      before mutation.
 
-      - Create or rotate tasca-viewer-token in GCP Secret Manager, retain tasca-admin-token,
-      prove their normalized values differ without printing either, and inject both
-      into the root-owned systemd environment through secret-safe channels. Install
-      only the selected 0.1.30 wheel/hash and tracked rollout producer from viewer_auth_release.package-release.
+      - Preserve the existing valid TLS, firewall denial, static IP, VM/service account,
+      Viewer Secret resource/version, systemd loopback binding, and SQLite disk. Do
+      not recreate or replay a matching effect, reopen public TCP/8000, or use the
+      removed temporary TLS bridge.
 
-      - Preserve one Tasca process and the existing tasca-data SQLite disk. Do not
-      format, migrate, copy, delete, or replace the database.
+      - Remediate the confirmed Admin credential exposure by adding one new version
+      to the existing `tasca-admin-token` resource through a secret-safe stdin channel.
+      Prove the new normalized Admin value differs from Viewer without printing either;
+      keep the exposed version enabled until the new version is active and verified.
+      Use the new Admin version for both rollback and final activation, then disable
+      the exposed version after final exact 0.1.30 health/readback succeeds. Do not
+      destroy secret versions or delete/vacuum journals.
 
-      - Rehearse rollback through the tracked producer: restore the captured 0.1.29
-      unit/environment with TASCA_VIEWER_TOKEN absent, verify public REST baseline
-      and the same SQLite disk, then reapply the exact 0.1.30 release and viewer secret.
-      Leave the final service on 0.1.30 over HTTPS with public port 8000 closed.
-
-
-      Boundary: devops-engineer owns one reversible R3 lifecycle on the named existing
-      VM, same-host TLS termination/firewall, two named Secret Manager secrets, systemd
-      configuration, release activation, rollback rehearsal, and final reconciliation.
-      No new VM/worker/database, disk mutation, package publication, token disclosure,
-      DNS-zone change beyond the witnessed hostname, or unrelated GCP resource change.
-
-
-      Admit: require witnessed control of the approved HTTPS hostname/DNS, current
-      target/resource identity, credential authority for the named GCP project, the
-      release wheel/hash/producer receipt, captured 0.1.29 rollback bytes, and a secret-safe
-      execution channel. Stop before effects if any identity, hostname, rollback input,
-      or certificate path is unresolved.
+      - Rehearse rollback through the repaired tracked producer and immutable 0.1.29
+      runtime input: run exact 0.1.29 with `TASCA_VIEWER_TOKEN` absent, prove public
+      REST reads and the unchanged SQLite identity/hash, then reapply the exact 0.1.30
+      wheel with current Admin and Viewer credentials. Leave exact 0.1.30 healthy
+      over HTTPS, one loopback backend, public 8000 refused, the old Admin version
+      disabled, and current configured Admin/Viewer values absent from Tasca/Caddy
+      logs and retained evidence.
 
 
-      Recovery: on any failure after effects, stop unrelated probes, remove viewer
-      credentials from the service environment, restore captured 0.1.29 unit/environment
-      and public-read behavior, retain the existing disk and secrets unless explicit
-      deletion is separately authorized, verify service health, and report exact reconciled
-      resources. Never reopen public TCP/8000 for credential traffic.'
-    verification: 'Use the tracked producer only: `env PROJECT_ID=rda-engineering
-      ZONE=asia-southeast1-b VM=tasca-mcp TASCA_HTTPS_HOST=<witnessed-host> RELEASE_WHEEL=dist/tasca-0.1.30-py3-none-any.whl
-      RELEASE_SHA256=<release-receipt-sha256> scripts/gcp/viewer-auth-rollout.sh apply
-      --require-version 0.1.30 --rollback-version 0.1.29 --rehearse-rollback`. Required
-      observations: certificate-valid HTTPS before first viewer-secret access; GCP
-      firewall has no public TCP/8000 path; local backend is single-process and loopback/private;
-      Secret Manager has both named secrets with normalized inequality reported only
-      as a boolean; 0.1.29 rollback restores public REST reads on the unchanged tasca-data
-      disk; final health reports 0.1.30; service logs/evidence contain neither token
-      value.'
+      Boundary: devops-engineer owns the remaining reversible R3 lifecycle on the
+      named existing VM, same-host release/rollback runtime, existing TLS/firewall
+      state, the two named Secret Manager resources, systemd, and final reconciliation.
+      No new VM/worker/database, disk mutation, package publication, credential disclosure,
+      DNS-zone change, journal deletion, old secret-version destruction, or unrelated
+      GCP resource change.
+
+
+      Admit: require the immutable repair receipt and integrated commit, current exact
+      wheel/hash, explicit CPython 3.13 runtime identity, existing rollback-capture
+      identity, witnessed live-state receipt, credential authority for the named project,
+      and a secret-safe channel. Reconcile unknown effects before retry. Stop before
+      new effects if any target, artifact, interpreter, rollback, certificate, firewall,
+      disk, secret-version, or current-service binding differs.
+
+
+      Recovery: preserve service availability and the unchanged disk. Before the new
+      Admin version is proven active, retain the old enabled version. After the new
+      version is proven and the exposed version is disabled, recover only with the
+      new version on either the deterministic 0.1.29 public-Viewer runtime or exact
+      0.1.30 configured-Viewer runtime; never re-enable the exposed version. Remove
+      temporary credentials, reconcile version states and the actual configured service
+      credential without printing values, keep public 8000 denied, and report the
+      exact terminal state.'
+    verification: 'Use the integrated tracked resume lifecycle exactly: `env PROJECT_ID=rda-engineering
+      ZONE=asia-southeast1-b VM=tasca-mcp TASCA_HTTPS_HOST=34.1.134.239.sslip.io TASCA_VIEWER_MODE=configured
+      TASCA_PYTHON=/var/lib/tasca/.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13
+      RELEASE_WHEEL=dist/tasca-0.1.30-py3-none-any.whl RELEASE_SHA256=<release-receipt-sha256>
+      TASCA_ROLLBACK_BUNDLE=<repair-receipt-artifact> TASCA_ROLLBACK_SHA256=<repair-receipt-sha256>
+      scripts/gcp/viewer-auth-rollout.sh resume --require-version 0.1.30 --rollback-version
+      0.1.29 --rehearse-rollback --rotate-admin-secret-version`. Required observations:
+      reconciled target/effect identity before mutation; no replay of matching TLS/firewall/Viewer-secret
+      effects; certificate-valid HTTPS and public 8000 refusal before credential access;
+      exact interpreter and artifact digests; deterministic 0.1.29 public reads on
+      the unchanged SQLite identity/hash; final one-process loopback 0.1.30 health
+      with `viewer_auth_required=true`; new Admin/Viewer inequality boolean; exposed
+      Admin version disabled only after successful final readback; zero current configured-token
+      matches in Tasca/Caddy logs, receipts, and output; no credential temp files
+      or bridge remains.'
     evidence_template: Record pre/post gcloud resource identities; approved hostname
       and certificate issuer/validity without credentials; timestamped proof that
       HTTPS and port-8000 closure preceded viewer-secret access; secret resource/version
@@ -48829,11 +48850,14 @@ phases:
       log redaction scan; exact commands/exits; final or recovered state. Never paste
       token values.
     refs:
-    - scripts/
-    - .artifacts/gcp-tasca-deploy/startup.sh
-    - .artifacts/gcp-tasca-deploy/verify_remote_mcp.py
+    - scripts/gcp/viewer-auth-rollout.sh
+    - scripts/gcp/viewer-auth-remote.sh
+    - scripts/gcp/verify_viewer_auth_remote.py
     - docs/deployment-ops-v0.1.md
     - pyproject.toml
+    - uv.lock
+    depends_on:
+    - viewer_auth_gcp.repair-rollout-producer
     agent: devops-engineer
   - id: viewer_auth_gcp.remote-verification
     name: Independently verify remote HTTPS viewer/admin behavior and cleanup
@@ -48903,14 +48927,100 @@ phases:
       redaction scan; command exits and L3 verdict. Any token value in evidence is
       an immediate FAIL requiring evidence quarantine.
     refs:
-    - scripts/
-    - .artifacts/gcp-tasca-deploy/verify_remote_mcp.py
+    - scripts/gcp/verify_viewer_auth_remote.py
     - docs/tasca-http-api-v0.1.md
     - docs/deployment-ops-v0.1.md
     - README.md
     depends_on:
     - viewer_auth_gcp.https-secret-rollout
     agent: integration-verifier
+  - id: viewer_auth_gcp.repair-rollout-producer
+    name: Repair deterministic rollout and rollback producer
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver:
+
+      - Repair the tracked GCP rollout lifecycle exposed by the live partial rollout.
+      Select and preflight an explicit Python 3.13 interpreter before credential or
+      service effects; never resolve the release interpreter from ambient `python3`
+      or replace `/usr/bin/python3`.
+
+      - Separate certificate-valid TLS readiness from backend health so the tracked
+      producer can recover when Tasca is stopped. Keep a later real local and HTTPS
+      Tasca health assertion as the activation proof; no temporary or untracked bootstrap
+      producer may be required.
+
+      - Create the 0.1.30 virtual environment with ownership and traversal that let
+      the declared `User=tasca`/`Group=tasca` execute and import the exact wheel under
+      `umask 077`. Preserve root-only credential staging and the restricted systemd
+      environment; do not broaden secret permissions.
+
+      - Replace the ambient `uvx --from tasca==0.1.29` rollback dependency with a
+      deterministic, digest-bound 0.1.29 runtime input selected by the tracked producer.
+      Its immutable receipt must bind the exact 0.1.29 package bytes, compatible transitive
+      dependency bytes including `httpx`, Python requirement, producer revision, and
+      artifact digests; rollback must install without resolving ambient latest and
+      must keep `TASCA_VIEWER_TOKEN` absent.
+
+      - Add an explicit reconciled `resume` lifecycle for the already-active partial
+      target. It must consume the existing rollback capture and immutable repair receipt,
+      refuse mismatched target/artifact/state, support a one-time named Admin Secret
+      version rotation after confirmed journal exposure, and preserve the existing
+      HTTPS/firewall/disk/Viewer-secret state instead of replaying completed effects.
+
+      - Add behavior tests for incompatible Python rejection before effects, TLS readiness
+      with the backend down followed by mandatory real-service health, Tasca-readable
+      venv execution without secret-mode broadening, deterministic 0.1.29 startup
+      with its declared dependencies, digest mismatch rejection, and safe resume/idempotent
+      reconciliation. Update the deployment runbook and exact command contract.
+
+
+      Boundary: devops-engineer owns one repository-only repair transaction over the
+      tracked GCP producers, focused behavior tests, and deployment runbook. It may
+      produce local digest-bound runtime artifacts and receipts for the later rollout
+      step. It may not access GCP credentials, mutate the VM, firewall, Secret Manager,
+      DNS, systemd, SQLite, publish packages, change the selected 0.1.30 wheel, or
+      execute untracked `.artifacts` code.
+
+
+      Admit: use the integrated 0.1.30 release receipt, current `pyproject.toml`/`uv.lock`,
+      and the redacted live failure evidence: CPython 3.13.15 was needed, backend-coupled
+      TLS blocked recovery, root:root 0700 venv caused `203/EXEC`, and ambient 0.1.29
+      lacked `httpx`. Every runtime input and generated receipt must be token-free
+      and reproducible from a clean checkout plus declared immutable package inputs.
+
+
+      Recovery: repository and local artifact changes only. If an exact dependency-complete
+      0.1.29 runtime input cannot be produced and behavior-tested, stop without changing
+      live state or weakening rollback, health, digest, ownership, or redaction checks.'
+    verification: 'From a clean checkout: `uv sync --frozen --group dev`; `bash -n
+      scripts/gcp/viewer-auth-rollout.sh scripts/gcp/viewer-auth-remote.sh`; `uv run
+      --frozen pytest -q tests/unit/gcp/test_rollout_producer.py tests/unit/gcp/test_remote_producer_state.py
+      tests/unit/test_release_package.py`; `uv run --frozen ruff check tests/unit/gcp/test_rollout_producer.py
+      tests/unit/gcp/test_remote_producer_state.py`; execute the new documented local
+      rollback-input build/verification command and prove its token-free receipt binds
+      exact 0.1.29 bytes, dependency artifacts, Python requirement, producer revision,
+      and SHA-256 values; `uvx invar-tools guard --all`; `git diff --check`. Require
+      behavior evidence for every failure mode in Deliver and confirm no GCP/runtime
+      command ran.'
+    evidence_template: Integrated commit and producer revision; exact commands/exits;
+      focused behavior-test counts; rollback artifact/receipt paths and SHA-256 values;
+      Python/TLS/venv/rollback/resume failure-mode evidence; Invar and diff results;
+      explicit no-runtime-effects statement.
+    refs:
+    - scripts/gcp/viewer-auth-rollout.sh
+    - scripts/gcp/viewer-auth-remote.sh
+    - tests/unit/gcp/test_rollout_producer.py
+    - tests/unit/gcp/test_remote_producer_state.py
+    - tests/unit/test_release_package.py
+    - docs/deployment-ops-v0.1.md
+    - pyproject.toml
+    - uv.lock
+    agent: devops-engineer
 - id: seat_presence_fix
   name: Seat presence active filtering repair
   status: done

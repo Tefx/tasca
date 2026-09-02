@@ -49303,3 +49303,248 @@ phases:
       migration, Plan change, or release-candidate effect. Verifier report `/tmp/larva-agent-artifacts/tasca-seat-verifier-f199974/report.json`,
       SHA-256 `8ed18c361a2c0738697801aca4ff75e1158d8e3ee7ee778b6f95e189f1fdc90d`;
       12 referenced evidence artifacts rehashed successfully.'
+- id: seat_presence_redeploy
+  name: Seat presence 0.1.31 release and GCP redeploy
+  status: pending
+  depends_on:
+  - seat_presence_fix
+  - viewer_auth_gcp
+  steps:
+  - id: package-0-1-31
+    name: Build and integrate the Seat-fixed 0.1.31 release
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver:
+
+      - Produce and integrate one clean repository release commit for exact version
+      0.1.31. The release commit must contain `f199974cc990077a854a0578892037d3b451d061`
+      as an ancestor, so the prior 0.1.30 wheel SHA-256 `4e412817e600be5889558d7ed859d91805e1ce7d1b931a1e82f93ddadba6c279`
+      is never reused.
+
+      - Keep version parity only across current consumers: Python/Web package metadata
+      and lock data, package tests, tracked GCP rollout/verifier version bindings,
+      and deployment documentation that names the installed release. Do not start
+      a version-generalization project or change Seat behavior beyond the integrated
+      fix.
+
+      - Build `tasca-0.1.31-py3-none-any.whl` from that exact commit under CPython
+      3.13 with locked dependencies. Prove its METADATA version and packaged `tasca/core/domain/seat.py`
+      bytes come from the Seat-fixed source tree; record exact byte count and SHA-256.
+
+      - Run focused Seat source/MCP regression tests, release-package tests, tracked
+      GCP producer/verifier tests, Ruff on touched Python, and the required Invar
+      full guard. Integrate only after `git diff --check` and a clean final worktree.
+
+
+      Boundary: `devops-engineer` owns this repository/package transaction, including
+      minimal version-bound rollout/verifier and documentation updates. No package
+      publication, GCP or other runtime mutation, credential access, database/schema
+      change, Web behavior redesign, or unrelated release tooling.
+
+
+      Admit: completed `seat_presence_fix` and `viewer_auth_gcp` outcomes; exact Seat
+      fix commit `f199974cc990077a854a0578892037d3b451d061`; current tracked release/package/GCP
+      producers; CPython 3.13; and `uv.lock`. The 0.1.31 artifact identity is the
+      integrated release commit, filename, byte count, SHA-256, METADATA version,
+      and packaged Seat-source digest consumed by deployment.
+
+
+      Recovery: discard the candidate commit and locally built artifacts if ancestry,
+      parity, package contents, focused behavior, or clean-integration checks fail.
+      No registry or runtime state requires reconciliation.'
+    verification: 'From a clean isolated checkout: `uv sync --frozen --group dev`;
+      `git merge-base --is-ancestor f199974cc990077a854a0578892037d3b451d061 HEAD`;
+      `uv run pytest -q tests/unit/test_seat_ttl.py tests/unit/storage/test_table_repo.py
+      tests/unit/mcp/test_mcp_server.py tests/integration/test_mcp.py::test_mcp_http_seat_list_active_filtering
+      tests/unit/test_release_package.py tests/unit/gcp/test_rollout_producer.py tests/unit/gcp/test_remote_producer_state.py
+      tests/unit/gcp/test_remote_verifier.py`; `uv run ruff check` limited to touched
+      Python files; `uvx --from invar-tools==1.20.1 invar guard --all`; `uv build
+      --wheel --out-dir dist`; `python3 -m zipfile -l dist/tasca-0.1.31-py3-none-any.whl`;
+      `sha256sum dist/tasca-0.1.31-py3-none-any.whl`; `git diff --check`; final `git
+      status --porcelain=v1`. Package tests must mechanically assert exact 0.1.31
+      METADATA and that the wheel''s Seat source bytes/digest match the exact fixed
+      source. Evidence must identify the integrated commit, successful ancestry check,
+      wheel path/bytes/SHA-256, focused test counts, guard result, and clean integration
+      state.'
+    evidence_template: Record the integrated release commit; ancestry-check exit;
+      exact 0.1.31 wheel path, bytes, and SHA-256; METADATA and packaged Seat-source
+      comparison; focused pytest/Ruff/Invar results; diff check; clean final status;
+      and confirmation that no publish or runtime effect occurred.
+    refs:
+    - pyproject.toml
+    - uv.lock
+    - src/tasca/__init__.py
+    - src/tasca/core/domain/seat.py
+    - src/tasca/core/services/seat_service.py
+    - web/package.json
+    - web/package-lock.json
+    - scripts/gcp/viewer-auth-rollout.sh
+    - scripts/gcp/viewer-auth-remote.sh
+    - scripts/gcp/verify_viewer_auth_remote.py
+    - tests/unit/test_release_package.py
+    - tests/unit/test_seat_ttl.py
+    - tests/unit/storage/test_table_repo.py
+    - tests/unit/mcp/test_mcp_server.py
+    - tests/integration/test_mcp.py
+    - tests/unit/gcp/test_rollout_producer.py
+    - tests/unit/gcp/test_remote_producer_state.py
+    - tests/unit/gcp/test_remote_verifier.py
+    - docs/deployment-ops-v0.1.md
+    agent: devops-engineer
+  - id: deploy-0-1-31
+    name: Deploy exact 0.1.31 to the existing Tasca GCP VM
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: runtime_state_only
+
+
+      Deliver:
+
+      - Reconcile the existing target `rda-engineering / asia-southeast1-b / tasca-mcp`
+      before mutation. Install only the package step''s exact 0.1.31 wheel into a
+      new release directory with explicit CPython 3.13, then activate that directory
+      through the existing systemd service.
+
+      - Preserve `/var/lib/tasca/tasca.db`, the existing environment and Admin/Viewer
+      secrets, Caddy, certificate-valid `34.1.134.239.sslip.io`, loopback backend
+      bind, and effective public TCP/8000 denial. Do not rotate or expose credentials,
+      migrate or edit database rows/schema, redesign TLS/firewall/secrets, or create
+      infrastructure.
+
+      - Retain the exact prior 0.1.30 release directory and unit configuration needed
+      for a simple service-unit rollback. Do not rehearse rollback or build an elaborate
+      rollback bundle.
+
+      - Leave one healthy Tasca process serving exact 0.1.31. Prove the process uses
+      the new release interpreter, the installed distribution reports 0.1.31, the
+      retained wheel hash equals package evidence, installed Seat source matches the
+      wheel''s fixed Seat content, SQLite remains at the authorized path and passes
+      integrity/readiness checks, HTTPS remains valid, and public port 8000 remains
+      unreachable.
+
+
+      Boundary: `devops-engineer` owns one reversible runtime activation on only the
+      named existing VM and release directory. It may use already-approved credentials
+      through opaque host handoff. No repository mutation, package publication, new
+      VM/disk/network/DNS/secret, secret rotation, direct SQLite mutation, TLS/firewall
+      redesign, or rollback rehearsal.
+
+
+      Admit: completed package evidence binding exact 0.1.31 commit/wheel/SHA/content
+      and tracked deployment producer; explicit `/var/lib/tasca/.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13`;
+      and read-only reconciliation of the current exact 0.1.30 service and preserved
+      database/environment/Caddy/firewall state. Stop before effects on any target,
+      artifact, interpreter, protected-state, or credential-handoff mismatch.
+
+
+      Recovery: reconcile before every retry. If activation starts and post-activation
+      checks fail, switch the service unit back to retained exact 0.1.30 without changing
+      database or environment/secrets, then read back service, HTTPS, SQLite, loopback,
+      and public-port state. Report any unknown effect and do not replay activation
+      until reconciled.'
+    verification: 'Run the package commit''s tracked deployment entrypoint with exact
+      bound inputs: `PROJECT_ID=rda-engineering`, `ZONE=asia-southeast1-b`, `VM=tasca-mcp`,
+      `TASCA_HTTPS_HOST=34.1.134.239.sslip.io`, `TASCA_PYTHON=/var/lib/tasca/.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13`,
+      exact package-step `RELEASE_WHEEL` and `RELEASE_SHA256`, `--require-version
+      0.1.31`, and `--rollback-version 0.1.30`, with no rollback-rehearsal or secret-rotation
+      option. Capture sanitized exact argv and exit status. Required readback: systemd
+      active with one process from the 0.1.31 release directory; interpreter and `importlib.metadata.version(''tasca'')`
+      identify 0.1.31; retained wheel SHA-256 equals package evidence; installed Seat
+      source digest equals the wheel member digest; `/var/lib/tasca/tasca.db` path/integrity/readiness
+      preserved; certificate-valid HTTPS health reports 0.1.31 and configured Viewer
+      auth; Caddy active; backend only on loopback; public `34.1.134.239:8000` refused;
+      0.1.30 release retained; no credential in command/output/evidence.'
+    evidence_template: Record sanitized pre-state and exact target; package commit/wheel
+      filename/bytes/SHA; explicit CPython 3.13; sanitized deployment argv/exit; systemd
+      process/release path; running distribution version plus wheel and installed
+      Seat-content digests; SQLite path/integrity/readiness; HTTPS/Caddy/loopback/public-8000
+      results; retained 0.1.30 rollback state; effects and reconciliation. Never include
+      tokens.
+    refs:
+    - scripts/gcp/viewer-auth-rollout.sh
+    - scripts/gcp/viewer-auth-remote.sh
+    - scripts/gcp/build-viewer-auth-rollback-bundle.sh
+    - docs/deployment-ops-v0.1.md
+    - pyproject.toml
+    - uv.lock
+    depends_on:
+    - package-0-1-31
+    agent: devops-engineer
+  - id: verify-live-seat-filtering
+    name: Independently verify Seat filtering on public HTTPS MCP
+    status: pending
+    description: 'step_type: verification
+
+      repo_change_policy: no_repo_change
+
+
+      Deliver:
+
+      - Through only certificate-valid public HTTPS MCP at `https://34.1.134.239.sslip.io`,
+      use isolated verification data to prove a mixed JOINED/LEFT table returns only
+      JOINED seats for `seat_list(active_only=true)`, returns the complete mixed set
+      for `active_only=false`, and reports `active_count` equal to the active result
+      length.
+
+      - Transition the isolated data to an all-LEFT case and prove `seat_list(active_only=true)`
+      returns `seats=[]` and `active_count=0`; confirm `active_only=false` still returns
+      the departed seats.
+
+      - Proportionally confirm public health reports exact 0.1.31 with configured
+      Viewer auth, certificate validation is enabled, Viewer can perform authorized
+      REST reads but cannot use Admin MCP or mutate, Admin can perform required MCP
+      session/tool calls, and public `34.1.134.239:8000` refuses connections.
+
+      - Clean up only the isolated verification table/data and prove absence. Never
+      emit credentials or place them in URLs, argv, response excerpts, reports, or
+      retained evidence.
+
+
+      Boundary: `integration-verifier` owns independent L3 observation plus create/transition/delete
+      of one isolated verification table through public application APIs. It may consume
+      already-approved Viewer/Admin credentials only through opaque host handoff.
+      No repository, deployment, GCP resource, systemd, firewall, TLS, secret, direct
+      SQLite, or pre-existing table mutation.
+
+
+      Admit: deployment evidence binds the immutable live target to exact 0.1.31,
+      wheel SHA/content, certificate-valid hostname, configured Viewer/Admin boundary,
+      loopback service, and public-port denial. Stop before credential use if TLS,
+      target identity, cleanup authority, or secret-safe observation is unavailable;
+      never fall back to HTTP or public port 8000.
+
+
+      Recovery: always attempt bounded Admin cleanup of the isolated table after any
+      probe that may have created it, then prove absence. On failure, report only
+      the residual table ID and observed redacted state; leave deployment repair to
+      `seat_presence_redeploy.deploy-0-1-31` and do not broaden targets or touch SQLite
+      directly.'
+    verification: 'Execute the exact tracked 0.1.31 remote verifier from the package
+      commit against `https://34.1.134.239.sslip.io`, with certificate validation
+      enabled, `--expected-version 0.1.31`, `--check-direct-port 34.1.134.239:8000`,
+      and approved credential selectors supplied only through the host''s opaque handoff;
+      record only sanitized argv. Required raw protocol evidence comes from real HTTPS
+      MCP JSON-RPC sessions/tool calls and identifies the isolated table and state
+      transitions without tokens: mixed JOINED/LEFT active-only result, matching unfiltered
+      result and `active_count`, all-LEFT empty/zero active result, all-LEFT unfiltered
+      result, Viewer denial, Admin success, exact health version/auth mode, direct-port
+      refusal, cleanup delete, and post-cleanup absence. Mocked, local, STDIO, certificate-disabled,
+      or direct-function paths do not satisfy this step.'
+    evidence_template: Record immutable live target and deployment binding; sanitized
+      verifier command; certificate-valid HTTPS and health 0.1.31; mixed and all-LEFT
+      MCP result summaries with exact counts/states; Viewer/Admin boundary statuses;
+      public-8000 refusal; isolated table ID; cleanup and absence; token-scan result.
+      Include no credential values or locations.
+    refs:
+    - scripts/gcp/verify_viewer_auth_remote.py
+    - docs/tasca-mcp-interface-v0.1.md
+    - docs/tasca-http-api-v0.1.md
+    - docs/deployment-ops-v0.1.md
+    depends_on:
+    - deploy-0-1-31
+    agent: integration-verifier

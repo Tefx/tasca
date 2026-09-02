@@ -48936,7 +48936,7 @@ phases:
     agent: integration-verifier
   - id: viewer_auth_gcp.repair-rollout-producer
     name: Repair deterministic rollout and rollback producer
-    status: done
+    status: rejected
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49024,40 +49024,12 @@ phases:
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T05:40:28.570179Z'
     done_at: '2026-09-02T05:51:22.769298+00:00'
-    evidence: 'Integrated the adjacent live-discovered Admin `value(name)` normalization
-      repair at exact commit af4b68e12ec68ce0fa940904a004e1ee48e1097e (parent 006ba7e50c1d817fc68cd20a88f034745ce9781a);
-      retained ref refs/vectl/candidates/viewer-auth-gcp-producer-repair/af4b68e.
-      Admin list/add output now accepts strict numeric version segments only: v1 creates
-      one post-v1 version through stdin; v1+one post-v1 reuses it without v3; one
-      post-v1 is finalized; empty/zero/duplicate/ambiguous/>2/full-resource/malformed
-      create output fails. Tests model observed gcloud output and preserve disable-after-success
-      ordering. Changed only scripts/gcp/viewer-auth-rollout.sh and tests/unit/gcp/test_rollout_producer.py;
-      clean candidate and integrated tracked tree. No GCP, credential, SSH, DNS, VM,
-      systemd, SQLite, Secret Manager, or live-service command/effect ran during repair.
-
-
-      Checks: frozen sync passed (118 packages); shell syntax passed; exact focused
-      tests 46/46 passed; focused Ruff and `git diff --check` passed. Authoritative
-      Invar retained exactly six documented pre-existing escape-hatch-budget errors
-      (59 warnings/4 infos), zero new findings and none on changed paths.
-
-
-      Current immutable rollback input: `/tmp/larva-agent-artifacts/tasca-viewer-auth-producer-repair-v3/output/tasca-0.1.29-rollback.tar.gz`,
-      SHA-256 86d6e7f3722330973130b359075c4efb5077b86b16d6cd28cbf9066baa7e84a0; token-free
-      0600 receipt SHA-256 00b07a1cf4793af10363e04c3992b9ff53565e11824fc80b97d26c8dd2fca901;
-      exact Tasca 0.1.29 wheel SHA-256 e5ebeb8ae9157770a9e3ac334a809de186165f0276fa492f0fc17461b0353fc2.
-      Receipt binds producer revision af4b68e..., rollout digest 3ad32931dfaebfbe4b68d5841a5c10b14df7675b505b9f2548479713ead8d836,
-      unchanged remote/builder digests, Python >=3.13, httpx 0.28.1, and FastMCP 3.4.7
-      (<4). Child and parent each ran real Linux x86_64 CPython 3.13 Docker `--network
-      none` smoke; parent repeated after integration: offline/no-index/hash-required
-      install, real Tasca 0.1.29 startup, public table read, viewer_auth_required=false,
-      and cleanup. Artifact scan found zero credential-value findings.'
-    rejection_reason: 'The same real gcloud `value(name)` contract defect remains
-      in Admin rotation: list/add return numeric version segments, while the producer
-      and stubs expect full secret-version resource paths. This would stop after staging
-      and before Admin v2 creation. Normalize Admin list/add output, update interrupted/finalized
-      rotation tests to real numeric output, reject malformed/ambiguous states, and
-      rebuild the immutable receipt.'
+    rejection_reason: Installed gcloud SDK source shows `versions list` installs Secret-version
+      display aliases, while `versions add` returns the raw API Version object. Therefore
+      bare `value(name)` is observed numeric for list but may remain a full resource
+      path for add. The producer should request `value(name.basename())` explicitly
+      for both list and add, then strictly parse numeric segments, so the first authorized
+      rotation does not create v2 and fail solely on formatter shape.
     rejection_history:
     - reason: Completion evidence recorded the rollback receipt SHA-256 incorrectly.
         The integrated implementation and artifacts remain accepted; re-complete with
@@ -49079,6 +49051,15 @@ phases:
         rotation tests to real numeric output, reject malformed/ambiguous states,
         and rebuild the immutable receipt.'
       timestamp: '2026-09-02T05:40:23.154704+00:00'
+      reviewer: orchestrator
+    - reason: Installed gcloud SDK source shows `versions list` installs Secret-version
+        display aliases, while `versions add` returns the raw API Version object.
+        Therefore bare `value(name)` is observed numeric for list but may remain a
+        full resource path for add. The producer should request `value(name.basename())`
+        explicitly for both list and add, then strictly parse numeric segments, so
+        the first authorized rotation does not create v2 and fail solely on formatter
+        shape.
+      timestamp: '2026-09-02T05:52:48.939309+00:00'
       reviewer: orchestrator
 - id: seat_presence_fix
   name: Seat presence active filtering repair

@@ -49305,14 +49305,14 @@ phases:
       12 referenced evidence artifacts rehashed successfully.'
 - id: seat_presence_redeploy
   name: Seat presence 0.1.31 release and GCP redeploy
-  status: pending
+  status: in_progress
   depends_on:
   - seat_presence_fix
   - viewer_auth_gcp
   steps:
   - id: package-0-1-31
     name: Build and integrate the Seat-fixed 0.1.31 release
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49395,6 +49395,8 @@ phases:
     - tests/unit/gcp/test_remote_verifier.py
     - docs/deployment-ops-v0.1.md
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-02T13:53:12.909972Z'
   - id: deploy-0-1-31
     name: Deploy exact 0.1.31 to the existing Tasca GCP VM
     status: pending

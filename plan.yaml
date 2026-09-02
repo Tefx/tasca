@@ -48886,8 +48886,11 @@ phases:
       HTTP proof.
 
       - Confirm public TCP/8000 is unreachable, certificate validation is enabled,
-      configured tokens do not appear in response bodies, service logs, verifier output,
-      or retained evidence, and all verification data is cleaned up.
+      configured tokens do not appear in response bodies, verifier output, receipts,
+      or retained evidence, and all verification data is cleaned up. Accept only the
+      two localized Admin v2 messages printed by historical 0.1.29 startup at 2026-09-02T09:11:56.842350Z;
+      require zero Viewer log matches and zero additional Admin log matches after
+      final 0.1.30 activation.
 
 
       Boundary: integration-verifier owns independent L3 observation and the isolated
@@ -48908,14 +48911,16 @@ phases:
       any possible residual table ID without token data, and leave deployment recovery
       to viewer_auth_gcp.https-secret-rollout; do not broaden targets or fall back
       to HTTP.'
-    verification: 'Run exactly the tracked verifier selected by the release receipt:
-      `env TASCA_HTTPS_BASE_URL=https://<witnessed-host> uv run python scripts/gcp/verify_viewer_auth_remote.py
-      --project rda-engineering --viewer-secret tasca-viewer-token --admin-secret
-      tasca-admin-token --expected-version 0.1.30 --check-direct-port 34.1.134.239:8000
-      --cleanup`. Require certificate verification, public-surface responses, route-inventory
-      401/viewer/admin matrix, viewer mutation rejection, admin create/delete, auth-role
-      validation, MCP viewer rejection/admin real-session success, direct-port refusal,
-      cleanup success, and a redaction scan with zero configured-token matches.'
+    verification: Run an independent process-local HTTPS verifier using the tracked
+      verifier transport/MCP contracts or equivalent direct protocol calls. Require
+      certificate-valid public surfaces; configured REST missing/invalid/Viewer/Admin
+      matrix; auth-role validation; unauthenticated/Viewer MCP denial; Admin real-session
+      tools/list plus isolated table create/exact-ID read; REST delete and 404 absence;
+      direct-port refusal; Viewer v1 and Admin v2 secret states with v1 disabled and
+      no v3; rollout evidence showing the same database across the service restart;
+      cleanup success; zero token matches in responses/report/evidence; and an epoch-bounded
+      journal scan showing exactly the two acknowledged pre-0.1.30 Admin events, zero
+      Viewer events, and zero new Admin events after 0.1.30 activation.
     evidence_template: Record verifier path/revision and exact argv; HTTPS host/certificate
       result; health/ready/docs/openapi/SPA/assets status table; complete non-health
       REST matrix with methods/paths/status/envelope and tokens represented only as

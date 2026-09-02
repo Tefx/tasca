@@ -48767,80 +48767,70 @@ phases:
       Deliver:
 
       - Reconcile the existing partial target rda-engineering / asia-southeast1-b
-      / tasca-mcp before any new effect. The admitted baseline is exact 0.1.30 healthy
-      through certificate-valid `34.1.134.239.sslip.io`, one Tasca process on `127.0.0.1:8000`,
-      priority-0 public TCP/8000 denial, unchanged `tasca-data` SQLite identity, Caddy
-      active, Viewer Secret version 1 enabled, Admin Secret version 1 enabled, and
-      no rollout credential temp or bootstrap helper.
+      / tasca-mcp before any new effect. The admitted state is exact public-Viewer
+      0.1.29 healthy through certificate-valid `34.1.134.239.sslip.io`, one Tasca
+      process on `127.0.0.1:8000`, priority-0 public TCP/8000 denial, Caddy active,
+      Viewer Secret version 1 enabled, Admin Secret versions 1 and 2 enabled, no version
+      3, and no credential/bootstrap temp file.
 
-      - Consume only the integrated tracked producer and immutable runtime-input receipt
-      from `viewer_auth_gcp.repair-rollout-producer`, the selected 0.1.30 wheel/hash
-      from `viewer_auth_release.package-release`, the explicit admitted CPython 3.13
-      path, and the digest-bound dependency-complete 0.1.29 rollback input. Refuse
-      mismatched bytes, target identity, rollback capture, interpreter, or live state
-      before mutation.
+      - Consume only integrated producer 6b8a0ac75ef2c7c63e080a7d907a570a587f4fb8,
+      its immutable rollback receipt, the exact 0.1.30 wheel/hash, and the explicit
+      CPython 3.13 path. Refuse mismatched target/artifact/interpreter/service/secret
+      state before mutation.
 
-      - Preserve the existing valid TLS, firewall denial, static IP, VM/service account,
-      Viewer Secret resource/version, systemd loopback binding, and SQLite disk. Do
-      not recreate or replay a matching effect, reopen public TCP/8000, or use the
-      removed temporary TLS bridge.
+      - Apply the current user''s deployment-first SQLite acceptance: preserve the
+      authorized DB path, tasca-data filesystem, device/inode, `PRAGMA integrity_check=ok`,
+      exact schema object inventory, and domain `tables` count matching public REST.
+      Main-file size/SHA changes caused by WAL/checkpoint behavior are forensic metadata,
+      not deployment gates. Use the explicit one-time `--accept-current-sqlite-logical-state`
+      reseal; do not modify DB rows/schema.
 
-      - Remediate the confirmed Admin credential exposure by adding one new version
-      to the existing `tasca-admin-token` resource through a secret-safe stdin channel.
-      Prove the new normalized Admin value differs from Viewer without printing either;
-      keep the exposed version enabled until the new version is active and verified.
-      Use the new Admin version for both rollback and final activation, then disable
-      the exposed version after final exact 0.1.30 health/readback succeeds. Do not
-      destroy secret versions or delete/vacuum journals.
+      - Recover through the tracked resume lifecycle without replaying rollback. Reuse
+      Admin v2, never create v3, reapply the exact 0.1.30 wheel with current Admin
+      v2 and Viewer v1, verify local/HTTPS health and SQLite logical readiness, then
+      disable but do not destroy Admin v1.
 
-      - Rehearse rollback through the repaired tracked producer and immutable 0.1.29
-      runtime input: run exact 0.1.29 with `TASCA_VIEWER_TOKEN` absent, prove public
-      REST reads and the unchanged SQLite identity/hash, then reapply the exact 0.1.30
-      wheel with current Admin and Viewer credentials. Leave exact 0.1.30 healthy
-      over HTTPS, one loopback backend, public 8000 refused, the old Admin version
-      disabled, and current configured Admin/Viewer values absent from Tasca/Caddy
-      logs and retained evidence.
+      - Preserve existing TLS, firewall denial, static IP, VM/service account, Viewer
+      Secret resource/version, loopback binding, and tasca-data disk. Do not reopen
+      public TCP/8000, recreate matching effects, delete/vacuum journals, or execute
+      removed/untracked helpers.
 
-
-      Boundary: devops-engineer owns the remaining reversible R3 lifecycle on the
-      named existing VM, same-host release/rollback runtime, existing TLS/firewall
-      state, the two named Secret Manager resources, systemd, and final reconciliation.
-      No new VM/worker/database, disk mutation, package publication, credential disclosure,
-      DNS-zone change, journal deletion, old secret-version destruction, or unrelated
-      GCP resource change.
+      - Leave exact 0.1.30 healthy over HTTPS with `viewer_auth_required=true`, one
+      loopback backend, Viewer v1 and Admin v2 as the only enabled versions, Admin/Viewer
+      inequality true, current configured tokens absent from full Tasca/Caddy journals
+      and evidence, and no credential/temp/bridge residue.
 
 
-      Admit: require the immutable repair receipt and integrated commit, current exact
-      wheel/hash, explicit CPython 3.13 runtime identity, existing rollback-capture
-      identity, witnessed live-state receipt, credential authority for the named project,
-      and a secret-safe channel. Reconcile unknown effects before retry. Stop before
-      new effects if any target, artifact, interpreter, rollback, certificate, firewall,
-      disk, secret-version, or current-service binding differs.
+      Boundary: devops-engineer owns the remaining reversible lifecycle on the named
+      VM, existing TLS/firewall/secrets/systemd, the one-time logical-state receipt,
+      exact release recovery, and final reconciliation. No new VM/database/disk, package
+      publication, DNS-zone change, secret destruction, credential disclosure, database
+      row/schema mutation, journal deletion, or unrelated resource change.
 
 
-      Recovery: preserve service availability and the unchanged disk. Before the new
-      Admin version is proven active, retain the old enabled version. After the new
-      version is proven and the exposed version is disabled, recover only with the
-      new version on either the deterministic 0.1.29 public-Viewer runtime or exact
-      0.1.30 configured-Viewer runtime; never re-enable the exposed version. Remove
-      temporary credentials, reconcile version states and the actual configured service
-      credential without printing values, keep public 8000 denied, and report the
-      exact terminal state.'
-    verification: 'Use the integrated tracked resume lifecycle exactly: `env PROJECT_ID=rda-engineering
+      Admit: require the immutable repair receipt and integrated producer, exact release
+      wheel/hash, CPython 3.13 identity, current read-only live reconciliation, authorized
+      credential handoff, and the current user''s explicit logical-SQLite acceptance
+      clarification.
+
+
+      Recovery: reconcile before repeat. If logical reseal succeeds but a later action
+      fails, retry without the one-time reseal flag. Never replay rollback or create
+      v3. Disable v1 only after final 0.1.30 proof; otherwise preserve v1+v2 and report
+      the exact redacted state.'
+    verification: 'Use the integrated tracked recovery exactly: `env PROJECT_ID=rda-engineering
       ZONE=asia-southeast1-b VM=tasca-mcp TASCA_HTTPS_HOST=34.1.134.239.sslip.io TASCA_VIEWER_MODE=configured
       TASCA_PYTHON=/var/lib/tasca/.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13
-      RELEASE_WHEEL=dist/tasca-0.1.30-py3-none-any.whl RELEASE_SHA256=<release-receipt-sha256>
-      TASCA_ROLLBACK_BUNDLE=<repair-receipt-artifact> TASCA_ROLLBACK_SHA256=<repair-receipt-sha256>
+      RELEASE_WHEEL=<exact-0.1.30-wheel> RELEASE_SHA256=4e412817e600be5889558d7ed859d91805e1ce7d1b931a1e82f93ddadba6c279
+      TASCA_ROLLBACK_BUNDLE=<v6-final-bundle> TASCA_ROLLBACK_SHA256=bcade9e9cb3ffaadbaa6538bea8a36cb18d61bb95486eccc442f75fafb42776b
       scripts/gcp/viewer-auth-rollout.sh resume --require-version 0.1.30 --rollback-version
-      0.1.29 --rehearse-rollback --rotate-admin-secret-version`. Required observations:
-      reconciled target/effect identity before mutation; no replay of matching TLS/firewall/Viewer-secret
-      effects; certificate-valid HTTPS and public 8000 refusal before credential access;
-      exact interpreter and artifact digests; deterministic 0.1.29 public reads on
-      the unchanged SQLite identity/hash; final one-process loopback 0.1.30 health
-      with `viewer_auth_required=true`; new Admin/Viewer inequality boolean; exposed
-      Admin version disabled only after successful final readback; zero current configured-token
-      matches in Tasca/Caddy logs, receipts, and output; no credential temp files
-      or bridge remains.'
+      0.1.29 --rehearse-rollback --rotate-admin-secret-version --accept-current-sqlite-logical-state`.
+      Required proof: exact pre-state and immutable digests; reseal before service/secret
+      mutation; integrity/schema/path/device/inode and REST/SQLite domain-table count
+      match; no rollback replay or v3; exact final 0.1.30 local/HTTPS health with
+      Viewer auth; one loopback listener; public 8000 refusal; Viewer v1 only; Admin
+      v2 only with v1 disabled/not destroyed; Admin/Viewer inequality; zero current-token
+      matches in full journals/evidence; no credential/temp/bridge residue.'
     evidence_template: Record pre/post gcloud resource identities; approved hostname
       and certificate issuer/validity without credentials; timestamped proof that
       HTTPS and port-8000 closure preceded viewer-secret access; secret resource/version

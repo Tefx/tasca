@@ -48936,7 +48936,7 @@ phases:
     agent: integration-verifier
   - id: viewer_auth_gcp.repair-rollout-producer
     name: Repair deterministic rollout and rollback producer
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49023,6 +49023,39 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T03:33:45.268806Z'
+    done_at: '2026-09-02T04:36:54.808430+00:00'
+    evidence: 'Integrated repository-only repair by fast-forward at immutable commit
+      a84f51a7f22be1852348f42c5c2fa0522fc4072f (parent/base c4fc9a210fadea7e04be84203aa58a1e8a39a1c2);
+      retained ref refs/vectl/candidates/viewer-auth-gcp-producer-repair/a84f51a.
+      Changed tracked rollout/remote producers, new rollback-bundle builder, focused
+      tests, release-package assertion, and docs; tracked tree is clean and plan.yaml
+      was not edited by the worker. No gcloud, SSH, DNS, GCP, VM, systemd, SQLite,
+      Secret Manager, or other live runtime effect ran during repair.
+
+
+      Behavior/quality evidence: clean isolated candidate ran `uv sync --frozen --group
+      dev`; `bash -n` on all three producers; exact focused pytest set with 34 passed;
+      focused Ruff passed; frozen sync and `git diff --check` passed. Parent reran
+      post-rebase and post-integration sync, shell syntax, Ruff, diff check, tracked-clean
+      checks, bundle verify, and Linux CPython 3.13 Docker smoke with `--network none`.
+      Invar MCP full scan on clean isolated candidate completed with 0 errors/48 warnings/4
+      infos. Authoritative `uvx invar-tools guard --all` on the clean isolated candidate
+      still reported the six documented pre-existing escape-hatch-budget errors (59
+      warnings/4 infos), none in changed producer paths; integration-checkout CLI
+      additionally saw unrelated untracked `.artifacts/gcp-tasca-deploy/verify_remote_mcp.py`,
+      while the retained clean candidate evidence remained six baseline errors.
+
+
+      Rollback artifact evidence under /tmp/larva-agent-artifacts/tasca-viewer-auth-producer-repair/output:
+      bundle SHA-256 edd920bda7e8a2e07d27802afa3602b6c8250ec62064d97b970a7d33dbcb96d5;
+      token-free receipt SHA-256 3bb53c762753e87a4ae6ccc67391840403a9060502fa952cbab1bd1b51719ce6;
+      exact Tasca 0.1.29 wheel SHA-256 e5ebeb8ae9157770a9e3ac334a809de186165f0276fa492f0fc17461b0353fc2.
+      Receipt binds producer revision a84f51a..., all producer/artifact SHA-256 values,
+      Python >=3.13, httpx required, and fastmcp<4. Independent final smoke started
+      the real console entry point from offline hash-required wheels and observed
+      Tasca 0.1.29, FastMCP 3.4.7, httpx 0.28.1, public `/api/v1/tables`, and viewer_auth_required=false;
+      temporary process/SQLite state was cleaned. Artifact/receipt scans found no
+      live Admin/Viewer token values.'
 - id: seat_presence_fix
   name: Seat presence active filtering repair
   status: done

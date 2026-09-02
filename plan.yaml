@@ -48936,7 +48936,7 @@ phases:
     agent: integration-verifier
   - id: viewer_auth_gcp.repair-rollout-producer
     name: Repair deterministic rollout and rollback producer
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49023,7 +49023,38 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T05:11:09.793466Z'
-    done_at: '2026-09-02T04:38:37.118777+00:00'
+    done_at: '2026-09-02T05:33:21.058486+00:00'
+    evidence: 'Repaired the live-discovered Viewer-v1 reconciliation defect and integrated
+      exact commit 739c3dae80e21b26c0bef852610cf30555379603 (parent 6dc2b930ee1a50201acb33781c3c8f2a506f0eb3);
+      retained ref refs/vectl/candidates/viewer-auth-gcp-producer-repair/739c3da.
+      `assert_resume_effects` now accepts only the actual single gcloud `value(name)`
+      output `1` and rejects empty, v2, multiple, and malformed full-resource output
+      before staging. Tests use the observed gcloud contract. Changed only scripts/gcp/viewer-auth-rollout.sh
+      and tests/unit/gcp/test_rollout_producer.py; worktree and integrated tracked
+      tree clean. No GCP, SSH, DNS, VM, systemd, SQLite, Secret Manager, credential,
+      or live-service command/effect ran during this repository repair.
+
+
+      Checks: frozen sync passed (118 packages); shell syntax passed for all three
+      tracked producers; exact focused test set passed 38/38; focused Ruff passed;
+      `git diff --check` passed. Invar MCP full scan on the isolated candidate completed
+      with 0 errors/48 warnings/4 infos. Authoritative `uvx invar-tools guard --all`
+      retained exactly the documented six pre-existing escape-hatch-budget errors
+      (59 warnings/4 infos), with zero changed findings and none on changed paths.
+
+
+      Rebuilt immutable output: `/tmp/larva-agent-artifacts/tasca-viewer-auth-producer-repair-v2/output/tasca-0.1.29-rollback.tar.gz`,
+      SHA-256 47d1d4d7f7ac26734394a6dee2394058ba28c8db48873bba4927b4610c369640; token-free
+      0600 receipt SHA-256 0ec5541c6bf7e906abf067b2694d6ab0783623081031493296305c9422042fc0;
+      exact Tasca 0.1.29 wheel SHA-256 e5ebeb8ae9157770a9e3ac334a809de186165f0276fa492f0fc17461b0353fc2.
+      Receipt binds producer revision 739c3da..., rollout digest fb827adf9d97defc98ca030c033b3de962a8dd346badc66e32f20215281e07d7,
+      unchanged remote/builder digests, Python >=3.13, httpx 0.28.1, and fastmcp 3.4.7
+      (<4). Parent restored the local OrbStack Docker service after its engine stopped
+      responding, then ran final candidate and post-integration Linux x86_64 CPython
+      3.13 Docker smoke with `--network none`: offline/no-index/hash-required install,
+      real Tasca 0.1.29 startup, public table read, viewer_auth_required=false, FastMCP
+      3.4.7/httpx 0.28.1, and cleanup. Final artifact scan covered 16 files/17 content
+      members with zero credential-value findings.'
     rejection_reason: 'Live read-only/zero-effect resume exposed a producer defect
       inside the original strict Viewer-v1 reconciliation obligation: `gcloud secrets
       versions list --format=value(name)` returned `1`, while `assert_resume_effects`

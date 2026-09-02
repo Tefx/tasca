@@ -48758,7 +48758,7 @@ phases:
   steps:
   - id: viewer_auth_gcp.https-secret-rollout
     name: Roll out HTTPS, GCP viewer secret, 0.1.30, and rehearse rollback
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: runtime_state_only
@@ -48859,6 +48859,8 @@ phases:
     depends_on:
     - viewer_auth_gcp.repair-rollout-producer
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-02T05:33:26.025759Z'
   - id: viewer_auth_gcp.remote-verification
     name: Independently verify remote HTTPS viewer/admin behavior and cleanup
     status: pending

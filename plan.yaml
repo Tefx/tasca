@@ -49312,7 +49312,7 @@ phases:
   steps:
   - id: package-0-1-31
     name: Build and integrate the Seat-fixed 0.1.31 release
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49397,6 +49397,34 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T13:53:12.909972Z'
+    done_at: '2026-09-02T14:25:12.161674+00:00'
+    evidence: 'Integrated exact release commit d68b87dd6d54d86deac0e4431eb9a1e05b6a1050
+      (parent 7f6a172f8c3ab475eb5265aeba0ee15b837b2335); `git merge-base --is-ancestor
+      f199974cc990077a854a0578892037d3b451d061 HEAD` passed before and after integration.
+      Version consumers now identify 0.1.31 while the historical 0.1.30↔0.1.29 producer
+      remains unchanged. Added the narrow committed `scripts/gcp/seat-presence-forward-deploy.sh`
+      for exact 0.1.31→existing target activation and simple 0.1.30 unit restore;
+      no GCP/SSH/secret/database/package-publication effect occurred.
+
+
+      Immutable wheel: `/tmp/larva-agent-artifacts/tasca-seat-presence-0-1-31-package/output/tasca-0.1.31-py3-none-any.whl`;
+      1,111,870 bytes; SHA-256 896ffb0a45f2d6ed8343c5a484f2aec81af4c9b973aa99fae6167f7441042441;
+      built under CPython 3.13.14. METADATA version is exact 0.1.31. Wheel `tasca/core/domain/seat.py`
+      is byte-identical to source, SHA-256 7fd834ae231e8eb92d5d695ad4ec0f2020b56101541d4050681492cce8df495f.
+      Parent additionally inspected the actual regression member `tasca/core/services/seat_service.py`:
+      byte-identical source/wheel SHA-256 62eb77ae9d294f1e19484c10f32f23c7ff5b53606a2077151d58f85b817e68ec
+      and contains the JOINED-state filter. Build receipt: `.../output/build-evidence.json`;
+      integrated token-free deployment manifest binds commit d68b87d, wheel hash,
+      fixed target and CPython path.
+
+
+      Worker verification: frozen sync 118 packages; focused Seat/MCP/package/GCP
+      suite 205 passed; Ruff, shell syntax, git diff check passed; pinned Invar 1.20.1
+      full guard passed with 0 errors/48 documented warnings and dynamic checks. Parent
+      repeated frozen sync, CPython 3.13 identity, touched Ruff, shell syntax, exact
+      wheel hash/bytes/METADATA/root-cause source inspection, manifest render, ancestry
+      and diff checks before and after fast-forward. Integration checkout has only
+      the pre-existing untracked `.artifacts/`, `.pi/`, `dev-timeline.html`, and `plan.yaml.lock`.'
   - id: deploy-0-1-31
     name: Deploy exact 0.1.31 to the existing Tasca GCP VM
     status: pending

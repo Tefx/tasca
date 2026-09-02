@@ -48936,7 +48936,7 @@ phases:
     agent: integration-verifier
   - id: viewer_auth_gcp.repair-rollout-producer
     name: Repair deterministic rollout and rollback producer
-    status: done
+    status: rejected
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49024,46 +49024,25 @@ phases:
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T04:38:20.979787Z'
     done_at: '2026-09-02T04:38:37.118777+00:00'
-    evidence: 'Integrated repository-only repair by fast-forward at immutable commit
-      a84f51a7f22be1852348f42c5c2fa0522fc4072f (parent/base c4fc9a210fadea7e04be84203aa58a1e8a39a1c2);
-      retained ref refs/vectl/candidates/viewer-auth-gcp-producer-repair/a84f51a.
-      Changed tracked rollout/remote producers, new rollback-bundle builder, focused
-      tests, release-package assertion, and docs; tracked tree is clean. No gcloud,
-      SSH, DNS, GCP, VM, systemd, SQLite, Secret Manager, or live runtime effect ran
-      during repair.
-
-
-      Clean isolated candidate checks: `uv sync --frozen --group dev`; `bash -n` on
-      all three producers; exact focused pytest set 34 passed; focused Ruff passed;
-      frozen sync and `git diff --check` passed. Parent reran post-rebase and post-integration
-      sync, shell syntax, Ruff, diff check, tracked-clean checks, bundle verify, and
-      Linux CPython 3.13 Docker smoke with `--network none`. Invar MCP full scan on
-      the clean isolated candidate completed with 0 errors/48 warnings/4 infos. Authoritative
-      `uvx invar-tools guard --all` on the clean isolated candidate reported the six
-      documented pre-existing escape-hatch-budget errors (59 warnings/4 infos), none
-      in changed producer paths; integration-checkout CLI additionally saw unrelated
-      untracked `.artifacts/gcp-tasca-deploy/verify_remote_mcp.py`.
-
-
-      Rollback artifacts in /tmp/larva-agent-artifacts/tasca-viewer-auth-producer-repair/output:
-      bundle SHA-256 edd920bda7e8a2e07d27802afa3602b6c8250ec62064d97b970a7d33dbcb96d5;
-      token-free receipt SHA-256 3bb53c610bd35df79dc72bb7725e1fbd3628f4674ea39549963766f641b61ce6;
-      exact Tasca 0.1.29 wheel SHA-256 e5ebeb8ae9157770a9e3ac334a809de186165f0276fa492f0fc17461b0353fc2.
-      Receipt binds producer revision a84f51a..., all producer/artifact SHA-256 values,
-      Python >=3.13, httpx required, and fastmcp<4. Final smoke started the real console
-      entry point from offline hash-required wheels and observed Tasca 0.1.29, FastMCP
-      3.4.7, httpx 0.28.1, public `/api/v1/tables`, and viewer_auth_required=false;
-      temporary process/SQLite state was cleaned. Artifact/receipt scans found no
-      live Admin/Viewer token values. This completion supersedes the immediately rejected
-      evidence record whose receipt SHA-256 contained a transcription error.'
-    rejection_reason: Completion evidence recorded the rollback receipt SHA-256 incorrectly.
-      The integrated implementation and artifacts remain accepted; re-complete with
-      the observed receipt hash 3bb53c610bd35df79dc72bb7725e1fbd3628f4674ea39549963766f641b61ce6.
+    rejection_reason: 'Live read-only/zero-effect resume exposed a producer defect
+      inside the original strict Viewer-v1 reconciliation obligation: `gcloud secrets
+      versions list --format=value(name)` returned `1`, while `assert_resume_effects`
+      compared it to a full resource path. Existing unit stubs encoded the wrong gcloud
+      output contract, so the matching enabled Viewer v1 state was rejected before
+      staging or mutation. Repair producer/tests and rebuild the immutable receipt.'
     rejection_history:
     - reason: Completion evidence recorded the rollback receipt SHA-256 incorrectly.
         The integrated implementation and artifacts remain accepted; re-complete with
         the observed receipt hash 3bb53c610bd35df79dc72bb7725e1fbd3628f4674ea39549963766f641b61ce6.
       timestamp: '2026-09-02T04:38:14.602704+00:00'
+      reviewer: orchestrator
+    - reason: 'Live read-only/zero-effect resume exposed a producer defect inside
+        the original strict Viewer-v1 reconciliation obligation: `gcloud secrets versions
+        list --format=value(name)` returned `1`, while `assert_resume_effects` compared
+        it to a full resource path. Existing unit stubs encoded the wrong gcloud output
+        contract, so the matching enabled Viewer v1 state was rejected before staging
+        or mutation. Repair producer/tests and rebuild the immutable receipt.'
+      timestamp: '2026-09-02T05:11:02.954490+00:00'
       reviewer: orchestrator
 - id: seat_presence_fix
   name: Seat presence active filtering repair

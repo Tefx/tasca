@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import sqlite3
 import subprocess
 import sys
 import zipfile
@@ -103,8 +105,8 @@ def write_fake_commands(directory: Path) -> None:
             "    fi\n"
             "    ;;\n"
             "  *'/api/v1/tables'*)\n"
-            "    if [ \"${TASCA_MUTATE_DB_ON_TABLE_READ:-0}\" = 1 ]; then printf x >> \"$TASCA_TEST_DB_FILE\"; fi\n"
-            "    printf '[]' ;;\n"
+            "    if [ \"${TASCA_MUTATE_TABLES_ON_TABLE_READ:-0}\" = 1 ]; then python3 -c 'import sqlite3, sys; connection = sqlite3.connect(sys.argv[1]); connection.execute(\"INSERT INTO tables (name) VALUES (\\\"read-side row\\\")\"); connection.commit(); connection.close()' \"$TASCA_TEST_DB_FILE\"; fi\n"
+            "    printf '%s' \"${TASCA_FAKE_TABLES_PAYLOAD:-[]}\" ;;\n"
             "  *) printf '[]' ;;\n"
             "esac\n"
         ),
@@ -117,7 +119,7 @@ def write_fake_commands(directory: Path) -> None:
         "stat": (
             "#!/usr/bin/env bash\n"
             "[[ \"$1\" == '-c' ]] || exit 2\nformat=\"$2\"\npath=''\nfor argument in \"$@\"; do path=\"$argument\"; done\n"
-            "python3 - \"$format\" \"$path\" <<'PY'\nimport os\nimport sys\nfmt, path = sys.argv[1:]\nst = os.stat(path)\nvalues = {'%a': format(st.st_mode & 0o777, 'o'), '%d:%i:%s': f'{st.st_dev}:{st.st_ino}:{st.st_size}'}\nprint(values[fmt])\nPY\n"
+            "python3 - \"$format\" \"$path\" <<'PY'\nimport os\nimport sys\nfmt, path = sys.argv[1:]\nst = os.stat(path)\nvalues = {'%a': format(st.st_mode & 0o777, 'o'), '%d:%i': f'{st.st_dev}:{st.st_ino}', '%d:%i:%s': f'{st.st_dev}:{st.st_ino}:{st.st_size}'}\nprint(values[fmt])\nPY\n"
         ),
         "cp": (
             "#!/usr/bin/env bash\nargs=(\"$@\")\ncount=${#args[@]}\nsource=\"${args[$((count - 2))]}\"\ntarget=\"${args[$((count - 1))]}\"\n/bin/cp \"$source\" \"$target\"\n"
@@ -156,7 +158,29 @@ def fixture_environment(
     for path in (data, env_file.parent, unit_file.parent, root / "run"):
         path.mkdir(parents=True, exist_ok=True)
     database = data / "tasca.db"
-    database.write_bytes(b"fixture sqlite bytes")
+    connection = sqlite3.connect(database)
+    connection.executescript(
+        "CREATE TABLE dedup (content_hash TEXT PRIMARY KEY, first_seen_at TEXT NOT NULL);"
+        "CREATE TABLE idempotency_keys (dedup_id TEXT PRIMARY KEY, expires_at TEXT NOT NULL);"
+        "CREATE TABLE patrons (id TEXT PRIMARY KEY);"
+        "CREATE TABLE sayings (id INTEGER PRIMARY KEY, table_id TEXT, speaker_name TEXT, content TEXT NOT NULL, created_at TEXT);"
+        "INSERT INTO sayings (content) VALUES ('fixture row');"
+        "CREATE VIRTUAL TABLE sayings_fts USING fts5(content, content='sayings', content_rowid='id');"
+        "CREATE TABLE seats (id TEXT PRIMARY KEY, table_id TEXT, patron_id TEXT);"
+        "CREATE TABLE tables (id INTEGER PRIMARY KEY, name TEXT NOT NULL, status TEXT);"
+        "CREATE INDEX idx_seats_table_id ON seats(table_id);"
+        "CREATE INDEX idx_seats_patron_id ON seats(patron_id);"
+        "CREATE INDEX idx_sayings_table_id ON sayings(table_id);"
+        "CREATE INDEX idx_sayings_table_sequence ON sayings(table_id, id);"
+        "CREATE INDEX idx_sayings_created_at ON sayings(created_at);"
+        "CREATE INDEX idx_tables_status ON tables(status);"
+        "CREATE INDEX idx_dedup_first_seen ON dedup(first_seen_at);"
+        "CREATE INDEX idx_idempotency_expires_at ON idempotency_keys(expires_at);"
+        "CREATE TRIGGER sayings_ai AFTER INSERT ON sayings BEGIN SELECT 1; END;"
+        "CREATE TRIGGER sayings_au AFTER UPDATE ON sayings BEGIN SELECT 1; END;"
+        "CREATE TRIGGER sayings_ad AFTER DELETE ON sayings BEGIN SELECT 1; END;"
+    )
+    connection.close()
     env_file.write_text(f"TASCA_ENVIRONMENT=production\n{db_line}\n")
     env_file.chmod(0o640)
     unit_file.write_text("[Service]\nUser=tasca\nExecStart=uvx --from tasca==0.1.29 tasca\n")
@@ -220,6 +244,28 @@ def preflight_arguments(environment: dict[str, str]) -> list[str]:
         environment["TASCA_ROLLBACK_BUNDLE"],
         "--rollback-sha",
         environment["TASCA_ROLLBACK_SHA256"],
+    ]
+
+
+def verify_public_read_arguments(environment: dict[str, str]) -> list[str]:
+    """Return the token-free health and public-table verification inputs."""
+    return [
+        "verify-public-read",
+        "--https-host",
+        "tasca.example.test",
+        "--python",
+        environment["TASCA_TEST_PYTHON"],
+    ]
+
+
+def reseal_logical_state_arguments(environment: dict[str, str]) -> list[str]:
+    """Return the explicit one-time legacy SQLite logical-state recovery inputs."""
+    return [
+        "reseal-sqlite-logical-state",
+        "--https-host",
+        "tasca.example.test",
+        "--python",
+        environment["TASCA_TEST_PYTHON"],
     ]
 
 
@@ -290,17 +336,19 @@ def test_preflight_rejects_duplicate_or_nonpublic_rollback_environment(tmp_path:
     assert "Viewer reads public" in configured.stderr
 
 
-def test_preflight_captures_database_identity_after_initial_public_read(tmp_path: Path) -> None:
-    """The baseline read settles database bytes before the rollback identity is recorded."""
+def test_preflight_captures_compact_logical_state_after_initial_public_read(tmp_path: Path) -> None:
+    """Preflight records only the deployed schema contract and domain table count."""
     environment, root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
-    database = root / "var/lib/tasca/tasca.db"
-    environment["TASCA_MUTATE_DB_ON_TABLE_READ"] = "1"
 
     result = remote(environment, *preflight_arguments(environment))
 
     assert result.returncode == 0, result.stderr
-    captured = (root / "var/lib/tasca/rollback/0.1.29/database.sha256").read_text().strip()
-    assert captured == hashlib.sha256(database.read_bytes()).hexdigest()
+    payload = json.loads((root / "var/lib/tasca/rollback/0.1.29/database.logical.json").read_text())
+    assert payload == {
+        "format": "tasca-sqlite-logical-v2",
+        "schema": "tasca-0.1.29",
+        "tables_count": 0,
+    }
 
 
 def test_preflight_rejects_incompatible_python_before_capture(tmp_path: Path) -> None:
@@ -422,30 +470,151 @@ def test_apply_requires_explicit_boolean_viewer_health_for_0_1_30(
     assert "local Tasca health is not the expected release" in result.stderr
 
 
-def test_verify_public_read_accepts_legacy_health_and_rechecks_database_identity(tmp_path: Path) -> None:
-    """The no-effect public-read verifier accepts old health and detects read-triggered SQLite writes."""
-    environment, root, _env_file, _unit_file, command_log, _bundle_sha = fixture_environment(tmp_path)
+def test_verify_public_read_accepts_legacy_health_and_checks_domain_table_count(tmp_path: Path) -> None:
+    """The no-effect public-read verifier accepts old health and checks public table cardinality."""
+    environment, _root, _env_file, _unit_file, command_log, _bundle_sha = fixture_environment(tmp_path)
     assert remote(environment, *preflight_arguments(environment)).returncode == 0
     environment["TASCA_FAKE_OMIT_VIEWER"] = "1"
-    arguments = [
-        "verify-public-read",
-        "--https-host",
-        "tasca.example.test",
-        "--python",
-        environment["TASCA_TEST_PYTHON"],
-    ]
 
-    verified = remote(environment, *arguments)
+    verified = remote(environment, *verify_public_read_arguments(environment))
 
     assert verified.returncode == 0, verified.stderr
     assert "/api/v1/tables" in command_log.read_text()
     assert "secretmanager.googleapis.com" not in command_log.read_text()
-    environment["TASCA_MUTATE_DB_ON_TABLE_READ"] = "1"
-    rejected = remote(environment, *arguments)
 
-    assert rejected.returncode != 0
-    assert "database device, inode, or size changed" in rejected.stderr
-    assert (root / "var/lib/tasca/tasca.db").read_bytes().endswith(b"x")
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("domain-row-count", "database tables row count changed"),
+        ("schema", "SQLite schema does not match the exact 0.1.29 logical contract"),
+        ("integrity", "database logical state"),
+        ("path", "database path changed"),
+        ("device-inode", "database device or inode changed"),
+        ("api-count", "public Tables API count"),
+    ],
+)
+def test_verify_public_read_rejects_domain_anchor_schema_and_public_count_changes(
+    tmp_path: Path, mutation: str, expected: str
+) -> None:
+    """Domain count, anchor, integrity, schema, and API drift stop verification without runtime effects."""
+    environment, root, env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    database = root / "var/lib/tasca/tasca.db"
+    if mutation == "domain-row-count":
+        connection = sqlite3.connect(database)
+        connection.execute("INSERT INTO tables (name) VALUES ('added')")
+        connection.commit()
+        connection.close()
+    elif mutation == "schema":
+        connection = sqlite3.connect(database)
+        connection.execute("CREATE INDEX sayings_content ON sayings(content)")
+        connection.commit()
+        connection.close()
+    elif mutation == "integrity":
+        database.write_bytes(b"not a SQLite database")
+    elif mutation == "path":
+        alternate = root / "var/lib/tasca/alternate.db"
+        alternate.write_bytes(database.read_bytes())
+        env_file.write_text("TASCA_ENVIRONMENT=production\nTASCA_DB_PATH=/var/lib/tasca/alternate.db\n")
+    elif mutation == "device-inode":
+        replacement = database.with_suffix(".replacement")
+        replacement.write_bytes(database.read_bytes())
+        os.replace(replacement, database)
+    else:
+        environment["TASCA_FAKE_TABLES_PAYLOAD"] = "[{}]"
+
+    result = remote(environment, *verify_public_read_arguments(environment))
+
+    assert result.returncode != 0
+    assert expected in result.stderr
+
+
+def test_reseal_logical_state_is_explicit_legacy_only_and_atomic(tmp_path: Path) -> None:
+    """A legacy capture gains a token-free 0600 baseline only after complete public-state proof."""
+    environment, root, _env_file, _unit_file, command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    backup = root / "var/lib/tasca/rollback/0.1.29"
+    for name in ("database.logical.json", "database.device_inode", "database.disk"):
+        (backup / name).unlink()
+    database = root / "var/lib/tasca/tasca.db"
+    before = hashlib.sha256(database.read_bytes()).hexdigest()
+    command_log.write_text("")
+
+    missing = remote(environment, *verify_public_read_arguments(environment))
+    sealed = remote(environment, *reseal_logical_state_arguments(environment))
+
+    baseline = backup / "database.logical.json"
+    assert missing.returncode != 0
+    assert "logical baseline is missing" in missing.stderr
+    assert sealed.returncode == 0, sealed.stderr
+    assert baseline.stat().st_mode & 0o777 == 0o600
+    payload = json.loads(baseline.read_text())
+    assert payload == {
+        "format": "tasca-sqlite-logical-v2",
+        "schema": "tasca-0.1.29",
+        "tables_count": 0,
+    }
+    assert not list(backup.glob(".database.logical.json.tmp"))
+    assert hashlib.sha256(database.read_bytes()).hexdigest() == before
+    log = command_log.read_text()
+    assert "/api/v1/tables" in log
+    assert "systemctl restart" not in log
+    assert "secretmanager.googleapis.com" not in log
+
+
+def test_reseal_rejects_nonlegacy_health_or_api_mismatch_before_baseline_write(tmp_path: Path) -> None:
+    """The one-time recovery seal refuses non-0.1.29 health and inconsistent public tables."""
+    environment, root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    baseline = root / "var/lib/tasca/rollback/0.1.29/database.logical.json"
+    baseline.unlink()
+    environment["TASCA_FAKE_VERSION"] = "0.1.30"
+
+    wrong_version = remote(environment, *reseal_logical_state_arguments(environment))
+
+    assert wrong_version.returncode != 0
+    assert "local Tasca health is not the expected release" in wrong_version.stderr
+    assert not baseline.exists()
+    environment["TASCA_FAKE_VERSION"] = "0.1.29"
+    environment["TASCA_FAKE_TABLES_PAYLOAD"] = "[{}]"
+    mismatched_api = remote(environment, *reseal_logical_state_arguments(environment))
+
+    assert mismatched_api.returncode != 0
+    assert "public Tables API count does not match SQLite tables row count" in mismatched_api.stderr
+    assert not baseline.exists()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("schema", "SQLite schema does not match the exact 0.1.29 logical contract"),
+        ("integrity", "database logical state"),
+    ],
+)
+def test_reseal_rejects_schema_or_integrity_before_baseline_write(
+    tmp_path: Path, mutation: str, expected: str
+) -> None:
+    """Resealing never normalizes an unknown schema or corrupt SQLite database."""
+    environment, root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    baseline = root / "var/lib/tasca/rollback/0.1.29/database.logical.json"
+    baseline.unlink()
+    database = root / "var/lib/tasca/tasca.db"
+    if mutation == "schema":
+        connection = sqlite3.connect(database)
+        connection.execute("CREATE TABLE unknown_schema (id INTEGER PRIMARY KEY)")
+        connection.commit()
+        connection.close()
+    else:
+        database.write_bytes(b"not a SQLite database")
+
+    result = remote(environment, *reseal_logical_state_arguments(environment))
+
+    assert result.returncode != 0
+    assert expected in result.stderr
+    assert not baseline.exists()
+    assert not list(baseline.parent.glob(".database.logical.json.tmp"))
 
 
 def test_apply_chowns_private_venv_for_tasca_and_keeps_environment_restricted(tmp_path: Path) -> None:
@@ -506,30 +675,52 @@ def test_preflight_rejects_bundle_digest_mismatch_without_capture(tmp_path: Path
     assert not (root / "var/lib/tasca/rollback/0.1.29").exists()
 
 
-def test_reconcile_refuses_mismatched_capture_before_replaying_runtime_effects(tmp_path: Path) -> None:
-    """Resume reconciliation reads matching live state and stops when captured disk identity differs."""
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE sayings SET content = 'changed'",
+        "INSERT INTO idempotency_keys (dedup_id, expires_at) VALUES ('fixture', '2099-01-01')",
+    ],
+)
+def test_reconcile_ignores_non_domain_values_and_internal_row_counts(tmp_path: Path, statement: str) -> None:
+    """Readiness ignores non-domain values and internal table cardinality."""
     environment, root, _env_file, _unit_file, command_log, _bundle_sha = fixture_environment(tmp_path)
     assert remote(environment, *preflight_arguments(environment)).returncode == 0
     environment.update({"TASCA_FAKE_VERSION": "0.1.30", "TASCA_FAKE_VIEWER": "true"})
-    healthy = remote(environment, *release_arguments(environment, "reconcile"))
+    connection = sqlite3.connect(root / "var/lib/tasca/tasca.db")
+    connection.execute(statement)
+    connection.commit()
+    connection.close()
 
-    assert healthy.returncode == 0, healthy.stderr
-    before = command_log.read_text()
-    database = root / "var/lib/tasca/tasca.db"
-    database.write_bytes(database.read_bytes() + b"changed")
-    rejected = remote(environment, *release_arguments(environment, "reconcile"))
+    reconciled = remote(environment, *release_arguments(environment, "reconcile"))
 
-    assert rejected.returncode != 0
-    assert "database device, inode, or size changed" in rejected.stderr
-    after = command_log.read_text()
-    assert "systemctl restart tasca.service" not in after[len(before) :]
+    assert reconciled.returncode == 0, reconciled.stderr
+    assert "systemctl restart tasca.service" not in command_log.read_text()
 
 
-def test_rollback_rejects_database_changed_by_final_public_table_read(tmp_path: Path) -> None:
-    """The post-read identity check catches writes triggered by the required public read."""
+def test_reconcile_accepts_main_file_size_and_hash_change_with_same_readiness_state(tmp_path: Path) -> None:
+    """Resume reconciliation accepts checkpoint-like physical changes with unchanged schema and domain count."""
     environment, root, _env_file, _unit_file, command_log, _bundle_sha = fixture_environment(tmp_path)
     assert remote(environment, *preflight_arguments(environment)).returncode == 0
-    environment["TASCA_MUTATE_DB_ON_TABLE_READ"] = "1"
+    environment.update({"TASCA_FAKE_VERSION": "0.1.30", "TASCA_FAKE_VIEWER": "true"})
+    database = root / "var/lib/tasca/tasca.db"
+    captured_hash = hashlib.sha256(database.read_bytes()).hexdigest()
+    captured_size = database.stat().st_size
+    database.write_bytes(database.read_bytes() + b"checkpoint-padding")
+
+    reconciled = remote(environment, *release_arguments(environment, "reconcile"))
+
+    assert reconciled.returncode == 0, reconciled.stderr
+    assert database.stat().st_size != captured_size
+    assert hashlib.sha256(database.read_bytes()).hexdigest() != captured_hash
+    assert "systemctl restart tasca.service" not in command_log.read_text()
+
+
+def test_rollback_rejects_domain_table_count_changed_by_final_public_read(tmp_path: Path) -> None:
+    """The post-read readiness check catches a domain-table write triggered by the required public read."""
+    environment, _root, _env_file, _unit_file, command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    environment["TASCA_MUTATE_TABLES_ON_TABLE_READ"] = "1"
 
     result = remote(
         environment,
@@ -547,7 +738,5 @@ def test_rollback_rejects_database_changed_by_final_public_table_read(tmp_path: 
     )
 
     assert result.returncode != 0
-    assert "database device, inode, or size changed" in result.stderr
+    assert "database tables row count changed" in result.stderr
     assert "/api/v1/tables" in command_log.read_text()
-    database = root / "var/lib/tasca/tasca.db"
-    assert database.read_bytes().endswith(b"x")

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # purpose: Reconcile, activate, rehearse, or restore the SHA-verified Tasca release on the authorized VM.
-# usage: Installed by viewer-auth-rollout.sh and invoked as root with preflight, stage-tls, apply, reconcile, rehearse, rollback, or verify-public-read.
+# usage: Installed by viewer-auth-rollout.sh and invoked as root with preflight, stage-tls, apply, reconcile, rehearse, rollback, reseal-sqlite-logical-state, or verify-public-read.
 # effects: Captures/restores systemd and environment state, configures Caddy, and installs exact wheel bytes. It never formats, copies, migrates, deletes, or replaces SQLite bytes.
 # requires: Debian VM with Caddy, uv, systemd, an admitted CPython 3.13 path, and mounted /var/lib/tasca persistent disk. TASCA_ROLLOUT_TEST_ROOT is only for offline fixture tests.
 set -euo pipefail
@@ -65,6 +65,14 @@ file_identity() {
     stat -c '%d:%i:%s' -- "$1"
 }
 
+file_device_inode() {
+    stat -c '%d:%i' -- "$1"
+}
+
+database_disk_source() {
+    findmnt -n -o SOURCE --target "$1"
+}
+
 require_python() {
     local python="$1"
     local canonical identity
@@ -120,23 +128,157 @@ normalized_db_path() {
     printf '%s\n' "$db_path"
 }
 
+database_logical_state() {
+    local python="$1"
+    local db_path="$2"
+    "$python" - "$db_path" <<'PY'
+import json
+import sqlite3
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1]).resolve()
+connection: sqlite3.Connection | None = None
+try:
+    connection = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)
+    connection.execute("PRAGMA query_only = ON")
+    integrity = [row[0] for row in connection.execute("PRAGMA integrity_check")]
+    if integrity != ["ok"]:
+        raise SystemExit("database integrity check failed")
+    schema = [
+        {"name": name, "type": kind}
+        for kind, name in connection.execute(
+            "SELECT type, name FROM sqlite_master "
+            "WHERE type IN ('index', 'table', 'trigger', 'view') AND name NOT LIKE 'sqlite_%' "
+            "ORDER BY type, name"
+        )
+    ]
+    tables_count = connection.execute("SELECT COUNT(*) FROM tables").fetchone()[0]
+    print(
+        json.dumps(
+            {"format": "tasca-sqlite-logical-v2", "schema": schema, "tables_count": tables_count},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+except sqlite3.Error as error:
+    raise SystemExit("database logical-state query failed") from error
+finally:
+    if connection is not None:
+        connection.close()
+PY
+}
+
+write_logical_baseline() {
+    local python="$1"
+    local target
+    target="$(state_path database.logical.json)"
+    [[ ! -e "$target" ]] || fail "database logical baseline is already sealed"
+    "$python" -c '
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = json.load(sys.stdin)
+if (
+    set(payload) != {"format", "schema", "tables_count"}
+    or payload.get("format") != "tasca-sqlite-logical-v2"
+    or not isinstance(payload["schema"], list)
+    or not isinstance(payload["tables_count"], int)
+    or payload["tables_count"] < 0
+):
+    raise SystemExit("database logical state has an invalid schema")
+baseline = {
+    "format": "tasca-sqlite-logical-v2",
+    "schema": "tasca-0.1.29",
+    "tables_count": payload["tables_count"],
+}
+temporary = path.with_name(f".{path.name}.tmp")
+temporary.write_text(json.dumps(baseline, sort_keys=True, separators=(",", ":")) + "\n")
+os.chmod(temporary, stat.S_IRUSR | stat.S_IWUSR)
+os.replace(temporary, path)
+os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+' "$target"
+}
+
 capture_database_identity() {
     local db_path
     db_path="$(normalized_db_path)"
     record_value database.path "$db_path"
     record_value database.identity "$(file_identity "$db_path")"
+    record_value database.device_inode "$(file_device_inode "$db_path")"
+    record_value database.disk "$(database_disk_source "$db_path")"
     record_value database.sha256 "$(file_hash "$db_path")"
 }
 
-assert_database_identity() {
-    local db_path
+capture_database_logical_baseline() {
+    local python="$1"
+    local db_path state
+    db_path="$(normalized_db_path)"
+    state="$(database_logical_state "$python" "$db_path")" \
+        || fail "database logical state could not be captured"
+    assert_exact_legacy_schema "$python" "$state" \
+        || fail "SQLite schema does not match the exact 0.1.29 logical contract"
+    printf '%s' "$state" | write_logical_baseline "$python"
+}
+
+assert_database_anchor() {
+    local db_path expected_device_inode
     db_path="$(normalized_db_path)"
     [[ "$db_path" == "$(<"$(state_path database.path)")" ]] \
         || fail "database path changed from captured state"
-    [[ "$(file_identity "$db_path")" == "$(<"$(state_path database.identity)")" ]] \
-        || fail "database device, inode, or size changed"
-    [[ "$(file_hash "$db_path")" == "$(<"$(state_path database.sha256)")" ]] \
-        || fail "database bytes changed"
+    if [[ -f "$(state_path database.device_inode)" ]]; then
+        expected_device_inode="$(<"$(state_path database.device_inode)")"
+    else
+        expected_device_inode="$(<"$(state_path database.identity)")"
+        expected_device_inode="${expected_device_inode%:*}"
+    fi
+    [[ "$(file_device_inode "$db_path")" == "$expected_device_inode" ]] \
+        || fail "database device or inode changed from captured state"
+    if [[ -f "$(state_path database.disk)" ]]; then
+        [[ "$(database_disk_source "$db_path")" == "$(<"$(state_path database.disk)")" ]] \
+            || fail "database disk changed from captured state"
+    fi
+}
+
+baseline_tables_row_count() {
+    local python="$1"
+    "$python" -c '
+import json
+import sys
+payload = json.load(sys.stdin)
+if (
+    set(payload) != {"format", "schema", "tables_count"}
+    or payload.get("format") != "tasca-sqlite-logical-v2"
+    or payload.get("schema") != "tasca-0.1.29"
+    or not isinstance(payload.get("tables_count"), int)
+    or payload["tables_count"] < 0
+):
+    raise SystemExit("database logical baseline has an invalid schema")
+print(payload["tables_count"])
+'
+}
+
+assert_database_identity() {
+    local python="$1"
+    local db_path state expected_count current_count
+    assert_database_anchor
+    [[ -f "$(state_path database.logical.json)" ]] \
+        || fail "database logical baseline is missing; resume requires explicit SQLite logical-state acceptance"
+    db_path="$(normalized_db_path)"
+    state="$(database_logical_state "$python" "$db_path")" \
+        || fail "database logical state could not be read"
+    assert_exact_legacy_schema "$python" "$state" \
+        || fail "SQLite schema does not match the exact 0.1.29 logical contract"
+    expected_count="$(baseline_tables_row_count "$python" < "$(state_path database.logical.json)")" \
+        || fail "database logical baseline is invalid"
+    current_count="$(logical_tables_row_count "$python" "$state")" \
+        || fail "database logical state has no usable tables row count"
+    [[ "$current_count" == "$expected_count" ]] \
+        || fail "database tables row count changed from captured state"
 }
 
 health_payload() {
@@ -196,6 +338,72 @@ require_https_health() {
         fi
     done
     fail "HTTPS Tasca health is not the expected release"
+}
+
+logical_tables_row_count() {
+    local python="$1"
+    local state="$2"
+    printf '%s' "$state" | "$python" -c '
+import json
+import sys
+payload = json.load(sys.stdin)
+count = payload.get("tables_count")
+if not isinstance(count, int) or count < 0:
+    raise SystemExit("database logical state has no usable tables row count")
+print(count)
+'
+}
+
+assert_exact_legacy_schema() {
+    local python="$1"
+    local state="$2"
+    printf '%s' "$state" | "$python" -c '
+import json
+import sys
+payload = json.load(sys.stdin)
+expected_tables = {
+    "dedup", "idempotency_keys", "patrons", "sayings", "sayings_fts",
+    "sayings_fts_config", "sayings_fts_data", "sayings_fts_docsize", "sayings_fts_idx",
+    "seats", "tables",
+}
+expected_objects = {("table", name) for name in expected_tables} | {
+    ("index", "idx_seats_table_id"),
+    ("index", "idx_seats_patron_id"),
+    ("index", "idx_sayings_table_id"),
+    ("index", "idx_sayings_table_sequence"),
+    ("index", "idx_sayings_created_at"),
+    ("index", "idx_tables_status"),
+    ("index", "idx_dedup_first_seen"),
+    ("index", "idx_idempotency_expires_at"),
+    ("trigger", "sayings_ai"),
+    ("trigger", "sayings_au"),
+    ("trigger", "sayings_ad"),
+}
+actual_objects = {(item["type"], item["name"]) for item in payload["schema"]}
+if actual_objects != expected_objects:
+    raise SystemExit("SQLite schema does not match the exact 0.1.29 logical contract")
+'
+}
+
+public_tables_row_count() {
+    local python="$1"
+    local host="$2"
+    curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+        "https://${host}/api/v1/tables" \
+        | "$python" -c 'import json, sys; payload = json.load(sys.stdin); assert isinstance(payload, list); print(len(payload))'
+}
+
+assert_public_tables_match_logical_state() {
+    local python="$1"
+    local host="$2"
+    local state="$3"
+    local sqlite_count public_count
+    sqlite_count="$(logical_tables_row_count "$python" "$state")" \
+        || fail "database logical state has no usable tables row count"
+    public_count="$(public_tables_row_count "$python" "$host")" \
+        || fail "public Tables API did not return a list"
+    [[ "$public_count" == "$sqlite_count" ]] \
+        || fail "public Tables API count does not match SQLite tables row count"
 }
 
 rollback_runtime_state() {
@@ -399,6 +607,7 @@ preflight() {
     record_file tasca.service "$UNIT_FILE"
     record_file tasca.env "$ENV_FILE"
     capture_database_identity
+    capture_database_logical_baseline "$python"
     capture_service_state "$python"
     printf 'tasca remote rollout: exact 0.1.29 runtime and rollback inputs captured\n'
 }
@@ -566,7 +775,7 @@ apply_release() {
     [[ -f "$wheel" && "$wheel_sha" =~ ^[[:xdigit:]]{64}$ ]] || fail "release wheel input is invalid"
     [[ "$(file_hash "$wheel")" == "$wheel_sha" ]] || fail "staged release wheel digest mismatch"
     assert_backup_integrity
-    assert_database_identity
+    assert_database_identity "$python"
     verify_rollback_bundle "$python" "$bundle" "$bundle_sha"
     ensure_tls "$host"
 
@@ -596,7 +805,7 @@ apply_release() {
     systemctl restart tasca.service
     require_local_health "$python" "$RELEASE_VERSION" "$expected_viewer_auth"
     require_https_health "$python" "$host" "$RELEASE_VERSION" "$expected_viewer_auth"
-    assert_database_identity
+    assert_database_identity "$python"
     rm -rf "$temporary_dir"
     trap - EXIT
     printf 'tasca remote rollout: exact 0.1.30 wheel is active in %s Viewer mode\n' "$viewer_mode"
@@ -630,7 +839,7 @@ rollback_release() {
     validate_host "$host"
     require_python "$python"
     assert_backup_integrity
-    assert_database_identity
+    assert_database_identity "$python"
     ensure_tls "$host"
     local temporary_dir
     temporary_dir="$(mktemp -d "${ROOT_PREFIX}/run/tasca-rollback.XXXXXX")"
@@ -645,7 +854,7 @@ rollback_release() {
     require_local_health "$python" "$ROLLBACK_VERSION" false
     require_https_health "$python" "$host" "$ROLLBACK_VERSION" false
     verify_public_read --https-host "$host" --python "$python"
-    assert_database_identity
+    assert_database_identity "$python"
     rm -rf "$temporary_dir"
     trap - EXIT
     printf 'tasca remote rollout: exact 0.1.29 public-read runtime restored from offline bundle\n'
@@ -682,7 +891,7 @@ reconcile_release() {
     [[ "$wheel_sha" =~ ^[[:xdigit:]]{64}$ && "$(file_hash "$wheel")" == "$wheel_sha" ]] \
         || fail "resume refuses a mismatched release wheel digest"
     assert_backup_integrity
-    assert_database_identity
+    assert_database_identity "$python"
     verify_rollback_bundle "$python" "$bundle" "$bundle_sha"
     ensure_tls "$host"
     require_local_health "$python" "$RELEASE_VERSION" "$( [[ "$viewer_mode" == configured ]] && printf true || printf false )"
@@ -720,6 +929,36 @@ rehearse_release() {
         --rollback-bundle "$bundle" --rollback-sha "$bundle_sha"
 }
 
+reseal_sqlite_logical_state() {
+    local host=""
+    local python=""
+    while (($#)); do
+        case "$1" in
+            --https-host) host="${2:-}"; shift 2 ;;
+            --python) python="${2:-}"; shift 2 ;;
+            *) fail "unknown reseal-sqlite-logical-state argument: $1" ;;
+        esac
+    done
+    require_python "$python"
+    validate_host "$host"
+    assert_backup_integrity
+    [[ ! -e "$(state_path database.logical.json)" ]] \
+        || fail "database logical baseline is already sealed"
+    assert_database_anchor
+    ensure_tls "$host"
+    require_local_health "$python" "$ROLLBACK_VERSION" false
+    require_https_health "$python" "$host" "$ROLLBACK_VERSION" false
+    local db_path state
+    db_path="$(normalized_db_path)"
+    state="$(database_logical_state "$python" "$db_path")" \
+        || fail "database logical state could not be read"
+    assert_exact_legacy_schema "$python" "$state" \
+        || fail "SQLite schema does not match the exact 0.1.29 logical contract"
+    assert_public_tables_match_logical_state "$python" "$host" "$state"
+    printf '%s' "$state" | write_logical_baseline "$python"
+    printf 'tasca remote rollout: current exact 0.1.29 SQLite logical state sealed\n'
+}
+
 verify_public_read() {
     local host=""
     local python=""
@@ -732,13 +971,16 @@ verify_public_read() {
     done
     require_python "$python"
     assert_backup_integrity
-    assert_database_identity
+    assert_database_identity "$python"
     ensure_tls "$host"
     require_local_health "$python" "$ROLLBACK_VERSION" false
     require_https_health "$python" "$host" "$ROLLBACK_VERSION" false
-    curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
-        "https://${host}/api/v1/tables" >/dev/null
-    assert_database_identity
+    local db_path state
+    db_path="$(normalized_db_path)"
+    state="$(database_logical_state "$python" "$db_path")" \
+        || fail "database logical state could not be read"
+    assert_public_tables_match_logical_state "$python" "$host" "$state"
+    assert_database_identity "$python"
 }
 
 main() {
@@ -753,6 +995,7 @@ main() {
         reconcile) reconcile_release "$@" ;;
         rehearse) rehearse_release "$@" ;;
         rollback) rollback_release "$@" ;;
+        reseal-sqlite-logical-state) reseal_sqlite_logical_state "$@" ;;
         verify-public-read) verify_public_read "$@" ;;
         *) fail "unknown action: $action" ;;
     esac

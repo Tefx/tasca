@@ -21,7 +21,7 @@ usage() {
     cat <<'USAGE'
 Usage:
   viewer-auth-rollout.sh apply --require-version 0.1.30 --rollback-version 0.1.29 [--rehearse-rollback]
-  viewer-auth-rollout.sh resume --require-version 0.1.30 --rollback-version 0.1.29 --rehearse-rollback [--rotate-admin-secret-version]
+  viewer-auth-rollout.sh resume --require-version 0.1.30 --rollback-version 0.1.29 --rehearse-rollback [--rotate-admin-secret-version] [--accept-current-sqlite-logical-state]
   viewer-auth-rollout.sh reapply --require-version 0.1.30 --rollback-version 0.1.29 --verification-state <0600-token-free-state-file>
   viewer-auth-rollout.sh rollback --rollback-version 0.1.29
   viewer-auth-rollout.sh render --require-version 0.1.30 --rollback-version 0.1.29 [--rehearse-rollback]
@@ -469,9 +469,13 @@ resume_release() {
     local rehearse="$1"
     local rotate_admin="$2"
     local viewer_mode="$3"
+    local accept_sqlite_logical_state="$4"
     require_committed_producer
     assert_resume_effects
     stage_tracked_inputs
+    if [[ "$accept_sqlite_logical_state" == "true" ]]; then
+        remote_command reseal-sqlite-logical-state --https-host "$TASCA_HTTPS_HOST" --python "$TASCA_PYTHON"
+    fi
     if remote_command verify-public-read --https-host "$TASCA_HTTPS_HOST" --python "$TASCA_PYTHON" \
         >/dev/null 2>&1; then
         [[ "$rehearse" == "true" ]] \
@@ -516,6 +520,7 @@ main() {
     local rehearse="false"
     local verification_state=""
     local rotate_admin="false"
+    local accept_sqlite_logical_state="false"
     while (($#)); do
         case "$1" in
             --require-version) required_version="${2:-}"; shift 2 ;;
@@ -523,6 +528,7 @@ main() {
             --rehearse-rollback) rehearse="true"; shift ;;
             --verification-state) verification_state="${2:-}"; shift 2 ;;
             --rotate-admin-secret-version) rotate_admin="true"; shift ;;
+            --accept-current-sqlite-logical-state) accept_sqlite_logical_state="true"; shift ;;
             --help|-h) usage; return 0 ;;
             *) die "unknown argument: $1" ;;
         esac
@@ -544,27 +550,27 @@ main() {
 
     case "$action" in
         render)
-            [[ -z "$verification_state" && "$rotate_admin" == "false" ]] \
-                || die "render accepts no reapply or rotation options"
+            [[ -z "$verification_state" && "$rotate_admin" == "false" && "$accept_sqlite_logical_state" == "false" ]] \
+                || die "render accepts no reapply, rotation, or SQLite logical-state acceptance options"
             emit_manifest "$rehearse" "$viewer_mode"
             ;;
         apply)
-            [[ -z "$verification_state" && "$rotate_admin" == "false" ]] \
-                || die "apply accepts no reapply or rotation options"
+            [[ -z "$verification_state" && "$rotate_admin" == "false" && "$accept_sqlite_logical_state" == "false" ]] \
+                || die "apply accepts no reapply, rotation, or SQLite logical-state acceptance options"
             apply_release "$rehearse" "$viewer_mode"
             ;;
         reapply)
-            [[ "$rehearse" == "false" && -n "$verification_state" && "$rotate_admin" == "false" ]] \
-                || die "reapply requires --verification-state and accepts no rollout rehearsal or rotation"
+            [[ "$rehearse" == "false" && -n "$verification_state" && "$rotate_admin" == "false" && "$accept_sqlite_logical_state" == "false" ]] \
+                || die "reapply requires --verification-state and accepts no rollout rehearsal, rotation, or SQLite logical-state acceptance"
             reapply_release "$viewer_mode" "$verification_state"
             ;;
         resume)
             [[ -z "$verification_state" ]] || die "resume does not accept --verification-state"
-            resume_release "$rehearse" "$rotate_admin" "$viewer_mode"
+            resume_release "$rehearse" "$rotate_admin" "$viewer_mode" "$accept_sqlite_logical_state"
             ;;
         rollback)
-            [[ "$rehearse" == "false" && -z "$verification_state" && "$rotate_admin" == "false" ]] \
-                || die "rollback accepts no reapply, rehearsal, or rotation options"
+            [[ "$rehearse" == "false" && -z "$verification_state" && "$rotate_admin" == "false" && "$accept_sqlite_logical_state" == "false" ]] \
+                || die "rollback accepts no reapply, rehearsal, rotation, or SQLite logical-state acceptance options"
             rollback_release
             ;;
     esac

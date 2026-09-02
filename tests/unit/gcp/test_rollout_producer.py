@@ -153,6 +153,7 @@ def stub_commands(directory: Path) -> Path:
         "  *'firewall-rules describe'*)\n"
         "    [ \"${GCP_FIREWALL_EXISTS:-1}\" = 1 ] || exit 1\n"
         "    if [ -f \"$GCP_CREATE_DONE\" ]; then printf '%s\\n' \"$GCP_FIREWALL_AFTER_CREATE_JSON\"; else printf '%s\\n' \"$GCP_FIREWALL_JSON\"; fi ;;\n"
+        "  *'viewer-auth-remote.sh reseal-sqlite-logical-state'*) [ \"${GCP_RESEAL_SQLITE_READY:-0}\" = 1 ] || exit 1 ;;\n"
         "  *'viewer-auth-remote.sh verify-public-read'*) [ \"${GCP_PUBLIC_ROLLBACK_READY:-0}\" = 1 ] || exit 1 ;;\n"
         "  *'secrets versions list tasca-viewer-token'*) printf '%s\\n' \"${GCP_VIEWER_ENABLED-1}\" ;;\n"
         "  *'secrets versions list tasca-admin-token'*)\n"
@@ -193,6 +194,8 @@ def run_action(
     verification_state: Path | None = None,
     failure: str | None = None,
     public_rollback_ready: bool = False,
+    reseal_sqlite_ready: bool = False,
+    accept_current_sqlite_logical_state: bool = False,
     rehearse: bool = True,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     """Run one producer action through the transport seam and return call order."""
@@ -215,6 +218,7 @@ def run_action(
             "GCP_ADMIN_CREATED": admin_created if admin_created is not None else "2",
             "GCP_VIEWER_ENABLED": viewer_enabled if viewer_enabled is not None else "1",
             "GCP_PUBLIC_ROLLBACK_READY": "1" if public_rollback_ready else "0",
+            "GCP_RESEAL_SQLITE_READY": "1" if reseal_sqlite_ready else "0",
         }
     )
     if admin_state is not None:
@@ -236,6 +240,8 @@ def run_action(
         command.extend(("--verification-state", str(verification_state)))
     if rotate_admin:
         command.append("--rotate-admin-secret-version")
+    if accept_current_sqlite_logical_state:
+        command.append("--accept-current-sqlite-logical-state")
     result = subprocess.run(command, cwd=REPOSITORY, env=environment, text=True, capture_output=True, check=False)
     return result, log.read_text().splitlines()
 
@@ -439,20 +445,56 @@ def test_resume_recovers_reconciled_public_0_1_29_with_existing_admin_v2(tmp_pat
         rotate_admin=True,
         admin_state=admin_state,
         public_rollback_ready=True,
+        reseal_sqlite_ready=True,
+        accept_current_sqlite_logical_state=True,
     )
 
     assert result.returncode == 0, result.stderr
+    reseal = next(
+        index for index, command in enumerate(commands) if "viewer-auth-remote.sh reseal-sqlite-logical-state" in command
+    )
     verification = next(
         index for index, command in enumerate(commands) if "viewer-auth-remote.sh verify-public-read" in command
     )
     activation = next(index for index, command in enumerate(commands) if "viewer-auth-remote.sh apply" in command)
     disabled = next(index for index, command in enumerate(commands) if "secrets versions disable 1" in command)
-    assert verification < activation < disabled
+    assert reseal < verification < activation < disabled
     assert not any("viewer-auth-remote.sh reconcile" in command for command in commands)
     assert not any("viewer-auth-remote.sh rehearse" in command for command in commands)
     assert not any("viewer-auth-remote.sh rollback" in command for command in commands)
     assert not any("secrets versions add tasca-admin-token" in command for command in commands)
     assert admin_state.read_text() == "2\n"
+
+
+def test_resume_stops_when_explicit_sqlite_reseal_fails_before_reapply_or_disable(tmp_path: Path) -> None:
+    """A failed one-time logical-state proof cannot reach verification, activation, or secret mutation."""
+    result, commands = run_action(
+        tmp_path,
+        "resume",
+        rotate_admin=True,
+        public_rollback_ready=True,
+        accept_current_sqlite_logical_state=True,
+    )
+
+    assert result.returncode != 0
+    assert any("viewer-auth-remote.sh reseal-sqlite-logical-state" in command for command in commands)
+    assert not any("viewer-auth-remote.sh verify-public-read" in command for command in commands)
+    assert not any("viewer-auth-remote.sh apply" in command for command in commands)
+    assert not any("secrets versions add tasca-admin-token" in command for command in commands)
+    assert not any("secrets versions disable" in command for command in commands)
+
+
+def test_sqlite_logical_state_acceptance_flag_is_resume_only(tmp_path: Path) -> None:
+    """The recovery authorization cannot be attached to a fresh apply action."""
+    result, commands = run_action(
+        tmp_path,
+        "apply",
+        accept_current_sqlite_logical_state=True,
+    )
+
+    assert result.returncode != 0
+    assert "apply accepts no reapply, rotation, or SQLite logical-state acceptance options" in result.stderr
+    assert commands == []
 
 
 def test_resume_rejects_public_rollback_recovery_without_rehearsal_authority(tmp_path: Path) -> None:

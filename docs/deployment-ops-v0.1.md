@@ -187,7 +187,8 @@ env PROJECT_ID=rda-engineering ZONE=asia-southeast1-b VM=tasca-mcp \
   TASCA_ROLLBACK_SHA256=<repair-receipt-sha256> \
   scripts/gcp/viewer-auth-rollout.sh resume \
   --require-version 0.1.30 --rollback-version 0.1.29 \
-  --rehearse-rollback --rotate-admin-secret-version
+  --rehearse-rollback --rotate-admin-secret-version \
+  --accept-current-sqlite-logical-state
 ```
 
 `resume` first performs read-only VM/VPC/tag, priority-0 TCP/8000 deny, Viewer
@@ -195,10 +196,28 @@ secret-version-1, release-wheel, rollback-bundle, rollback-capture, local-health
 and HTTPS-health reconciliation. A difference stops the lifecycle before a new
 runtime effect. When all state matches, it stages only the tracked producer and
 immutable bytes; it does not reconfigure Caddy, replay the matching firewall
-denial, or add/read a Viewer secret version. The explicit Admin rotation is
-one-time: it requires version 1 to be the only enabled Admin version, adds one
-new version from a secret-safe stdin channel, and disables version 1 only after
-the rollback rehearsal restores final 0.1.30 health.
+denial, or add/read a Viewer secret version. The explicit Admin rotation creates
+version 2 from a secret-safe stdin channel when version 1 is the only enabled
+Admin version. A recovered state with versions 1 and 2 enabled reuses version 2
+and does not create version 3. In either case, it disables version 1 only after
+final 0.1.30 proof.
+
+`--accept-current-sqlite-logical-state` is a one-time, user-authorized `resume`
+option for a historical 0.1.29 capture that lacks a logical SQLite baseline. It
+reseals before any release, service, or secret mutation. Resealing requires the
+captured path and device/inode anchor, the mounted `tasca-data` disk, exact local
+and HTTPS public 0.1.29 health, `PRAGMA integrity_check=ok`, and an
+unauthenticated REST `/tables` count equal to SQLite's `tables` row count. It
+atomically writes a 0600 token-free record containing only the logical-state
+format, deployed schema label, and `tables` count. The producer checks the exact
+expected SQLite schema object names and types directly; it does not record or
+hash row values, FTS rows, idempotency rows, or TTL rows. Any version, integrity,
+schema, path, device/inode, or API-count mismatch fails before the seal. Later
+release/rollback checks require the same schema and domain-table count, so normal
+WAL/checkpoint main-file size or SHA-256 changes are forensic metadata rather
+than deployment gates. The flag is single-use: after a successful reseal, the
+0600 baseline already exists. If a later effect fails, reconcile observed state
+and retry `resume` without `--accept-current-sqlite-logical-state`.
 
 For a fresh 0.1.29 baseline, `apply` uses the same environment and immutable
 bundle with `apply --require-version 0.1.30 --rollback-version 0.1.29
@@ -215,9 +234,12 @@ rollback it installs the archive's hash-pinned wheel set with `uv --offline
 --no-index --require-hashes`, rewrites only the captured unit's `ExecStart` to
 the deterministic 0.1.29 venv, rewrites the environment with the current Admin
 secret and no Viewer token, and preserves captured service enablement plus
-restricted environment mode. The final device/inode/size/SHA-256 assertion
-occurs after the public HTTPS read, so WAL, schema, or migration writes caused
-by that read fail rollback verification.
+restricted environment mode. The final database check occurs after the public HTTPS read. It preserves
+captured main-file device/inode/size/SHA-256 as forensic metadata, enforces the
+path and device/inode anchor, and checks the deployed schema plus the baseline
+`tables` count. WAL/checkpoint physical byte changes therefore remain deployable
+while schema or domain-table-count changes caused by that read fail rollback
+verification.
 
 To perform only the deterministic rollback, use the same explicit Python and
 bundle inputs with `viewer-auth-rollout.sh rollback --rollback-version 0.1.29`.

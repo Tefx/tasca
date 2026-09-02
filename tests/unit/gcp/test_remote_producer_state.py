@@ -9,6 +9,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+
 REPOSITORY = Path(__file__).parents[3]
 REMOTE = REPOSITORY / "scripts/gcp/viewer-auth-remote.sh"
 BUNDLE_BUILDER = REPOSITORY / "scripts/gcp/build-viewer-auth-rollback-bundle.sh"
@@ -30,8 +32,10 @@ def rollback_bundle(tmp_path: Path) -> tuple[Path, str]:
     wheelhouse.mkdir()
     tasca = wheelhouse / "tasca-0.1.29-py3-none-any.whl"
     httpx = wheelhouse / "httpx-0.28.1-py3-none-any.whl"
-    write_wheel(tasca, name="tasca", version="0.1.29", requires=("httpx (>=0.28.0)",))
+    fastmcp = wheelhouse / "fastmcp-3.1.0-py3-none-any.whl"
+    write_wheel(tasca, name="tasca", version="0.1.29", requires=("httpx (>=0.28.0)", "fastmcp (>=3.0)"))
     write_wheel(httpx, name="httpx", version="0.28.1")
+    write_wheel(fastmcp, name="fastmcp", version="3.1.0")
     bundle = tmp_path / "rollback.tar.gz"
     receipt = tmp_path / "rollback-receipt.json"
     build = subprocess.run(
@@ -126,7 +130,9 @@ def write_fake_commands(directory: Path) -> None:
         path.chmod(0o755)
 
 
-def fixture_environment(tmp_path: Path) -> tuple[dict[str, str], Path, Path, Path, Path, str]:
+def fixture_environment(
+    tmp_path: Path, db_line: str = "TASCA_DB_PATH=/var/lib/tasca/tasca.db"
+) -> tuple[dict[str, str], Path, Path, Path, Path, str]:
     """Create isolated disk, unit, command seams, and exact selected Python input."""
     root = tmp_path / "fixture-root"
     data = root / "var/lib/tasca"
@@ -136,7 +142,7 @@ def fixture_environment(tmp_path: Path) -> tuple[dict[str, str], Path, Path, Pat
         path.mkdir(parents=True, exist_ok=True)
     database = data / "tasca.db"
     database.write_bytes(b"fixture sqlite bytes")
-    env_file.write_text("TASCA_ENVIRONMENT=production\nTASCA_DB_PATH=/var/lib/tasca/tasca.db\n")
+    env_file.write_text(f"TASCA_ENVIRONMENT=production\n{db_line}\n")
     env_file.chmod(0o640)
     unit_file.write_text("[Service]\nUser=tasca\nExecStart=uvx --from tasca==0.1.29 tasca\n")
     unit_file.chmod(0o644)
@@ -217,6 +223,63 @@ def release_arguments(environment: dict[str, str], action: str) -> list[str]:
         "--rollback-sha",
         environment["TASCA_ROLLBACK_SHA256"],
     ]
+
+
+@pytest.mark.parametrize(
+    ("db_line", "expected"),
+    [
+        ("", "exactly once"),
+        ("TASCA_DB_PATH=relative.db", "absolute"),
+        ("TASCA_DB_PATH=/outside/tasca.db", "on tasca-data"),
+        ("TASCA_DB_PATH=/var/lib/tasca/missing.db", "must exist"),
+    ],
+)
+def test_preflight_rejects_invalid_database_placement(
+    tmp_path: Path, db_line: str, expected: str
+) -> None:
+    """Rollback capture rejects missing, relative, and nonexistent database selections."""
+    environment, root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path, db_line)
+    if "/outside/" in db_line:
+        outside = root / "outside"
+        outside.mkdir()
+        (outside / "tasca.db").write_bytes(b"outside fixture")
+
+    result = remote(environment, *preflight_arguments(environment))
+
+    assert result.returncode != 0
+    assert expected in result.stderr
+    assert not (root / "var/lib/tasca/rollback/0.1.29").exists()
+
+
+def test_preflight_rejects_duplicate_or_nonpublic_rollback_environment(tmp_path: Path) -> None:
+    """One unambiguous public baseline is required before bytes can be captured."""
+    environment, root, env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    env_file.write_text(
+        "TASCA_DB_PATH=/var/lib/tasca/tasca.db\n"
+        "TASCA_DB_PATH=/var/lib/tasca/tasca.db\n"
+    )
+    duplicate = remote(environment, *preflight_arguments(environment))
+    assert duplicate.returncode != 0
+    assert "exactly once" in duplicate.stderr
+    assert not (root / "var/lib/tasca/rollback/0.1.29").exists()
+
+    env_file.write_text("TASCA_DB_PATH=/var/lib/tasca/tasca.db\nTASCA_VIEWER_TOKEN=fixture\n")
+    configured = remote(environment, *preflight_arguments(environment))
+    assert configured.returncode != 0
+    assert "Viewer reads public" in configured.stderr
+
+
+def test_preflight_captures_database_identity_after_initial_public_read(tmp_path: Path) -> None:
+    """The baseline read settles database bytes before the rollback identity is recorded."""
+    environment, root, _env_file, _unit_file, _command_log, _bundle_sha = fixture_environment(tmp_path)
+    database = root / "var/lib/tasca/tasca.db"
+    environment["TASCA_MUTATE_DB_ON_TABLE_READ"] = "1"
+
+    result = remote(environment, *preflight_arguments(environment))
+
+    assert result.returncode == 0, result.stderr
+    captured = (root / "var/lib/tasca/rollback/0.1.29/database.sha256").read_text().strip()
+    assert captured == hashlib.sha256(database.read_bytes()).hexdigest()
 
 
 def test_preflight_rejects_incompatible_python_before_capture(tmp_path: Path) -> None:
@@ -332,3 +395,31 @@ def test_reconcile_refuses_mismatched_capture_before_replaying_runtime_effects(t
     assert "database device, inode, or size changed" in rejected.stderr
     after = command_log.read_text()
     assert "systemctl restart tasca.service" not in after[len(before) :]
+
+
+def test_rollback_rejects_database_changed_by_final_public_table_read(tmp_path: Path) -> None:
+    """The post-read identity check catches writes triggered by the required public read."""
+    environment, root, _env_file, _unit_file, command_log, _bundle_sha = fixture_environment(tmp_path)
+    assert remote(environment, *preflight_arguments(environment)).returncode == 0
+    environment["TASCA_MUTATE_DB_ON_TABLE_READ"] = "1"
+
+    result = remote(
+        environment,
+        "rollback",
+        "--rollback-version",
+        "0.1.29",
+        "--https-host",
+        "tasca.example.test",
+        "--python",
+        environment["TASCA_TEST_PYTHON"],
+        "--rollback-bundle",
+        environment["TASCA_ROLLBACK_BUNDLE"],
+        "--rollback-sha",
+        environment["TASCA_ROLLBACK_SHA256"],
+    )
+
+    assert result.returncode != 0
+    assert "database device, inode, or size changed" in result.stderr
+    assert "/api/v1/tables" in command_log.read_text()
+    database = root / "var/lib/tasca/tasca.db"
+    assert database.read_bytes().endswith(b"x")

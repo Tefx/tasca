@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # purpose: Create and verify an immutable offline Tasca 0.1.29 rollback bundle.
-# usage: build-viewer-auth-rollback-bundle.sh build|verify [declared immutable inputs]
+# usage: build-viewer-auth-rollback-bundle.sh build|verify|smoke [declared immutable inputs]
 # effects: Creates only selected local bundle and receipt paths; it never accesses GCP, credentials, or repository runtime state.
-# requires: Python 3, git, and declared immutable wheelhouse inputs.
+# requires: Python 3, git, uv, and declared immutable wheelhouse inputs.
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,8 +24,14 @@ import io
 import json
 import os
 import re
+import socket
 import subprocess
+import sys
 import tarfile
+import tempfile
+import time
+import urllib.error
+import urllib.request
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +39,7 @@ from typing import Any
 
 ROLLBACK_VERSION = "0.1.29"
 FORMAT = "tasca-rollback-bundle-v1"
+FAST_MCP_CONSTRAINT = "<4"
 ROOT = Path(os.environ["TASCA_ROLLBACK_BUNDLE_REPO_ROOT"])
 REQUIRED_PRODUCERS = (
     ROOT / "scripts/gcp/viewer-auth-rollout.sh",
@@ -245,6 +252,9 @@ def manifest_for(wheel: Path, wheel_sha256: str, wheelhouse: Path) -> tuple[dict
         raise ValueError("wheelhouse must contain the exact selected Tasca 0.1.29 wheel")
     if "httpx" not in by_name:
         raise ValueError("wheelhouse must include the declared httpx dependency")
+    fastmcp = by_name.get("fastmcp")
+    if fastmcp is None or version_key(fastmcp.version) >= version_key("4"):
+        raise ValueError("wheelhouse must select a compatible fastmcp version constrained to <4")
     _name, _version, python_requirement, _requires = wheel_metadata(wheel)
     if python_requirement != ">=3.13":
         raise ValueError("rollback Tasca wheel must require Python >=3.13")
@@ -270,6 +280,7 @@ def manifest_for(wheel: Path, wheel_sha256: str, wheelhouse: Path) -> tuple[dict
         "format": FORMAT,
         "producer": producer_identity(),
         "rollback": {
+            "constraints": {"fastmcp": FAST_MCP_CONSTRAINT, "httpx": "required"},
             "python_requires": python_requirement,
             "version": ROLLBACK_VERSION,
             "wheel": wheel.name,
@@ -311,8 +322,10 @@ def safe_members(bundle: Path) -> dict[str, bytes]:
         raise ValueError("rollback bundle is not a readable gzip tar archive") from error
 
 
-def verify_bundle(bundle: Path, expected_sha256: str) -> dict[str, Any]:
-    """Verify archive digest, manifest shape, package bytes, and producer identity."""
+def verify_bundle(
+    bundle: Path, expected_sha256: str, *, verify_current_producer: bool = True
+) -> dict[str, Any]:
+    """Verify archive bytes and, unless detached, its producer identity."""
     if not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
         raise ValueError("--sha256 must be a lowercase SHA-256 digest")
     if not bundle.is_file() or sha256(bundle) != expected_sha256:
@@ -331,10 +344,12 @@ def verify_bundle(bundle: Path, expected_sha256: str) -> dict[str, Any]:
         not isinstance(rollback, dict)
         or rollback.get("version") != ROLLBACK_VERSION
         or rollback.get("python_requires") != ">=3.13"
+        or rollback.get("constraints") != {"fastmcp": FAST_MCP_CONSTRAINT, "httpx": "required"}
         or not isinstance(artifacts, list)
         or not isinstance(producer, dict)
-        or producer != producer_identity()
     ):
+        raise ValueError("rollback bundle contract is invalid")
+    if verify_current_producer and producer != producer_identity():
         raise ValueError("rollback bundle does not match the current tracked producer")
     expected_requirements: list[str] = []
     names: set[str] = set()
@@ -360,8 +375,12 @@ def verify_bundle(bundle: Path, expected_sha256: str) -> dict[str, Any]:
         if payload is None or hashlib.sha256(payload).hexdigest() != digest:
             raise ValueError("rollback bundle artifact bytes do not match the manifest")
         expected_requirements.append(f"{name}=={version} --hash=sha256:{digest}\n")
-    if "tasca" not in names or "httpx" not in names:
-        raise ValueError("rollback bundle is missing Tasca or httpx")
+    fastmcp = next((item for item in artifacts if item.get("name") == "fastmcp"), None)
+    if "tasca" not in names or "httpx" not in names or not isinstance(fastmcp, dict):
+        raise ValueError("rollback bundle is missing Tasca, httpx, or fastmcp")
+    fastmcp_version = fastmcp.get("version")
+    if not isinstance(fastmcp_version, str) or version_key(fastmcp_version) >= version_key("4"):
+        raise ValueError("rollback bundle fastmcp selection violates <4")
     if rollback.get("wheel_sha256") != next(
         (item["sha256"] for item in artifacts if item.get("name") == "tasca"), None
     ):
@@ -397,6 +416,120 @@ def command_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def require_cpython_313(python: Path) -> None:
+    """Reject a smoke interpreter other than the explicit CPython 3.13 selection."""
+    result = subprocess.run(
+        [str(python), "-c", "import sys; print(sys.implementation.name, sys.version_info[:2])"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0 or result.stdout.strip() != "cpython (3, 13)":
+        raise ValueError("--python must select executable CPython 3.13")
+
+
+def command_smoke(args: argparse.Namespace) -> int:
+    """Install and execute the exact offline runtime on loopback with no Viewer token."""
+    manifest = verify_bundle(
+        args.bundle.resolve(), args.sha256, verify_current_producer=not args.allow_detached_producer
+    )
+    python = args.python.resolve()
+    require_cpython_313(python)
+    members = safe_members(args.bundle.resolve())
+    with tempfile.TemporaryDirectory(prefix="tasca-rollback-smoke-") as raw_directory:
+        directory = Path(raw_directory)
+        os.chmod(directory, 0o700)
+        for name, content in members.items():
+            target = directory / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        venv = directory / "venv"
+        environment = os.environ.copy()
+        environment.update({"UV_OFFLINE": "1", "HOME": str(directory), "TASCA_DB_PATH": str(directory / "tasca.db")})
+        environment.pop("TASCA_VIEWER_TOKEN", None)
+        environment["TASCA_ADMIN_TOKEN"] = "local-rollback-smoke-admin"
+        create = subprocess.run(
+            ["uv", "venv", "--clear", "--python", str(python), str(venv)],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        if create.returncode != 0:
+            raise ValueError("offline smoke could not create the selected Python venv")
+        install = subprocess.run(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--offline",
+                "--no-index",
+                "--find-links",
+                str(directory / "rollback/wheelhouse"),
+                "--require-hashes",
+                "--python",
+                str(venv / "bin/python"),
+                "-r",
+                str(directory / "rollback/requirements.txt"),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        if install.returncode != 0:
+            raise ValueError("offline smoke could not install the immutable rollback wheelhouse")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        environment.update({"TASCA_API_HOST": "127.0.0.1", "TASCA_API_PORT": str(port)})
+        process = subprocess.Popen(
+            [str(venv / "bin/tasca")],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=environment,
+        )
+        base_url = f"http://127.0.0.1:{port}"
+        try:
+            deadline = time.monotonic() + 30
+            health: dict[str, Any] | None = None
+            while time.monotonic() < deadline:
+                if process.poll() is not None:
+                    raise ValueError("offline smoke Tasca process exited before health")
+                try:
+                    with urllib.request.urlopen(f"{base_url}/api/v1/health", timeout=1) as response:
+                        health = json.loads(response.read())
+                    break
+                except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+                    time.sleep(0.1)
+            if health is None or health.get("version") != ROLLBACK_VERSION:
+                raise ValueError("offline smoke health did not report exact Tasca 0.1.29")
+            if health.get("viewer_auth_required", False) is not False:
+                raise ValueError("offline smoke did not keep Viewer reads public")
+            with urllib.request.urlopen(f"{base_url}/api/v1/tables", timeout=5) as response:
+                tables = json.loads(response.read())
+            if not isinstance(tables, list):
+                raise ValueError("offline smoke public table read was not a list")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+    print(json.dumps({
+        "smoke": {
+            "fastmcp": next(item["version"] for item in manifest["artifacts"] if item["name"] == "fastmcp"),
+            "httpx": next(item["version"] for item in manifest["artifacts"] if item["name"] == "httpx"),
+            "installer": "offline-no-index-require-hashes",
+            "public_tables": True,
+            "version": ROLLBACK_VERSION,
+            "viewer_auth_required": False,
+        }
+    }, sort_keys=True))
+    return 0
+
+
 def main() -> int:
     """Parse the intentionally small build/verify interface."""
     parser = argparse.ArgumentParser()
@@ -412,6 +545,16 @@ def main() -> int:
     verify.add_argument("--bundle", required=True, type=Path)
     verify.add_argument("--sha256", required=True)
     verify.set_defaults(handler=command_verify)
+    smoke = commands.add_parser("smoke")
+    smoke.add_argument("--bundle", required=True, type=Path)
+    smoke.add_argument("--sha256", required=True)
+    smoke.add_argument("--python", required=True, type=Path)
+    smoke.add_argument(
+        "--allow-detached-producer",
+        action="store_true",
+        help="allow a Linux smoke container after host verification matched the tracked producer",
+    )
+    smoke.set_defaults(handler=command_smoke)
     args = parser.parse_args()
     return args.handler(args)
 

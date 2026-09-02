@@ -262,6 +262,7 @@ if (
     not isinstance(rollback, dict)
     or rollback.get("version") != "0.1.29"
     or rollback.get("python_requires") != ">=3.13"
+    or rollback.get("constraints") != {"fastmcp": "<4", "httpx": "required"}
     or not isinstance(producer, dict)
     or not isinstance(artifacts, list)
 ):
@@ -298,8 +299,15 @@ for artifact in artifacts:
     if payload is None or hashlib.sha256(payload).hexdigest() != digest:
         raise SystemExit("rollback artifact digest is mismatched")
     requirements.append(f"{name}=={version} --hash=sha256:{digest}\n")
-if "tasca" not in names or "httpx" not in names:
-    raise SystemExit("rollback bundle is missing Tasca or httpx")
+fastmcp = next((item for item in artifacts if item.get("name") == "fastmcp"), None)
+if "tasca" not in names or "httpx" not in names or not isinstance(fastmcp, dict):
+    raise SystemExit("rollback bundle is missing Tasca, httpx, or fastmcp")
+try:
+    fastmcp_major = int(str(fastmcp["version"]).split(".", 1)[0])
+except (KeyError, ValueError):
+    raise SystemExit("rollback bundle fastmcp version is invalid")
+if fastmcp_major >= 4:
+    raise SystemExit("rollback bundle fastmcp selection violates <4")
 if rollback.get("wheel_sha256") != next((item["sha256"] for item in artifacts if item.get("name") == "tasca"), None):
     raise SystemExit("rollback Tasca wheel digest is mismatched")
 if content.get("rollback/requirements.txt") != "".join(requirements).encode():
@@ -612,6 +620,7 @@ rollback_release() {
     systemctl restart tasca.service
     require_local_health "$python" "$ROLLBACK_VERSION" false
     require_https_health "$python" "$host" "$ROLLBACK_VERSION" false
+    verify_public_read --https-host "$host" --python "$python"
     assert_database_identity
     rm -rf "$temporary_dir"
     trap - EXIT

@@ -312,7 +312,7 @@ reconcile_public_backend_port() {
 }
 
 assert_resume_effects() {
-    local context network tags_json rule_json
+    local context network tags_json rule_json viewer_enabled
     context="$(vm_network_and_tags)" || die "could not reconcile the target VM VPC network"
     network="${context%%$'\n'*}"
     tags_json="${context#*$'\n'}"
@@ -325,9 +325,10 @@ assert_resume_effects() {
         || die "resume refuses a missing TCP/8000 deny rule"
     printf '%s' "$rule_json" | firewall_rule_is_correct "$network" \
         || die "resume refuses a mismatched TCP/8000 deny rule"
-    gcloud secrets versions describe 1 --project="$PROJECT_ID" --secret=tasca-viewer-token \
-        --format='value(state)' --quiet | grep -qx ENABLED \
-        || die "resume refuses a Viewer secret version other than enabled version 1"
+    viewer_enabled="$(gcloud secrets versions list tasca-viewer-token --project="$PROJECT_ID" \
+        --filter='state=ENABLED' --format='value(name)' --quiet)"
+    [[ "$viewer_enabled" == "projects/${PROJECT_ID}/secrets/tasca-viewer-token/versions/1" ]] \
+        || die "resume requires exactly enabled Viewer secret version 1"
 }
 
 mark_verification_reapplied() {
@@ -405,17 +406,47 @@ reapply_release() {
 
 ROTATED_ADMIN_OLD_VERSION=""
 rotate_admin_secret_version() {
-    local enabled new_version
+    local enabled new_version line version
+    local -a versions=()
     enabled="$(gcloud secrets versions list tasca-admin-token --project="$PROJECT_ID" \
         --filter='state=ENABLED' --format='value(name)' --quiet)"
-    [[ "$enabled" =~ /versions/1$ && "$enabled" != *$'\n'* ]] \
-        || die "Admin rotation is one-time and requires only enabled version 1"
-    new_version="$(head -c 48 /dev/urandom | base64 | tr -d '\n' \
-        | gcloud secrets versions add tasca-admin-token --project="$PROJECT_ID" --data-file=- \
-            --format='value(name)' --quiet)"
-    [[ "$new_version" =~ /versions/[2-9][0-9]*$ ]] \
-        || die "Admin rotation did not create a new named secret version"
-    ROTATED_ADMIN_OLD_VERSION="${enabled##*/}"
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        [[ "$line" =~ ^projects/${PROJECT_ID}/secrets/tasca-admin-token/versions/([1-9][0-9]*)$ ]] \
+            || die "Admin rotation found an invalid enabled version name"
+        versions+=("${BASH_REMATCH[1]}")
+    done <<< "$enabled"
+    case "${#versions[@]}" in
+        1)
+            version="${versions[0]}"
+            if [[ "$version" == "1" ]]; then
+                new_version="$(head -c 48 /dev/urandom | base64 | tr -d '\n' \
+                    | gcloud secrets versions add tasca-admin-token --project="$PROJECT_ID" --data-file=- \
+                        --format='value(name)' --quiet)"
+                [[ "$new_version" =~ ^projects/${PROJECT_ID}/secrets/tasca-admin-token/versions/([2-9]|[1-9][0-9]+)$ ]] \
+                    || die "Admin rotation did not create a new named secret version"
+                ROTATED_ADMIN_OLD_VERSION="1"
+                return
+            fi
+            [[ "$version" =~ ^([2-9]|[1-9][0-9]+)$ ]] \
+                || die "Admin rotation found an invalid enabled version"
+            printf 'viewer-auth rollout: Admin rotation is already finalized at enabled version %s\n' "$version"
+            ;;
+        2)
+            if [[ " ${versions[*]} " =~ " 1 " ]]; then
+                for version in "${versions[@]}"; do
+                    [[ "$version" == "1" ]] && continue
+                    [[ "$version" =~ ^([2-9]|[1-9][0-9]+)$ ]] \
+                        || die "Admin rotation found an invalid post-version-1 state"
+                done
+                ROTATED_ADMIN_OLD_VERSION="1"
+                printf 'viewer-auth rollout: reusing the existing post-version-1 Admin secret\n'
+                return
+            fi
+            die "Admin rotation found ambiguous enabled versions"
+            ;;
+        *) die "Admin rotation found ambiguous enabled versions" ;;
+    esac
 }
 
 disable_rotated_admin_version() {

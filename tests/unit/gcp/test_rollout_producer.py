@@ -36,8 +36,10 @@ def build_rollback_bundle(tmp_path: Path) -> tuple[Path, str, Path]:
     wheelhouse.mkdir()
     rollback_wheel = wheelhouse / ROLLBACK_WHEEL
     httpx_wheel = wheelhouse / "httpx-0.28.1-py3-none-any.whl"
-    write_wheel(rollback_wheel, name="tasca", version="0.1.29", requires=("httpx (>=0.28.0)",))
+    fastmcp_wheel = wheelhouse / "fastmcp-3.1.0-py3-none-any.whl"
+    write_wheel(rollback_wheel, name="tasca", version="0.1.29", requires=("httpx (>=0.28.0)", "fastmcp (>=3.0)"))
     write_wheel(httpx_wheel, name="httpx", version="0.28.1")
+    write_wheel(fastmcp_wheel, name="fastmcp", version="3.1.0")
     bundle = tmp_path / "tasca-0.1.29-rollback.tar.gz"
     receipt = tmp_path / "tasca-0.1.29-rollback-receipt.json"
     result = subprocess.run(
@@ -143,12 +145,22 @@ def stub_commands(directory: Path) -> Path:
     gcloud.write_text(
         "#!/bin/sh\n"
         "printf '%s\\n' \"$*\" >> \"$GCP_LOG\"\n"
+        "case \"$*\" in *\"${GCP_FAIL_COMMAND:-__no_failure__}\"*) exit 1 ;; esac\n"
         "case \"$*\" in\n"
         "  *'instances describe'*) printf '%s\\n' \"$GCP_VM_JSON\" ;;\n"
-        "  *'firewall-rules describe'*) printf '%s\\n' \"$GCP_FIREWALL_JSON\" ;;\n"
-        "  *'secrets versions describe 1'*) printf 'ENABLED\\n' ;;\n"
-        "  *'secrets versions list'*) printf '%s\\n' \"${GCP_ADMIN_ENABLED:-projects/rda-engineering/secrets/tasca-admin-token/versions/1}\" ;;\n"
-        "  *'secrets versions add'*) printf 'projects/rda-engineering/secrets/tasca-admin-token/versions/2\\n' ;;\n"
+        "  *'firewall-rules list'*) printf '%s\\n' \"${GCP_FIREWALL_LIST_JSON:-[]}\" ;;\n"
+        "  *'firewall-rules create'*) : > \"$GCP_CREATE_DONE\" ;;\n"
+        "  *'firewall-rules describe'*)\n"
+        "    [ \"${GCP_FIREWALL_EXISTS:-1}\" = 1 ] || exit 1\n"
+        "    if [ -f \"$GCP_CREATE_DONE\" ]; then printf '%s\\n' \"$GCP_FIREWALL_AFTER_CREATE_JSON\"; else printf '%s\\n' \"$GCP_FIREWALL_JSON\"; fi ;;\n"
+        "  *'secrets versions list tasca-viewer-token'*) printf '%s\\n' \"${GCP_VIEWER_ENABLED:-projects/rda-engineering/secrets/tasca-viewer-token/versions/1}\" ;;\n"
+        "  *'secrets versions list tasca-admin-token'*)\n"
+        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then cat \"$GCP_ADMIN_STATE_FILE\"; else printf '%s\\n' \"${GCP_ADMIN_ENABLED:-projects/rda-engineering/secrets/tasca-admin-token/versions/1}\"; fi ;;\n"
+        "  *'secrets versions add tasca-admin-token'*)\n"
+        "    printf 'projects/rda-engineering/secrets/tasca-admin-token/versions/2\\n'\n"
+        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then printf '%s\\n' 'projects/rda-engineering/secrets/tasca-admin-token/versions/2' >> \"$GCP_ADMIN_STATE_FILE\"; fi ;;\n"
+        "  *'secrets versions disable 1'*)\n"
+        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then grep -v '/versions/1$' \"$GCP_ADMIN_STATE_FILE\" > \"$GCP_ADMIN_STATE_FILE.next\"; mv \"$GCP_ADMIN_STATE_FILE.next\" \"$GCP_ADMIN_STATE_FILE\"; fi ;;\n"
         "esac\n"
     )
     git = directory / "git"
@@ -169,12 +181,18 @@ def run_action(
     action: str,
     *,
     firewall: str | None = None,
+    after_create: str | None = None,
+    rules: list[dict[str, object]] | None = None,
     rotate_admin: bool = False,
     admin_enabled: str | None = None,
+    viewer_enabled: str | None = None,
+    admin_state: Path | None = None,
+    verification_state: Path | None = None,
+    failure: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     """Run one producer action through the transport seam and return call order."""
     bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
+    bin_dir.mkdir(parents=True)
     log = stub_commands(bin_dir)
     environment = rollout_environment(tmp_path, viewer_mode="configured")
     environment.update(
@@ -184,9 +202,18 @@ def run_action(
             "GCP_LOG": str(log),
             "GCP_VM_JSON": vm_json(),
             "GCP_FIREWALL_JSON": firewall or correct_deny_rule(),
+            "GCP_FIREWALL_AFTER_CREATE_JSON": after_create or correct_deny_rule(),
+            "GCP_FIREWALL_LIST_JSON": json.dumps(rules or []),
+            "GCP_CREATE_DONE": str(tmp_path / "created"),
+            "GCP_FIREWALL_EXISTS": "1",
             "GCP_ADMIN_ENABLED": admin_enabled or "projects/rda-engineering/secrets/tasca-admin-token/versions/1",
+            "GCP_VIEWER_ENABLED": viewer_enabled or "projects/rda-engineering/secrets/tasca-viewer-token/versions/1",
         }
     )
+    if admin_state is not None:
+        environment["GCP_ADMIN_STATE_FILE"] = str(admin_state)
+    if failure is not None:
+        environment["GCP_FAIL_COMMAND"] = failure
     command = [
         "bash",
         str(ROLLOUT),
@@ -198,6 +225,8 @@ def run_action(
     ]
     if action == "resume":
         command.append("--rehearse-rollback")
+    if verification_state is not None:
+        command.extend(("--verification-state", str(verification_state)))
     if rotate_admin:
         command.append("--rotate-admin-secret-version")
     result = subprocess.run(command, cwd=REPOSITORY, env=environment, text=True, capture_output=True, check=False)
@@ -239,12 +268,13 @@ def test_bundle_is_deterministic_and_receipt_binds_exact_bytes_dependencies_and_
     manifest = payload["manifest"]
     assert payload["bundle"]["sha256"] == digest
     assert manifest["rollback"] == {
+        "constraints": {"fastmcp": "<4", "httpx": "required"},
         "python_requires": ">=3.13",
         "version": "0.1.29",
         "wheel": ROLLBACK_WHEEL,
         "wheel_sha256": hashlib.sha256((wheelhouse / ROLLBACK_WHEEL).read_bytes()).hexdigest(),
     }
-    assert {artifact["name"] for artifact in manifest["artifacts"]} == {"tasca", "httpx"}
+    assert {artifact["name"] for artifact in manifest["artifacts"]} == {"tasca", "httpx", "fastmcp"}
     assert len(manifest["producer"]["revision"]) == 40
     assert all(len(item["sha256"]) == 64 for item in manifest["producer"]["files"])
     assert "TASCA_VIEWER_TOKEN" not in receipt.read_text()
@@ -282,6 +312,32 @@ def test_bundle_rejects_incompatible_declared_dependency_bytes(tmp_path: Path) -
 
     assert result.returncode != 0
     assert "incompatible declared dependencies" in result.stderr
+
+
+def test_bundle_rejects_fastmcp_4_even_if_the_tasca_metadata_allows_it(tmp_path: Path) -> None:
+    """The rollback contract pins the FastMCP major line rather than trusting ambient resolution."""
+    wheelhouse = tmp_path / "fastmcp-4-wheelhouse"
+    wheelhouse.mkdir()
+    tasca = wheelhouse / ROLLBACK_WHEEL
+    write_wheel(tasca, name="tasca", version="0.1.29", requires=("httpx (>=0.28.0)", "fastmcp (>=3.0)"))
+    write_wheel(wheelhouse / "httpx-0.28.1-py3-none-any.whl", name="httpx", version="0.28.1")
+    write_wheel(wheelhouse / "fastmcp-4.0.0-py3-none-any.whl", name="fastmcp", version="4.0.0")
+
+    result = subprocess.run(
+        [
+            "bash", str(BUNDLE_BUILDER), "build", "--wheel", str(tasca),
+            "--wheel-sha256", hashlib.sha256(tasca.read_bytes()).hexdigest(),
+            "--wheelhouse", str(wheelhouse), "--output", str(tmp_path / "bundle.tar.gz"),
+            "--receipt", str(tmp_path / "receipt.json"),
+        ],
+        cwd=REPOSITORY,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "fastmcp version constrained to <4" in result.stderr
 
 
 def test_render_binds_exact_release_rollback_bundle_and_python_selection(tmp_path: Path) -> None:
@@ -354,18 +410,177 @@ def test_resume_preserves_matching_tls_firewall_and_viewer_secret_while_rotating
     assert not any("secrets versions add tasca-viewer-token" in command for command in commands)
 
 
-def test_resume_refuses_a_non_one_time_admin_rotation_before_secret_write(tmp_path: Path) -> None:
-    """A second enabled Admin version blocks the named rotation before it can add another."""
+def test_resume_refuses_ambiguous_admin_versions_before_secret_write(tmp_path: Path) -> None:
+    """Several post-v1 Admin versions do not identify a safe rotation outcome."""
     result, commands = run_action(
         tmp_path,
         "resume",
         rotate_admin=True,
-        admin_enabled="projects/rda-engineering/secrets/tasca-admin-token/versions/1\nprojects/rda-engineering/secrets/tasca-admin-token/versions/2",
+        admin_enabled="projects/rda-engineering/secrets/tasca-admin-token/versions/2\nprojects/rda-engineering/secrets/tasca-admin-token/versions/3",
     )
 
     assert result.returncode != 0
-    assert "one-time and requires only enabled version 1" in result.stderr
+    assert "ambiguous enabled versions" in result.stderr
     assert not any("secrets versions add" in command for command in commands)
+    assert not any("secrets versions disable" in command for command in commands)
+
+
+def test_reapply_marks_only_a_token_free_prepared_persistence_receipt(tmp_path: Path) -> None:
+    """The restart marks the bounded witness only after its remote activation succeeds."""
+    receipt = tmp_path / "persistence.json"
+    receipt.write_text(
+        json.dumps(
+            {
+                "format": "tasca-viewer-auth-persistence-v1",
+                "phase": "prepared",
+                "base_url": "https://tasca.example.test",
+                "expected_version": "0.1.30",
+                "table_id": "fixture-table",
+            }
+        )
+    )
+    receipt.chmod(0o600)
+
+    result, commands = run_action(tmp_path, "reapply", verification_state=receipt)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(receipt.read_text())["phase"] == "reapplied"
+    assert receipt.stat().st_mode & 0o777 == 0o600
+    assert "token" not in receipt.read_text().lower()
+    assert any("viewer-auth-remote.sh apply" in command for command in commands)
+
+
+def test_reapply_keeps_prepare_receipt_when_remote_activation_fails(tmp_path: Path) -> None:
+    """A failed reapply cannot report persistence verification as complete."""
+    receipt = tmp_path / "persistence.json"
+    receipt.write_text(
+        json.dumps(
+            {
+                "format": "tasca-viewer-auth-persistence-v1",
+                "phase": "prepared",
+                "base_url": "https://tasca.example.test",
+                "expected_version": "0.1.30",
+                "table_id": "fixture-table",
+            }
+        )
+    )
+    receipt.chmod(0o600)
+
+    result, _commands = run_action(
+        tmp_path,
+        "reapply",
+        verification_state=receipt,
+        failure="viewer-auth-remote.sh apply",
+    )
+
+    assert result.returncode != 0
+    assert json.loads(receipt.read_text())["phase"] == "prepared"
+
+
+def test_apply_replaces_wrong_vpc_or_lower_precedence_named_deny_without_touching_allows(tmp_path: Path) -> None:
+    """Apply recreates only the named deny when it cannot preempt public TCP/8000 on the VM VPC."""
+    wrong_vpc = json.loads(correct_deny_rule())
+    wrong_vpc["network"] = "https://www.googleapis.com/compute/v1/projects/rda-engineering/global/networks/wrong-vpc"
+    public_allow = {
+        "name": "allow-public-8000",
+        "network": NETWORK,
+        "direction": "INGRESS",
+        "disabled": False,
+        "priority": 800,
+        "sourceRanges": ["0.0.0.0/0"],
+        "targetTags": ["tasca-mcp"],
+        "allowed": [{"IPProtocol": "tcp", "ports": ["7000-9000"]}],
+    }
+
+    result, commands = run_action(
+        tmp_path, "apply", firewall=json.dumps(wrong_vpc), rules=[public_allow]
+    )
+
+    assert result.returncode == 0, result.stderr
+    deleted = next(index for index, item in enumerate(commands) if "firewall-rules delete tasca-deny-public-8000" in item)
+    created = next(index for index, item in enumerate(commands) if "firewall-rules create tasca-deny-public-8000" in item)
+    assert deleted < created
+    assert f"--network={NETWORK}" in commands[created]
+    assert "--priority=0" in commands[created]
+    assert "tcp:8000" in commands[created]
+    assert not any("firewall-rules delete allow-public-8000" in item for item in commands)
+
+
+def test_apply_rejects_created_deny_that_fails_target_vpc_readback(tmp_path: Path) -> None:
+    """A successful create is insufficient until the named rule reads back as the intended deny."""
+    wrong_vpc = json.loads(correct_deny_rule())
+    wrong_vpc["network"] = "https://www.googleapis.com/compute/v1/projects/rda-engineering/global/networks/wrong-vpc"
+    malformed = json.loads(correct_deny_rule())
+    malformed["sourceRanges"] = ["10.0.0.0/8"]
+
+    result, _commands = run_action(
+        tmp_path,
+        "apply",
+        firewall=json.dumps(wrong_vpc),
+        after_create=json.dumps(malformed),
+    )
+
+    assert result.returncode != 0
+    assert "does not match the target VPC contract" in result.stderr
+
+
+def test_resume_rejects_viewer_secret_layout_other_than_exact_enabled_v1(tmp_path: Path) -> None:
+    """A matching version 1 plus any second enabled Viewer version cannot be safely resumed."""
+    result, commands = run_action(
+        tmp_path,
+        "resume",
+        viewer_enabled=(
+            "projects/rda-engineering/secrets/tasca-viewer-token/versions/1\n"
+            "projects/rda-engineering/secrets/tasca-viewer-token/versions/2"
+        ),
+    )
+
+    assert result.returncode != 0
+    assert "exactly enabled Viewer secret version 1" in result.stderr
+    assert not any("compute scp" in command for command in commands)
+
+
+def test_resume_reuses_midway_admin_rotation_after_rehearsal_failure(tmp_path: Path) -> None:
+    """A second resume uses the one existing post-v1 Admin version and then retires version 1."""
+    state = tmp_path / "enabled-admin-versions"
+    state.write_text("projects/rda-engineering/secrets/tasca-admin-token/versions/1\n")
+    failed, failed_commands = run_action(
+        tmp_path / "first",
+        "resume",
+        rotate_admin=True,
+        admin_state=state,
+        failure="viewer-auth-remote.sh rehearse",
+    )
+
+    assert failed.returncode != 0
+    assert any("secrets versions add tasca-admin-token" in command for command in failed_commands)
+    assert not any("secrets versions disable 1" in command for command in failed_commands)
+    assert state.read_text().splitlines() == [
+        "projects/rda-engineering/secrets/tasca-admin-token/versions/1",
+        "projects/rda-engineering/secrets/tasca-admin-token/versions/2",
+    ]
+
+    resumed, resumed_commands = run_action(
+        tmp_path / "second", "resume", rotate_admin=True, admin_state=state
+    )
+
+    assert resumed.returncode == 0, resumed.stderr
+    assert "reusing the existing post-version-1 Admin secret" in resumed.stdout
+    assert not any("secrets versions add tasca-admin-token" in command for command in resumed_commands)
+    assert any("secrets versions disable 1" in command for command in resumed_commands)
+    assert state.read_text().splitlines() == ["projects/rda-engineering/secrets/tasca-admin-token/versions/2"]
+
+
+def test_resume_treats_one_enabled_post_v1_admin_version_as_finalized(tmp_path: Path) -> None:
+    """A retried finalized rotation runs reconciliation without another secret mutation."""
+    state = tmp_path / "enabled-admin-versions"
+    state.write_text("projects/rda-engineering/secrets/tasca-admin-token/versions/10\n")
+
+    result, commands = run_action(tmp_path / "finalized", "resume", rotate_admin=True, admin_state=state)
+
+    assert result.returncode == 0, result.stderr
+    assert "Admin rotation is already finalized at enabled version 10" in result.stdout
+    assert not any("secrets versions add tasca-admin-token" in command for command in commands)
     assert not any("secrets versions disable" in command for command in commands)
 
 

@@ -73,8 +73,10 @@ rollback time. Store these release inputs and generated output outside Git.
 From a clean committed checkout, build the content-addressed archive and its
 0600 token-free receipt. The command rejects a wheelhouse with missing declared
 dependencies, duplicate package versions, a non-0.1.29 Tasca wheel, a different
-wheel hash, no `httpx`, or a Tasca wheel whose `Requires-Python` is not
-`>=3.13`.
+wheel hash, no `httpx`, no selected `fastmcp<4`, a FastMCP 4.x wheel, or a
+Tasca wheel whose `Requires-Python` is not `>=3.13`. The receipt records the
+required `fastmcp<4` constraint and selected FastMCP/httpx wheels, preventing a
+later input from silently selecting FastMCP 4.
 
 ```bash
 ROLLBACK_INPUT_DIR=/secure/local/immutable-tasca-0.1.29
@@ -93,6 +95,32 @@ TASCA_ROLLBACK_SHA256="$(sha256sum "$ROLLBACK_OUTPUT_DIR/tasca-0.1.29-rollback.t
 bash scripts/gcp/build-viewer-auth-rollback-bundle.sh verify \
   --bundle "$ROLLBACK_OUTPUT_DIR/tasca-0.1.29-rollback.tar.gz" \
   --sha256 "$TASCA_ROLLBACK_SHA256"
+
+# The smoke creates a temporary 0700 loopback environment. It installs only
+# archive-contained wheels with uv --offline --no-index --require-hashes,
+# starts exact 0.1.29, checks public Viewer health, and reads /api/v1/tables
+# without a Viewer token.
+bash scripts/gcp/build-viewer-auth-rollback-bundle.sh smoke \
+  --bundle "$ROLLBACK_OUTPUT_DIR/tasca-0.1.29-rollback.tar.gz" \
+  --sha256 "$TASCA_ROLLBACK_SHA256" \
+  --python /absolute/path/to/cpython-3.13
+```
+
+When the archive contains Linux x86_64 wheels and the local host has another
+platform, run `verify` on the host first, then run the same tracked smoke in an
+isolated Linux x86_64 container. The container has no network and receives only
+read-only source and bundle mounts; `--allow-detached-producer` is limited to
+this second artifact-runtime check because the host `verify` already matched the
+bundle producer to the checkout.
+
+```bash
+docker run --rm --network none --platform linux/amd64 \
+  -v "$PWD:/repo:ro" \
+  -v "$ROLLBACK_OUTPUT_DIR/tasca-0.1.29-rollback.tar.gz:/input/rollback.tar.gz:ro" \
+  -w /repo ghcr.io/astral-sh/uv:python3.13-bookworm-slim \
+  bash scripts/gcp/build-viewer-auth-rollback-bundle.sh smoke \
+  --bundle /input/rollback.tar.gz --sha256 "$TASCA_ROLLBACK_SHA256" \
+  --python /usr/local/bin/python3.13 --allow-detached-producer
 ```
 
 The archive and receipt bind the exact Tasca and dependency bytes, their
@@ -123,7 +151,11 @@ secret until the new Admin version is active and final health succeeds. The
 explicit `resume --rotate-admin-secret-version` lifecycle creates one new
 `tasca-admin-token` version through a stdin channel, uses its `latest` value for
 the rollback rehearsal and final activation, then disables version 1 only after
-final health succeeds. A public Viewer rollout does not read the Viewer secret
+final health succeeds. If a failed rehearsal already left version 1 plus one
+post-version-1 Admin version enabled, a later `resume` reuses that version and
+does not add another; one enabled post-version-1 version means the rotation is
+already finalized. Other enabled Admin layouts stop for reconciliation. Resume
+also requires exactly enabled Viewer version 1. A public Viewer rollout does not read the Viewer secret
 at all. A configured Viewer rollout reads it only after the TLS gate passes; the
 release environment is root-owned, group-readable only by `tasca`, and mode
 0640 without exposing either credential.

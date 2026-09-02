@@ -101,6 +101,33 @@ The tracked remote verifier now admits only expected version `0.1.31`. It
 continues to verify the existing Viewer/Admin protocol; this release adds no
 Seat-specific live assertion to that verifier.
 
+## Verify the complete 0.1.31 MCP matrix
+
+With `TASCA_ADMIN_TOKEN` supplied by the approved runtime credential handoff
+(and never printed or placed in arguments), run the tracked verifier against
+the certificate-valid HTTPS endpoint. Select an existing reference table that
+contains at least two distinct patrons and use a fresh report path:
+
+```bash
+env TASCA_HTTPS_BASE_URL=https://<witnessed-host> \
+  uv run python scripts/gcp/verify_remote_mcp_full_matrix.py \
+  --expected-version 0.1.31 \
+  --reference-table <existing-reference-table-id> \
+  --report /secure/tasca-mcp-full-matrix.json \
+  --wait-ms 1000
+```
+
+The verifier performs public health/version and Admin/session gates before
+creating data, then records one semantic row for each of the 17 advertised
+MCP tools. It invokes `connect` with `{}` only and requires
+`connection_status` to report local healthy mode. The report is JSON with mode
+0600 and contains no credential value. A material failure after table creation
+stops unrelated calls and runs exactly one reconciliation path: attempt
+`table_control(close)`, batch-delete only the recorded test table, and call
+`table_get`, requiring its explicit result to be `NOT_FOUND`. A cleanup failure leaves
+the report at `BLOCKED` with the residual table ID and observed redacted state;
+do not continue the matrix or broaden deletion.
+
 ## Build and verify the immutable 0.1.29 rollback input
 
 The rollback input starts with a declared immutable wheelhouse for the target

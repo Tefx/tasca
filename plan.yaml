@@ -49549,7 +49549,7 @@ phases:
       were observation-only.'
   - id: verify-live-seat-filtering
     name: Independently verify Seat filtering on public HTTPS MCP
-    status: pending
+    status: claimed
     description: 'step_type: verification
 
       repo_change_policy: no_repo_change
@@ -49620,3 +49620,5 @@ phases:
     depends_on:
     - deploy-0-1-31
     agent: integration-verifier
+    claimed_by: integration-verifier
+    claimed_at: '2026-09-02T14:38:08.137906Z'

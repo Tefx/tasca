@@ -49427,7 +49427,7 @@ phases:
       the pre-existing untracked `.artifacts/`, `.pi/`, `dev-timeline.html`, and `plan.yaml.lock`.'
   - id: deploy-0-1-31
     name: Deploy exact 0.1.31 to the existing Tasca GCP VM
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: runtime_state_only
@@ -49512,6 +49512,41 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T14:26:26.481037Z'
+    done_at: '2026-09-02T14:38:01.709267+00:00'
+    evidence: 'Deployed exact 0.1.31 to existing `rda-engineering/asia-southeast1-b/tasca-mcp`
+      VM id 8120608387419901442 with committed producer d68b87dd6d54d86deac0e4431eb9a1e05b6a1050.
+      Preflight reconciled exact healthy configured-Viewer 0.1.30, fixed CPython 3.13.15,
+      absent 0.1.31 release, environment/DB/Caddy/firewall/secret-version metadata
+      and public-port denial. Exact command used the immutable 1,111,870-byte wheel
+      SHA-256 896ffb0a45f2d6ed8343c5a484f2aec81af4c9b973aa99fae6167f7441042441; producer
+      exit 0.
+
+
+      Effect: created `/opt/tasca/releases/0.1.31/venv`, installed exact wheel and
+      dependencies, backed up the prior unit, atomically switched only `tasca.service`
+      ExecStart, daemon-reloaded and restarted. Final service is active with one `ExecStart=/opt/tasca/releases/0.1.31/venv/bin/tasca`;
+      local and certificate-valid HTTPS health report version 0.1.31 and viewer_auth_required=true.
+      Installed distribution version is 0.1.31; installed `tasca/core/services/seat_service.py`
+      SHA-256 is 62eb77ae9d294f1e19484c10f32f23c7ff5b53606a2077151d58f85b817e68ec
+      and the JOINED-state filter is present. Staged wheel hash matches package evidence.
+
+
+      Preservation/readback: `/opt/tasca/releases/0.1.30` retained; unit backup hash
+      946a10b22623cb3834559a0e3e944b8cc613a561be20014f3d9a273e4ad80ef1 matches the
+      pre-unit. Environment mode/key counts/hash unchanged. `/var/lib/tasca/tasca.db`
+      path, device/inode 2048:12, `/dev/sda` mount, integrity_check=ok, exact schema
+      inventory and domain table count 3 unchanged. Caddy config/service, priority-0
+      firewall denial and Viewer/Admin secret-version metadata unchanged. One loopback
+      127.0.0.1:8000 listener, public TCP/8000 refused. No Secret Manager value read,
+      credential output, rotation, database mutation, TLS/firewall change or rollback
+      rehearsal. Parent independently re-read public exact 0.1.31 health and port
+      refusal.
+
+
+      Evidence: `/tmp/larva-agent-artifacts/tasca-seat-presence-0-1-31-deploy/evidence/deployment-evidence.json`
+      (40/40 postflight), `preflight-check.json` (20/20), and sanitized `command-ledger.json`;
+      apply stdout/stderr retained with no credential values. Physical SQLite bytes
+      were observation-only.'
   - id: verify-live-seat-filtering
     name: Independently verify Seat filtering on public HTTPS MCP
     status: pending

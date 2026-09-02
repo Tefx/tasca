@@ -48936,7 +48936,7 @@ phases:
     agent: integration-verifier
   - id: viewer_auth_gcp.repair-rollout-producer
     name: Repair deterministic rollout and rollback producer
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49023,7 +49023,37 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-02T07:13:09.565576Z'
-    done_at: '2026-09-02T05:59:41.372405+00:00'
+    done_at: '2026-09-02T07:42:36.056318+00:00'
+    evidence: 'Integrated live-rehearsal recovery repair at exact commit 2d60a860ee9f4825c5f40c149dc779983765a24a
+      (parent 21ddf11a4f3f4b0a98276e77bc59095580234473); retained ref refs/vectl/candidates/viewer-auth-gcp-producer-repair/2d60a86.
+      Added fixed 30x1s local/HTTPS readiness, exact 0.1.29-only acceptance of an
+      absent legacy Viewer health field, explicit boolean enforcement for 0.1.30,
+      SQLite checks around public reads, and tracked resume recovery from verified
+      public 0.1.29. Recovery requires rehearsal+rotation authority, reuses existing
+      Admin v2, skips rollback replay/v3, reapplies exact 0.1.30, verifies health/SQLite,
+      then disables v1. Unknown state remains no-effect failure. Four tracked source/test
+      files changed; clean candidate/integration. No GCP/runtime/credential effect
+      occurred during repository repair.
+
+
+      Checks: frozen sync 118 packages; shell syntax; exact focused tests 65/65; focused
+      Ruff; diff check; all passed. Tests mechanically cover transient local/HTTPS
+      readiness, 30-attempt exhaustion, strict 0.1.29/0.1.30 health schemas, public-read
+      SQLite mutation, normal rehearsal, and partial 0.1.29 v1+v2 recovery ordering/no-v3.
+      Authoritative Invar retained six documented pre-existing errors (59 warnings/4
+      infos), zero changed-path findings.
+
+
+      Final immutable input: `/tmp/larva-agent-artifacts/tasca-viewer-auth-producer-repair-v5-revised/output/tasca-0.1.29-rollback.tar.gz`,
+      SHA-256 2c5daa2fb2c3e7f5578ff4985daf72352d53c3c88d6b5a2355b24642f93ed9c5; 0600
+      token-free receipt SHA-256 5647a814893a52c0cd5ee29d74f5379aa9ef8849551cf3a3817a417e21d505ab;
+      exact 0.1.29 wheel SHA-256 e5ebeb8ae9157770a9e3ac334a809de186165f0276fa492f0fc17461b0353fc2.
+      Receipt binds producer 2d60a86, rollout SHA-256 550906c4a47da3779d31b7f59f3ed9aadbccc8c27926b1c6eddd3a01a9e97996,
+      remote SHA-256 f272fc2dade11ca8d1da39a4746ecfd6ddda15b980f6709e5415f25b6e7f7adf,
+      builder SHA-256 ae66760a76c760fa028d853a3db9ce7391e323e899af2eef7444086d7167c474,
+      Python >=3.13, httpx 0.28.1, FastMCP 3.4.7 (<4). Child and parent Docker `--network
+      none` smoke passed; parent repeated post-integration exact 0.1.29 startup/public
+      read. Token scan zero findings.'
     rejection_reason: 'Live rehearsal exposed two producer defects and a missing same-target
       recovery branch: health checks run immediately after systemctl restart; exact
       0.1.29 health lacks the 0.1.30 `viewer_auth_required` field; and resume cannot

@@ -49427,7 +49427,7 @@ phases:
       the pre-existing untracked `.artifacts/`, `.pi/`, `dev-timeline.html`, and `plan.yaml.lock`.'
   - id: deploy-0-1-31
     name: Deploy exact 0.1.31 to the existing Tasca GCP VM
-    status: claimed
+    status: pending
     description: 'step_type: implementation
 
       repo_change_policy: runtime_state_only
@@ -49505,8 +49505,6 @@ phases:
     depends_on:
     - package-0-1-31
     agent: devops-engineer
-    claimed_by: devops-engineer
-    claimed_at: '2026-09-02T14:25:18.680047Z'
   - id: verify-live-seat-filtering
     name: Independently verify Seat filtering on public HTTPS MCP
     status: pending

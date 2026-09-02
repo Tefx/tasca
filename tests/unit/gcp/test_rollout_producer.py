@@ -153,14 +153,15 @@ def stub_commands(directory: Path) -> Path:
         "  *'firewall-rules describe'*)\n"
         "    [ \"${GCP_FIREWALL_EXISTS:-1}\" = 1 ] || exit 1\n"
         "    if [ -f \"$GCP_CREATE_DONE\" ]; then printf '%s\\n' \"$GCP_FIREWALL_AFTER_CREATE_JSON\"; else printf '%s\\n' \"$GCP_FIREWALL_JSON\"; fi ;;\n"
-        "  *'secrets versions list tasca-viewer-token'*) printf '%s\\n' \"${GCP_VIEWER_ENABLED:-projects/rda-engineering/secrets/tasca-viewer-token/versions/1}\" ;;\n"
+        "  *'secrets versions list tasca-viewer-token'*) printf '%s\\n' \"${GCP_VIEWER_ENABLED-1}\" ;;\n"
         "  *'secrets versions list tasca-admin-token'*)\n"
-        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then cat \"$GCP_ADMIN_STATE_FILE\"; else printf '%s\\n' \"${GCP_ADMIN_ENABLED:-projects/rda-engineering/secrets/tasca-admin-token/versions/1}\"; fi ;;\n"
+        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then cat \"$GCP_ADMIN_STATE_FILE\"; else printf '%s\\n' \"${GCP_ADMIN_ENABLED-1}\"; fi ;;\n"
         "  *'secrets versions add tasca-admin-token'*)\n"
-        "    printf 'projects/rda-engineering/secrets/tasca-admin-token/versions/2\\n'\n"
-        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then printf '%s\\n' 'projects/rda-engineering/secrets/tasca-admin-token/versions/2' >> \"$GCP_ADMIN_STATE_FILE\"; fi ;;\n"
+        "    created=\"${GCP_ADMIN_CREATED-2}\"\n"
+        "    printf '%s\\n' \"$created\"\n"
+        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then printf '%s\\n' \"$created\" >> \"$GCP_ADMIN_STATE_FILE\"; fi ;;\n"
         "  *'secrets versions disable 1'*)\n"
-        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then grep -v '/versions/1$' \"$GCP_ADMIN_STATE_FILE\" > \"$GCP_ADMIN_STATE_FILE.next\"; mv \"$GCP_ADMIN_STATE_FILE.next\" \"$GCP_ADMIN_STATE_FILE\"; fi ;;\n"
+        "    if [ -n \"${GCP_ADMIN_STATE_FILE:-}\" ]; then grep -vx '1' \"$GCP_ADMIN_STATE_FILE\" > \"$GCP_ADMIN_STATE_FILE.next\"; mv \"$GCP_ADMIN_STATE_FILE.next\" \"$GCP_ADMIN_STATE_FILE\"; fi ;;\n"
         "esac\n"
     )
     git = directory / "git"
@@ -185,6 +186,7 @@ def run_action(
     rules: list[dict[str, object]] | None = None,
     rotate_admin: bool = False,
     admin_enabled: str | None = None,
+    admin_created: str | None = None,
     viewer_enabled: str | None = None,
     admin_state: Path | None = None,
     verification_state: Path | None = None,
@@ -206,7 +208,8 @@ def run_action(
             "GCP_FIREWALL_LIST_JSON": json.dumps(rules or []),
             "GCP_CREATE_DONE": str(tmp_path / "created"),
             "GCP_FIREWALL_EXISTS": "1",
-            "GCP_ADMIN_ENABLED": admin_enabled or "projects/rda-engineering/secrets/tasca-admin-token/versions/1",
+            "GCP_ADMIN_ENABLED": admin_enabled if admin_enabled is not None else "1",
+            "GCP_ADMIN_CREATED": admin_created if admin_created is not None else "2",
             "GCP_VIEWER_ENABLED": viewer_enabled if viewer_enabled is not None else "1",
         }
     )
@@ -395,14 +398,18 @@ def test_apply_preflights_selected_python_and_bundle_before_tls_or_secret_effect
     assert any("compute scp" in command and "rollback.tar.gz" in command for command in commands)
 
 
-def test_resume_preserves_matching_tls_firewall_and_viewer_secret_while_rotating_admin_once(tmp_path: Path) -> None:
-    """Resume reads matching effects, rehearses only runtime bytes, and rotates Admin once."""
-    result, commands = run_action(tmp_path, "resume", rotate_admin=True)
+def test_resume_creates_one_numeric_admin_v2_after_reconciliation(tmp_path: Path) -> None:
+    """One enabled numeric v1 creates one numeric v2 through stdin after the rehearsal setup."""
+    result, commands = run_action(
+        tmp_path, "resume", rotate_admin=True, admin_enabled="1", admin_created="2"
+    )
 
     assert result.returncode == 0, result.stderr
     assert any("viewer-auth-remote.sh reconcile" in command for command in commands)
     assert any("viewer-auth-remote.sh rehearse" in command for command in commands)
-    assert any("secrets versions add tasca-admin-token" in command for command in commands)
+    additions = [command for command in commands if "secrets versions add tasca-admin-token" in command]
+    assert len(additions) == 1
+    assert "--data-file=-" in additions[0]
     assert any("secrets versions disable 1" in command for command in commands)
     assert not any("instances add-tags" in command for command in commands)
     assert not any("firewall-rules create" in command or "firewall-rules delete" in command for command in commands)
@@ -410,18 +417,48 @@ def test_resume_preserves_matching_tls_firewall_and_viewer_secret_while_rotating
     assert not any("secrets versions add tasca-viewer-token" in command for command in commands)
 
 
-def test_resume_refuses_ambiguous_admin_versions_before_secret_write(tmp_path: Path) -> None:
-    """Several post-v1 Admin versions do not identify a safe rotation outcome."""
+@pytest.mark.parametrize(
+    "admin_enabled",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("0", id="zero"),
+        pytest.param("1\n1", id="duplicate-v1"),
+        pytest.param("1\n2\n3", id="more-than-two"),
+        pytest.param("2\n3", id="two-post-v1-without-v1"),
+        pytest.param("projects/rda-engineering/secrets/tasca-admin-token/versions/1", id="malformed-resource-name"),
+    ],
+)
+def test_resume_rejects_invalid_numeric_admin_enabled_versions_before_secret_write(
+    tmp_path: Path, admin_enabled: str
+) -> None:
+    """Admin rotation rejects empty, malformed, duplicate, and ambiguous value(name) output."""
+    result, commands = run_action(tmp_path, "resume", rotate_admin=True, admin_enabled=admin_enabled)
+
+    assert result.returncode != 0
+    assert "Admin rotation" in result.stderr
+    assert not any("secrets versions add" in command for command in commands)
+    assert not any("secrets versions disable" in command for command in commands)
+
+
+@pytest.mark.parametrize(
+    "admin_created",
+    [
+        pytest.param("0", id="zero"),
+        pytest.param("2\n3", id="multiple"),
+        pytest.param("projects/rda-engineering/secrets/tasca-admin-token/versions/2", id="malformed-resource-name"),
+    ],
+)
+def test_resume_rejects_malformed_numeric_admin_creation_output(
+    tmp_path: Path, admin_created: str
+) -> None:
+    """A v1 rotation refuses malformed value(name) output after one attempted stdin creation."""
     result, commands = run_action(
-        tmp_path,
-        "resume",
-        rotate_admin=True,
-        admin_enabled="projects/rda-engineering/secrets/tasca-admin-token/versions/2\nprojects/rda-engineering/secrets/tasca-admin-token/versions/3",
+        tmp_path, "resume", rotate_admin=True, admin_enabled="1", admin_created=admin_created
     )
 
     assert result.returncode != 0
-    assert "ambiguous enabled versions" in result.stderr
-    assert not any("secrets versions add" in command for command in commands)
+    assert "Admin rotation did not create a new named secret version" in result.stderr
+    assert sum("secrets versions add tasca-admin-token" in command for command in commands) == 1
     assert not any("secrets versions disable" in command for command in commands)
 
 
@@ -552,10 +589,10 @@ def test_resume_rejects_viewer_secret_layout_other_than_exact_enabled_v1(
     assert not any("compute scp" in command for command in commands)
 
 
-def test_resume_reuses_midway_admin_rotation_after_rehearsal_failure(tmp_path: Path) -> None:
-    """A second resume uses the one existing post-v1 Admin version and then retires version 1."""
+def test_resume_reuses_numeric_partial_admin_rotation_after_rehearsal_failure(tmp_path: Path) -> None:
+    """A second resume reuses numeric v2 and disables v1 only after a successful rehearsal."""
     state = tmp_path / "enabled-admin-versions"
-    state.write_text("projects/rda-engineering/secrets/tasca-admin-token/versions/1\n")
+    state.write_text("1\n")
     failed, failed_commands = run_action(
         tmp_path / "first",
         "resume",
@@ -567,10 +604,7 @@ def test_resume_reuses_midway_admin_rotation_after_rehearsal_failure(tmp_path: P
     assert failed.returncode != 0
     assert any("secrets versions add tasca-admin-token" in command for command in failed_commands)
     assert not any("secrets versions disable 1" in command for command in failed_commands)
-    assert state.read_text().splitlines() == [
-        "projects/rda-engineering/secrets/tasca-admin-token/versions/1",
-        "projects/rda-engineering/secrets/tasca-admin-token/versions/2",
-    ]
+    assert state.read_text().splitlines() == ["1", "2"]
 
     resumed, resumed_commands = run_action(
         tmp_path / "second", "resume", rotate_admin=True, admin_state=state
@@ -579,14 +613,16 @@ def test_resume_reuses_midway_admin_rotation_after_rehearsal_failure(tmp_path: P
     assert resumed.returncode == 0, resumed.stderr
     assert "reusing the existing post-version-1 Admin secret" in resumed.stdout
     assert not any("secrets versions add tasca-admin-token" in command for command in resumed_commands)
-    assert any("secrets versions disable 1" in command for command in resumed_commands)
-    assert state.read_text().splitlines() == ["projects/rda-engineering/secrets/tasca-admin-token/versions/2"]
+    rehearsal = next(index for index, command in enumerate(resumed_commands) if "viewer-auth-remote.sh rehearse" in command)
+    disable = next(index for index, command in enumerate(resumed_commands) if "secrets versions disable 1" in command)
+    assert rehearsal < disable
+    assert state.read_text().splitlines() == ["2"]
 
 
 def test_resume_treats_one_enabled_post_v1_admin_version_as_finalized(tmp_path: Path) -> None:
     """A retried finalized rotation runs reconciliation without another secret mutation."""
     state = tmp_path / "enabled-admin-versions"
-    state.write_text("projects/rda-engineering/secrets/tasca-admin-token/versions/10\n")
+    state.write_text("10\n")
 
     result, commands = run_action(tmp_path / "finalized", "resume", rotate_admin=True, admin_state=state)
 

@@ -413,15 +413,14 @@ reapply_release() {
 
 ROTATED_ADMIN_OLD_VERSION=""
 rotate_admin_secret_version() {
-    local enabled new_version line version
+    local enabled new_version line version old_count post_version
     local -a versions=()
     enabled="$(gcloud secrets versions list tasca-admin-token --project="$PROJECT_ID" \
         --filter='state=ENABLED' --format='value(name)' --quiet)"
     while IFS= read -r line; do
-        [[ -n "$line" ]] || continue
-        [[ "$line" =~ ^projects/${PROJECT_ID}/secrets/tasca-admin-token/versions/([1-9][0-9]*)$ ]] \
-            || die "Admin rotation found an invalid enabled version name"
-        versions+=("${BASH_REMATCH[1]}")
+        [[ "$line" =~ ^[1-9][0-9]*$ ]] \
+            || die "Admin rotation found an invalid enabled version"
+        versions+=("$line")
     done <<< "$enabled"
     case "${#versions[@]}" in
         1)
@@ -430,7 +429,7 @@ rotate_admin_secret_version() {
                 new_version="$(head -c 48 /dev/urandom | base64 | tr -d '\n' \
                     | gcloud secrets versions add tasca-admin-token --project="$PROJECT_ID" --data-file=- \
                         --format='value(name)' --quiet)"
-                [[ "$new_version" =~ ^projects/${PROJECT_ID}/secrets/tasca-admin-token/versions/([2-9]|[1-9][0-9]+)$ ]] \
+                [[ "$new_version" =~ ^([2-9]|[1-9][0-9]+)$ ]] \
                     || die "Admin rotation did not create a new named secret version"
                 ROTATED_ADMIN_OLD_VERSION="1"
                 return
@@ -440,17 +439,21 @@ rotate_admin_secret_version() {
             printf 'viewer-auth rollout: Admin rotation is already finalized at enabled version %s\n' "$version"
             ;;
         2)
-            if [[ " ${versions[*]} " =~ " 1 " ]]; then
-                for version in "${versions[@]}"; do
-                    [[ "$version" == "1" ]] && continue
-                    [[ "$version" =~ ^([2-9]|[1-9][0-9]+)$ ]] \
-                        || die "Admin rotation found an invalid post-version-1 state"
-                done
-                ROTATED_ADMIN_OLD_VERSION="1"
-                printf 'viewer-auth rollout: reusing the existing post-version-1 Admin secret\n'
-                return
-            fi
-            die "Admin rotation found ambiguous enabled versions"
+            old_count=0
+            post_version=""
+            for version in "${versions[@]}"; do
+                if [[ "$version" == "1" ]]; then
+                    ((old_count += 1))
+                elif [[ "$version" =~ ^([2-9]|[1-9][0-9]+)$ ]]; then
+                    post_version="$version"
+                else
+                    die "Admin rotation found an invalid post-version-1 state"
+                fi
+            done
+            [[ "$old_count" == "1" && -n "$post_version" ]] \
+                || die "Admin rotation found ambiguous enabled versions"
+            ROTATED_ADMIN_OLD_VERSION="1"
+            printf 'viewer-auth rollout: reusing the existing post-version-1 Admin secret\n'
             ;;
         *) die "Admin rotation found ambiguous enabled versions" ;;
     esac

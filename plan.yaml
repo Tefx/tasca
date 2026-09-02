@@ -48797,21 +48797,25 @@ phases:
 
       - Leave exact 0.1.30 healthy over HTTPS with `viewer_auth_required=true`, one
       loopback backend, Viewer v1 and Admin v2 as the only enabled versions, Admin/Viewer
-      inequality true, current configured tokens absent from full Tasca/Caddy journals
-      and evidence, and no credential/temp/bridge residue.
+      inequality true, and no credential/temp/bridge residue. Per the current user''s
+      bounded risk acceptance, preserve exactly two Admin v2 occurrences printed by
+      historical 0.1.29 startup at 2026-09-02T09:11:56.842350Z; require no Viewer
+      occurrence, no additional Admin occurrence after final 0.1.30 activation, and
+      no credential bytes in responses, verifier output, receipts, or retained evidence.
 
 
       Boundary: devops-engineer owns the remaining reversible lifecycle on the named
       VM, existing TLS/firewall/secrets/systemd, the one-time logical-state receipt,
       exact release recovery, and final reconciliation. No new VM/database/disk, package
-      publication, DNS-zone change, secret destruction, credential disclosure, database
-      row/schema mutation, journal deletion, or unrelated resource change.
+      publication, DNS-zone change, secret destruction, credential disclosure outside
+      the acknowledged preserved legacy journal entries, database row/schema mutation,
+      journal deletion, or unrelated resource change.
 
 
       Admit: require the immutable repair receipt and integrated producer, exact release
       wheel/hash, CPython 3.13 identity, current read-only live reconciliation, authorized
-      credential handoff, and the current user''s explicit logical-SQLite acceptance
-      clarification.
+      credential handoff, and the current user''s explicit logical-SQLite and bounded
+      historical-journal risk acceptance.
 
 
       Recovery: reconcile before repeat. If logical reseal succeeds but a later action
@@ -48829,8 +48833,11 @@ phases:
       mutation; integrity/schema/path/device/inode and REST/SQLite domain-table count
       match; no rollback replay or v3; exact final 0.1.30 local/HTTPS health with
       Viewer auth; one loopback listener; public 8000 refusal; Viewer v1 only; Admin
-      v2 only with v1 disabled/not destroyed; Admin/Viewer inequality; zero current-token
-      matches in full journals/evidence; no credential/temp/bridge residue.'
+      v2 only with v1 disabled/not destroyed; Admin/Viewer inequality; exactly the
+      two acknowledged pre-0.1.30 Admin v2 journal matches, zero Viewer matches, zero
+      additional Admin matches after 0.1.30 activation, and zero configured-token
+      matches in responses/receipts/verifier output/retained evidence; no credential/temp/bridge
+      residue.'
     evidence_template: Record pre/post gcloud resource identities; approved hostname
       and certificate issuer/validity without credentials; timestamped proof that
       HTTPS and port-8000 closure preceded viewer-secret access; secret resource/version

@@ -27,7 +27,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-RELEASE_VERSION = "0.1.30"
+RELEASE_VERSION = "0.1.31"
 PROJECT_ID = "rda-engineering"
 ZONE = "asia-southeast1-b"
 VM = "tasca-mcp"
@@ -643,7 +643,7 @@ def main() -> int:
     if args.project != PROJECT_ID:
         raise RuntimeError("verifier project must be rda-engineering")
     if args.expected_version != RELEASE_VERSION:
-        raise RuntimeError("verifier expected version must be 0.1.30")
+        raise RuntimeError("verifier expected version must be 0.1.31")
     raw_base_url = os.environ.get("TASCA_HTTPS_BASE_URL")
     if not raw_base_url:
         raise RuntimeError("TASCA_HTTPS_BASE_URL is required")

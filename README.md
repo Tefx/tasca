@@ -129,7 +129,7 @@ If you're running the server, hit `http://localhost:8000` in your browser to ent
 
 `/api/v1/health`, `/api/v1/ready`, `/docs`, `/openapi.json`, and the SPA shell/static assets stay public. Credentials never belong in URLs, prompts, command arguments, logs, or screenshots. Remote credential transport requires certificate-valid HTTPS.
 
-The committed 0.1.30 rollout and rollback producers live in `scripts/gcp/`. They install only the release wheel whose filename and SHA-256 were recorded at build time, bind the backend to loopback port 8000, and preserve the single `tasca-data` SQLite disk. See [`docs/deployment-ops-v0.1.md`](docs/deployment-ops-v0.1.md) for release, TLS, secret rotation, rollback, and redacted verification instructions.
+The committed 0.1.31 forward-deployment producer lives in `scripts/gcp/seat-presence-forward-deploy.sh`. It installs only the recorded wheel and SHA-256 into a new release venv, atomically changes only the service `ExecStart` path, preserves the existing environment, `tasca-data` SQLite disk, Caddy, firewall, and 0.1.30 release, then restores the backed-up unit if activation health fails. See [`docs/deployment-ops-v0.1.md`](docs/deployment-ops-v0.1.md) for the exact target, build, and runtime commands.
 
 ## 💡 Gotchas & Survival Guide
 

@@ -43,7 +43,7 @@ def verifier_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dic
         del headers
         operations.append((operation, token, method))
         if url.endswith("/api/v1/health"):
-            return 200, b'{"version":"0.1.30"}', {}
+            return 200, b'{"version":"0.1.31"}', {}
         if url.endswith("/api/v1/ready") or url.endswith("/docs") or url.endswith("/openapi.json"):
             return 200, b"{}", {}
         if url.endswith("/") and "/mcp/" not in url:
@@ -128,7 +128,7 @@ def arguments(*, phase: str, viewer_mode: str = "configured") -> SimpleNamespace
         project="rda-engineering",
         viewer_secret="tasca-viewer-token",
         admin_secret="tasca-admin-token",
-        expected_version="0.1.30",
+        expected_version="0.1.31",
         check_direct_port="34.1.134.239:8000",
         viewer_mode=viewer_mode,
         prepare=phase == "prepare",
@@ -162,7 +162,7 @@ def test_prepare_exercises_configured_rest_mcp_create_get_and_writes_token_free_
         "format": "tasca-viewer-auth-persistence-v1",
         "phase": "prepared",
         "base_url": "https://tasca.example",
-        "expected_version": "0.1.30",
+        "expected_version": "0.1.31",
         "table_id": "fixture-table",
     }
     assert stat.S_IMODE(state_file.stat().st_mode) == 0o600
@@ -309,7 +309,7 @@ def test_exact_downstream_cleanup_cli_contract(monkeypatch: pytest.MonkeyPatch) 
             "--admin-secret",
             "tasca-admin-token",
             "--expected-version",
-            "0.1.30",
+            "0.1.31",
             "--check-direct-port",
             "34.1.134.239:8000",
             "--cleanup",

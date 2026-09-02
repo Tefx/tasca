@@ -42,7 +42,7 @@ It can elevate from Viewer to Admin with a fresh validation. See
 [`tasca-http-api-v0.1.md`](tasca-http-api-v0.1.md) and
 [`tasca-web-uiux-v0.1.md`](tasca-web-uiux-v0.1.md) for route and UI behavior.
 
-## Build the 0.1.30 release candidate
+## Build the 0.1.31 Seat-presence release candidate
 
 From a clean committed checkout, build the tracked SPA before building Python
 artifacts:
@@ -50,17 +50,56 @@ artifacts:
 ```bash
 uv sync --frozen --group dev
 (cd web && npm ci && npm test && npm run lint && npm run build)
-uv run pytest -q
-uv build
-shasum -a 256 dist/tasca-0.1.30-py3-none-any.whl
+uv run pytest -q tests/unit/test_release_package.py
+uv build --wheel --out-dir dist
+shasum -a 256 dist/tasca-0.1.31-py3-none-any.whl
 git rev-parse HEAD
 ```
 
 The wheel filename, its SHA-256, and the committed producer revision are the
-release identity. The wheel includes `tasca/web/dist/`; no `uvx --from
-tasca==...`, PyPI `latest`, or untracked `.artifacts` helper is an installation
-input. Building creates local `dist/` artifacts only. It does not publish or
-deploy them.
+release identity. The package test requires wheel `METADATA` version `0.1.31`
+and byte-for-byte inclusion of `tasca/core/domain/seat.py`. The wheel includes
+`tasca/web/dist/`; no `uvx --from tasca==...`, PyPI `latest`, or untracked
+`.artifacts` helper is an installation input. Building creates local `dist/`
+artifacts only. It does not publish or deploy them.
+
+## 0.1.31 Seat-presence forward deployment
+
+`scripts/gcp/seat-presence-forward-deploy.sh` is the only producer for this
+release. It accepts only the exact `tasca-0.1.31-py3-none-any.whl` and its
+SHA-256, and its constants bind the existing `rda-engineering`,
+`asia-southeast1-b`, `tasca-mcp` target plus the admitted remote CPython 3.13
+path. No target, interpreter, hostname, token, secret, database, Caddy, or
+firewall value is accepted from the command line or environment.
+
+First render the token-free plan from the committed clean checkout:
+
+```bash
+RELEASE_WHEEL=dist/tasca-0.1.31-py3-none-any.whl \
+RELEASE_SHA256=<recorded-wheel-sha256> \
+scripts/gcp/seat-presence-forward-deploy.sh render
+```
+
+The separately authorized runtime step uses the same exact inputs with
+`apply`. It stages the tracked producer and wheel, installs the wheel into
+`/opt/tasca/releases/0.1.31/venv` with the fixed remote CPython 3.13 binary,
+and atomically replaces only `tasca.service`'s `ExecStart` path. It neither
+reads nor rewrites the environment or credentials, and it leaves the SQLite
+disk, Caddy, firewall, and `/opt/tasca/releases/0.1.30` untouched. It retains
+`/opt/tasca/releases/0.1.31/tasca.service.pre-0.1.31`; any failed systemd
+activation or bounded local/HTTPS health readback restores that unit and
+restarts the existing service. This producer has no rollback rehearsal or
+rollback bundle action.
+
+```bash
+RELEASE_WHEEL=dist/tasca-0.1.31-py3-none-any.whl \
+RELEASE_SHA256=<recorded-wheel-sha256> \
+scripts/gcp/seat-presence-forward-deploy.sh apply
+```
+
+The tracked remote verifier now admits only expected version `0.1.31`. It
+continues to verify the existing Viewer/Admin protocol; this release adds no
+Seat-specific live assertion to that verifier.
 
 ## Build and verify the immutable 0.1.29 rollback input
 
@@ -160,7 +199,7 @@ at all. A configured Viewer rollout reads it only after the TLS gate passes; the
 release environment is root-owned, group-readable only by `tasca`, and mode
 0640 without exposing either credential.
 
-## Exact GCP rollout and rollback
+## Historical 0.1.30 Viewer/Auth GCP rollout and rollback
 Before `apply`, witness that the chosen hostname points at the existing VM and
 can obtain a valid certificate. The tracked producer stages Caddy and verifies
 certificate-valid HTTPS before it asks Secret Manager for either credential. It
@@ -243,7 +282,10 @@ verification.
 
 To perform only the deterministic rollback, use the same explicit Python and
 bundle inputs with `viewer-auth-rollout.sh rollback --rollback-version 0.1.29`.
-## Mandatory persistence verification protocol
+## Historical 0.1.30 persistence verification protocol
+
+This records the prior Viewer/Auth release lifecycle. It is not a producer for
+0.1.31; use the forward-deployment section above for the current release.
 
 The verifier uses a 0600, token-free, bounded state receipt. It contains only
 format, phase, HTTPS base URL, expected version, and table ID. It stores no

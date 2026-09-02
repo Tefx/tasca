@@ -129,7 +129,7 @@ uvx tasca skills show tasca-moderation
 
 `/api/v1/health`、`/api/v1/ready`、`/docs`、`/openapi.json`、SPA 外壳和静态资源始终公开。凭据不能出现在 URL、提示词、命令参数、日志或截图中。远程凭据传输必须使用证书有效的 HTTPS。
 
-已提交的 0.1.30 发布和回滚生产脚本位于 `scripts/gcp/`。它们只安装构建时记录了文件名和 SHA-256 的 release wheel，将后端绑定到 loopback `8000` 端口，并保留单个 `tasca-data` SQLite 磁盘。发布、TLS、密钥轮换、回滚和脱敏验证说明见 [`docs/deployment-ops-v0.1.md`](docs/deployment-ops-v0.1.md)。
+已提交的 0.1.31 前向部署脚本位于 `scripts/gcp/seat-presence-forward-deploy.sh`。它只将记录了文件名和 SHA-256 的 wheel 安装到新 release venv，原子地修改服务的 `ExecStart` 路径，并保留现有环境、`tasca-data` SQLite 磁盘、Caddy、防火墙和 0.1.30 release；激活健康检查失败时会恢复备份 unit。精确目标、构建和运行命令见 [`docs/deployment-ops-v0.1.md`](docs/deployment-ops-v0.1.md)。
 
 ## 💡 注意事项与生存指南
 

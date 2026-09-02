@@ -1,4 +1,4 @@
-"""Release-candidate packaging contracts for the tracked 0.1.30 SPA."""
+"""Release-candidate packaging contracts for the tracked 0.1.31 Seat-presence release."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 REPOSITORY = Path(__file__).parents[2]
-VERSION = "0.1.30"
+VERSION = "0.1.31"
 WHEEL_NAME = f"tasca-{VERSION}-py3-none-any.whl"
 
 
@@ -46,6 +46,7 @@ def test_sdist_has_bounded_release_contents(tmp_path: Path) -> None:
         "scripts/gcp/viewer-auth-rollout.sh",
         "scripts/gcp/build-viewer-auth-rollback-bundle.sh",
         "scripts/gcp/verify_viewer_auth_remote.py",
+        "scripts/gcp/seat-presence-forward-deploy.sh",
     } <= names
     assert "scripts/gcp/verify_remote_mcp.py" not in names
     forbidden_prefixes = (
@@ -80,6 +81,9 @@ def test_wheel_contains_tracked_spa_and_fresh_cli(tmp_path: Path) -> None:
         assert "tasca/web/dist/index.html" in names
         assert any(name.startswith("tasca/web/dist/assets/") for name in names)
         assert f"Version: {VERSION}" in metadata
+        seat_source = (REPOSITORY / "src/tasca/core/domain/seat.py").read_bytes()
+        wheel_seat_source = archive.read("tasca/core/domain/seat.py")
+        assert wheel_seat_source == seat_source
 
     environment = tmp_path / "fresh-wheel"
     create_environment = run(["uv", "venv", str(environment)])

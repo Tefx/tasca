@@ -73,7 +73,7 @@ def is_valid_attachment_name(name: str) -> bool:
 @deal.pre(lambda index, attachment: index >= 0 and isinstance(attachment, AttachmentInput))
 @deal.post(
     lambda result: (
-        (isinstance(result[0], int) and result[0] >= 0 and result[1] is None)
+        (isinstance(result[0], int) and result[0] >= 1 and result[1] is None)
         or (result[0] is None and isinstance(result[1], SayingValidationError))
     )
 )
@@ -85,8 +85,8 @@ def validate_attachment_input(
 
     >>> validate_attachment_input(0, AttachmentInput(name="note.md", content="note"))[0]
     4
-    >>> validate_attachment_input(1, AttachmentInput(name="empty.md", content=""))[0]
-    0
+    >>> validate_attachment_input(1, AttachmentInput(name="empty.md", content=""))[1].kind
+    <SayingValidationKind.ATTACHMENT_CONTENT: 'attachment_content'>
     >>> validate_attachment_input(2, AttachmentInput(name="bad.txt", content="note"))[1].attachment_index
     2
     """
@@ -97,6 +97,12 @@ def validate_attachment_input(
                 "Attachment names must be 1..128 characters, have no surrounding "
                 "whitespace, end in .md or .markdown, and contain no slash, backslash, or NUL"
             ),
+            attachment_index=index,
+        )
+    if not attachment.content.strip():
+        return None, SayingValidationError(
+            kind=SayingValidationKind.ATTACHMENT_CONTENT,
+            message="Attachment content must contain non-whitespace Markdown",
             attachment_index=index,
         )
     byte_size = utf8_size(attachment.content)
@@ -140,8 +146,8 @@ def validate_saying_payload(
     <SayingValidationKind.CONTENT: 'content'>
     >>> validate_saying_payload("Body", [AttachmentInput(name="notes.md", content="日本語")]) is None
     True
-    >>> validate_saying_payload("Body", [AttachmentInput(name="empty.md", content="")]) is None
-    True
+    >>> validate_saying_payload("Body", [AttachmentInput(name="empty.md", content="")]).kind
+    <SayingValidationKind.ATTACHMENT_CONTENT: 'attachment_content'>
     >>> validate_saying_payload("Body", [AttachmentInput(name="../notes.md", content="x")]).kind
     <SayingValidationKind.ATTACHMENT_NAME: 'attachment_name'>
     """

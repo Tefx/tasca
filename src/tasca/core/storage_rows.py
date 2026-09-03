@@ -236,7 +236,7 @@ def row_to_saying(row: tuple[object, ...]) -> Saying:
     and all(isinstance(row[index], str | int) for index in (3, 4))
     and all(_is_sqlite_int(row[index]) for index in (3, 4))
     and int(cast(Any, row[3])) >= 0
-    and int(cast(Any, row[4])) >= 0
+    and int(cast(Any, row[4])) >= 1
 )
 @deal.post(lambda result: isinstance(result, AttachmentSummary))
 def row_to_attachment_summary(row: tuple[object, ...]) -> AttachmentSummary:
@@ -244,8 +244,8 @@ def row_to_attachment_summary(row: tuple[object, ...]) -> AttachmentSummary:
 
     >>> row_to_attachment_summary(("a1", "s1", "notes.md", 0, 7)).byte_size
     7
-    >>> row_to_attachment_summary(("a2", "s1", "empty.md", 1, 0)).byte_size
-    0
+    >>> row_to_attachment_summary(("a2", "s1", "one.md", 1, 1)).byte_size
+    1
     """
     return AttachmentSummary(
         id=AttachmentId(str(row[0])),
@@ -261,7 +261,7 @@ def row_to_attachment_summary(row: tuple[object, ...]) -> AttachmentSummary:
     and all(isinstance(row[index], str | int) for index in (4, 5))
     and all(_is_sqlite_int(row[index]) for index in (4, 5))
     and int(cast(Any, row[4])) >= 0
-    and int(cast(Any, row[5])) >= 0
+    and int(cast(Any, row[5])) >= 1
 )
 @deal.post(lambda result: isinstance(result, SayingAttachment))
 def row_to_attachment(row: tuple[object, ...]) -> SayingAttachment:
@@ -269,8 +269,8 @@ def row_to_attachment(row: tuple[object, ...]) -> SayingAttachment:
 
     >>> row_to_attachment(("a1", "s1", "t1", "notes.md", 0, 7, "# note")).content
     '# note'
-    >>> row_to_attachment(("a2", "s1", "t1", "empty.md", 1, 0, "")).content
-    ''
+    >>> row_to_attachment(("a2", "s1", "t1", "one.md", 1, 1, "x")).content
+    'x'
     """
     return SayingAttachment(
         id=AttachmentId(str(row[0])),

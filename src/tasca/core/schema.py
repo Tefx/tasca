@@ -152,7 +152,7 @@ def create_saying_attachments_table_ddl(
     True
     >>> "UNIQUE(saying_id, position)" in ddl
     True
-    >>> "CHECK(byte_size >= 0)" in ddl
+    >>> "CHECK(byte_size >= 1)" in ddl
     True
     """
     return f"""CREATE TABLE IF NOT EXISTS {table_name} (
@@ -161,7 +161,7 @@ def create_saying_attachments_table_ddl(
     position INTEGER NOT NULL CHECK(position >= 0),
     name TEXT NOT NULL,
     content TEXT NOT NULL,
-    byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
+    byte_size INTEGER NOT NULL CHECK(byte_size >= 1),
     FOREIGN KEY (saying_id) REFERENCES sayings(id) ON DELETE CASCADE,
     UNIQUE(saying_id, position)
 )"""

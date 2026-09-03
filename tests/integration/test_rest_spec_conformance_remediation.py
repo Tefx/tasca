@@ -146,8 +146,8 @@ async def test_rest_join_history_includes_ordered_attachment_metadata(http_clien
             "speaker_name": "Alice",
             "content": "First",
             "attachments": [
-                {"name": "empty.md", "content": ""},
-                {"name": "notes.markdown", "content": "body-only-secret"},
+                {"name": "first.md", "content": "first-body-only-secret"},
+                {"name": "notes.markdown", "content": "second-body-only-secret"},
             ],
         },
         headers=_auth(),
@@ -170,12 +170,48 @@ async def test_rest_join_history_includes_ordered_attachment_metadata(http_clien
     assert [saying["sequence"] for saying in sayings] == [0, 1]
     assert sayings[0]["attachments"] == with_attachment.json()["attachments"]
     assert [item["name"] for item in sayings[0]["attachments"]] == [
-        "empty.md",
+        "first.md",
         "notes.markdown",
     ]
     assert all("content" not in item for item in sayings[0]["attachments"])
     assert sayings[1]["attachments"] == []
-    assert "body-only-secret" not in join_response.text
+    assert "first-body-only-secret" not in join_response.text
+    assert "second-body-only-secret" not in join_response.text
+
+
+@pytest.mark.asyncio
+async def test_rest_rejects_blank_attachment_content_without_consuming_sequence(
+    http_client,
+) -> None:
+    suffix = uuid.uuid4().hex
+    create_response = await http_client.post(
+        "/api/v1/tables",
+        json={"title": f"REST blank attachment {suffix}"},
+        headers=_auth(),
+    )
+    assert create_response.status_code == 200
+    table_id = create_response.json()["table_id"]
+
+    for content in ("", " \n\t", "\u0085\u2028\u2029"):
+        response = await http_client.post(
+            f"/api/v1/tables/{table_id}/sayings",
+            json={
+                "speaker_name": "Alice",
+                "content": "Body",
+                "attachments": [{"name": "blank.md", "content": content}],
+            },
+            headers=_auth(),
+        )
+        assert response.status_code == 422
+        assert response.json()["error"]["details"]["kind"] == "attachment_content"
+
+    accepted = await http_client.post(
+        f"/api/v1/tables/{table_id}/sayings",
+        json={"speaker_name": "Alice", "content": "Accepted"},
+        headers=_auth(),
+    )
+    assert accepted.status_code == 201
+    assert accepted.json()["sequence"] == 0
 
 
 @pytest.mark.asyncio

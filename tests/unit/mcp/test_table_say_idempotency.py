@@ -14,7 +14,6 @@ from returns.result import Failure, Success
 
 from tasca.config import settings
 from tasca.core.domain.table import Table, TableId, TableStatus
-from tasca.core.schema import create_saying_attachments_table_ddl
 from tasca.shell.mcp import database as mcp_database
 from tasca.shell.mcp import entrypoints
 from tasca.shell.storage.database import apply_schema
@@ -38,27 +37,14 @@ def _create_database(path: str = ":memory:") -> tuple[sqlite3.Connection, str]:
     return conn, table_id
 
 
-def _install_positive_attachment_byte_check(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        "ALTER TABLE saying_attachments RENAME TO saying_attachments_allow_empty"
-    )
-    conn.execute(
-        create_saying_attachments_table_ddl().replace(
-            "CHECK(byte_size >= 0)",
-            "CHECK(byte_size >= 1)",
-        )
-    )
-    conn.execute("DROP TABLE saying_attachments_allow_empty")
-    conn.commit()
-
-
-def test_mcp_database_initialization_runs_shared_empty_attachment_migration(
+def test_mcp_database_initialization_runs_shared_schema_migration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     db_path = tmp_path / "mcp-migration.db"
     setup_conn, table_id = _create_database(str(db_path))
-    _install_positive_attachment_byte_check(setup_conn)
+    setup_conn.execute("DROP TABLE saying_attachments")
+    setup_conn.commit()
     setup_conn.close()
     monkeypatch.setattr(settings, "db_path", str(db_path))
     mcp_database.close_mcp_db()
@@ -71,17 +57,17 @@ def test_mcp_database_initialization_runs_shared_empty_attachment_migration(
                 "WHERE type = 'table' AND name = 'saying_attachments'"
             ).fetchone()[0].split()
         )
-        assert "CHECK(byte_size>=0)" in normalized_ddl
+        assert "CHECK(byte_size>=1)" in normalized_ddl
 
         created = entrypoints.table_say(
             table_id=table_id,
             content="MCP migration body",
             speaker_name="Alice",
             speaker_kind="human",
-            attachments=[{"name": "empty.md", "content": ""}],
+            attachments=[{"name": "notes.md", "content": "Migrated"}],
         )
         assert isinstance(created, Success)
-        assert created.unwrap()["data"]["attachments"][0]["byte_size"] == 0
+        assert created.unwrap()["data"]["attachments"][0]["byte_size"] == 8
     finally:
         mcp_database.close_mcp_db()
 
@@ -108,7 +94,7 @@ def test_idempotency_storage_failure_rolls_back_saying_attachments_and_sequence(
         "speaker_name": "Alice",
         "speaker_kind": "human",
         "dedup_id": "forced-storage-failure",
-        "attachments": [{"name": "empty.md", "content": ""}],
+        "attachments": [{"name": "atomic.md", "content": "Atomic attachment"}],
     }
 
     failed = entrypoints.table_say(**request)
@@ -143,7 +129,7 @@ def test_concurrent_same_dedup_id_on_shared_mcp_connection_returns_one_saying(
         "speaker_name": "Alice",
         "speaker_kind": "human",
         "dedup_id": "same-shared-connection-key",
-        "attachments": [{"name": "empty.md", "content": ""}],
+        "attachments": [{"name": "shared.md", "content": "Shared attachment"}],
     }
 
     try:
@@ -191,7 +177,7 @@ def test_concurrent_same_dedup_id_commits_one_attachment_bearing_saying(
         "speaker_kind": "human",
         "dedup_id": "same-concurrent-key",
         "attachments": [
-            {"name": "empty.md", "content": ""},
+            {"name": "first.md", "content": "First"},
             {"name": "notes.md", "content": "Notes"},
         ],
     }
@@ -205,7 +191,7 @@ def test_concurrent_same_dedup_id_commits_one_attachment_bearing_saying(
         assert len({response["id"] for response in responses}) == 1
         assert {response["sequence"] for response in responses} == {0}
         assert all(
-            [item["name"] for item in response["attachments"]] == ["empty.md", "notes.md"]
+            [item["name"] for item in response["attachments"]] == ["first.md", "notes.md"]
             for response in responses
         )
 

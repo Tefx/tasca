@@ -28,7 +28,7 @@ Search covers saying `content`, board values, and selected table metadata. Markd
    - One JSON object per line.
    - Header `export_version` is `0.2`.
    - Include a table snapshot followed by sayings in sequence order.
-   - Every saying has an ordered `attachments` array. Each entry includes `{id, position, name, media_type, byte_size, saying_id, table_id, content}`; `content` is complete and unchanged, including an empty string.
+   - Every saying has an ordered `attachments` array. Each entry includes `{id, position, name, media_type, byte_size, saying_id, table_id, content}`; accepted nonblank `content` is exported completely and unchanged.
 
 ```json
 {"type":"export_header","export_version":"0.2","exported_at":"2026-02-21T00:00:00Z","table_id":"<uuid>"}

@@ -95,7 +95,7 @@ class AttachmentSummary(BaseModel):
     id: AttachmentId
     name: str
     position: int = Field(..., ge=0)
-    byte_size: int = Field(..., ge=0)
+    byte_size: int = Field(..., ge=1)
     media_type: Literal["text/markdown"] = "text/markdown"
 
 

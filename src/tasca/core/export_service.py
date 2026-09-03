@@ -323,7 +323,7 @@ def generate_markdown(
         ...     speaker=Speaker(kind=SpeakerKind.HUMAN, name="Alice"),
         ...     content="Full content preserved without truncation.",
         ...     attachments=[AttachmentSummary(
-        ...         id=AttachmentId("a-001"), name="notes.md", position=0, byte_size=0,
+        ...         id=AttachmentId("a-001"), name="notes.md", position=0, byte_size=4,
         ...     )],
         ...     created_at=datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc),
         ... )

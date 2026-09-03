@@ -104,7 +104,7 @@ Rationale: pause is a control/social signal and is soft-enforced by default in v
 - Input attachments are `{name, content}`. Ordinary saying reads expose ordered metadata `{id, position, name, media_type, byte_size}` and omit attachment content.
 - Full attachment reads add `saying_id`, `table_id`, and unchanged `content`; they occur only through the explicit nested REST endpoint or the admin-only MCP tool.
 - Names are 1..128 Unicode characters, have no surrounding whitespace, slash, backslash, or NUL, and end in `.md` or `.markdown`.
-- Attachment content is valid UTF-8 text and may be empty or whitespace-only. Exact UTF-8 limits are 256 KiB per item, 1 MiB total, and eight items per saying.
+- Attachment content must be valid UTF-8 text containing non-whitespace Markdown. Exact UTF-8 limits are 256 KiB per item, 1 MiB total, and eight items per saying.
 - Attachments do not participate in mention resolution, saying FTS, notifications, standalone upload, mutation, or deletion in v1.
 
 ## 4) Storage consistency model (SQLite)
@@ -160,7 +160,7 @@ Routes and MCP entrypoints may contain transport orchestration, but they MUST NO
 
 ### 4.4 Attachment storage and read paths
 
-`saying_attachments` is an additive table with attachment UUID primary key, `saying_id` foreign key using `ON DELETE CASCADE`, stable `position`, `name`, unchanged Markdown `content`, and validated exact UTF-8 `byte_size` (zero is valid). `UNIQUE(saying_id, position)` fixes ordering. Upgrades create this table without rewriting existing sayings; existing rows read with `attachments=[]`. Databases that applied the pre-release `byte_size >= 1` check are transactionally rebuilt with the zero-byte constraint while preserving attachment rows. There is no down migration, so rollback to a pre-attachment binary leaves the table and rows intact while that binary temporarily omits them.
+`saying_attachments` is an additive table with attachment UUID primary key, `saying_id` foreign key using `ON DELETE CASCADE`, stable `position`, `name`, unchanged nonblank Markdown `content`, and validated exact positive UTF-8 `byte_size`. `UNIQUE(saying_id, position)` fixes ordering. Upgrades create this table without rewriting existing sayings; existing rows read with `attachments=[]`. There is no down migration, so rollback to a pre-attachment binary leaves the table and rows intact while that binary temporarily omits them.
 
 Ordinary list/join/listen/wait/history paths first load sayings, then issue one metadata-only query for the page's saying IDs. They never select attachment content and do not issue one query per saying. Explicit attachment reads and the shared export operation are the only body-loading paths. Batch table deletion deletes sayings and relies on the attachment foreign-key cascade.
 

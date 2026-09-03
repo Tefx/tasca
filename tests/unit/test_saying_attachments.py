@@ -11,7 +11,6 @@ from returns.result import Failure, Success
 
 from tasca.core.domain.saying import AttachmentInput, Speaker, SpeakerKind
 from tasca.core.domain.table import Table, TableId, TableStatus
-from tasca.core.schema import create_saying_attachments_table_ddl
 from tasca.core.services.attachment_service import (
     MAX_ATTACHMENT_BYTES,
     MAX_ATTACHMENTS_TOTAL_BYTES,
@@ -102,16 +101,18 @@ def test_attachment_count_and_nonblank_saying_body_are_validated() -> None:
     assert count_error.kind == SayingValidationKind.ATTACHMENT_COUNT
     assert count_error.actual == 9
     assert body_error is not None and body_error.kind == SayingValidationKind.CONTENT
-    assert (
-        validate_saying_payload(
-            "Body",
-            [
-                AttachmentInput(name="empty.md", content=""),
-                AttachmentInput(name="whitespace.md", content=" \n\t"),
-            ],
-        )
-        is None
+
+
+@pytest.mark.parametrize("content", ["", " \n\t", "\u0085\u2028\u2029"])
+def test_attachment_content_must_be_nonblank(content: str) -> None:
+    error = validate_saying_payload(
+        "Body",
+        [AttachmentInput(name="blank.md", content=content)],
     )
+
+    assert error is not None
+    assert error.kind == SayingValidationKind.ATTACHMENT_CONTENT
+    assert error.attachment_index == 0
 
 
 def test_utf8_item_and_aggregate_boundaries_are_exact() -> None:
@@ -176,79 +177,40 @@ def test_atomic_insert_returns_metadata_and_explicit_read_returns_raw_body() -> 
     )
 
 
-def test_zero_byte_attachment_round_trips_through_storage_reads_and_exports() -> None:
+def test_blank_attachment_rejection_leaves_no_rows_or_consumed_sequence() -> None:
     conn = _database()
-    saying = append_saying(
+
+    failed = append_saying(
         conn,
         "attachments-table",
         _speaker(),
-        "Body",
-        [AttachmentInput(name="empty.md", content="")],
-    ).unwrap()
+        "Rejected body",
+        [AttachmentInput(name="blank.md", content=" \n\t")],
+    )
 
-    assert saying.attachments[0].byte_size == 0
-    assert conn.execute(
-        "SELECT content, byte_size FROM saying_attachments WHERE id = ?",
-        (str(saying.attachments[0].id),),
-    ).fetchone() == ("", 0)
-    full = get_attachment_for_saying(
-        conn,
-        "attachments-table",
-        str(saying.id),
-        str(saying.attachments[0].id),
-    ).unwrap()
-    assert full is not None
-    assert full.content == ""
-    assert full.byte_size == 0
-
-    jsonl = export_table(
-        conn,
-        "attachments-table",
-        "jsonl",
-        exported_at="2026-01-01T00:00:00Z",
-    ).unwrap().content
-    assert jsonl is not None
-    exported_attachment = json.loads(jsonl.splitlines()[2])["saying"]["attachments"][0]
-    assert exported_attachment["content"] == ""
-    assert exported_attachment["byte_size"] == 0
-
-    markdown = export_table(conn, "attachments-table", "markdown").unwrap().content
-    assert markdown is not None
-    assert '[attachments: "empty.md"]' in markdown
-    assert "- bytes: 0" in markdown
+    assert isinstance(failed, Failure)
+    assert conn.execute("SELECT COUNT(*) FROM sayings").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM saying_attachments").fetchone()[0] == 0
+    accepted = append_saying(conn, "attachments-table", _speaker(), "Accepted body").unwrap()
+    assert accepted.sequence == 0
 
 
-def test_whitespace_only_attachment_preserves_exact_body_in_exports() -> None:
+def test_attachment_schema_rejects_zero_byte_rows() -> None:
     conn = _database()
-    content = " \n\t"
-    saying = append_saying(
-        conn,
-        "attachments-table",
-        _speaker(),
-        "Body",
-        [AttachmentInput(name="whitespace.md", content=content)],
-    ).unwrap()
+    saying = append_saying(conn, "attachments-table", _speaker(), "Parent body").unwrap()
 
-    full = get_attachment_for_saying(
-        conn,
-        "attachments-table",
-        str(saying.id),
-        str(saying.attachments[0].id),
-    ).unwrap()
-    assert full is not None and full.content == content
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO saying_attachments (
+                id, saying_id, position, name, content, byte_size
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("zero-byte", str(saying.id), 0, "blank.md", "", 0),
+        )
+    conn.rollback()
 
-    jsonl = export_table(
-        conn,
-        "attachments-table",
-        "jsonl",
-        exported_at="2026-01-01T00:00:00Z",
-    ).unwrap().content
-    assert jsonl is not None
-    assert json.loads(jsonl.splitlines()[2])["saying"]["attachments"][0]["content"] == content
-
-    markdown = export_table(conn, "attachments-table", "markdown").unwrap().content
-    assert markdown is not None
-    assert "- bytes: 3\n\n \n\t\n" in markdown
+    assert conn.execute("SELECT COUNT(*) FROM saying_attachments").fetchone()[0] == 0
 
 
 def test_second_attachment_failure_rolls_back_rows_and_sequence() -> None:
@@ -356,52 +318,6 @@ def test_existing_database_migration_preserves_sayings_with_empty_metadata() -> 
     loaded = list_sayings_by_table(conn, "attachments-table").unwrap()
     assert [item.id for item in loaded] == [saying.id]
     assert loaded[0].attachments == []
-
-
-def test_schema_migrates_positive_attachment_byte_check_and_preserves_rows() -> None:
-    conn = _database()
-    original = append_saying(
-        conn,
-        "attachments-table",
-        _speaker(),
-        "Before byte-check migration",
-        [AttachmentInput(name="original.md", content="kept")],
-    ).unwrap()
-
-    conn.execute(
-        "ALTER TABLE saying_attachments RENAME TO saying_attachments_allow_empty"
-    )
-    old_ddl = create_saying_attachments_table_ddl().replace(
-        "CHECK(byte_size >= 0)",
-        "CHECK(byte_size >= 1)",
-    )
-    conn.execute(old_ddl)
-    conn.execute("""
-        INSERT INTO saying_attachments (
-            id, saying_id, position, name, content, byte_size
-        )
-        SELECT id, saying_id, position, name, content, byte_size
-        FROM saying_attachments_allow_empty
-        """)
-    conn.execute("DROP TABLE saying_attachments_allow_empty")
-    conn.commit()
-
-    assert isinstance(apply_schema(conn), Success)
-    preserved = get_attachment_for_saying(
-        conn,
-        "attachments-table",
-        str(original.id),
-        str(original.attachments[0].id),
-    ).unwrap()
-    assert preserved is not None
-    assert preserved.content == "kept"
-    assert append_saying(
-        conn,
-        "attachments-table",
-        _speaker(),
-        "After byte-check migration",
-        [AttachmentInput(name="empty.md", content="")],
-    ).unwrap().attachments[0].byte_size == 0
 
 
 def test_exports_preserve_unicode_order_and_append_material_after_transcript() -> None:

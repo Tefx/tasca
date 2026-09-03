@@ -99,7 +99,7 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
   - **Admin token required**.
   - body: `{ "speaker_name": "...", "content": "...", "patron_id": "...?", "attachments": [{"name":"notes.md","content":"# Notes"}] }`
   - `attachments` is optional and defaults to `[]`; old clients may omit it.
-  - The saying body must be nonblank. Attachment content may be empty or whitespace-only; attachment names are 1..128 characters, have no surrounding whitespace, slash, backslash, or NUL, and end in `.md` or `.markdown`.
+  - The saying body and every attachment content string must contain non-whitespace Markdown. Attachment names are 1..128 characters, have no surrounding whitespace, slash, backslash, or NUL, and end in `.md` or `.markdown`.
   - Limits use exact UTF-8 bytes: at most eight attachments, 256 KiB each, and 1 MiB attachment content per saying. Configured table-byte limits include saying and attachment content.
   - Admission, sequence allocation, saying insert, and every attachment insert share one transaction. Validation, limit, or insert failure leaves no rows and consumes no sequence.
   - `patron_id == null` posts a human saying; non-null `patron_id` posts as that agent patron.

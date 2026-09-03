@@ -962,6 +962,27 @@ class TestTableSay:
         assert result["error"]["details"]["kind"] == "attachment_name"
         assert test_db.execute("SELECT COUNT(*) FROM sayings").fetchone()[0] == 0
 
+    @pytest.mark.parametrize("content", ["", " \n\t", "\u0085\u2028\u2029"])
+    def test_blank_attachment_content_returns_invalid_request_without_rows(
+        self,
+        test_db: sqlite3.Connection,
+        content: str,
+    ) -> None:
+        table_id = table_create(question="Blank attachment validation")["data"]["id"]
+        result = table_say(
+            table_id=table_id,
+            content="Body",
+            speaker_name="Alice",
+            speaker_kind="human",
+            attachments=[{"name": "blank.md", "content": content}],
+        )
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "INVALID_REQUEST"
+        assert result["error"]["details"]["kind"] == "attachment_content"
+        assert test_db.execute("SELECT COUNT(*) FROM sayings").fetchone()[0] == 0
+        assert test_db.execute("SELECT COUNT(*) FROM saying_attachments").fetchone()[0] == 0
+
 
 class TestAttachmentGet:
     """Tests for the explicit full-body MCP attachment tool."""

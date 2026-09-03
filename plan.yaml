@@ -49693,11 +49693,11 @@ phases:
   - seat_presence_redeploy
 - id: saying_attachments
   name: Saying Markdown attachments v1
-  status: pending
+  status: in_progress
   steps:
   - id: implement-markdown-attachments
     name: Document and implement atomic lazy-loaded Markdown attachments
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49810,3 +49810,5 @@ phases:
     - web/src/components/CommandConsole.tsx
     - web/src/components/Stream.tsx
     agent: principal-engineer
+    claimed_by: principal-engineer
+    claimed_at: '2026-09-03T17:17:41.318083Z'

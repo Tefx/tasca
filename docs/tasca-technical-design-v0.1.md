@@ -333,7 +333,7 @@ The template follows `tasca-search-export-v0.1.md` and includes:
 
 - Table metadata block.
 - Board section (keys in stable order: agenda, summary, decision_draft, then others).
-- Compact transcript lines with `[seq=...] timestamp (speaker): content`; sayings with attachments add their ordered JSON-quoted names inline as `[attachments: "name.md", "other.markdown"]`, without attachment bodies.
+- Compact transcript lines with `[seq=...] timestamp (speaker): content`; sayings with attachments add their ordered JSON-quoted names inline as `[attachments: "name.md", "other.markdown"]`, without attachment bodies. Accepted Unicode line separators are escaped in transcript and appendix name metadata so names cannot split structural lines.
 - A following `## Attachments` section, when present, ordered by saying sequence and attachment position. It records identity/name/byte metadata and then includes each complete unchanged Markdown body.
 
 HTTP, MCP, and CLI use the same formatter and full-body load.

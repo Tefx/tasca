@@ -10,8 +10,10 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING
 
+from returns.result import Failure
+
 from tasca.config import settings
-from tasca.core.schema import get_all_fts_ddl, get_all_index_ddl, get_all_table_ddl
+from tasca.shell.storage.database import apply_schema
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -19,34 +21,6 @@ if TYPE_CHECKING:
 
 # Global connection for MCP tools - initialized lazily
 _mcp_db_connection: sqlite3.Connection | None = None
-
-
-def _run_schema_migrations(conn: sqlite3.Connection) -> None:
-    """Run schema migrations for backward compatibility.
-
-    This function adds missing columns to existing tables.
-    Safe to run multiple times - ALTER TABLE ADD COLUMN is idempotent
-    because we check if the column exists first.
-    """
-    # Migration: Add alias and meta columns to patrons table
-    cursor = conn.execute("PRAGMA table_info(patrons)")
-    columns = {row[1] for row in cursor.fetchall()}
-
-    if "alias" not in columns:
-        conn.execute("ALTER TABLE patrons ADD COLUMN alias TEXT")
-
-    if "meta" not in columns:
-        conn.execute("ALTER TABLE patrons ADD COLUMN meta TEXT")
-
-    # Migration: Add creator_patron_id column to tables table
-    cursor = conn.execute("PRAGMA table_info(tables)")
-    table_columns = {row[1] for row in cursor.fetchall()}
-
-    if "creator_patron_id" not in table_columns:
-        conn.execute("ALTER TABLE tables ADD COLUMN creator_patron_id TEXT")
-
-    if "host_ids" not in table_columns:
-        conn.execute("ALTER TABLE tables ADD COLUMN host_ids TEXT")
 
 
 def get_mcp_db() -> Generator[sqlite3.Connection]:
@@ -84,14 +58,13 @@ def get_mcp_db() -> Generator[sqlite3.Connection]:
         # Enable foreign key constraints
         _mcp_db_connection.execute("PRAGMA foreign_keys=ON")
 
-        # Apply schema (tables, indexes, and FTS5 virtual tables/triggers)
-        for stmt in get_all_table_ddl() + get_all_index_ddl() + get_all_fts_ddl():
-            _mcp_db_connection.execute(stmt)
-        _mcp_db_connection.commit()
-
-        # Run migrations for backward compatibility
-        _run_schema_migrations(_mcp_db_connection)
-        _mcp_db_connection.commit()
+        # Use the shared schema path so every transport receives the same migrations.
+        schema_result = apply_schema(_mcp_db_connection)
+        if isinstance(schema_result, Failure):
+            failure = schema_result.failure()
+            _mcp_db_connection.close()
+            _mcp_db_connection = None
+            raise sqlite3.DatabaseError(failure)
 
     yield _mcp_db_connection
 

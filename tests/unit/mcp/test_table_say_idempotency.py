@@ -12,7 +12,10 @@ from pathlib import Path
 import pytest
 from returns.result import Failure, Success
 
+from tasca.config import settings
 from tasca.core.domain.table import Table, TableId, TableStatus
+from tasca.core.schema import create_saying_attachments_table_ddl
+from tasca.shell.mcp import database as mcp_database
 from tasca.shell.mcp import entrypoints
 from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.table_repo import create_table
@@ -33,6 +36,54 @@ def _create_database(path: str = ":memory:") -> tuple[sqlite3.Connection, str]:
     )
     assert isinstance(create_table(conn, table), Success)
     return conn, table_id
+
+
+def _install_positive_attachment_byte_check(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "ALTER TABLE saying_attachments RENAME TO saying_attachments_allow_empty"
+    )
+    conn.execute(
+        create_saying_attachments_table_ddl().replace(
+            "CHECK(byte_size >= 0)",
+            "CHECK(byte_size >= 1)",
+        )
+    )
+    conn.execute("DROP TABLE saying_attachments_allow_empty")
+    conn.commit()
+
+
+def test_mcp_database_initialization_runs_shared_empty_attachment_migration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "mcp-migration.db"
+    setup_conn, table_id = _create_database(str(db_path))
+    _install_positive_attachment_byte_check(setup_conn)
+    setup_conn.close()
+    monkeypatch.setattr(settings, "db_path", str(db_path))
+    mcp_database.close_mcp_db()
+
+    try:
+        conn = next(mcp_database.get_mcp_db())
+        normalized_ddl = "".join(
+            conn.execute(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'saying_attachments'"
+            ).fetchone()[0].split()
+        )
+        assert "CHECK(byte_size>=0)" in normalized_ddl
+
+        created = entrypoints.table_say(
+            table_id=table_id,
+            content="MCP migration body",
+            speaker_name="Alice",
+            speaker_kind="human",
+            attachments=[{"name": "empty.md", "content": ""}],
+        )
+        assert isinstance(created, Success)
+        assert created.unwrap()["data"]["attachments"][0]["byte_size"] == 0
+    finally:
+        mcp_database.close_mcp_db()
 
 
 def test_idempotency_storage_failure_rolls_back_saying_attachments_and_sequence(
@@ -79,6 +130,37 @@ def test_idempotency_storage_failure_rolls_back_saying_attachments_and_sequence(
     assert conn.execute("SELECT COUNT(*) FROM saying_attachments").fetchone()[0] == 1
     assert conn.execute("SELECT COUNT(*) FROM idempotency_keys").fetchone()[0] == 1
     conn.close()
+
+
+def test_concurrent_same_dedup_id_on_shared_mcp_connection_returns_one_saying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn, table_id = _create_database()
+    monkeypatch.setattr(entrypoints, "get_mcp_db", lambda: iter((conn,)))
+    request = {
+        "table_id": table_id,
+        "content": "Shared connection body",
+        "speaker_name": "Alice",
+        "speaker_kind": "human",
+        "dedup_id": "same-shared-connection-key",
+        "attachments": [{"name": "empty.md", "content": ""}],
+    }
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(lambda _index: entrypoints.table_say(**request), range(8)))
+
+        assert all(isinstance(result, Success) for result in results)
+        responses = [result.unwrap()["data"] for result in results]
+        assert len({response["id"] for response in responses}) == 1
+        assert {response["sequence"] for response in responses} == {0}
+        assert conn.execute("SELECT COUNT(*) FROM sayings").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM saying_attachments").fetchone()[0] == 1
+        assert conn.execute(
+            "SELECT COUNT(*) FROM idempotency_keys WHERE tool_name = 'table_say'"
+        ).fetchone()[0] == 1
+    finally:
+        conn.close()
 
 
 def test_concurrent_same_dedup_id_commits_one_attachment_bearing_saying(

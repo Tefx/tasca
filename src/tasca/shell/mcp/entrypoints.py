@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+import threading
 import time
 import uuid
 from datetime import UTC, datetime
@@ -141,6 +142,8 @@ from tasca.shell.storage.table_repo import (
 
 logger = get_logger(__name__).unwrap()
 McpEnvelope = dict[str, Any]
+_TABLE_SAY_LOCK = threading.RLock()
+
 
 # Per-session loop state tracking.
 # MCP server runs per-agent (stdio) or per-session (HTTP), so module-level state
@@ -832,8 +835,37 @@ def _check_say_idempotency(
     return Success(None)
 
 
-# @shell_complexity: MCP adapter keeps idempotency/mentions/response envelope around shared table_say operation.
+# @shell_orchestration: SQLite's shared MCP connection needs call-wide transaction ownership.
 def table_say(
+    table_id: str,
+    content: str,
+    speaker_kind: Literal["agent", "human"] = "agent",
+    patron_id: str | None = None,
+    speaker_name: str | None = None,
+    saying_type: str | None = None,
+    mentions: list[str] | None = None,
+    reply_to_sequence: int | None = None,
+    dedup_id: str | None = None,
+    attachments: list[dict[str, str]] | list[AttachmentInput] | None = None,
+) -> Result[McpEnvelope, McpEnvelope]:
+    """Serialize a complete table_say call on the shared MCP SQLite connection."""
+    with _TABLE_SAY_LOCK:
+        return _table_say(
+            table_id=table_id,
+            content=content,
+            speaker_kind=speaker_kind,
+            patron_id=patron_id,
+            speaker_name=speaker_name,
+            saying_type=saying_type,
+            mentions=mentions,
+            reply_to_sequence=reply_to_sequence,
+            dedup_id=dedup_id,
+            attachments=attachments,
+        )
+
+
+# @shell_complexity: MCP adapter keeps idempotency/mentions/response envelope around shared table_say operation.
+def _table_say(
     table_id: str,
     content: str,
     speaker_kind: Literal["agent", "human"] = "agent",

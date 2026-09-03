@@ -415,6 +415,9 @@ def test_exports_preserve_unicode_order_and_append_material_after_transcript() -
         [
             AttachmentInput(name="one.md", content=raw),
             AttachmentInput(name="two.markdown", content="Second attachment"),
+            AttachmentInput(name="before\u0085after.md", content="NEL name"),
+            AttachmentInput(name="before\u2028after.md", content="Line separator name"),
+            AttachmentInput(name="before\u2029after.md", content="Paragraph separator name"),
         ],
     ).unwrap()
 
@@ -429,19 +432,37 @@ def test_exports_preserve_unicode_order_and_append_material_after_transcript() -
         .content
     )
     assert jsonl is not None
-    records = [json.loads(line) for line in jsonl.splitlines()]
+    records = [json.loads(line) for line in jsonl.split("\n")]
     assert records[0]["export_version"] == "0.2"
     exported = records[2]["saying"]["attachments"]
-    assert [item["position"] for item in exported] == [0, 1]
+    assert [item["position"] for item in exported] == [0, 1, 2, 3, 4]
     assert exported[0]["content"] == raw
     assert exported[1]["content"] == "Second attachment"
+    assert [item["name"] for item in exported[2:]] == [
+        "before\u0085after.md",
+        "before\u2028after.md",
+        "before\u2029after.md",
+    ]
 
     markdown = export_table(conn, "attachments-table", "markdown").unwrap().content
     assert markdown is not None
     transcript_offset = markdown.index("## Transcript")
     attachment_offset = markdown.index("## Attachments")
     assert attachment_offset > transcript_offset
-    transcript_line = next(line for line in markdown.splitlines() if line.startswith("- [seq=0]"))
-    assert transcript_line.endswith('[attachments: "one.md", "two.markdown"]')
+    transcript_lines = [
+        line
+        for line in markdown[:attachment_offset].splitlines()
+        if line.startswith("- [seq=0]")
+    ]
+    assert len(transcript_lines) == 1
+    assert transcript_lines[0].endswith(
+        '[attachments: "one.md", "two.markdown", "before\\u0085after.md", '
+        '"before\\u2028after.md", "before\\u2029after.md"]'
+    )
+    assert all(separator not in transcript_lines[0] for separator in "\u0085\u2028\u2029")
+    appendix = markdown[attachment_offset:]
+    assert '- name: "before\\u0085after.md"' in appendix
+    assert '- name: "before\\u2028after.md"' in appendix
+    assert '- name: "before\\u2029after.md"' in appendix
     assert markdown.index(raw) > attachment_offset
     assert markdown.index("Second attachment") > markdown.index(raw)

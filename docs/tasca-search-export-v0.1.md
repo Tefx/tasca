@@ -39,6 +39,7 @@ Search covers saying `content`, board values, and selected table metadata. Markd
 2) **Markdown** (human-readable)
    - Title, metadata, stable Board section, and compact timestamped/numbered transcript.
    - Each transcript line with attachments adds ordered, JSON-quoted names as `[attachments: "name.md", "other.markdown"]`; bodies remain out of the compact line.
+   - JSON quoting escapes every accepted line-separator character in transcript and appendix name metadata, so a name cannot split a structural line.
    - If attachments exist, append `## Attachments` after the transcript.
    - Order material by saying sequence then attachment position; emit identity/name/byte metadata followed by each complete raw Markdown body.
 
@@ -55,7 +56,7 @@ Search covers saying `content`, board values, and selected table metadata. Markd
 ## Attachments
 ### [seq=1] Attachment 1
 - id: `<uuid>`
-- name: `notes.md`
+- name: "notes.md"
 - bytes: 7
 
 # Notes

@@ -226,6 +226,31 @@ def _fmt_dt(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d %H:%M") + " UTC"
 
 
+@deal.pre(lambda name: isinstance(name, str) and len(name) > 0)
+@deal.post(
+    lambda result: (
+        isinstance(result, str)
+        and "\u0085" not in result
+        and "\u2028" not in result
+        and "\u2029" not in result
+    )
+)
+def _quote_attachment_name(name: str) -> str:
+    """Return one JSON-quoted name that cannot split a Markdown transcript line.
+
+    >>> _quote_attachment_name('before\u2028after.md')
+    '"before\\\\u2028after.md"'
+    >>> _quote_attachment_name('日本語.md')
+    '"日本語.md"'
+    """
+    quoted = json.dumps(name, ensure_ascii=False)
+    return (
+        quoted.replace("\u0085", "\\u0085")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
+
 @deal.pre(
     lambda table, sayings, board=None, attachments_by_saying=None: (
         table is not None
@@ -386,7 +411,7 @@ def generate_markdown(
             attachment_tag = ""
             if attachment_items:
                 names = ", ".join(
-                    json.dumps(attachment.name, ensure_ascii=False)
+                    _quote_attachment_name(attachment.name)
                     for attachment in attachment_items
                 )
                 attachment_tag = f" [attachments: {names}]"
@@ -403,7 +428,7 @@ def generate_markdown(
                     f"### [seq={saying.sequence}] Attachment {attachment.position + 1}"
                 )
                 lines.append(f"- id: `{attachment.id}`")
-                lines.append(f"- name: `{attachment.name}`")
+                lines.append(f"- name: {_quote_attachment_name(attachment.name)}")
                 lines.append(f"- bytes: {attachment.byte_size}")
                 lines.extend(["", attachment.content, ""])
 

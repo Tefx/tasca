@@ -94,26 +94,36 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
   - response: `{ "table_status": "open|paused|closed", "control_saying_sequence": 123 }`
 
 ### Sayings
-
 - `POST /api/v1/tables/{table_id}/sayings` → shared `table_say` append/state/limits behavior
-  - v0.1: **Admin token required** to post as human.
-  - body: `{ "speaker_name": "...", "content": "...", "patron_id": "...?" }`
+  - **Admin token required**.
+  - body: `{ "speaker_name": "...", "content": "...", "patron_id": "...?", "attachments": [{"name":"notes.md","content":"# Notes"}] }`
+  - `attachments` is optional and defaults to `[]`; old clients may omit it.
+  - The saying body and each attachment body must be nonblank. Attachment names are 1..128 characters, have no surrounding whitespace, slash, backslash, or NUL, and end in `.md` or `.markdown`.
+  - Limits use exact UTF-8 bytes: at most eight attachments, 256 KiB each, and 1 MiB attachment content per saying. Configured table-byte limits include saying and attachment content.
+  - Admission, sequence allocation, saying insert, and every attachment insert share one transaction. Validation, limit, or insert failure leaves no rows and consumes no sequence.
   - `patron_id == null` posts a human saying; non-null `patron_id` posts as that agent patron.
-  - Response is the REST `Saying` domain shape, not the MCP `{saying_id, sequence, mentions_*}` envelope.
-  - Viewer mode is read-only.
-  - Closed-table state failures return HTTP `409` with standard error code `TableClosed`; auth failures remain `401/403 PermissionDenied`.
+  - Response is the REST `Saying` domain shape. Its ordered `attachments` entries are metadata only:
 
-- `GET  /api/v1/tables/{table_id}/sayings`
-  - reads sayings newer than `since_sequence`
-  - query: `since_sequence` (default `-1`), `limit` (default `50`, max `200`)
+```json
+{"id":"attachment-uuid","position":0,"name":"notes.md","media_type":"text/markdown","byte_size":7}
+```
+
+- `GET /api/v1/tables/{table_id}/sayings`
+  - reads sayings newer than `since_sequence`; query defaults remain `since_sequence=-1`, `limit=50` (max 200)
   - response: `{ "sayings": [...], "next_sequence": <last-seen sequence> }`
+  - every saying includes ordered attachment metadata and never attachment `content`; metadata is batch-loaded for the page
 
-- `GET  /api/v1/tables/{table_id}/sayings/wait`
-  - REST long-poll binding for MCP `table_wait`
+- `GET /api/v1/tables/{table_id}/sayings/wait`
   - query: `since_sequence`, `timeout` seconds (default `30.0`, `0.0..120.0`)
   - response: `{ "sayings": [...], "next_sequence": <last-seen sequence>, "timeout": true|false }`
-  - timeout is a valid success response (`sayings=[]`, `timeout=true`)
-  - already-available sayings are returned immediately, including when `since_sequence=-1&timeout=0`.
+  - timeout is a valid success response; returned sayings use the same metadata-only attachment shape
+
+- `GET /api/v1/tables/{table_id}/sayings/{saying_id}/attachments/{attachment_id}`
+  - Viewer-or-Admin resource read (public baseline when viewer auth is disabled)
+  - all three nested IDs must match or the endpoint returns `404 AttachmentNotFound`
+  - returns metadata plus `saying_id`, `table_id`, and the complete unchanged Markdown `content`
+
+Viewer mode remains read-only. Closed-table failures return HTTP 409 `TableClosed`; payload validation returns HTTP 422 `InvalidRequest`; authorization failures use `PermissionDenied`.
 
 ### Seats (Presence)
 
@@ -127,23 +137,18 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
   - result: table-level hits with snippets
 
 ### Export
-
 - `GET /api/v1/tables/{table_id}/export/jsonl`
 - `GET /api/v1/tables/{table_id}/export/markdown`
-  - Both endpoints delegate table/saying fetch and formatting to the shared export operation.
-  - HTTP response shaping is local: `download=true` adds a `Content-Disposition` attachment header and uses `application/octet-stream`; otherwise responses use `text/plain; charset=utf-8`.
+  - Both endpoints delegate table/saying fetch, complete attachment loading, and formatting to the same shared operation used by MCP and `tasca export`.
+  - JSONL header version is `0.2`; each saying embeds its ordered complete attachment objects.
+  - Markdown keeps transcript lines compact and appends a complete ordered attachment section after the transcript.
+  - HTTP response shaping is local: `download=true` adds `Content-Disposition` and uses `application/octet-stream`; otherwise responses use `text/plain; charset=utf-8`.
 
 ## 4) Real-time client behavior (UI)
-
 v0.1 UI SHOULD:
 
-- Keep a local `since_sequence` per table.
-- Call `/sayings/wait?since_sequence=N&timeout=30` in a loop.
-- On success:
-  - append sayings
-  - set `since_sequence = next_sequence`
-- On timeout (`timeout=true` with `sayings=[]`):
-  - treat as success and poll again
-- On network errors:
-  - exponential backoff (1s, 2s, 4s, max 30s)
-  - keep sequence and resume
+- Keep a local `since_sequence` per table and poll `/sayings/wait?since_sequence=N&timeout=30`.
+- Append returned sayings and set `since_sequence = next_sequence`; treat an empty timeout as success.
+- Back off on network errors (1s, 2s, 4s, max 30s), retain sequence, and resume.
+- Display attachment metadata collapsed. Do not call the nested body endpoint until expansion; cache the result for subsequent expansion.
+- Render loaded attachment Markdown through the same raw-HTML-disabled, safe-link, Mermaid-stripping/SVG-sanitizing pipeline used for saying content.

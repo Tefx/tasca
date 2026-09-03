@@ -31,7 +31,7 @@ from tasca.shell.logging import (
 @pytest.fixture
 def captured_logger() -> logging.Logger:
     """Create a logger that can be captured by caplog."""
-    logger = get_logger("tasca.test.observability")
+    logger = get_logger("tasca.test.observability").unwrap()
     logger.setLevel(logging.DEBUG)
     return logger
 

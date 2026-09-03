@@ -1,4 +1,4 @@
-"""Release-candidate packaging contracts for the tracked 0.1.31 Seat-presence release."""
+"""Release-candidate packaging contracts for the tracked 0.1.32 attachment release."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 REPOSITORY = Path(__file__).parents[2]
-VERSION = "0.1.31"
+VERSION = "0.1.32"
 WHEEL_NAME = f"tasca-{VERSION}-py3-none-any.whl"
 
 

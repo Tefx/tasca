@@ -19,7 +19,7 @@ from typing import Any
 import deal
 from pydantic import BaseModel
 
-from tasca.core.domain.saying import Saying, SpeakerKind
+from tasca.core.domain.saying import Saying, SayingAttachment, SpeakerKind
 from tasca.core.domain.table import Table
 
 # =============================================================================
@@ -41,7 +41,7 @@ class ExportHeader(BaseModel):
     """
 
     type: str = "export_header"
-    export_version: str = "0.1"
+    export_version: str = "0.2"
     exported_at: str
     table_id: str
 
@@ -76,10 +76,11 @@ class SayingExport(BaseModel):
 
 
 @deal.pre(
-    lambda table, sayings, exported_at: (
+    lambda table, sayings, exported_at, attachments_by_saying=None: (
         table is not None
         and sayings is not None
         and exported_at is not None
+        and (attachments_by_saying is None or isinstance(attachments_by_saying, dict))
         and len(exported_at) > 0
         and isinstance(exported_at, str)
     )
@@ -87,9 +88,16 @@ class SayingExport(BaseModel):
 @deal.post(lambda result: isinstance(result, str))
 @deal.post(lambda result: len(result) > 0)
 @deal.ensure(
-    lambda table, sayings, exported_at, result: result.startswith('{"type":"export_header"')
+    lambda table, sayings, exported_at, attachments_by_saying=None, result="": result.startswith(
+        '{"type":"export_header"'
+    )
 )
-def generate_jsonl(table: Table, sayings: list[Saying], exported_at: str) -> str:
+def generate_jsonl(
+    table: Table,
+    sayings: list[Saying],
+    exported_at: str,
+    attachments_by_saying: dict[str, list[SayingAttachment]] | None = None,
+) -> str:
     """Generate JSONL export string for a table and its sayings.
 
     JSONL format:
@@ -101,6 +109,7 @@ def generate_jsonl(table: Table, sayings: list[Saying], exported_at: str) -> str
         table: The table to export (required, non-null).
         sayings: List of sayings for this table (may be empty, ordered by sequence).
         exported_at: ISO timestamp for the export (required).
+        attachments_by_saying: Ordered complete attachment bodies keyed by saying ID.
 
     Returns:
         JSONL string with header, table, and saying lines.
@@ -179,6 +188,10 @@ def generate_jsonl(table: Table, sayings: list[Saying], exported_at: str) -> str
                     "patron_id": saying.speaker.patron_id,
                 },
                 "content": saying.content,
+                "attachments": [
+                    attachment.model_dump(mode="json")
+                    for attachment in (attachments_by_saying or {}).get(str(saying.id), [])
+                ],
                 "pinned": saying.pinned,
                 "created_at": saying.created_at.isoformat(),
             }
@@ -213,15 +226,23 @@ def _fmt_dt(dt: datetime) -> str:
 
 
 @deal.pre(
-    lambda table, sayings, board=None: (
-        table is not None and sayings is not None and (board is None or isinstance(board, dict))
+    lambda table, sayings, board=None, attachments_by_saying=None: (
+        table is not None
+        and sayings is not None
+        and (board is None or isinstance(board, dict))
+        and (attachments_by_saying is None or isinstance(attachments_by_saying, dict))
     )
 )
 @deal.post(lambda result: isinstance(result, str))
 @deal.post(lambda result: len(result) > 0)
 @deal.ensure(lambda *args, result, **kwargs: (args[0] if args else kwargs["table"]).question in result)
 @deal.ensure(lambda *args, result, **kwargs: str((args[0] if args else kwargs["table"]).id) in result)
-def generate_markdown(table: Table, sayings: list[Saying], board: dict[str, Any] | None = None) -> str:
+def generate_markdown(
+    table: Table,
+    sayings: list[Saying],
+    board: dict[str, Any] | None = None,
+    attachments_by_saying: dict[str, list[SayingAttachment]] | None = None,
+) -> str:
     """Generate Markdown export string for a table and its sayings.
 
     Markdown format:
@@ -238,6 +259,7 @@ def generate_markdown(table: Table, sayings: list[Saying], board: dict[str, Any]
         table: The table to export (required, non-null).
         sayings: List of sayings for this table (may be empty, ordered by sequence).
         board: Optional board snapshot. Missing board exports as an empty section.
+        attachments_by_saying: Ordered complete attachment bodies keyed by saying ID.
 
     Returns:
         Markdown string with table metadata and transcript.
@@ -354,5 +376,18 @@ def generate_markdown(table: Table, sayings: list[Saying], board: dict[str, Any]
             time_str = saying.created_at.isoformat()
             pin_tag = " [pinned]" if saying.pinned else ""
             lines.append(f"- [seq={seq}] {time_str} ({speaker_label}): {saying.content}{pin_tag}")
+
+    exported_attachments = attachments_by_saying or {}
+    if any(exported_attachments.values()):
+        lines.extend(["", "## Attachments", ""])
+        for saying in sayings:
+            for attachment in exported_attachments.get(str(saying.id), []):
+                lines.append(
+                    f"### [seq={saying.sequence}] Attachment {attachment.position + 1}"
+                )
+                lines.append(f"- id: `{attachment.id}`")
+                lines.append(f"- name: `{attachment.name}`")
+                lines.append(f"- bytes: {attachment.byte_size}")
+                lines.extend(["", attachment.content, ""])
 
     return "\n".join(lines)

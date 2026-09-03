@@ -139,7 +139,7 @@ class TestExportMarkdownStdout:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 0
+        assert result.unwrap() == 0
 
         output = stdout.getvalue()
         # Check markdown format
@@ -153,6 +153,27 @@ class TestExportMarkdownStdout:
         assert "Bob" in output
         assert "First message" in output
         assert "Second message" in output
+
+    def test_export_applies_attachment_schema_to_legacy_database(
+        self, test_db: sqlite3.Connection
+    ) -> None:
+        """CLI export upgrades a pre-attachment database before shared loading."""
+        table = create_test_table(test_db, "legacy-table", "Legacy question?")
+        create_test_saying(test_db, table.id, "Legacy saying")
+        test_db.execute("DROP TABLE saying_attachments")
+        args = argparse.Namespace(table_id=table.id, format="md", output=None)
+        stdout = io.StringIO()
+
+        with (
+            redirect_stdout(stdout),
+            patch("tasca.cli.settings") as mock_settings,
+            patch("sqlite3.connect", return_value=test_db),
+        ):
+            mock_settings.db_path = ":memory:"
+            result = cmd_export(args)
+
+        assert result.unwrap() == 0
+        assert "Legacy saying" in stdout.getvalue()
 
     def test_export_markdown_empty_table(self, test_db: sqlite3.Connection) -> None:
         """Export empty table produces valid markdown."""
@@ -174,7 +195,7 @@ class TestExportMarkdownStdout:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 0
+        assert result.unwrap() == 0
 
         output = stdout.getvalue()
         assert "# Empty question?" in output
@@ -199,7 +220,7 @@ class TestExportMarkdownStdout:
                         result = cmd_export(args)
 
         output = stdout.getvalue()
-        assert result == 0
+        assert result.unwrap() == 0
         assert "```mermaid" in output
         assert "graph TD" in output
         assert "A[Start] --> B[Done]" in output
@@ -237,7 +258,7 @@ class TestExportJsonlStdout:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 0
+        assert result.unwrap() == 0
 
         output = stdout.getvalue()
         lines = output.strip().split("\n")
@@ -288,7 +309,7 @@ class TestExportJsonlStdout:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 0
+        assert result.unwrap() == 0
 
         output = stdout.getvalue()
         lines = output.strip().split("\n")
@@ -321,7 +342,7 @@ class TestExportJsonlStdout:
 
         output = stdout.getvalue()
         content = json.loads(output.strip().split("\n")[2])["saying"]["content"]
-        assert result == 0
+        assert result.unwrap() == 0
         assert "```mermaid" in content
         assert "graph TD" in content
         assert "A[Start] --> B[Done]" in content
@@ -360,7 +381,7 @@ class TestExportFileOutput:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 0
+        assert result.unwrap() == 0
 
         # Verify file was created
         assert temp_output_file.exists()
@@ -397,7 +418,7 @@ class TestExportFileOutput:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 0
+        assert result.unwrap() == 0
 
         # Verify file was created and contains valid JSONL
         assert temp_output_file.exists()
@@ -437,7 +458,7 @@ class TestExportFileOutput:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 0
+        assert result.unwrap() == 0
         assert nested_file.exists()
         assert nested_file.parent.exists()
 
@@ -468,7 +489,7 @@ class TestExportErrors:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 1
+        assert result.unwrap() == 1
         assert "not found" in stderr.getvalue().lower()
 
     def test_export_missing_table_via_main(self, test_db: sqlite3.Connection) -> None:
@@ -483,7 +504,7 @@ class TestExportErrors:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = main(["export", "nonexistent-table"])
 
-        assert result == 1
+        assert result.unwrap() == 1
         assert "not found" in stderr.getvalue().lower()
 
 
@@ -516,7 +537,7 @@ class TestExportDefaultFormat:
                     with patch("sqlite3.connect", return_value=test_db):
                         result = cmd_export(args)
 
-        assert result == 0
+        assert result.unwrap() == 0
 
         output = stdout.getvalue()
         # Markdown should contain heading with question
@@ -539,7 +560,7 @@ class TestExportDefaultFormat:
                         # No --format flag, should default to markdown
                         result = main(["export", table.id])
 
-        assert result == 0
+        assert result.unwrap() == 0
 
         output = stdout.getvalue()
         assert "# Main default?" in output
@@ -560,7 +581,7 @@ class TestExportArgumentParsing:
             mock_cmd_export.return_value = 0
             result = main(["export", "my-table-id"])
 
-            assert result == 0
+            assert result.unwrap() == 0
             call_args = mock_cmd_export.call_args
             assert call_args is not None
             args = call_args[0][0]
@@ -574,7 +595,7 @@ class TestExportArgumentParsing:
             mock_cmd_export.return_value = 0
             result = main(["export", "my-table-id", "--format", "jsonl"])
 
-            assert result == 0
+            assert result.unwrap() == 0
             call_args = mock_cmd_export.call_args
             assert call_args is not None
             args = call_args[0][0]
@@ -587,7 +608,7 @@ class TestExportArgumentParsing:
             mock_cmd_export.return_value = 0
             result = main(["export", "my-table-id", "-f", "jsonl"])
 
-            assert result == 0
+            assert result.unwrap() == 0
             call_args = mock_cmd_export.call_args
             assert call_args is not None
             args = call_args[0][0]
@@ -599,7 +620,7 @@ class TestExportArgumentParsing:
             mock_cmd_export.return_value = 0
             result = main(["export", "my-table-id", "-o", "/tmp/export.md"])
 
-            assert result == 0
+            assert result.unwrap() == 0
             call_args = mock_cmd_export.call_args
             assert call_args is not None
             args = call_args[0][0]
@@ -620,7 +641,7 @@ class TestExportArgumentParsing:
                 ]
             )
 
-            assert result == 0
+            assert result.unwrap() == 0
             call_args = mock_cmd_export.call_args
             assert call_args is not None
             args = call_args[0][0]

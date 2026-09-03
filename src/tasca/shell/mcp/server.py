@@ -190,7 +190,8 @@ deduplicates within a 24-hour window and returns the original response on hit.
 - tasca.table_update: Update table metadata (host_ids, policy, board) using
   optimistic concurrency (expected_version). Use to set moderation policy or
   pin shared notes to the board.
-- tasca.table_export: Export the full discussion as markdown or JSONL.
+- tasca.table_export: Export the full discussion and complete attachments as markdown or JSONL.
+- tasca.attachment_get: Read 1-8 complete Markdown attachment bodies by ID.
 - tasca.table_delete_batch: Batch-delete tables by ID (max 100).
 
 ## Error Handling
@@ -442,6 +443,16 @@ def table_export(
     return ep.table_export(table_id, format)
 
 
+@_contract_tool("attachment_get")
+def attachment_get(
+    attachment_ids: Annotated[
+        list[str], parameter_field("attachment_get", "attachment_ids").unwrap()
+    ],
+) -> Result[dict[str, Any], dict[str, Any]]:
+    """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
+    return ep.attachment_get(attachment_ids)
+
+
 @_contract_tool("table_say")
 def table_say(
     table_id: Annotated[str, parameter_field("table_say", "table_id").unwrap()],
@@ -467,6 +478,9 @@ def table_say(
     dedup_id: Annotated[str, parameter_field("table_say", "dedup_id").unwrap()] = parameter_default(
         "table_say", "dedup_id"
     ).unwrap(),
+    attachments: Annotated[
+        list[dict[str, str]], parameter_field("table_say", "attachments").unwrap()
+    ] = parameter_default("table_say", "attachments").unwrap(),
 ) -> Result[dict[str, Any], dict[str, Any]]:
     """MCP runtime wrapper; public contract metadata lives in tool_contracts.py."""
     return ep.table_say(
@@ -479,6 +493,7 @@ def table_say(
         mentions,
         reply_to_sequence,
         dedup_id,
+        attachments,
     )
 
 

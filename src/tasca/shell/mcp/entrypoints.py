@@ -9,10 +9,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+from pydantic import ValidationError
 from returns.result import Failure, Result, Success
 
 from tasca.core.domain.patron import Patron, PatronId
-from tasca.core.domain.saying import Speaker, SpeakerKind
+from tasca.core.domain.saying import AttachmentInput, Speaker, SpeakerKind
 from tasca.core.domain.seat import Seat, SeatId, SeatState
 from tasca.core.domain.table import TableId, Version
 from tasca.core.services.limits_service import LimitsConfig, settings_to_limits_config
@@ -111,6 +112,7 @@ from tasca.shell.services.operations.table_creation import (
     create_discussion_table,
 )
 from tasca.shell.services.operations.table_export import export_table
+from tasca.shell.storage.attachment_repo import get_attachments_by_ids
 from tasca.shell.storage.idempotency_repo import check_idempotency_key, store_idempotency_key
 from tasca.shell.storage.patron_repo import (
     PatronNotFoundError,
@@ -707,6 +709,19 @@ def _table_say_error_to_mcp_response(error: TableSayError) -> Result[McpEnvelope
         return Failure(error_response("NOT_FOUND", error.message))
     if error.kind == TableSayErrorKind.LIMIT_EXCEEDED and error.limit_error is not None:
         return Failure(_limit_error_to_response(error.limit_error))
+    if error.kind == TableSayErrorKind.VALIDATION_FAILED and error.validation_error is not None:
+        validation = error.validation_error
+        details = {
+            "kind": validation.kind.value,
+            "attachment_index": validation.attachment_index,
+            "limit": validation.limit,
+            "actual": validation.actual,
+        }
+        return Failure(error_response(
+            "INVALID_REQUEST",
+            error.message,
+            {key: value for key, value in details.items() if value is not None},
+        ))
     return Failure(error_response("DATABASE_ERROR", error.message))
 
 
@@ -758,6 +773,25 @@ def _resolve_mentions_for_say(
     return Success((mentions_all, mentions_resolved, mentions_unresolved))
 
 
+def _normalize_attachment_inputs(
+    attachments: list[dict[str, str]] | list[AttachmentInput] | None,
+) -> Result[list[AttachmentInput], McpEnvelope]:
+    """Parse the public attachment object shape before shared validation."""
+    if attachments is None:
+        return Success([])
+    try:
+        return Success([
+            item if isinstance(item, AttachmentInput) else AttachmentInput.model_validate(item)
+            for item in attachments
+        ])
+    except (TypeError, ValidationError) as exc:
+        return Failure(error_response(
+            "INVALID_REQUEST",
+            "attachments must contain objects with string name and content fields",
+            {"validation": str(exc)},
+        ))
+
+
 def _check_say_idempotency(
     conn: Any, resource_key: str, dedup_id: str | None, logger: Any
 ) -> Result[McpEnvelope | None, McpEnvelope]:
@@ -797,6 +831,7 @@ def table_say(
     mentions: list[str] | None = None,
     reply_to_sequence: int | None = None,
     dedup_id: str | None = None,
+    attachments: list[dict[str, str]] | list[AttachmentInput] | None = None,
 ) -> Result[McpEnvelope, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     conn = next(get_mcp_db())
@@ -827,6 +862,10 @@ def table_say(
     if cached_response is not None:
         return Success(cached_response)
 
+    attachments_result = _normalize_attachment_inputs(attachments)
+    if isinstance(attachments_result, Failure):
+        return attachments_result
+
     # Resolve mentions before append so ambiguity cannot persist a saying.
     mentions_result = _resolve_mentions_for_say(conn, mentions)
     if isinstance(mentions_result, Failure):
@@ -845,6 +884,7 @@ def table_say(
         patron_id=patron_id,
         speaker_name=speaker_name,
         limits=limits_result.unwrap(),
+        attachments=attachments_result.unwrap(),
     )
 
     if isinstance(result, Failure):
@@ -871,6 +911,30 @@ def table_say(
     if dedup_id is not None:
         store_idempotency_key(conn, resource_key, "table_say", dedup_id, {"data": response_data})
     return Success(success_response(response_data))
+
+
+def attachment_get(attachment_ids: list[str]) -> Result[McpEnvelope, McpEnvelope]:
+    """Return 1..8 complete attachment bodies by ID in request order."""
+    if not 1 <= len(attachment_ids) <= 8 or any(not item.strip() for item in attachment_ids):
+        return Failure(error_response(
+            "INVALID_REQUEST",
+            "attachment_ids must contain 1..8 non-empty IDs",
+        ))
+
+    conn = next(get_mcp_db())
+    result = get_attachments_by_ids(conn, attachment_ids)
+    if isinstance(result, Failure):
+        return Failure(error_response("DATABASE_ERROR", str(result.failure())))
+    attachments, missing = result.unwrap()
+    if missing:
+        return Failure(error_response(
+            "NOT_FOUND",
+            "One or more attachments were not found",
+            {"attachment_ids": missing},
+        ))
+    return Success(success_response({
+        "attachments": [attachment.model_dump(mode="json") for attachment in attachments]
+    }))
 
 
 # @shell_complexity: 5 branches for table lookup + long-poll loop + timeout + backoff + error handling
@@ -904,22 +968,7 @@ def table_listen(
 
     return Success(success_response(
         {
-            "sayings": [
-                {
-                    "id": s.id,
-                    "table_id": s.table_id,
-                    "sequence": s.sequence,
-                    "speaker": {
-                        "kind": s.speaker.kind.value,
-                        "name": s.speaker.name,
-                        "patron_id": s.speaker.patron_id,
-                    },
-                    "content": s.content,
-                    "pinned": s.pinned,
-                    "created_at": s.created_at.isoformat(),
-                }
-                for s in sayings
-            ],
+            "sayings": [_format_saying_dict(s) for s in sayings],
             "next_sequence": next_sequence,
             "_next_action": (
                 f"IMMEDIATELY call tasca.table_wait(since_sequence={next_sequence}). "

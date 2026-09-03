@@ -21,17 +21,13 @@ from typing import Any, cast
 from returns.result import Failure, Result, Success
 
 from tasca.config import settings
-from tasca.core.domain.table import Table, TableId, TableStatus, Version
-from tasca.core.export_service import generate_jsonl, generate_markdown
+from tasca.core.domain.table import Table, TableStatus, Version
 from tasca.core.schema import create_tables_table_ddl
 from tasca.shell.cli_legacy import create_table_via_mcp, create_table_via_rest, is_server_running
+from tasca.shell.services.operations.table_export import export_table
 from tasca.shell.services.table_id_generator import generate_table_id
 from tasca.shell.skills_cli import cmd_skills_install, cmd_skills_list, cmd_skills_show
-from tasca.shell.storage.saying_repo import list_all_sayings_by_table
-from tasca.shell.storage.table_repo import (
-    TableNotFoundError,
-    get_table,
-)
+from tasca.shell.storage.database import apply_schema
 from tasca.shell.storage.table_repo import (
     create_table as repo_create_table,
 )
@@ -357,40 +353,18 @@ def cmd_export(args: argparse.Namespace) -> Result[int, str]:
     conn = sqlite3.connect(db_path)
 
     try:
-        # Fetch table
-        table_result = get_table(conn, TableId(table_id))
-        if isinstance(table_result, Failure):
-            error = table_result.failure()
-            if isinstance(error, TableNotFoundError):
-                print(f"Error: Table not found: {table_id}", file=sys.stderr)
-            else:
-                print(f"Error: Failed to fetch table: {error}", file=sys.stderr)
+        schema_result = apply_schema(conn)
+        if isinstance(schema_result, Failure):
+            print(f"Error: Failed to apply database schema: {schema_result.failure()}", file=sys.stderr)
             return Success(1)
 
-        table = table_result.unwrap()
-
-        # Fetch ALL sayings for export (no count truncation)
-        sayings_result = list_all_sayings_by_table(conn, table_id)
-        if isinstance(sayings_result, Failure):
-            error_msg = str(sayings_result.failure())
-            # Check if it's a size exceeded error
-            if "Export size exceeded" in error_msg:
-                print(f"Error: {error_msg}", file=sys.stderr)
-            else:
-                print(f"Error: Failed to fetch sayings: {error_msg}", file=sys.stderr)
+        operation_format = "jsonl" if output_format == "jsonl" else "markdown"
+        export_result = export_table(conn, table_id, operation_format)
+        if isinstance(export_result, Failure):
+            error = export_result.failure()
+            print(f"Error: {error.error or error.status}", file=sys.stderr)
             return Success(1)
-
-        sayings = sayings_result.unwrap()
-
-        # Generate export content
-        if output_format == "jsonl":
-            from datetime import UTC, datetime
-
-            exported_at = datetime.now(UTC).isoformat()
-            content = generate_jsonl(table, sayings, exported_at)
-        else:
-            # Default: markdown
-            content = generate_markdown(table, sayings)
+        content = export_result.unwrap().content or ""
 
         # Write output
         if output_file:

@@ -140,7 +140,7 @@ class TestExportJSONL:
         # Parse header
         header = json.loads(lines[0])
         assert header["type"] == "export_header"
-        assert header["export_version"] == "0.1"
+        assert header["export_version"] == "0.2"
         assert header["table_id"] == table.id
         assert "exported_at" in header
 

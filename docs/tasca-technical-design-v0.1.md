@@ -97,6 +97,15 @@ Rationale: idempotency semantics are shared where implemented, but the public RE
 
 Rationale: pause is a control/social signal and is soft-enforced by default in v0.1. **[Proven]** (matches MCP spec)
 
+### 3.6 Markdown attachment v1
+
+- A saying keeps a required, nonblank Markdown `content` body and may include zero to eight immutable text-Markdown attachments.
+- Input attachments are `{name, content}`. Ordinary saying reads expose ordered metadata `{id, position, name, media_type, byte_size}` and omit attachment content.
+- Full attachment reads add `saying_id`, `table_id`, and unchanged `content`; they occur only through the explicit nested REST endpoint or the admin-only MCP tool.
+- Names are 1..128 Unicode characters, have no surrounding whitespace, slash, backslash, or NUL, and end in `.md` or `.markdown`.
+- Attachment content is nonblank and limited by exact UTF-8 size: 256 KiB per item, 1 MiB total, and eight items per saying.
+- Attachments do not participate in mention resolution, saying FTS, notifications, standalone upload, mutation, or deletion in v1.
+
 ## 4) Storage consistency model (SQLite)
 
 ### 4.1 Concurrency assumption
@@ -110,24 +119,26 @@ Rationale: simplest way to guarantee atomic sequence allocation and avoid subtle
 Fails if: you deploy multiple API processes pointing at the same SQLite file; v0.1 explicitly does not support this. Future multi-process requires a fresh concurrency design review. **[Likely]**
 
 ### 4.2 Required atomic operations (transaction boundaries)
-
 These operations MUST be atomic (all-or-nothing):
 
 1) **table.say**
-   - Allocate next sequence for the table
-   - Insert saying row
-   - Persist table sequence advancement (`tables.next_sequence`) / derived state
+   - Validate the saying body and attachment names/content/count/exact UTF-8 limits before mutation.
+   - Start one `BEGIN IMMEDIATE` transaction.
+   - Under that writer lock, read current saying count and exact table bytes, where table bytes include saying bodies plus attachment bodies.
+   - Reject configured limits without allocating a sequence.
+   - Allocate the next sequence, insert the saying, and insert every attachment at its stable zero-based position.
+   - Commit only after the final attachment insert. Any limit or insert failure rolls back saying rows, attachment rows, and sequence allocation.
 
 2) **table.control**
-   - Append a control/audit saying
-   - Update `tables.status` (derived snapshot)
+   - Append a control/audit saying.
+   - Update `tables.status` (derived snapshot).
 
 3) **table.update**
-   - Check `expected_version` (optimistic concurrency)
-   - Apply patch
-   - Increment `tables.version`
+   - Check `expected_version` (optimistic concurrency).
+   - Apply patch.
+   - Increment `tables.version`.
 
-Rationale: without atomicity, clients will observe gaps, duplicates, or inconsistent state in long polling. **[Likely]**
+Rationale: without atomicity, clients will observe gaps, duplicates, partial attachment sets, or inconsistent state in long polling. **[Proven]**
 
 ### 4.3 Shared operation ownership boundaries (implemented)
 
@@ -143,6 +154,12 @@ The implemented ownership model separates reusable shell-application operations 
 | Export | `src/tasca/shell/services/operations/table_export.py` + core export formatting | Download header/media type shaping | MCP `{content, format, table_id}` envelope |
 
 Routes and MCP entrypoints may contain transport orchestration, but they MUST NOT re-own the shared business decisions above. If behavior changes, update the shared operation first and keep HTTP/MCP adapter differences explicit.
+
+### 4.4 Attachment storage and read paths
+
+`saying_attachments` is an additive table with attachment UUID primary key, `saying_id` foreign key using `ON DELETE CASCADE`, stable `position`, `name`, unchanged Markdown `content`, and validated exact UTF-8 `byte_size`. `UNIQUE(saying_id, position)` fixes ordering. Upgrades create this table without rewriting existing sayings; existing rows read with `attachments=[]`. There is no down migration, so rollback to a pre-attachment binary leaves the table and rows intact while that binary temporarily omits them.
+
+Ordinary list/join/listen/wait/history paths first load sayings, then issue one metadata-only query for the page's saying IDs. They never select attachment content and do not issue one query per saying. Explicit attachment reads and the shared export operation are the only body-loading paths. Batch table deletion deletes sayings and relies on the attachment foreign-key cascade.
 
 ## 5) Public contract consolidation
 
@@ -180,6 +197,10 @@ Rationale: consistent machine-readable errors remain the target, while implement
 All enabled resource-router and admin-auth failures use the standard `PermissionDenied` envelope. Router-level viewer access wiring protects the complete REST resource inventory; mutation handlers retain their existing `verify_admin_token` dependency. The health payload exposes only `viewer_auth_required: bool`.
 
 Configured credentials, whether loaded from environment, `.env`, or another explicit settings source, are redacted from startup output, logs, errors, OpenAPI examples, tests, and evidence. A generated local admin token remains discoverable for local setup. Remote deployments terminate certificate-valid HTTPS before credential use, bind the backend to loopback/private port 8000, and carry Bearer credentials only in HTTPS headers.
+
+### 5.2.1 Attachment authorization
+
+REST attachment creation remains part of the Admin-only saying mutation. The nested REST body read is a resource read, so it follows the existing Viewer-or-Admin policy (or the public read baseline when viewer auth is disabled). MCP HTTP remains Admin-only for every tool; `attachment_get` therefore requires the admin Bearer credential. STDIO behavior is unchanged.
 
 ### 5.3 Dedup key canonicalization
 
@@ -249,10 +270,11 @@ Rationale: prevents mention spam and limits payload growth while keeping low-fri
 Endpoint: `GET /api/v1/search`
 
 ### 6.1 Indexed scope (MUST)
-
 - sayings.content
 - board values
 - table metadata (title/tags/space/repo fields)
+
+Attachment names and content are deliberately excluded from FTS and mention resolution in attachment v1.
 
 ### 6.2 Minimum query semantics (MVP)
 
@@ -272,19 +294,19 @@ Rationale: aligns with Watchtower UI needs and FTS5 feasibility. **[Proven]**
 ## 7) Export contracts
 
 ### 7.1 JSONL export (MUST)
-
 Endpoint: `GET /api/v1/tables/{table_id}/export/jsonl`
 
 **Decision:** JSONL MUST include:
 
-1) Export header line
-2) One `table` snapshot line
-3) Stream of `saying` lines ordered by sequence, including control events as sayings
+1) Export header line with format version `0.2`.
+2) One `table` snapshot line.
+3) A stream of `saying` lines ordered by sequence, including control events as sayings.
+4) An ordered `attachments` array inside every saying. The array is empty for legacy/no-attachment sayings; each populated entry includes metadata, `saying_id`, `table_id`, and the complete unchanged Markdown `content`.
 
 Required header fields:
 
 ```json
-{"type":"export_header","export_version":"0.1","exported_at":"<iso8601>","table_id":"<uuid>"}
+{"type":"export_header","export_version":"0.2","exported_at":"<iso8601>","table_id":"<uuid>"}
 ```
 
 Table line:
@@ -296,28 +318,34 @@ Table line:
 Saying line:
 
 ```json
-{"type":"saying","saying":{ /* saying object, ordered by sequence */ }}
+{"type":"saying","saying":{"content":"...","attachments":[{"id":"...","position":0,"name":"notes.md","media_type":"text/markdown","byte_size":7,"saying_id":"...","table_id":"...","content":"# Notes"}]}}
 ```
 
-Rationale: machine replayability without multi-instance coordination. **[Proven]**
+HTTP, MCP, and `tasca export` call the same complete attachment-loading operation. JSON decoding therefore round-trips attachment Unicode content and order across all three surfaces.
 
 ### 7.2 Markdown export (MUST)
-
 Endpoint: `GET /api/v1/tables/{table_id}/export/markdown`
 
-Template MUST follow `tasca-search-export-v0.1.md` and include:
+The template follows `tasca-search-export-v0.1.md` and includes:
 
-- Table metadata block
-- Board section (keys in a stable order: agenda, summary, decision_draft, then others)
-- Transcript lines with `[seq=...] timestamp (speaker): content`
+- Table metadata block.
+- Board section (keys in stable order: agenda, summary, decision_draft, then others).
+- Compact transcript lines with `[seq=...] timestamp (speaker): content`; attachment bodies do not inflate these lines.
+- A following `## Attachments` section, when present, ordered by saying sequence and attachment position. It records identity/name/byte metadata and then includes each complete unchanged Markdown body.
 
-Rationale: human review and archival. **[Proven]**
+HTTP, MCP, and CLI use the same formatter and full-body load.
 
 ## 8) Web rendering security (UI)
 
 ### 8.1 Markdown
 
 - Raw HTML in Markdown MUST be disabled by default.
+
+### 8.1.1 Lazy attachment rendering
+
+The composer accepts only local `.md`/`.markdown` files, decodes valid UTF-8 text, enforces the server limits for immediate feedback, and sends `{name, content}` in the same saying request. The server remains authoritative.
+
+The stream displays ordered name/type/byte metadata collapsed by default. It sends no body request before user expansion. First expansion calls the nested attachment endpoint, keeps the returned raw Markdown unchanged in local state, and renders it with the same `ReactMarkdown` component overrides as saying content. Raw HTML stays disabled, links receive the existing safe handling, and Mermaid continues through strict initialization stripping and SVG sanitization. Re-expansion uses the already loaded body.
 
 ### 8.2 Mermaid
 - Mermaid rendering is client-side (ADR-001).

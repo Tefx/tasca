@@ -116,12 +116,11 @@ def format_saying_dict(saying: Any) -> dict[str, Any]:
         "id": saying.id,
         "table_id": saying.table_id,
         "sequence": saying.sequence,
-        "speaker": {
-            "kind": saying.speaker.kind.value,
-            "name": saying.speaker.name,
-            "patron_id": saying.speaker.patron_id,
-        },
+        "speaker": saying.speaker.model_dump(mode="json"),
         "content": saying.content,
+        "attachments": [
+            attachment.model_dump(mode="json") for attachment in saying.attachments
+        ],
         "pinned": saying.pinned,
         "created_at": saying.created_at.isoformat(),
     }
@@ -371,6 +370,9 @@ def _say_response_payload(
         "table_id": saying.table_id,
         "speaker": speaker,
         "content": saying.content,
+        "attachments": [
+            attachment.model_dump(mode="json") for attachment in saying.attachments
+        ],
         "pinned": saying.pinned,
         "_next_action": next_action,
     })

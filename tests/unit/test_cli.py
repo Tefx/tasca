@@ -409,8 +409,9 @@ class TestPrintStartupBanner:
         self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The default server banner hides constructor-supplied credentials."""
-        import tasca.main as main_module
         from returns.result import Success
+
+        import tasca.main as main_module
         from tasca.config import Settings
 
         configured_token = "configured-admin-token"

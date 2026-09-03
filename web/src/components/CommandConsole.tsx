@@ -8,7 +8,12 @@
  */
 
 import { useState, useCallback, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
-import { postSaying, type Saying, type Seat } from '../api/sayings'
+import {
+  postSaying,
+  type AttachmentInput,
+  type Saying,
+  type Seat,
+} from '../api/sayings'
 import { pauseTable, resumeTable, closeTable, type Table as TableType } from '../api/tables'
 import { MentionInput, type MentionInputRef } from './MentionInput'
 import { type PatronInfo } from './SeatDeck'
@@ -54,6 +59,10 @@ function canResume(status: string): boolean {
 function canClose(status: string): boolean {
   return status === 'open' || status === 'paused'
 }
+
+/** Match the characters treated as whitespace by Python's str.strip(). */
+const pythonWhitespaceBoundary = /^[\p{White_Space}\u001c-\u001f]|[\p{White_Space}\u001c-\u001f]$/u
+const pythonWhitespaceOnly = /^[\p{White_Space}\u001c-\u001f]*$/u
 
 // =============================================================================
 // Close Confirmation Hook
@@ -295,7 +304,17 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
     const [value, setValue] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [attachments, setAttachments] = useState<AttachmentInput[]>([])
+    const [isReadingAttachments, setIsReadingAttachments] = useState(false)
+    const attachmentsRef = useRef<AttachmentInput[]>([])
+    const attachmentReadPendingRef = useRef(false)
     const mentionInputRef = useRef<MentionInputRef>(null)
+    const attachmentInputRef = useRef<HTMLInputElement>(null)
+
+    const replaceAttachments = useCallback((next: AttachmentInput[]) => {
+      attachmentsRef.current = next
+      setAttachments(next)
+    }, [])
 
     const isAdmin = mode === 'admin' && hasToken
     const isClosed = table.status === 'closed'
@@ -307,20 +326,80 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
 
     const handleSubmit = useCallback(async () => {
       const trimmed = value.trim()
-      if (!trimmed || !isAdmin || isSubmitting) return
+      if (!trimmed || !isAdmin || isSubmitting || attachmentReadPendingRef.current) return
 
       setIsSubmitting(true)
       setError(null)
+      const submittedAttachments = attachmentsRef.current
       try {
-        const newSaying = await postSaying(table.id, { speaker_name: 'Human', content: trimmed, patron_id: null })
+        const newSaying = await postSaying(table.id, {
+          speaker_name: 'Human',
+          content: trimmed,
+          patron_id: null,
+          ...(submittedAttachments.length > 0 ? { attachments: submittedAttachments } : {}),
+        })
         setValue('')
+        replaceAttachments([])
         onPosted?.(newSaying)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to send saying')
       } finally {
         setIsSubmitting(false)
       }
-    }, [value, isAdmin, isSubmitting, table.id, onPosted])
+    }, [value, isAdmin, isSubmitting, table.id, onPosted, replaceAttachments])
+
+    const handleAttachmentSelection = useCallback(async (files: FileList | null) => {
+      if (!files?.length || attachmentReadPendingRef.current) return
+
+      attachmentReadPendingRef.current = true
+      setIsReadingAttachments(true)
+      setError(null)
+      const existingAttachments = attachmentsRef.current
+      try {
+        const selected = Array.from(files)
+        if (existingAttachments.length + selected.length > 8) {
+          throw new Error('A saying may contain at most 8 attachments')
+        }
+        const decoded: AttachmentInput[] = []
+        let totalBytes = existingAttachments.reduce(
+          (total, item) => total + new TextEncoder().encode(item.content).byteLength,
+          0
+        )
+        for (const file of selected) {
+          const nameLength = Array.from(file.name).length
+          const validName =
+            nameLength >= 1 &&
+            nameLength <= 128 &&
+            !pythonWhitespaceBoundary.test(file.name) &&
+            (file.name.endsWith('.md') || file.name.endsWith('.markdown')) &&
+            !file.name.includes('/') &&
+            !file.name.includes('\\') &&
+            !file.name.includes('\0')
+          if (!validName) throw new Error(`Invalid Markdown attachment name: ${file.name}`)
+          if (file.size > 256 * 1024) throw new Error(`${file.name} exceeds 256 KiB`)
+          const bytes = new Uint8Array(await file.arrayBuffer())
+          const content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+          if (pythonWhitespaceOnly.test(content)) {
+            throw new Error(`${file.name} must contain non-whitespace Markdown`)
+          }
+          totalBytes += bytes.byteLength
+          if (totalBytes > 1024 * 1024) throw new Error('Attachments exceed 1 MiB total')
+          decoded.push({ name: file.name, content })
+        }
+        replaceAttachments([...existingAttachments, ...decoded])
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to read Markdown attachment')
+      } finally {
+        attachmentReadPendingRef.current = false
+        setIsReadingAttachments(false)
+        if (attachmentInputRef.current) attachmentInputRef.current.value = ''
+      }
+    }, [replaceAttachments])
+
+    const handleRemoveAttachment = useCallback((index: number) => {
+      if (attachmentReadPendingRef.current || isSubmitting) return
+      replaceAttachments(attachmentsRef.current.filter((_, item) => item !== index))
+    }, [isSubmitting, replaceAttachments])
 
     const handleInsertSummaryRequest = useCallback((text: string) => {
       setValue(text)
@@ -347,6 +426,23 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
             {error}
           </p>
         )}
+        {attachments.length > 0 && (
+          <ul className="mc-attachment-selection" aria-label="Selected Markdown attachments">
+            {attachments.map((attachment, index) => (
+              <li key={`${attachment.name}-${index}`}>
+                <span>{attachment.name}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAttachment(index)}
+                  disabled={isSubmitting || isReadingAttachments}
+                  aria-label={`Remove ${attachment.name}`}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="mc-console-row">
           <MentionInput
             ref={mentionInputRef}
@@ -366,14 +462,29 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
             className="mc-console-input"
           />
           {isAdmin && !isClosed && (
+            <label className="mc-attachment-picker" title="Attach Markdown files">
+              <span aria-hidden="true">＋.md</span>
+              <span className="sr-only">Attach Markdown files</span>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                aria-label="Attach Markdown files"
+                accept=".md,.markdown,text/markdown"
+                multiple
+                disabled={isSubmitting || isReadingAttachments || attachments.length >= 8}
+                onChange={(event) => void handleAttachmentSelection(event.target.files)}
+              />
+            </label>
+          )}
+          {isAdmin && !isClosed && (
             <button
               type="button"
               className="mc-console-send-btn"
               onClick={handleSubmit}
-              disabled={!value.trim() || isSubmitting}
+              disabled={!value.trim() || isSubmitting || isReadingAttachments}
               title="Send saying (Enter)"
             >
-              {isSubmitting ? '…' : 'Send'}
+              {isReadingAttachments ? 'Reading…' : isSubmitting ? '…' : 'Send'}
             </button>
           )}
         </div>

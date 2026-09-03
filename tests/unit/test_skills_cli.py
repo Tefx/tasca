@@ -21,7 +21,7 @@ import tasca.cli as cli
 def test_skills_list_exits_zero() -> None:
     """skills list returns exit code 0."""
     result = cli.main(["skills", "list"])
-    assert result == 0
+    assert result.unwrap() == 0
 
 
 def test_skills_list_includes_tasca_moderation(capsys: pytest.CaptureFixture[str]) -> None:
@@ -39,7 +39,7 @@ def test_skills_list_includes_tasca_moderation(capsys: pytest.CaptureFixture[str
 def test_skills_show_exits_zero() -> None:
     """skills show tasca-moderation returns exit code 0."""
     result = cli.main(["skills", "show", "tasca-moderation"])
-    assert result == 0
+    assert result.unwrap() == 0
 
 
 def test_skills_show_prints_content(capsys: pytest.CaptureFixture[str]) -> None:
@@ -72,7 +72,7 @@ def test_skills_install_requires_target() -> None:
 def test_skills_install_copies_skill_to_target(tmp_path: pathlib.Path) -> None:
     """skills install --target <path> copies SKILL.md and returns 0."""
     result = cli.main(["skills", "install", "--target", str(tmp_path), "tasca-moderation"])
-    assert result == 0
+    assert result.unwrap() == 0
     dest = tmp_path / "tasca-moderation" / "SKILL.md"
     assert dest.exists()
     assert dest.stat().st_size > 0

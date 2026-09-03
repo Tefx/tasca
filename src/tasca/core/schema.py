@@ -139,6 +139,32 @@ def create_sayings_table_ddl(table_name: str = "sayings") -> str:
 )"""
 
 
+@deal.post(lambda result: len(result) > 0)
+def create_saying_attachments_table_ddl(
+    table_name: str = "saying_attachments",
+) -> str:
+    """Generate additive DDL for immutable Markdown attachment storage.
+
+    >>> ddl = create_saying_attachments_table_ddl()
+    >>> "saying_attachments" in ddl
+    True
+    >>> "ON DELETE CASCADE" in ddl
+    True
+    >>> "UNIQUE(saying_id, position)" in ddl
+    True
+    """
+    return f"""CREATE TABLE IF NOT EXISTS {table_name} (
+    id TEXT PRIMARY KEY,
+    saying_id TEXT NOT NULL,
+    position INTEGER NOT NULL CHECK(position >= 0),
+    name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    byte_size INTEGER NOT NULL CHECK(byte_size >= 1),
+    FOREIGN KEY (saying_id) REFERENCES sayings(id) ON DELETE CASCADE,
+    UNIQUE(saying_id, position)
+)"""
+
+
 @deal.post(lambda result: len(result) > 0)  # DDL string is non-empty
 def create_dedup_table_ddl(table_name: str = "dedup") -> str:
     """
@@ -182,13 +208,13 @@ def create_idempotency_keys_table_ddl(table_name: str = "idempotency_keys") -> s
 )"""
 
 
-@deal.post(lambda result: len(result) == 6)
+@deal.post(lambda result: len(result) == 7)
 def get_all_table_ddl() -> list[str]:
     """
     Get all table creation DDL statements in dependency order.
 
     >>> len(get_all_table_ddl())
-    6
+    7
     >>> get_all_table_ddl()[0].startswith("CREATE TABLE IF NOT EXISTS patrons")
     True
     """
@@ -197,6 +223,7 @@ def get_all_table_ddl() -> list[str]:
         create_tables_table_ddl(),
         create_seats_table_ddl(),
         create_sayings_table_ddl(),
+        create_saying_attachments_table_ddl(),
         create_dedup_table_ddl(),
         create_idempotency_keys_table_ddl(),
     ]

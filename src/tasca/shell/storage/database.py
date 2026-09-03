@@ -136,12 +136,14 @@ def apply_schema(conn: sqlite3.Connection) -> Result[int, str]:
     >>> result = apply_schema(conn)
     >>> isinstance(result, Success)
     True
-    >>> result.unwrap()  # 6 tables + 8 indexes + 4 FTS = 18 statements
-    18
+    >>> result.unwrap()  # 7 tables + 8 indexes + 4 FTS = 19 statements
+    19
     >>> tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
     >>> 'patrons' in [t[0] for t in tables]
     True
     >>> 'sayings' in [t[0] for t in tables]
+    True
+    >>> 'saying_attachments' in [t[0] for t in tables]
     True
     >>> 'sayings_fts' in [t[0] for t in tables]  # FTS5 virtual table
     True

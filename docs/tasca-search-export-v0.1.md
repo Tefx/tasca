@@ -3,12 +3,7 @@
 ## Full-text search
 
 ### Scope
-
-Search MUST cover:
-
-- sayings (`content`)
-- board (values, formerly "pins")
-- table metadata (title, tags/space, repo fields, etc.)
+Search covers saying `content`, board values, and selected table metadata. Markdown attachment names and content are deliberately excluded from saying FTS in attachment v1, so attachment-only terms return no search hit.
 
 ### Storage recommendation (single-instance local/LAN)
 
@@ -29,57 +24,43 @@ Search MUST cover:
 ## Export / Archive
 
 ### Formats (MVP)
-
 1) **JSONL** (machine-replayable)
    - One JSON object per line.
-   - Include: table snapshot + sayings ordered by sequence + control events.
+   - Header `export_version` is `0.2`.
+   - Include a table snapshot followed by sayings in sequence order.
+   - Every saying has an ordered `attachments` array. Each entry includes `{id, position, name, media_type, byte_size, saying_id, table_id, content}`; `content` is complete and unchanged.
 
-   Suggested JSONL shape (v0.1):
-
-   - First line: export header
-   - Following lines: exported entities/events
-
-   Example:
-   ```json
-   {"type":"export_header","export_version":"0.1","exported_at":"2026-02-21T00:00:00Z","table_id":"<uuid>"}
-   {"type":"table","table":{ /* full table object from table.get */ }}
-   {"type":"saying","saying":{ /* saying object, ordered by sequence */ }}
-   {"type":"saying","saying":{ /* ... */ }}
-   ```
+```json
+{"type":"export_header","export_version":"0.2","exported_at":"2026-02-21T00:00:00Z","table_id":"<uuid>"}
+{"type":"table","table":{}}
+{"type":"saying","saying":{"sequence":1,"content":"Body","attachments":[{"id":"<uuid>","position":0,"name":"notes.md","media_type":"text/markdown","byte_size":7,"saying_id":"<uuid>","table_id":"<uuid>","content":"# Notes"}]}}
+```
 
 2) **Markdown** (human-readable)
-   - Title + metadata
-   - Board section (formerly "Pins")
-   - Transcript with timestamps, speakers, and sequences
+   - Title, metadata, stable Board section, and compact timestamped/numbered transcript.
+   - If attachments exist, append `## Attachments` after the transcript.
+   - Order material by saying sequence then attachment position; emit identity/name/byte metadata followed by each complete raw Markdown body.
 
-   Suggested Markdown template (v0.1):
+```markdown
+# <table.title>
 
-   ```markdown
-   # <table.title>
+## Board
+### agenda
+<...>
 
-   - table_id: <uuid>
-   - status: <open|paused|closed>
-   - creator: <display_name>
-   - hosts: <...>
-   - created_at: <...>
-   - tags/space: <...>
+## Transcript
+- [seq=1] 2026-02-21T00:00:01Z (agent:Architect-A): Compact body
 
-   ## Board
-   ### agenda
-   <...>
+## Attachments
+### [seq=1] Attachment 1
+- id: `<uuid>`
+- name: `notes.md`
+- bytes: 7
 
-   ### summary
-   <...>
-
-   ### decision_draft
-   <...>
-
-   ## Transcript
-   - [seq=1] 2026-02-21T00:00:01Z (agent:Architect-A): ...
-   - [seq=2] 2026-02-21T00:00:05Z (human): ...
-   ```
+# Notes
+```
 
 ### Notes
-
+- HTTP, MCP, and `tasca export` use one shared complete attachment-loading operation and formatter.
 - Export must not require multi-instance coordination.
-- Export should include enough data to re-import/replay later (even if re-import is v0.2).
+- The output includes enough identity and full content for future replay. Re-import remains outside attachment v1.

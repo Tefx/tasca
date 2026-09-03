@@ -17,15 +17,15 @@ from pydantic import BaseModel, Field
 from returns.result import Failure, Result, Success
 
 from tasca.config import settings
-from tasca.core.domain.saying import Saying
+from tasca.core.domain.saying import AttachmentInput, Saying, SayingAttachment
 from tasca.core.domain.table import Table, TableId
 from tasca.core.services.limits_service import (
     LimitsConfig,
     settings_to_limits_config,
 )
-from tasca.shell.api.auth import verify_admin_token
+from tasca.shell.api.auth import verify_admin_token, verify_viewer_or_admin
 from tasca.shell.api.deps import get_db
-from tasca.shell.api.errors import raise_http_error
+from tasca.shell.api.errors import error_envelope, raise_http_error
 from tasca.shell.api.fastapi_compat import APIRouter, Depends, HTTPException, Query, status
 from tasca.shell.logging import get_logger, log_say, log_wait_returned, log_wait_timeout
 from tasca.shell.services.limited_saying_service import (
@@ -33,6 +33,7 @@ from tasca.shell.services.limited_saying_service import (
     TableSayErrorKind,
     append_saying_operation,
 )
+from tasca.shell.storage.attachment_repo import get_attachment_for_saying
 from tasca.shell.storage.saying_repo import (
     get_table_max_sequence,
     list_sayings_by_table,
@@ -60,6 +61,11 @@ class SayingCreate(BaseModel):
     speaker_name: str = Field(..., description="Display name of the speaker", min_length=1)
     content: str = Field(..., description="Markdown content of the saying", min_length=1)
     patron_id: str | None = Field(None, description="Patron ID if speaker is an AI agent")
+    attachments: list[AttachmentInput] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Markdown attachments inserted atomically with the saying",
+    )
 
 
 class SayingListResponse(BaseModel):
@@ -179,6 +185,7 @@ def _append_saying_response(
         patron_id=data.patron_id,
         speaker_name=data.speaker_name,
         limits=limits_result.unwrap(),
+        attachments=data.attachments,
     )
     if isinstance(result, Failure):
         try:
@@ -321,7 +328,46 @@ def _raise_table_say_failure(error: TableSayError) -> None:
     if error.kind == TableSayErrorKind.INVALID_SPEAKER:
         raise_http_error(status.HTTP_400_BAD_REQUEST, "InvalidRequest", error.message)
 
+    if error.kind == TableSayErrorKind.VALIDATION_FAILED and error.validation_error is not None:
+        validation = error.validation_error
+        details = {
+            "kind": validation.kind.value,
+            "attachment_index": validation.attachment_index,
+            "limit": validation.limit,
+            "actual": validation.actual,
+        }
+        raise_http_error(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "InvalidRequest",
+            error.message,
+            {key: value for key, value in details.items() if value is not None},
+        )
+
     raise_http_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "StorageError", error.message)
+
+
+def _get_attachment_response(
+    conn: sqlite3.Connection,
+    table_id: str,
+    saying_id: str,
+    attachment_id: str,
+) -> Result[SayingAttachment, HTTPException]:
+    """Load a nested attachment or return the standard HTTP failure."""
+    result = get_attachment_for_saying(conn, table_id, saying_id, attachment_id)
+    if isinstance(result, Failure):
+        return Failure(HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_envelope("StorageError", str(result.failure())),
+        ))
+    attachment = result.unwrap()
+    if attachment is None:
+        return Failure(HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_envelope(
+                "AttachmentNotFound", f"Attachment not found: {attachment_id}"
+            ),
+        ))
+    return Success(attachment)
 
 
 # =============================================================================
@@ -385,6 +431,29 @@ async def wait_for_sayings_endpoint(
 ) -> WaitResponse:
     """Long-poll wait for new sayings."""
     result = await _wait_for_sayings_response(conn, table_id, since_sequence, timeout)
+    if isinstance(result, Failure):
+        raise result.failure()
+    return result.unwrap()
+
+
+# =============================================================================
+# GET nested attachment - explicit body read
+# =============================================================================
+
+
+@router.get(
+    "/{saying_id}/attachments/{attachment_id}",
+    response_model=SayingAttachment,
+)
+async def get_attachment_endpoint(
+    table_id: str,
+    saying_id: str,
+    attachment_id: str,
+    _auth: str | None = Depends(verify_viewer_or_admin),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> SayingAttachment:
+    """Return one attachment body when its complete nested identity matches."""
+    result = _get_attachment_response(conn, table_id, saying_id, attachment_id)
     if isinstance(result, Failure):
         raise result.failure()
     return result.unwrap()

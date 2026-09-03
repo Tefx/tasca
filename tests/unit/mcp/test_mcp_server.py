@@ -17,6 +17,7 @@ from returns.result import Failure, Success
 
 from tasca.core.domain.table import Table, TableId, TableStatus, TableUpdate, Version
 from tasca.shell.mcp.server import (
+    attachment_get,
     patron_get,
     patron_register,
     seat_heartbeat,
@@ -899,6 +900,105 @@ class TestTableSay:
         assert result["ok"] is True
         assert result["data"]["speaker"]["kind"] == "agent"
         assert result["data"]["speaker"]["patron_id"] == patron_id
+
+    def test_say_with_attachments_is_atomic_and_idempotent(
+        self,
+        test_db: sqlite3.Connection,
+    ) -> None:
+        table_id = table_create(question="Attachment test")["data"]["id"]
+        request = {
+            "table_id": table_id,
+            "content": "Body",
+            "speaker_name": "Alice",
+            "speaker_kind": "human",
+            "dedup_id": "attachment-retry",
+            "attachments": [
+                {"name": "one.md", "content": "One"},
+                {"name": "two.markdown", "content": "Two"},
+            ],
+        }
+        first = table_say(**request)
+        retried = table_say(**request)
+
+        assert first["ok"] is True
+        assert retried["ok"] is True
+        assert retried["data"]["id"] == first["data"]["id"]
+        assert retried["data"]["attachments"] == first["data"]["attachments"]
+        assert [item["position"] for item in first["data"]["attachments"]] == [0, 1]
+        assert all("content" not in item for item in first["data"]["attachments"])
+        assert test_db.execute("SELECT COUNT(*) FROM sayings").fetchone()[0] == 1
+        assert test_db.execute("SELECT COUNT(*) FROM saying_attachments").fetchone()[0] == 2
+
+    def test_attachment_text_does_not_create_mentions(self) -> None:
+        table_id = table_create(question="Attachment mention exclusion")["data"]["id"]
+        result = table_say(
+            table_id=table_id,
+            content="Body without mentions",
+            speaker_name="Alice",
+            speaker_kind="human",
+            attachments=[{"name": "mention.md", "content": "Hello @all and @missing"}],
+        )
+
+        assert result["ok"] is True
+        assert result["data"]["mentions_all"] is False
+        assert result["data"]["mentions_resolved"] == []
+        assert result["data"]["mentions_unresolved"] == []
+
+    def test_invalid_attachment_request_returns_invalid_request_without_rows(
+        self,
+        test_db: sqlite3.Connection,
+    ) -> None:
+        table_id = table_create(question="Attachment validation")["data"]["id"]
+        result = table_say(
+            table_id=table_id,
+            content="Body",
+            speaker_name="Alice",
+            speaker_kind="human",
+            attachments=[{"name": "bad/path.md", "content": "x"}],
+        )
+
+        assert result["ok"] is False
+        assert result["error"]["code"] == "INVALID_REQUEST"
+        assert result["error"]["details"]["kind"] == "attachment_name"
+        assert test_db.execute("SELECT COUNT(*) FROM sayings").fetchone()[0] == 0
+
+
+class TestAttachmentGet:
+    """Tests for the explicit full-body MCP attachment tool."""
+
+    def test_get_selected_attachments_in_request_order(self) -> None:
+        table_id = table_create(question="Read attachments")["data"]["id"]
+        saying = table_say(
+            table_id=table_id,
+            content="Body",
+            speaker_name="Alice",
+            speaker_kind="human",
+            attachments=[
+                {"name": "one.md", "content": "# One"},
+                {"name": "two.md", "content": "# Two"},
+            ],
+        )["data"]
+        ids = [item["id"] for item in saying["attachments"]]
+
+        result = attachment_get(attachment_ids=[ids[1], ids[0]])
+
+        assert result["ok"] is True
+        attachments = result["data"]["attachments"]
+        assert [item["content"] for item in attachments] == ["# Two", "# One"]
+        assert all(item["table_id"] == table_id for item in attachments)
+        assert all(item["saying_id"] == saying["id"] for item in attachments)
+
+    @pytest.mark.parametrize("attachment_ids", [[], [str(index) for index in range(9)]])
+    def test_get_requires_one_to_eight_ids(self, attachment_ids: list[str]) -> None:
+        result = attachment_get(attachment_ids=attachment_ids)
+        assert result["ok"] is False
+        assert result["error"]["code"] == "INVALID_REQUEST"
+
+    def test_get_reports_missing_ids(self) -> None:
+        result = attachment_get(attachment_ids=["missing"])
+        assert result["ok"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
+        assert result["error"]["details"]["attachment_ids"] == ["missing"]
 
 
 class TestTableListen:

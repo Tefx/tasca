@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Stream } from './Stream'
 import type { Saying } from '../api/sayings'
 
@@ -380,5 +380,83 @@ describe('Stream Mermaid Markdown rendering', () => {
     const fallbackCode = container.querySelector('pre.mc-mermaid-source code.language-mermaid')
     expect(fallbackCode).toBeInTheDocument()
     expect(fallbackCode).toHaveTextContent('not a valid mermaid diagram')
+  })
+})
+
+describe('Stream Markdown attachments', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('stays metadata-only until expansion and uses the safe Markdown/Mermaid pipeline', async () => {
+    const content = [
+      '# Attachment heading',
+      '',
+      '<script>alert(1)</script>',
+      '',
+      '[unsafe](javascript:alert(2))',
+      '',
+      '```mermaid',
+      'flowchart TD',
+      '  A --> B',
+      '```',
+    ].join('\n')
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'attachment-1',
+          saying_id: 'saying-1',
+          table_id: 'table-1',
+          name: 'notes.md',
+          position: 0,
+          byte_size: new TextEncoder().encode(content).byteLength,
+          media_type: 'text/markdown',
+          content,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const saying: Saying = {
+      ...makeSaying(1),
+      attachments: [
+        {
+          id: 'attachment-1',
+          name: 'notes.md',
+          position: 0,
+          byte_size: new TextEncoder().encode(content).byteLength,
+          media_type: 'text/markdown',
+        },
+      ],
+    }
+
+    const { container } = render(
+      <Stream sayings={[saying]} connectionStatus="live" tableStatus="open" />
+    )
+
+    const disclosure = screen.getByRole('button', { name: /notes\.md/ })
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(screen.queryByRole('heading', { name: 'Attachment heading' })).not.toBeInTheDocument()
+
+    fireEvent.click(disclosure)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/v1/tables/table-1/sayings/saying-1/attachments/attachment-1'
+    )
+    expect(await screen.findByRole('heading', { name: 'Attachment heading' })).toBeInTheDocument()
+    expect(container.querySelector('script')).not.toBeInTheDocument()
+    expect(container.innerHTML).toContain('&lt;script')
+    expect(screen.getByText('unsafe').closest('a')?.getAttribute('href')).not.toContain(
+      'javascript:'
+    )
+    await waitFor(() => {
+      expect(container.querySelector('.mc-attachment-body .mc-mermaid-diagram svg')).toBeInTheDocument()
+    })
+
+    fireEvent.click(disclosure)
+    fireEvent.click(disclosure)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

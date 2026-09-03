@@ -178,6 +178,182 @@ describe('CommandConsole — submit', () => {
     expect(onPosted).toHaveBeenCalledTimes(1)
   })
 
+  it('selects local Markdown and submits its exact text in the saying request', async () => {
+    asAdmin()
+    const raw = '# Notes\n\nUnicode 日本語'
+    const bytes = new TextEncoder().encode(raw)
+    const file = new File([bytes], 'notes.md', { type: 'text/markdown' })
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: vi.fn(async () => bytes.buffer),
+    })
+    ;(postSaying as Mock).mockResolvedValue({
+      id: 'saying-attachment',
+      table_id: 'table-001',
+      sequence: 1,
+      speaker: { kind: 'human', name: 'Human', patron_id: null },
+      content: 'With attachment',
+      attachments: [],
+      pinned: false,
+      created_at: '2024-01-01T00:00:00Z',
+    })
+    render(<CommandConsole table={makeTable()} seats={[]} />)
+
+    fireEvent.change(screen.getByLabelText('Attach Markdown files'), {
+      target: { files: [file] },
+    })
+    expect(await screen.findByText('notes.md')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: /message input/i }), {
+      target: { value: 'With attachment' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^send$/i }))
+
+    await waitFor(() => {
+      expect(postSaying).toHaveBeenCalledWith('table-001', {
+        speaker_name: 'Human',
+        content: 'With attachment',
+        patron_id: null,
+        attachments: [{ name: 'notes.md', content: raw }],
+      })
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('notes.md')).not.toBeInTheDocument()
+    })
+  })
+
+  it('blocks submit and concurrent selection until attachment decoding finishes', async () => {
+    asAdmin()
+    const firstBytes = new TextEncoder().encode('# First')
+    let resolveFirstRead!: (value: ArrayBuffer) => void
+    const firstRead = new Promise<ArrayBuffer>((resolve) => {
+      resolveFirstRead = resolve
+    })
+    const first = new File([firstBytes], 'first.md', { type: 'text/markdown' })
+    Object.defineProperty(first, 'arrayBuffer', {
+      value: vi.fn(() => firstRead),
+    })
+
+    const secondBytes = new TextEncoder().encode('# Second')
+    const secondRead = vi.fn(async () => secondBytes.buffer)
+    const second = new File([secondBytes], 'second.md', { type: 'text/markdown' })
+    Object.defineProperty(second, 'arrayBuffer', { value: secondRead })
+    ;(postSaying as Mock).mockResolvedValue({
+      id: 'saying-after-read',
+      table_id: 'table-001',
+      sequence: 1,
+      speaker: { kind: 'human', name: 'Human', patron_id: null },
+      content: 'Wait for attachment',
+      attachments: [],
+      pinned: false,
+      created_at: '2024-01-01T00:00:00Z',
+    })
+    render(<CommandConsole table={makeTable()} seats={[]} />)
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i })
+    const picker = screen.getByLabelText('Attach Markdown files')
+    fireEvent.change(textarea, { target: { value: 'Wait for attachment' } })
+    fireEvent.change(picker, { target: { files: [first] } })
+
+    const readingButton = await screen.findByRole('button', { name: 'Reading…' })
+    expect(readingButton).toBeDisabled()
+    expect(picker).toBeDisabled()
+    fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
+    fireEvent.change(picker, { target: { files: [second] } })
+    expect(postSaying).not.toHaveBeenCalled()
+    expect(secondRead).not.toHaveBeenCalled()
+
+    await act(async () => {
+      resolveFirstRead(firstBytes.buffer as ArrayBuffer)
+      await firstRead
+    })
+
+    expect(await screen.findByText('first.md')).toBeInTheDocument()
+    expect(screen.queryByText('second.md')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => {
+      expect(postSaying).toHaveBeenCalledWith('table-001', {
+        speaker_name: 'Human',
+        content: 'Wait for attachment',
+        patron_id: null,
+        attachments: [{ name: 'first.md', content: '# First' }],
+      })
+    })
+  })
+
+  it('counts astral Unicode filename characters as code points', async () => {
+    asAdmin()
+    const bytes = new TextEncoder().encode('note')
+    const name = `${'😀'.repeat(125)}.md`
+    expect(Array.from(name)).toHaveLength(128)
+    const file = new File([bytes], name, { type: 'text/markdown' })
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: vi.fn(async () => bytes.buffer),
+    })
+    render(<CommandConsole table={makeTable()} seats={[]} />)
+
+    fireEvent.change(screen.getByLabelText('Attach Markdown files'), {
+      target: { files: [file] },
+    })
+
+    expect(await screen.findByText(name)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('rejects Unicode whitespace at a filename boundary', async () => {
+    asAdmin()
+    const bytes = new TextEncoder().encode('note')
+    const file = new File([bytes], '\u0085notes.md', { type: 'text/markdown' })
+    const read = vi.fn(async () => bytes.buffer)
+    Object.defineProperty(file, 'arrayBuffer', { value: read })
+    render(<CommandConsole table={makeTable()} seats={[]} />)
+
+    fireEvent.change(screen.getByLabelText('Attach Markdown files'), {
+      target: { files: [file] },
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Invalid Markdown attachment name'
+    )
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it('rejects Python whitespace-only attachment content', async () => {
+    asAdmin()
+    const bytes = new TextEncoder().encode('\u0085')
+    const file = new File([bytes], 'blank.md', { type: 'text/markdown' })
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: vi.fn(async () => bytes.buffer),
+    })
+    render(<CommandConsole table={makeTable()} seats={[]} />)
+
+    fireEvent.change(screen.getByLabelText('Attach Markdown files'), {
+      target: { files: [file] },
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'blank.md must contain non-whitespace Markdown'
+    )
+  })
+
+  it('rejects non-Markdown files before submission', async () => {
+    asAdmin()
+    const bytes = new TextEncoder().encode('plain text')
+    const file = new File([bytes], 'notes.txt', { type: 'text/plain' })
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: vi.fn(async () => bytes.buffer),
+    })
+    render(<CommandConsole table={makeTable()} seats={[]} />)
+
+    fireEvent.change(screen.getByLabelText('Attach Markdown files'), {
+      target: { files: [file] },
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Invalid Markdown attachment name: notes.txt'
+    )
+    expect(postSaying).not.toHaveBeenCalled()
+  })
+
   it('submit error path: postSaying rejection shows error with role="alert"', async () => {
     // Arrange
     asAdmin()

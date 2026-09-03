@@ -344,6 +344,7 @@ def test_mcp_list_tools(mcp_session: MCPSession) -> None:
 
         # Expected tools
         expected_tools = {
+            "attachment_get",
             "patron_register",
             "patron_get",
             "table_create",
@@ -360,6 +361,7 @@ def test_mcp_list_tools(mcp_session: MCPSession) -> None:
         }
 
         assert expected_tools <= tool_names, f"Missing tools: {expected_tools - tool_names}"
+        assert len(tools) == 18
 
 
 def test_mcp_table_join_and_get_public_shapes(mcp_session: MCPSession) -> None:
@@ -623,6 +625,32 @@ def test_mcp_table_say(mcp_session: MCPSession) -> None:
     assert response.status_code == 200
     data = _parse_sse_response(response.text)
     assert "result" in data
+
+
+def test_mcp_attachment_create_list_and_full_read(mcp_session: MCPSession) -> None:
+    """HTTP MCP transports metadata by default and bodies via attachment_get."""
+    call_tool = make_call_tool(mcp_session, [30], _extract_tool_result_strict)
+    table = call_tool("table_create", {"question": "Attachment transport"})["data"]
+    raw = "# Unicode 日本語\n\n```mermaid\ngraph TD\nA-->B\n```"
+    created = call_tool(
+        "table_say",
+        {
+            "table_id": table["id"],
+            "content": "Body",
+            "speaker_kind": "human",
+            "attachments": [{"name": "notes.md", "content": raw}],
+        },
+    )
+    assert created["ok"] is True
+    summary = created["data"]["attachments"][0]
+    assert summary["media_type"] == "text/markdown"
+    assert "content" not in summary
+
+    listened = call_tool("table_listen", {"table_id": table["id"]})
+    assert listened["data"]["sayings"][0]["attachments"] == [summary]
+    full = call_tool("attachment_get", {"attachment_ids": [summary["id"]]})
+    assert full["data"]["attachments"][0]["content"] == raw
+    assert full["data"]["attachments"][0]["table_id"] == table["id"]
 
 
 def test_mcp_table_listen(mcp_session: MCPSession) -> None:

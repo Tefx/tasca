@@ -16,6 +16,7 @@ from returns.result import Failure, Result, Success
 from tasca.core.domain.saying import Saying
 from tasca.core.domain.table import Table, TableId
 from tasca.core.export_service import generate_jsonl, generate_markdown
+from tasca.shell.storage.attachment_repo import list_full_attachments_by_table
 from tasca.shell.storage.saying_repo import (
     DEFAULT_EXPORT_MAX_BYTES,
     SayingExportSizeExceededError,
@@ -107,12 +108,23 @@ def export_table(
         ))
 
     sayings = sayings_result.unwrap()
+    attachments_result = list_full_attachments_by_table(conn, table_id)
+    if isinstance(attachments_result, Failure):
+        return Failure(TableExportOperationResult(
+            status="database_error",
+            table_id=table_id,
+            format=format,
+            table=table,
+            error=f"Failed to list attachments: {attachments_result.failure()}",
+        ))
+    attachments_by_saying = attachments_result.unwrap()
+
     if format == "jsonl":
         export_time = exported_at or datetime.now(UTC).isoformat()
-        content = generate_jsonl(table, sayings, export_time)
+        content = generate_jsonl(table, sayings, export_time, attachments_by_saying)
         filename = f"{table_id}.jsonl"
     else:
-        content = generate_markdown(table, sayings)
+        content = generate_markdown(table, sayings, table.board, attachments_by_saying)
         filename = f"{table_id}.md"
 
     return Success(TableExportOperationResult(

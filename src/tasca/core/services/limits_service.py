@@ -324,10 +324,11 @@ def validate_mentions(content: str, max_mentions: int | None) -> bool:
 
 
 @deal.pre(
-    lambda content, current_saying_count, current_bytes, config: (
+    lambda content, current_saying_count, current_bytes, config, attachment_bytes=0: (
         len(content) >= 0
         and current_saying_count >= 0
         and current_bytes >= 0
+        and attachment_bytes >= 0
         and config is not None
     )
 )
@@ -337,6 +338,7 @@ def check_content_limits(
     current_saying_count: int,
     current_bytes: int,
     config: LimitsConfig,
+    attachment_bytes: int = 0,
 ) -> LimitError | None:
     """Check all content-related limits before appending a saying.
 
@@ -348,8 +350,9 @@ def check_content_limits(
     Args:
         content: The content to validate.
         current_saying_count: Current number of sayings in the table.
-        current_bytes: Current total bytes in the table.
+        current_bytes: Current exact UTF-8 content bytes in the table.
         config: Limits configuration.
+        attachment_bytes: Exact UTF-8 bytes in attachments admitted with this saying.
 
     Returns:
         None if all limits pass, or the first LimitError encountered.
@@ -364,6 +367,9 @@ def check_content_limits(
         >>> error = check_content_limits("Hi", 10, 1000, config)
         >>> error.kind
         <LimitKind.HISTORY: 'history'>
+        >>> bytes_config = LimitsConfig(max_bytes_per_table=10)
+        >>> check_content_limits("é", 0, 4, bytes_config, attachment_bytes=4) is None
+        True
     """
     # Check content length
     if not validate_content_length(content, config.max_content_length):
@@ -388,7 +394,7 @@ def check_content_limits(
     # Check bytes limit (would new content exceed it?)
     new_content_bytes = len(content.encode("utf-8"))
     if config.max_bytes_per_table is not None:
-        projected_bytes = current_bytes + new_content_bytes
+        projected_bytes = current_bytes + new_content_bytes + attachment_bytes
         if not validate_bytes_size(projected_bytes, config.max_bytes_per_table):
             return LimitError(
                 kind=LimitKind.BYTES,

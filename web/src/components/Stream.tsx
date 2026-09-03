@@ -27,7 +27,12 @@ import {
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { Saying, SpeakerKind } from '../api/sayings'
+import {
+  getSayingAttachment,
+  type AttachmentSummary,
+  type Saying,
+  type SpeakerKind,
+} from '../api/sayings'
 import type { ConnectionStatus } from '../hooks/useLongPoll'
 import type { TableStatus } from '../api/tables'
 import { useNow } from '../hooks/useNow'
@@ -440,6 +445,64 @@ function ConnectionBadge({ status }: ConnectionBadgeProps) {
 // Sub-Components
 // =============================================================================
 
+interface AttachmentDisclosureProps {
+  tableId: string
+  sayingId: string
+  attachment: AttachmentSummary
+}
+
+/** Metadata-first attachment disclosure; the body request starts only on expansion. */
+function AttachmentDisclosure({ tableId, sayingId, attachment }: AttachmentDisclosureProps) {
+  const [expanded, setExpanded] = useState(false)
+  const [content, setContent] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const toggle = useCallback(async () => {
+    const shouldExpand = !expanded
+    setExpanded(shouldExpand)
+    if (!shouldExpand || content !== null || isLoading) return
+
+    setIsLoading(true)
+    setError(null)
+    try {
+      const body = await getSayingAttachment(tableId, sayingId, attachment.id)
+      setContent(body.content)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load attachment')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [attachment.id, content, expanded, isLoading, sayingId, tableId])
+
+  return (
+    <section className="mc-attachment">
+      <button
+        type="button"
+        className="mc-attachment-summary"
+        aria-expanded={expanded}
+        aria-controls={`attachment-${attachment.id}`}
+        onClick={() => void toggle()}
+      >
+        <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+        <span>{attachment.name}</span>
+        <span className="mc-attachment-bytes">{attachment.byte_size.toLocaleString()} bytes</span>
+      </button>
+      {expanded && (
+        <div id={`attachment-${attachment.id}`} className="mc-attachment-body">
+          {isLoading && <p role="status">Loading attachment…</p>}
+          {error && <p role="alert">{error}</p>}
+          {content !== null && (
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {content}
+            </ReactMarkdown>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 interface LogBlockProps {
   saying: Saying
   /** Whether this block was added in the current mount cycle (triggers highlight). */
@@ -456,6 +519,7 @@ function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps)
   const kind = saying.speaker.kind
   const isMonospace = kind === 'agent' || kind === 'patron'
   const palette = kind === 'agent' ? agentPaletteEntry(saying.speaker.patron_id) : null
+  const attachments = saying.attachments ?? []
 
   return (
     <article
@@ -510,6 +574,19 @@ function LogBlock({ saying, isNew, now, sayingIndex, isFocused }: LogBlockProps)
           {saying.content}
         </ReactMarkdown>
       </div>
+
+      {attachments.length > 0 && (
+        <div className="mc-attachments" aria-label="Markdown attachments">
+          {attachments.map((attachment) => (
+            <AttachmentDisclosure
+              key={attachment.id}
+              tableId={saying.table_id}
+              sayingId={saying.id}
+              attachment={attachment}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Unresolved mention chips */}
       {saying.mentions_unresolved && saying.mentions_unresolved.length > 0 && (

@@ -18,6 +18,7 @@ from tasca.shell.mcp.tool_contracts import (
 )
 
 EXPECTED_SERVER_TOOLS = {
+    "attachment_get",
     "patron_register",
     "patron_get",
     "table_create",
@@ -77,6 +78,7 @@ def test_parameter_contract_defaults_match_spec_defaults() -> None:
     assert table_say_defaults["saying_type"] == "text"
     assert table_say_defaults["mentions"] is None
     assert table_say_defaults["reply_to_sequence"] is None
+    assert table_say_defaults["attachments"] is None
     assert SPEC_PARAMETER_DEFAULTS["seat_heartbeat.ttl_ms"] == 60000
     assert heartbeat_defaults["ttl_ms"] == 60000
     assert heartbeat_defaults["state"] == "running"

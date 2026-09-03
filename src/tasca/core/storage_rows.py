@@ -13,7 +13,15 @@ from typing import Any, cast
 import deal
 
 from tasca.core.domain.patron import PatronId
-from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
+from tasca.core.domain.saying import (
+    AttachmentId,
+    AttachmentSummary,
+    Saying,
+    SayingAttachment,
+    SayingId,
+    Speaker,
+    SpeakerKind,
+)
 from tasca.core.domain.table import Table, TableId, TableStatus, Version
 
 JsonObject = dict[str, object]
@@ -219,6 +227,55 @@ def row_to_saying(row: tuple[object, ...]) -> Saying:
         content=str(row[6]),
         pinned=bool(row[7]),
         created_at=datetime.fromisoformat(str(row[8])),
+    )
+
+
+@deal.pre(
+    lambda row: len(row) >= 5
+    and all(isinstance(row[index], str) for index in (0, 1, 2))
+    and all(isinstance(row[index], str | int) for index in (3, 4))
+    and all(_is_sqlite_int(row[index]) for index in (3, 4))
+    and int(cast(Any, row[3])) >= 0
+    and int(cast(Any, row[4])) >= 1
+)
+@deal.post(lambda result: isinstance(result, AttachmentSummary))
+def row_to_attachment_summary(row: tuple[object, ...]) -> AttachmentSummary:
+    """Convert a metadata-only attachment row without requiring content.
+
+    >>> row_to_attachment_summary(("a1", "s1", "notes.md", 0, 7)).byte_size
+    7
+    """
+    return AttachmentSummary(
+        id=AttachmentId(str(row[0])),
+        name=str(row[2]),
+        position=int(cast(Any, row[3])),
+        byte_size=int(cast(Any, row[4])),
+    )
+
+
+@deal.pre(
+    lambda row: len(row) >= 7
+    and all(isinstance(row[index], str) for index in (0, 1, 2, 3, 6))
+    and all(isinstance(row[index], str | int) for index in (4, 5))
+    and all(_is_sqlite_int(row[index]) for index in (4, 5))
+    and int(cast(Any, row[4])) >= 0
+    and int(cast(Any, row[5])) >= 1
+)
+@deal.post(lambda result: isinstance(result, SayingAttachment))
+def row_to_attachment(row: tuple[object, ...]) -> SayingAttachment:
+    """Convert a complete attachment row while preserving Markdown content.
+
+    >>> row_to_attachment(("a1", "s1", "t1", "notes.md", 0, 7, "# note")).content
+    '# note'
+    """
+    return SayingAttachment(
+        id=AttachmentId(str(row[0])),
+        saying_id=SayingId(str(row[1])),
+        table_id=str(row[2]),
+        name=str(row[3]),
+        position=int(cast(Any, row[4])),
+        byte_size=int(cast(Any, row[5])),
+        content=str(row[6]),
     )
 
 

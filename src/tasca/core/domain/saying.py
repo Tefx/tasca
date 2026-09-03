@@ -11,10 +11,10 @@ Speaker Semantics:
 
 from datetime import datetime
 from enum import StrEnum
-from typing import NewType
+from typing import Literal, NewType
 
 import deal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from tasca.core.domain.patron import PatronId
 
@@ -75,6 +75,36 @@ class Speaker(BaseModel):
 
 
 SayingId = NewType("SayingId", str)
+AttachmentId = NewType("AttachmentId", str)
+
+
+class AttachmentInput(BaseModel):
+    """Markdown attachment supplied while creating a saying."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    content: str
+
+
+class AttachmentSummary(BaseModel):
+    """Attachment metadata returned with ordinary saying reads."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: AttachmentId
+    name: str
+    position: int = Field(..., ge=0)
+    byte_size: int = Field(..., ge=1)
+    media_type: Literal["text/markdown"] = "text/markdown"
+
+
+class SayingAttachment(AttachmentSummary):
+    """A complete attachment returned only by explicit reads and exports."""
+
+    saying_id: SayingId
+    table_id: str
+    content: str
 
 
 class Saying(BaseModel):
@@ -106,6 +136,10 @@ class Saying(BaseModel):
     sequence: int = Field(..., ge=0, description="Monotonically increasing sequence per table")
     speaker: Speaker
     content: str = Field(..., description="Markdown content of the saying")
+    attachments: list[AttachmentSummary] = Field(
+        default_factory=list,
+        description="Ordered attachment metadata; bodies require an explicit attachment read",
+    )
     pinned: bool = False
     created_at: datetime
 

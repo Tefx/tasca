@@ -692,3 +692,107 @@ class TestStateGuards:
         response = client.get(f"/tables/{closed_table}/sayings/wait?since_sequence=-1&timeout=0.1")
 
         assert response.status_code == 200
+
+
+class TestMarkdownAttachments:
+    """REST creation returns metadata and nested reads return bodies on demand."""
+
+    def test_create_list_and_explicit_read(
+        self,
+        admin_client: TestClient,
+        test_table: str,
+    ) -> None:
+        raw = "# Notes\n\n<script>alert(1)</script>"
+        created = admin_client.post(
+            f"/tables/{test_table}/sayings",
+            json={
+                "speaker_name": "Alice",
+                "content": "Body",
+                "attachments": [
+                    {"name": "notes.md", "content": raw},
+                    {"name": "more.markdown", "content": "More"},
+                ],
+            },
+        )
+        assert created.status_code == 201
+        saying = created.json()
+        assert [item["position"] for item in saying["attachments"]] == [0, 1]
+        assert saying["attachments"][0]["media_type"] == "text/markdown"
+        assert "content" not in saying["attachments"][0]
+
+        listed = admin_client.get(f"/tables/{test_table}/sayings")
+        assert listed.status_code == 200
+        listed_attachment = listed.json()["sayings"][0]["attachments"][0]
+        assert listed_attachment == saying["attachments"][0]
+        assert "content" not in listed_attachment
+
+        attachment_id = saying["attachments"][0]["id"]
+        fetched = admin_client.get(
+            f"/tables/{test_table}/sayings/{saying['id']}/attachments/{attachment_id}"
+        )
+        assert fetched.status_code == 200
+        assert fetched.json()["content"] == raw
+        assert fetched.json()["saying_id"] == saying["id"]
+        assert fetched.json()["table_id"] == test_table
+
+        wrong_parent = admin_client.get(
+            f"/tables/{test_table}/sayings/wrong-saying/attachments/{attachment_id}"
+        )
+        assert wrong_parent.status_code == 404
+
+    def test_invalid_attachment_rolls_back_without_consuming_sequence(
+        self,
+        admin_client: TestClient,
+        test_table: str,
+        test_db: sqlite3.Connection,
+    ) -> None:
+        rejected = admin_client.post(
+            f"/tables/{test_table}/sayings",
+            json={
+                "speaker_name": "Alice",
+                "content": "Body",
+                "attachments": [{"name": "../escape.md", "content": "x"}],
+            },
+        )
+        assert rejected.status_code == 422
+        assert test_db.execute("SELECT COUNT(*) FROM sayings").fetchone()[0] == 0
+
+        accepted = admin_client.post(
+            f"/tables/{test_table}/sayings",
+            json={"speaker_name": "Alice", "content": "Retry"},
+        )
+        assert accepted.status_code == 201
+        assert accepted.json()["sequence"] == 0
+        assert accepted.json()["attachments"] == []
+
+    def test_viewer_can_read_attachment_but_cannot_create(
+        self,
+        app: FastAPI,
+        test_table: str,
+    ) -> None:
+        from tasca.config import settings
+
+        with (
+            patch.object(settings, "admin_token", "admin-token"),
+            patch.object(settings, "viewer_token", "viewer-token"),
+        ):
+            admin = TestClient(app, headers={"Authorization": "Bearer admin-token"})
+            created = admin.post(
+                f"/tables/{test_table}/sayings",
+                json={
+                    "speaker_name": "Alice",
+                    "content": "Body",
+                    "attachments": [{"name": "viewer.md", "content": "Visible"}],
+                },
+            ).json()
+            path = (
+                f"/tables/{test_table}/sayings/{created['id']}"
+                f"/attachments/{created['attachments'][0]['id']}"
+            )
+            viewer = TestClient(app, headers={"Authorization": "Bearer viewer-token"})
+            assert viewer.get(path).status_code == 200
+            assert viewer.post(
+                f"/tables/{test_table}/sayings",
+                json={"speaker_name": "Viewer", "content": "Denied"},
+            ).status_code == 401
+            assert TestClient(app).get(path).status_code == 401

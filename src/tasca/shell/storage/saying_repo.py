@@ -16,9 +16,22 @@ from typing import NewType
 
 from returns.result import Failure, Result, Success
 
-from tasca.core.domain.saying import Saying, SayingId, Speaker
+from tasca.core.domain.saying import (
+    AttachmentId,
+    AttachmentInput,
+    AttachmentSummary,
+    Saying,
+    SayingId,
+    Speaker,
+)
+from tasca.core.services.attachment_service import (
+    SayingValidationError,
+    validate_saying_payload,
+)
+from tasca.core.services.limits_service import LimitError, LimitsConfig, check_content_limits
 from tasca.core.services.saying_service import compute_next_sequence
 from tasca.core.storage_rows import row_to_saying
+from tasca.shell.storage.attachment_repo import list_attachment_summaries
 
 # Type for repository errors
 SayingError = NewType("SayingError", str)
@@ -32,118 +45,168 @@ class SayingExportSizeExceededError(Exception):
         self.estimated_bytes = estimated_bytes
         self.max_bytes = max_bytes
         super().__init__(
-            f"Export size exceeded: table has ~{estimated_bytes // (1024 * 1024)} MiB "
+            f"Export size exceeded: table has {estimated_bytes} UTF-8 content bytes "
             f"of content (limit: {max_bytes // (1024 * 1024)} MiB). "
             f"Use a larger max_bytes limit if needed."
         )
 
 
-# @shell_orchestration: Multi-step operation with transaction
-# @shell_complexity: Multi-step atomic operation (lock, query, compute, insert)
-# Transaction boundary guarantees atomicity - cannot decompose further
+AppendSayingError = SayingError | LimitError | SayingValidationError
+
+
+# @shell_complexity: Two aggregate queries normalize empty rows inside the append transaction.
+def _read_table_admission_state(
+    cursor: sqlite3.Cursor,
+    table_id: str,
+) -> Result[tuple[int, int, int], SayingError]:
+    """Read saying count, max sequence, and total content bytes under the writer lock."""
+    try:
+        row = cursor.execute(
+            """
+            SELECT
+                COUNT(*),
+                COALESCE(MAX(sequence), -1),
+                COALESCE(SUM(LENGTH(CAST(content AS BLOB))), 0)
+            FROM sayings WHERE table_id = ?
+            """,
+            (table_id,),
+        ).fetchone()
+        attachment_row = cursor.execute(
+            """
+            SELECT COALESCE(SUM(a.byte_size), 0)
+            FROM saying_attachments AS a
+            JOIN sayings AS s ON s.id = a.saying_id
+            WHERE s.table_id = ?
+            """,
+            (table_id,),
+        ).fetchone()
+        saying_bytes = int(row[2]) if row else 0
+        attachment_bytes = int(attachment_row[0]) if attachment_row else 0
+        return Success((
+            int(row[0]) if row else 0,
+            int(row[1]) if row else -1,
+            saying_bytes + attachment_bytes,
+        ))
+    except sqlite3.Error as exc:
+        return Failure(SayingError(f"Database error: {exc}"))
+
+
+# @shell_orchestration: One BEGIN IMMEDIATE owns limit admission, sequence allocation, and every insert.
+# @shell_complexity: Atomic saying + attachment append cannot split its transaction boundary.
 def append_saying(
     conn: sqlite3.Connection,
     table_id: str,
     speaker: Speaker,
     content: str,
-) -> Result[Saying, SayingError]:
-    """Atomically allocate sequence and insert a new saying.
+    attachments: list[AttachmentInput] | None = None,
+    limits: LimitsConfig | None = None,
+) -> Result[Saying, AppendSayingError]:
+    """Atomically validate limits and insert one saying with 0..8 attachments.
 
-    This operation is atomic:
-    1. Get current max sequence for table (locked)
-    2. Compute next sequence
-    3. Insert saying with new sequence
-    4. All in one transaction
-
-    Args:
-        conn: Database connection (must have transaction support).
-        table_id: UUID of the table.
-        speaker: Speaker information.
-        content: Markdown content of the saying.
-
-    Returns:
-        Success with the created Saying, or Failure with error message.
-
-    Note:
-        The UNIQUE(table_id, sequence) constraint in the schema guarantees
-        no duplicate sequences can exist for the same table.
+    Attachment validation happens before acquiring the writer lock. Configured
+    count and table-byte admission, sequence allocation, the saying insert, and
+    all attachment inserts happen inside one ``BEGIN IMMEDIATE`` transaction.
     """
+    normalized_attachments = attachments or []
+    validation_error = validate_saying_payload(content, normalized_attachments)
+    if validation_error is not None:
+        return Failure(validation_error)
+
+    attachment_bytes = sum(len(item.content.encode("utf-8")) for item in normalized_attachments)
+    effective_limits = limits or LimitsConfig()
+    saying_id = SayingId(str(uuid.uuid4()))
+    now = datetime.now(UTC)
+    cursor = conn.cursor()
+
     try:
-        # Generate saying ID
-        saying_id = SayingId(str(uuid.uuid4()))
-        now = datetime.now(UTC)
-
-        cursor = conn.cursor()
-
-        # Atomic: Get max sequence and insert in one transaction
-        # SQLite DEFAULT transaction behavior is DEFERRED, which means
-        # the transaction starts on the first write operation.
-        # For atomicity, we use explicit BEGIN IMMEDIATE to acquire write lock.
-
         cursor.execute("BEGIN IMMEDIATE")
+        admission_result = _read_table_admission_state(cursor, table_id)
+        if isinstance(admission_result, Failure):
+            conn.rollback()
+            return Failure(admission_result.failure())
+        current_count, current_max, current_bytes = admission_result.unwrap()
+        limit_error = check_content_limits(
+            content,
+            current_count,
+            current_bytes,
+            effective_limits,
+            attachment_bytes,
+        )
+        if limit_error is not None:
+            conn.rollback()
+            return Failure(limit_error)
 
-        try:
-            # Get current max sequence for this table
-            cursor.execute(
-                "SELECT COALESCE(MAX(sequence), -1) FROM sayings WHERE table_id = ?",
-                (table_id,),
-            )
-            row = cursor.fetchone()
-            current_max = int(row[0]) if row else -1
-
-            # Compute next sequence (pure function from core)
-            next_sequence = compute_next_sequence(current_max)
-
-            # Insert the saying
+        next_sequence = compute_next_sequence(current_max)
+        cursor.execute(
+            """
+            INSERT INTO sayings (
+                id, table_id, sequence, speaker_kind, speaker_name,
+                patron_id, content, pinned, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                saying_id, table_id, next_sequence, speaker.kind.value,
+                speaker.name, speaker.patron_id, content, 0, now.isoformat(),
+            ),
+        )
+        summaries: list[AttachmentSummary] = []
+        for position, attachment in enumerate(normalized_attachments):
+            attachment_id = AttachmentId(str(uuid.uuid4()))
+            byte_size = len(attachment.content.encode("utf-8"))
             cursor.execute(
                 """
-                INSERT INTO sayings (
-                    id, table_id, sequence, speaker_kind, speaker_name,
-                    patron_id, content, pinned, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO saying_attachments
+                    (id, saying_id, position, name, content, byte_size)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    saying_id,
-                    table_id,
-                    next_sequence,
-                    speaker.kind.value,
-                    speaker.name,
-                    speaker.patron_id,
-                    content,
-                    0,  # pinned defaults to False
-                    now.isoformat(),
-                ),
+                (attachment_id, saying_id, position, attachment.name, attachment.content, byte_size),
             )
+            summaries.append(AttachmentSummary(
+                id=attachment_id,
+                name=attachment.name,
+                position=position,
+                byte_size=byte_size,
+            ))
+        saying = Saying(
+            id=saying_id,
+            table_id=table_id,
+            sequence=next_sequence,
+            speaker=speaker,
+            content=content,
+            attachments=summaries,
+            pinned=False,
+            created_at=now,
+        )
+        conn.commit()
+        return Success(saying)
+    except sqlite3.IntegrityError as exc:
+        conn.rollback()
+        if "unique" in str(exc).lower():
+            return Failure(SayingError(
+                f"Sequence or attachment position conflict for table {table_id}"
+            ))
+        return Failure(SayingError(f"Integrity error: {exc}"))
+    except sqlite3.Error as exc:
+        conn.rollback()
+        return Failure(SayingError(f"Database error: {exc}"))
+    except Exception:
+        conn.rollback()
+        raise
 
-            conn.commit()
 
-            return Success(
-                Saying(
-                    id=saying_id,
-                    table_id=table_id,
-                    sequence=next_sequence,
-                    speaker=speaker,
-                    content=content,
-                    pinned=False,
-                    created_at=now,
-                )
-            )
-
-        except sqlite3.IntegrityError as e:
-            conn.rollback()
-            # This should never happen with proper transaction handling,
-            # but the UNIQUE constraint provides a safety net
-            error_msg = str(e).lower()
-            if "unique" in error_msg:
-                return Failure(
-                    SayingError(
-                        f"Sequence conflict: duplicate (table_id, sequence) for table {table_id}"
-                    )
-                )
-            return Failure(SayingError(f"Integrity error: {e}"))
-
-    except sqlite3.Error as e:
-        return Failure(SayingError(f"Database error: {e}"))
+def _with_attachment_summaries(
+    conn: sqlite3.Connection,
+    sayings: list[Saying],
+) -> Result[list[Saying], SayingError]:
+    """Attach one metadata-only batch query to an already selected saying page."""
+    metadata_result = list_attachment_summaries(conn, [str(saying.id) for saying in sayings])
+    if isinstance(metadata_result, Failure):
+        return Failure(SayingError(str(metadata_result.failure())))
+    by_saying = metadata_result.unwrap()
+    return Success([
+        saying.model_copy(update={"attachments": by_saying.get(str(saying.id), [])})
+        for saying in sayings
+    ])
 
 
 def get_saying_by_id(
@@ -173,8 +236,10 @@ def get_saying_by_id(
         if not row:
             return Success(None)
 
-        saying = row_to_saying(row)
-        return Success(saying)
+        summaries_result = _with_attachment_summaries(conn, [row_to_saying(row)])
+        if isinstance(summaries_result, Failure):
+            return Failure(summaries_result.failure())
+        return Success(summaries_result.unwrap()[0])
 
     except sqlite3.Error as e:
         return Failure(SayingError(f"Database error: {e}"))
@@ -208,8 +273,10 @@ def get_saying_by_sequence(
         if not row:
             return Success(None)
 
-        saying = row_to_saying(row)
-        return Success(saying)
+        summaries_result = _with_attachment_summaries(conn, [row_to_saying(row)])
+        if isinstance(summaries_result, Failure):
+            return Failure(summaries_result.failure())
+        return Success(summaries_result.unwrap()[0])
 
     except sqlite3.Error as e:
         return Failure(SayingError(f"Database error: {e}"))
@@ -248,7 +315,7 @@ def list_sayings_by_table(
         rows = cursor.fetchall()
 
         sayings = [row_to_saying(row) for row in rows]
-        return Success(sayings)
+        return _with_attachment_summaries(conn, sayings)
 
     except sqlite3.Error as e:
         return Failure(SayingError(f"Database error: {e}"))
@@ -317,8 +384,12 @@ def get_recent_sayings(
             # No sayings at all
             return Success(([], -1, False))
 
-        # Reverse to get oldest-first order
+        # Reverse to get oldest-first order, then batch-load metadata only.
         sayings.reverse()
+        summaries_result = _with_attachment_summaries(conn, sayings)
+        if isinstance(summaries_result, Failure):
+            return Failure(summaries_result.failure())
+        sayings = summaries_result.unwrap()
 
         # history_sequence is the sequence before the oldest returned saying
         # This is what clients use to page older history
@@ -371,21 +442,14 @@ def list_all_sayings_by_table(
         No exceptions raised - errors return Failure.
     """
     try:
-        # First, check if the table content exceeds max_bytes
+        # Check exact UTF-8 body + attachment bytes before materializing export content.
         if max_bytes > 0:
-            cursor = conn.execute(
-                "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM sayings WHERE table_id = ?",
-                (table_id,),
-            )
-            row = cursor.fetchone()
-            total_chars = int(row[0]) if row else 0
-
-            # Estimate bytes (UTF-8 can be up to 4 bytes per char, but usually 1-2)
-            # Use 2x as a reasonable upper bound estimate
-            estimated_bytes = total_chars * 2
-
-            if estimated_bytes > max_bytes:
-                return Failure(SayingExportSizeExceededError(table_id, estimated_bytes, max_bytes))
+            bytes_result = get_table_content_bytes(conn, table_id)
+            if isinstance(bytes_result, Failure):
+                return Failure(bytes_result.failure())
+            content_bytes = bytes_result.unwrap()
+            if content_bytes > max_bytes:
+                return Failure(SayingExportSizeExceededError(table_id, content_bytes, max_bytes))
 
         # Fetch ALL sayings without count limit
         cursor = conn.execute(
@@ -401,7 +465,7 @@ def list_all_sayings_by_table(
         rows = cursor.fetchall()
 
         sayings = [row_to_saying(row) for row in rows]
-        return Success(sayings)
+        return _with_attachment_summaries(conn, sayings)
 
     except sqlite3.Error as e:
         return Failure(SayingError(f"Database error: {e}"))
@@ -462,30 +526,33 @@ def count_sayings_by_table(conn: sqlite3.Connection, table_id: str) -> Result[in
 
 
 def get_table_content_bytes(conn: sqlite3.Connection, table_id: str) -> Result[int, SayingError]:
-    """Get the total byte size of all content in a table.
+    """Get exact UTF-8 saying and attachment content bytes for one table.
 
-    This calculates the total bytes of all saying content in the table,
-    useful for bytes limit enforcement.
-
-    Note: SQLite LENGTH() returns characters, not bytes. For ASCII content
-    this is equivalent, but for Unicode content the actual byte count
-    may be higher. For accurate byte counting, content would need to be
-    fetched and encoded. This implementation uses character count as a
-    reasonable approximation that's efficient at the database level.
+    SQLite stores these values as UTF-8 text. Casting saying content to BLOB
+    makes ``LENGTH`` count bytes; attachments use their validated stored size.
 
     Args:
         conn: Database connection.
         table_id: UUID of the table.
 
     Returns:
-        Success with total bytes estimate (0 if no sayings), or Failure with error.
+        Success with the exact total (0 if no sayings), or Failure with error.
     """
     try:
-        # LENGTH() counts characters, which equals bytes for ASCII
-        # For accurate UTF-8 byte count, would need to fetch and encode
         cursor = conn.execute(
-            "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM sayings WHERE table_id = ?",
-            (table_id,),
+            """
+            SELECT
+                COALESCE(SUM(LENGTH(CAST(s.content AS BLOB))), 0)
+                + COALESCE((
+                    SELECT SUM(a.byte_size)
+                    FROM saying_attachments AS a
+                    JOIN sayings AS attached_saying ON attached_saying.id = a.saying_id
+                    WHERE attached_saying.table_id = ?
+                ), 0)
+            FROM sayings AS s
+            WHERE s.table_id = ?
+            """,
+            (table_id, table_id),
         )
         row = cursor.fetchone()
         total = int(row[0]) if row else 0

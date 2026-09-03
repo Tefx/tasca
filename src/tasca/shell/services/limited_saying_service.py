@@ -16,13 +16,10 @@ from typing import NewType
 from returns.result import Failure, Result, Success
 
 from tasca.core.domain.patron import PatronId
-from tasca.core.domain.saying import Saying, Speaker, SpeakerKind
+from tasca.core.domain.saying import AttachmentInput, Saying, Speaker, SpeakerKind
 from tasca.core.domain.table import TableId
-from tasca.core.services.limits_service import (
-    LimitError,
-    LimitsConfig,
-    check_content_limits,
-)
+from tasca.core.services.attachment_service import SayingValidationError
+from tasca.core.services.limits_service import LimitError, LimitsConfig
 from tasca.core.table_state_machine import can_say
 from tasca.shell.storage.patron_repo import PatronNotFoundError, get_patron
 from tasca.shell.storage.saying_repo import (
@@ -46,6 +43,7 @@ class TableSayErrorKind(StrEnum):
     PATRON_NOT_FOUND = "patron_not_found"
     PATRON_LOOKUP_FAILED = "patron_lookup_failed"
     LIMIT_EXCEEDED = "limit_exceeded"
+    VALIDATION_FAILED = "validation_failed"
     APPEND_FAILED = "append_failed"
 
 
@@ -67,20 +65,21 @@ class TableSayError:
     speaker_kind: str | None = None
     patron_id: str | None = None
     limit_error: LimitError | None = None
+    validation_error: SayingValidationError | None = None
     cause: str | None = None
 
 
-# @shell_complexity: 4 branches - 2 for count/bytes fetch + 2 for limit check flow
 def append_saying_with_limits(
     conn: sqlite3.Connection,
     table_id: str,
     speaker: Speaker,
     content: str,
     limits: LimitsConfig,
-) -> Result[Saying, LimitError | LimitedSayingError]:
+    attachments: list[AttachmentInput] | None = None,
+) -> Result[Saying, LimitError | SayingValidationError | LimitedSayingError]:
     """Append a saying with limits enforcement.
 
-    This checks all configured limits before appending:
+    This checks all payload and configured limits before appending:
     1. Content length limit
     2. History count limit
     3. Bytes limit
@@ -107,27 +106,19 @@ def append_saying_with_limits(
         >>> limits = LimitsConfig(max_content_length=100, max_sayings_per_table=10)
         >>> # Append would work if we had a proper setup
     """
-    # Get current counts for limit checking
-    count_result = count_sayings_by_table(conn, table_id)
-    if isinstance(count_result, Failure):
-        return Failure(LimitedSayingError(f"Failed to get saying count: {count_result.failure()}"))
-    current_count = count_result.unwrap()
-
-    bytes_result = get_table_content_bytes(conn, table_id)
-    if isinstance(bytes_result, Failure):
-        return Failure(LimitedSayingError(f"Failed to get content bytes: {bytes_result.failure()}"))
-    current_bytes = bytes_result.unwrap()
-
-    # Check all limits
-    limit_error = check_content_limits(content, current_count, current_bytes, limits)
-    if limit_error is not None:
-        return Failure(limit_error)
-
-    # All limits passed, perform the append
-    result = append_saying(conn, table_id, speaker, content)
+    result = append_saying(
+        conn,
+        table_id,
+        speaker,
+        content,
+        attachments=attachments,
+        limits=limits,
+    )
     if isinstance(result, Failure):
-        return Failure(LimitedSayingError(result.failure()))
-
+        error = result.failure()
+        if isinstance(error, LimitError | SayingValidationError):
+            return Failure(error)
+        return Failure(LimitedSayingError(error))
     return Success(result.unwrap())
 
 
@@ -212,6 +203,7 @@ def append_saying_operation(
     patron_id: str | None,
     speaker_name: str | None,
     limits: LimitsConfig,
+    attachments: list[AttachmentInput] | None = None,
 ) -> Result[TableSayOutcome, TableSayError]:
     """Append a saying through the shared table_say business operation.
 
@@ -261,7 +253,14 @@ def append_saying_operation(
         return Failure(speaker_result.failure())
     speaker, speaker_key = speaker_result.unwrap()
 
-    append_result = append_saying_with_limits(conn, table_id, speaker, content, limits)
+    append_result = append_saying_with_limits(
+        conn,
+        table_id,
+        speaker,
+        content,
+        limits,
+        attachments,
+    )
     if isinstance(append_result, Failure):
         error = append_result.failure()
         if isinstance(error, LimitError):
@@ -270,6 +269,14 @@ def append_saying_operation(
                     kind=TableSayErrorKind.LIMIT_EXCEEDED,
                     message=error.message,
                     limit_error=error,
+                )
+            )
+        if isinstance(error, SayingValidationError):
+            return Failure(
+                TableSayError(
+                    kind=TableSayErrorKind.VALIDATION_FAILED,
+                    message=error.message,
+                    validation_error=error,
                 )
             )
         return Failure(

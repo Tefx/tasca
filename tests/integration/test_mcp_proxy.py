@@ -185,8 +185,8 @@ def test_e2e_proxy_mode_table_operations(mcp_session, upstream_server):
         local_client, headers, "table_get", {"table_id": table_id}, 3,
     )
     assert get_result.get("ok") is True, f"proxy table_get failed: {get_result}"
-    assert get_result["data"]["id"] == table_id
-    assert get_result["data"]["question"] == "Proxy test table"
+    assert get_result["data"]["table"]["id"] == table_id
+    assert get_result["data"]["table"]["question"] == "Proxy test table"
 
     # Disconnect
     disconnect = _call_tool(local_client, headers, "connect", {}, 4)

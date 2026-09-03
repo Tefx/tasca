@@ -32,6 +32,28 @@ export interface Speaker {
 // Saying Types (mirror backend Saying model)
 // =============================================================================
 
+/** Markdown attachment submitted atomically with a saying. */
+export interface AttachmentInput {
+  name: string
+  content: string
+}
+
+/** Metadata included in ordinary saying reads; content is intentionally absent. */
+export interface AttachmentSummary {
+  id: string
+  name: string
+  position: number
+  byte_size: number
+  media_type: 'text/markdown'
+}
+
+/** Complete attachment returned only by the nested authenticated read. */
+export interface SayingAttachment extends AttachmentSummary {
+  saying_id: string
+  table_id: string
+  content: string
+}
+
 /** A single saying (message) in a discussion table. */
 export interface Saying {
   /** Unique identifier (UUID) */
@@ -44,6 +66,8 @@ export interface Saying {
   speaker: Speaker
   /** Markdown content */
   content: string
+  /** Ordered attachment metadata; bodies are fetched only on expansion */
+  attachments?: AttachmentSummary[]
   /** Whether this saying is pinned */
   pinned: boolean
   /** ISO timestamp — when the saying was created */
@@ -62,6 +86,8 @@ export interface SayingCreate {
   content: string
   /** Patron ID if speaker is an AI agent; null for humans */
   patron_id?: string | null
+  /** Optional Markdown files inserted in the same transaction */
+  attachments?: AttachmentInput[]
 }
 
 /** Response model from GET /tables/{id}/sayings — mirrors backend SayingListResponse. */
@@ -203,6 +229,18 @@ export function postSaying(tableId: string, data: SayingCreate): Promise<Saying>
     method: 'POST',
     body: JSON.stringify(data),
   })
+}
+
+/** Fetch one attachment body after the user explicitly expands it. */
+export function getSayingAttachment(
+  tableId: string,
+  sayingId: string,
+  attachmentId: string
+): Promise<SayingAttachment> {
+  return apiClient<SayingAttachment>(
+    `/tables/${encodeURIComponent(tableId)}/sayings/${encodeURIComponent(sayingId)}` +
+      `/attachments/${encodeURIComponent(attachmentId)}`
+  )
 }
 
 /**

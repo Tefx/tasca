@@ -49691,3 +49691,122 @@ phases:
   status: done
   depends_on:
   - seat_presence_redeploy
+- id: saying_attachments
+  name: Saying Markdown attachments v1
+  status: pending
+  steps:
+  - id: implement-markdown-attachments
+    name: Document and implement atomic lazy-loaded Markdown attachments
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver: Implement the accepted Markdown attachment v1 contract across tracked
+      documentation, Python domain/storage/services, REST, MCP, exports/CLI, React
+      UI, tests, and package release identity. A saying keeps required Markdown body
+      content and may atomically append zero to eight immutable text-Markdown attachments.
+      List/join/listen/wait surfaces return ordered attachment metadata only; attachment
+      bodies are read on demand. Web composition accepts local .md/.markdown text,
+      sends it in the saying JSON transaction, and renders attachments collapsed by
+      default through the shared Markdown/Mermaid-safe renderer. JSONL export version
+      0.2 preserves complete ordered attachment content inside each saying record;
+      Markdown export keeps the transcript compact and appends full attachment material
+      after it. Existing saying FTS and mention resolution exclude attachment names/content
+      in v1.
+
+
+      Contract: Client attachment input is {name, content}. Server output metadata
+      is {id, position, name, media_type=''text/markdown'', byte_size}; full reads
+      add saying/table identity and content. Require nonblank body and attachment
+      content; names are 1..128 characters, have .md or .markdown suffix, and contain
+      no leading/trailing whitespace, path separators, or NUL. Enforce exact UTF-8
+      limits: at most 8 attachments, 256 KiB each, and 1 MiB attachment content per
+      saying. Existing max_bytes_per_table, when configured, counts saying and attachment
+      content bytes exactly. Attachment Markdown does not trigger mentions. Do not
+      add standalone upload, edit/delete, binary, URL-backed, object-storage, digest/dedup,
+      attachment FTS, notification, or MCP-resource behavior.
+
+
+      Boundary: Repository-only reversible implementation under one polyglot owner.
+      No GCP/runtime deployment, external state, credentials, live database mutation,
+      or mcp_0_1_31_full_matrix restoration. Preserve current Viewer/Admin authorization:
+      REST attachment reads follow viewer-or-admin access, REST creation stays Admin-only,
+      and MCP stays Admin-only. Preserve saying sequence/cursor behavior, single-process/single-writer
+      SQLite, HTTPS configuration, and no-attachment client compatibility. Advance
+      repository/package identity beyond 0.1.31 rather than overwriting that release;
+      deployment remains outside this step.
+
+
+      Admit: Use an additive saying_attachments table keyed to saying_id with stable
+      position, exact stored byte_size, and ON DELETE CASCADE. Existing databases
+      gain the table without rewriting sayings and existing rows read with attachments=[].
+      Persist saying plus all attachments in one BEGIN IMMEDIATE transaction after
+      exact limit admission; any insert/limit error leaves no saying, attachment,
+      or consumed sequence. Batch-load metadata to avoid N+1 queries and never select
+      attachment content for ordinary stream/history reads. Add one MCP attachment_get
+      tool that accepts 1..8 attachment IDs, making the advertised inventory 18; do
+      not require a protocol upgrade or ResourceLink. REST supplies a nested read
+      endpoint. Exports and src/tasca/cli.py must share complete attachment loading.
+      Raw Markdown is stored/exported unchanged; Tasca-rendered previews keep raw
+      HTML disabled and reuse existing safe-link, Mermaid strict/init-stripping, SVG-sanitization,
+      and CSP behavior.
+
+
+      Recovery: Keep schema migration additive and omit down migration. Repository
+      rollback to 0.1.31 must leave attachment rows/table intact; the old binary may
+      temporarily omit attachment display/export until re-upgrade. Test only temporary
+      databases and local web state. If a check fails, repair the same candidate without
+      touching live runtime state.'
+    verification: 'Behavioral proof: old no-attachment REST/MCP calls and existing
+      DBs remain compatible; create with multiple attachments commits one saying plus
+      ordered attachments; over-count, per-item, aggregate, table-byte, invalid-name,
+      or injected second-row failure rolls back all rows and sequence; idempotent
+      MCP retry does not duplicate attachments; join/listen/wait/REST list expose
+      metadata without body content; REST Viewer/Admin and MCP Admin-only authorization
+      hold; attachment_get retrieves selected full Markdown; attachment-only terms
+      do not hit saying FTS or mentions; batch table deletion leaves no attachments;
+      JSONL 0.2 round-trips exact Unicode content/order and Markdown appends complete
+      material after the transcript; CLI/HTTP/MCP exports agree; web does not fetch
+      bodies before expansion and renders raw-HTML/link/Mermaid cases through the
+      existing safe pipeline.
+
+
+      Reproducible checks from clean tracked state: uv run --python 3.13 --frozen
+      --group dev pytest; uv run --python 3.13 --frozen --group dev ruff check src
+      tests; (cd web && npm ci && npm test && npm run lint && npm run build); uvx
+      invar-tools guard --all; git diff --check.'
+    evidence_template: List changed contract/source/test files; report release version;
+      provide exact command outcomes for Python tests, Ruff, web tests/lint/build,
+      full Invar guard, and diff check; identify any untested behavior or deployment
+      gap. No live deployment evidence is expected.
+    refs:
+    - AGENTS.md
+    - INVAR.md
+    - pyproject.toml
+    - uv.lock
+    - docs/tasca-technical-design-v0.1.md
+    - docs/tasca-http-api-v0.1.md
+    - docs/tasca-mcp-interface-v0.1.md
+    - docs/tasca-search-export-v0.1.md
+    - docs/adr-001-mermaid-rendering.md
+    - docs/adr-002-mermaid-svg-sanitization.md
+    - src/tasca/core/domain/saying.py
+    - src/tasca/core/schema.py
+    - src/tasca/core/services/limits_service.py
+    - src/tasca/core/export_service.py
+    - src/tasca/shell/services/limited_saying_service.py
+    - src/tasca/shell/storage/saying_repo.py
+    - src/tasca/shell/storage/table_repo.py
+    - src/tasca/shell/api/routes/sayings.py
+    - src/tasca/shell/services/operations/table_export.py
+    - src/tasca/shell/mcp/tool_contracts.py
+    - src/tasca/shell/mcp/server.py
+    - src/tasca/shell/mcp/entrypoints.py
+    - src/tasca/shell/mcp/entrypoint_logic.py
+    - src/tasca/cli.py
+    - web/src/api/sayings.ts
+    - web/src/components/CommandConsole.tsx
+    - web/src/components/Stream.tsx
+    agent: principal-engineer

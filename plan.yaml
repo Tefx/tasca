@@ -49688,6 +49688,6 @@ phases:
       acceptance step.'
 - id: mcp_0_1_31_full_matrix
   name: Tasca 0.1.31 live MCP 17-tool matrix
-  status: in_progress
+  status: done
   depends_on:
   - seat_presence_redeploy

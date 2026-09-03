@@ -76,12 +76,12 @@ CREATE TABLE saying_attachments (
   position INTEGER NOT NULL CHECK(position >= 0),
   name TEXT NOT NULL,
   content TEXT NOT NULL,
-  byte_size INTEGER NOT NULL CHECK(byte_size >= 1),
+  byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
   UNIQUE(saying_id, position)
 );
 ```
 
-`position` is stable zero-based input order. `byte_size` is the exact UTF-8 byte count validated at admission. Name/content/count limits are application-level contracts. The additive migration uses `CREATE TABLE IF NOT EXISTS`; it does not rewrite saying rows and has no down migration. Batch table deletion removes sayings and lets `ON DELETE CASCADE` remove attachments.
+`position` is stable zero-based input order. `media_type` is the fixed public value `text/markdown` and is derived rather than stored. `content` may be empty or whitespace-only. `byte_size` is the exact UTF-8 byte count validated at admission, including zero for empty content. Name/content/count limits are application-level contracts. The additive migration uses `CREATE TABLE IF NOT EXISTS`; it does not rewrite saying rows and has no down migration. A database that applied the pre-release `byte_size >= 1` table is rebuilt transactionally to the constraint above, preserving its attachment rows and ordering. Batch table deletion removes sayings and lets `ON DELETE CASCADE` remove attachments.
 
 ### 4) seats (presence)
 

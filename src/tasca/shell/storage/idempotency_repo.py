@@ -52,6 +52,8 @@ def check_idempotency_key(
     tool_name: str,
     dedup_id: str,
     now: datetime | None = None,
+    *,
+    commit: bool = True,
 ) -> Result[dict[str, Any] | None, IdempotencyError]:
     """Check if an idempotency key exists and is not expired.
 
@@ -61,6 +63,7 @@ def check_idempotency_key(
         tool_name: Name of the MCP tool.
         dedup_id: Client-provided idempotency key.
         now: Current timestamp (defaults to UTC now).
+        commit: Commit removal of an expired key. Disable only inside a caller-owned transaction.
 
     Returns:
         Success with parsed response dict if found and not expired,
@@ -104,7 +107,8 @@ def check_idempotency_key(
                 "DELETE FROM idempotency_keys WHERE resource_key = ? AND tool_name = ? AND dedup_id = ?",
                 (resource_key, tool_name, dedup_id),
             )
-            conn.commit()
+            if commit:
+                conn.commit()
             return Success(None)
 
         # Parse and return the cached response
@@ -126,6 +130,8 @@ def store_idempotency_key(
     response_data: dict[str, Any],
     ttl_seconds: int = DEFAULT_IDEMPOTENCY_TTL_SECONDS,
     now: datetime | None = None,
+    *,
+    commit: bool = True,
 ) -> Result[None, IdempotencyError]:
     """Store an idempotency key with cached response.
 
@@ -137,6 +143,7 @@ def store_idempotency_key(
         response_data: Response dict to cache.
         ttl_seconds: Time-to-live in seconds (default 24 hours).
         now: Current timestamp (defaults to UTC now).
+        commit: Commit the insert. Disable only inside a caller-owned transaction.
 
     Returns:
         Success(None) on success, or Failure with error.
@@ -178,7 +185,8 @@ def store_idempotency_key(
                 expires_at.isoformat(),
             ),
         )
-        conn.commit()
+        if commit:
+            conn.commit()
         return Success(None)
 
     except sqlite3.Error as e:

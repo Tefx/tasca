@@ -76,6 +76,8 @@ def append_saying_with_limits(
     content: str,
     limits: LimitsConfig,
     attachments: list[AttachmentInput] | None = None,
+    *,
+    manage_transaction: bool = True,
 ) -> Result[Saying, LimitError | SayingValidationError | LimitedSayingError]:
     """Append a saying with limits enforcement.
 
@@ -113,6 +115,7 @@ def append_saying_with_limits(
         content,
         attachments=attachments,
         limits=limits,
+        manage_transaction=manage_transaction,
     )
     if isinstance(result, Failure):
         error = result.failure()
@@ -204,6 +207,8 @@ def append_saying_operation(
     speaker_name: str | None,
     limits: LimitsConfig,
     attachments: list[AttachmentInput] | None = None,
+    *,
+    manage_transaction: bool = True,
 ) -> Result[TableSayOutcome, TableSayError]:
     """Append a saying through the shared table_say business operation.
 
@@ -260,6 +265,7 @@ def append_saying_operation(
         content,
         limits,
         attachments,
+        manage_transaction=manage_transaction,
     )
     if isinstance(append_result, Failure):
         error = append_result.failure()

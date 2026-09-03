@@ -86,6 +86,7 @@ These are the "teeth" that make the system consistent under retries and polling.
 ### 3.4 At-least-once delivery + idempotent writes
 
 - MCP write tools that expose `dedup_id` MUST return the *original success response* (`return_existing`) on dedup hit.
+- `table_say` serializes dedup lookup, saying/attachment append, and durable response storage under one `BEGIN IMMEDIATE` transaction. Concurrent calls for the same dedup scope therefore return one committed saying and sequence; failure to store the retry response rolls back the whole append.
 - HTTP endpoints expose idempotency only where the implemented REST request model includes `dedup_id` (currently patron registration, table creation, and table control compatibility input); HTTP routes must document any narrower transport surface rather than implying automatic parity with MCP.
 
 Rationale: idempotency semantics are shared where implemented, but the public REST and MCP field surfaces are intentionally transport-local. **[Proven]** (centralized patron/table creation/control paths plus route/tool contracts)
@@ -103,7 +104,7 @@ Rationale: pause is a control/social signal and is soft-enforced by default in v
 - Input attachments are `{name, content}`. Ordinary saying reads expose ordered metadata `{id, position, name, media_type, byte_size}` and omit attachment content.
 - Full attachment reads add `saying_id`, `table_id`, and unchanged `content`; they occur only through the explicit nested REST endpoint or the admin-only MCP tool.
 - Names are 1..128 Unicode characters, have no surrounding whitespace, slash, backslash, or NUL, and end in `.md` or `.markdown`.
-- Attachment content is nonblank and limited by exact UTF-8 size: 256 KiB per item, 1 MiB total, and eight items per saying.
+- Attachment content is valid UTF-8 text and may be empty or whitespace-only. Exact UTF-8 limits are 256 KiB per item, 1 MiB total, and eight items per saying.
 - Attachments do not participate in mention resolution, saying FTS, notifications, standalone upload, mutation, or deletion in v1.
 
 ## 4) Storage consistency model (SQLite)
@@ -123,11 +124,13 @@ These operations MUST be atomic (all-or-nothing):
 
 1) **table.say**
    - Validate the saying body and attachment names/content/count/exact UTF-8 limits before mutation.
-   - Start one `BEGIN IMMEDIATE` transaction.
+   - Start one `BEGIN IMMEDIATE` transaction. For MCP calls with `dedup_id`, MCP starts this transaction before checking the scoped key; other callers start it in the shared append repository.
+   - A dedup hit returns the original committed response without allocating a sequence. A miss continues under the same writer lock.
    - Under that writer lock, read current saying count and exact table bytes, where table bytes include saying bodies plus attachment bodies.
    - Reject configured limits without allocating a sequence.
    - Allocate the next sequence, insert the saying, and insert every attachment at its stable zero-based position.
-   - Commit only after the final attachment insert. Any limit or insert failure rolls back saying rows, attachment rows, and sequence allocation.
+   - For an MCP dedup miss, store the complete success response before commit.
+   - Commit only after the final required insert. Any limit, saying, attachment, or dedup-result failure rolls back saying rows, attachment rows, the dedup row, and sequence allocation.
 
 2) **table.control**
    - Append a control/audit saying.
@@ -157,7 +160,7 @@ Routes and MCP entrypoints may contain transport orchestration, but they MUST NO
 
 ### 4.4 Attachment storage and read paths
 
-`saying_attachments` is an additive table with attachment UUID primary key, `saying_id` foreign key using `ON DELETE CASCADE`, stable `position`, `name`, unchanged Markdown `content`, and validated exact UTF-8 `byte_size`. `UNIQUE(saying_id, position)` fixes ordering. Upgrades create this table without rewriting existing sayings; existing rows read with `attachments=[]`. There is no down migration, so rollback to a pre-attachment binary leaves the table and rows intact while that binary temporarily omits them.
+`saying_attachments` is an additive table with attachment UUID primary key, `saying_id` foreign key using `ON DELETE CASCADE`, stable `position`, `name`, unchanged Markdown `content`, and validated exact UTF-8 `byte_size` (zero is valid). `UNIQUE(saying_id, position)` fixes ordering. Upgrades create this table without rewriting existing sayings; existing rows read with `attachments=[]`. Databases that applied the pre-release `byte_size >= 1` check are transactionally rebuilt with the zero-byte constraint while preserving attachment rows. There is no down migration, so rollback to a pre-attachment binary leaves the table and rows intact while that binary temporarily omits them.
 
 Ordinary list/join/listen/wait/history paths first load sayings, then issue one metadata-only query for the page's saying IDs. They never select attachment content and do not issue one query per saying. Explicit attachment reads and the shared export operation are the only body-loading paths. Batch table deletion deletes sayings and relies on the attachment foreign-key cascade.
 
@@ -330,7 +333,7 @@ The template follows `tasca-search-export-v0.1.md` and includes:
 
 - Table metadata block.
 - Board section (keys in stable order: agenda, summary, decision_draft, then others).
-- Compact transcript lines with `[seq=...] timestamp (speaker): content`; attachment bodies do not inflate these lines.
+- Compact transcript lines with `[seq=...] timestamp (speaker): content`; sayings with attachments add their ordered JSON-quoted names inline as `[attachments: "name.md", "other.markdown"]`, without attachment bodies.
 - A following `## Attachments` section, when present, ordered by saying sequence and attachment position. It records identity/name/byte metadata and then includes each complete unchanged Markdown body.
 
 HTTP, MCP, and CLI use the same formatter and full-body load.

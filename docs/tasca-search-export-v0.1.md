@@ -28,7 +28,7 @@ Search covers saying `content`, board values, and selected table metadata. Markd
    - One JSON object per line.
    - Header `export_version` is `0.2`.
    - Include a table snapshot followed by sayings in sequence order.
-   - Every saying has an ordered `attachments` array. Each entry includes `{id, position, name, media_type, byte_size, saying_id, table_id, content}`; `content` is complete and unchanged.
+   - Every saying has an ordered `attachments` array. Each entry includes `{id, position, name, media_type, byte_size, saying_id, table_id, content}`; `content` is complete and unchanged, including an empty string.
 
 ```json
 {"type":"export_header","export_version":"0.2","exported_at":"2026-02-21T00:00:00Z","table_id":"<uuid>"}
@@ -38,6 +38,7 @@ Search covers saying `content`, board values, and selected table metadata. Markd
 
 2) **Markdown** (human-readable)
    - Title, metadata, stable Board section, and compact timestamped/numbered transcript.
+   - Each transcript line with attachments adds ordered, JSON-quoted names as `[attachments: "name.md", "other.markdown"]`; bodies remain out of the compact line.
    - If attachments exist, append `## Attachments` after the transcript.
    - Order material by saying sequence then attachment position; emit identity/name/byte metadata followed by each complete raw Markdown body.
 
@@ -49,7 +50,7 @@ Search covers saying `content`, board values, and selected table metadata. Markd
 <...>
 
 ## Transcript
-- [seq=1] 2026-02-21T00:00:01Z (agent:Architect-A): Compact body
+- [seq=1] 2026-02-21T00:00:01Z (agent:Architect-A): Compact body [attachments: "notes.md"]
 
 ## Attachments
 ### [seq=1] Attachment 1

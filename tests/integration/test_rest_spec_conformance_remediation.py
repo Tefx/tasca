@@ -130,6 +130,55 @@ async def test_rest_table_join_route_returns_documented_initial_block(http_clien
 
 
 @pytest.mark.asyncio
+async def test_rest_join_history_includes_ordered_attachment_metadata(http_client) -> None:
+    suffix = uuid.uuid4().hex
+    create_response = await http_client.post(
+        "/api/v1/tables",
+        json={"title": f"REST attachment history {suffix}"},
+        headers=_auth(),
+    )
+    assert create_response.status_code == 200
+    table_id = create_response.json()["table_id"]
+
+    with_attachment = await http_client.post(
+        f"/api/v1/tables/{table_id}/sayings",
+        json={
+            "speaker_name": "Alice",
+            "content": "First",
+            "attachments": [
+                {"name": "empty.md", "content": ""},
+                {"name": "notes.markdown", "content": "body-only-secret"},
+            ],
+        },
+        headers=_auth(),
+    )
+    without_attachment = await http_client.post(
+        f"/api/v1/tables/{table_id}/sayings",
+        json={"speaker_name": "Bob", "content": "Second"},
+        headers=_auth(),
+    )
+    assert with_attachment.status_code == 201
+    assert without_attachment.status_code == 201
+
+    join_response = await http_client.post(
+        "/api/v1/tables/join",
+        json={"table_id": table_id, "history_limit": 10, "history_max_bytes": 65536},
+    )
+
+    assert join_response.status_code == 200
+    sayings = join_response.json()["initial"]["sayings"]
+    assert [saying["sequence"] for saying in sayings] == [0, 1]
+    assert sayings[0]["attachments"] == with_attachment.json()["attachments"]
+    assert [item["name"] for item in sayings[0]["attachments"]] == [
+        "empty.md",
+        "notes.markdown",
+    ]
+    assert all("content" not in item for item in sayings[0]["attachments"])
+    assert sayings[1]["attachments"] == []
+    assert "body-only-secret" not in join_response.text
+
+
+@pytest.mark.asyncio
 async def test_rest_wait_timeout_zero_returns_existing_sayings(http_client) -> None:
     suffix = uuid.uuid4().hex
     create_response = await http_client.post(

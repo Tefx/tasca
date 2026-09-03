@@ -317,22 +317,56 @@ describe('CommandConsole — submit', () => {
     expect(read).not.toHaveBeenCalled()
   })
 
-  it('rejects Python whitespace-only attachment content', async () => {
+  it('accepts empty and whitespace-only attachment content unchanged', async () => {
     asAdmin()
-    const bytes = new TextEncoder().encode('\u0085')
-    const file = new File([bytes], 'blank.md', { type: 'text/markdown' })
-    Object.defineProperty(file, 'arrayBuffer', {
-      value: vi.fn(async () => bytes.buffer),
+    const emptyBytes = new TextEncoder().encode('')
+    const whitespaceContent = '\u0085 \n\t'
+    const whitespaceBytes = new TextEncoder().encode(whitespaceContent)
+    const empty = new File([emptyBytes], 'empty.md', { type: 'text/markdown' })
+    const whitespace = new File([whitespaceBytes], 'whitespace.md', {
+      type: 'text/markdown',
+    })
+    Object.defineProperty(empty, 'arrayBuffer', {
+      value: vi.fn(async () => emptyBytes.buffer),
+    })
+    Object.defineProperty(whitespace, 'arrayBuffer', {
+      value: vi.fn(async () => whitespaceBytes.buffer),
+    })
+    ;(postSaying as Mock).mockResolvedValue({
+      id: 'saying-empty-attachments',
+      table_id: 'table-001',
+      sequence: 1,
+      speaker: { kind: 'human', name: 'Human', patron_id: null },
+      content: 'Body remains required',
+      attachments: [],
+      pinned: false,
+      created_at: '2024-01-01T00:00:00Z',
     })
     render(<CommandConsole table={makeTable()} seats={[]} />)
 
     fireEvent.change(screen.getByLabelText('Attach Markdown files'), {
-      target: { files: [file] },
+      target: { files: [empty, whitespace] },
     })
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'blank.md must contain non-whitespace Markdown'
-    )
+    expect(await screen.findByText('empty.md')).toBeInTheDocument()
+    expect(await screen.findByText('whitespace.md')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: /message input/i }), {
+      target: { value: 'Body remains required' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => {
+      expect(postSaying).toHaveBeenCalledWith('table-001', {
+        speaker_name: 'Human',
+        content: 'Body remains required',
+        patron_id: null,
+        attachments: [
+          { name: 'empty.md', content: '' },
+          { name: 'whitespace.md', content: whitespaceContent },
+        ],
+      })
+    })
   })
 
   it('rejects non-Markdown files before submission', async () => {

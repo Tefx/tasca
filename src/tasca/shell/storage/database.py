@@ -19,6 +19,7 @@ from tasca.core.database_normalization import (
     normalize_journal_mode,
 )
 from tasca.core.schema import (
+    create_saying_attachments_table_ddl,
     get_all_fts_ddl,
     get_all_index_ddl,
     get_all_table_ddl,
@@ -198,7 +199,34 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     if "board" not in table_columns:
         conn.execute("ALTER TABLE tables ADD COLUMN board TEXT")
 
+    _migrate_saying_attachments_to_allow_empty_content(conn)
     conn.commit()
+
+
+# @shell_orchestration: transactional SQLite table rebuild for a legacy CHECK constraint
+def _migrate_saying_attachments_to_allow_empty_content(conn: sqlite3.Connection) -> None:
+    """Replace the pre-release positive-byte CHECK while preserving attachment rows."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'saying_attachments'"
+    ).fetchone()
+    if row is None or row[0] is None:
+        return
+    normalized_ddl = "".join(str(row[0]).lower().split())
+    if "check(byte_size>=1)" not in normalized_ddl:
+        return
+
+    conn.execute(
+        "ALTER TABLE saying_attachments RENAME TO saying_attachments_nonempty_legacy"
+    )
+    conn.execute(create_saying_attachments_table_ddl())
+    conn.execute("""
+        INSERT INTO saying_attachments (
+            id, saying_id, position, name, content, byte_size
+        )
+        SELECT id, saying_id, position, name, content, byte_size
+        FROM saying_attachments_nonempty_legacy
+        """)
+    conn.execute("DROP TABLE saying_attachments_nonempty_legacy")
 
 
 def verify_database_config(conn: sqlite3.Connection) -> Result[dict[str, int | bool | str], str]:

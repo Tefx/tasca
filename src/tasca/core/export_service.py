@@ -13,6 +13,7 @@ Design Decisions:
     - Full content: No truncation of saying content
 """
 
+import json
 from datetime import datetime
 from typing import Any
 
@@ -267,7 +268,9 @@ def generate_markdown(
     Examples:
         >>> from datetime import datetime, timezone
         >>> from tasca.core.domain.table import Table, TableId, TableStatus, Version
-        >>> from tasca.core.domain.saying import Saying, SayingId, Speaker, SpeakerKind
+        >>> from tasca.core.domain.saying import (
+        ...     AttachmentId, AttachmentSummary, Saying, SayingId, Speaker, SpeakerKind,
+        ... )
         >>> from tasca.core.domain.patron import PatronId
         >>> t = Table(
         ...     id=TableId("t-001"),
@@ -294,12 +297,15 @@ def generate_markdown(
         ...     sequence=0,
         ...     speaker=Speaker(kind=SpeakerKind.HUMAN, name="Alice"),
         ...     content="Full content preserved without truncation.",
+        ...     attachments=[AttachmentSummary(
+        ...         id=AttachmentId("a-001"), name="notes.md", position=0, byte_size=0,
+        ...     )],
         ...     created_at=datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc),
         ... )
         >>> result2 = generate_markdown(t, [s1])
         >>> "Full content preserved without truncation." in result2
         True
-        >>> "- [seq=0] 2024-01-01T12:00:00+00:00 (human:Alice): Full content preserved without truncation." in result2
+        >>> '- [seq=0] 2024-01-01T12:00:00+00:00 (human:Alice): Full content preserved without truncation. [attachments: "notes.md"]' in result2
         True
 
         >>> s2 = Saying(
@@ -362,6 +368,7 @@ def generate_markdown(
     lines.append("## Transcript")
     lines.append("")
 
+    exported_attachments = attachments_by_saying or {}
     if not sayings:
         lines.append("_No sayings yet._")
     else:
@@ -375,9 +382,19 @@ def generate_markdown(
                 speaker_label = f"human:{name}"
             time_str = saying.created_at.isoformat()
             pin_tag = " [pinned]" if saying.pinned else ""
-            lines.append(f"- [seq={seq}] {time_str} ({speaker_label}): {saying.content}{pin_tag}")
+            attachment_items = exported_attachments.get(str(saying.id), saying.attachments)
+            attachment_tag = ""
+            if attachment_items:
+                names = ", ".join(
+                    json.dumps(attachment.name, ensure_ascii=False)
+                    for attachment in attachment_items
+                )
+                attachment_tag = f" [attachments: {names}]"
+            lines.append(
+                f"- [seq={seq}] {time_str} ({speaker_label}): "
+                f"{saying.content}{pin_tag}{attachment_tag}"
+            )
 
-    exported_attachments = attachments_by_saying or {}
     if any(exported_attachments.values()):
         lines.extend(["", "## Attachments", ""])
         for saying in sayings:

@@ -62,7 +62,6 @@ function canClose(status: string): boolean {
 
 /** Match the characters treated as whitespace by Python's str.strip(). */
 const pythonWhitespaceBoundary = /^[\p{White_Space}\u001c-\u001f]|[\p{White_Space}\u001c-\u001f]$/u
-const pythonWhitespaceOnly = /^[\p{White_Space}\u001c-\u001f]*$/u
 
 // =============================================================================
 // Close Confirmation Hook
@@ -379,9 +378,6 @@ export const CommandConsole = forwardRef<CommandConsoleRef, CommandConsoleProps>
           if (file.size > 256 * 1024) throw new Error(`${file.name} exceeds 256 KiB`)
           const bytes = new Uint8Array(await file.arrayBuffer())
           const content = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
-          if (pythonWhitespaceOnly.test(content)) {
-            throw new Error(`${file.name} must contain non-whitespace Markdown`)
-          }
           totalBytes += bytes.byteLength
           if (totalBytes > 1024 * 1024) throw new Error('Attachments exceed 1 MiB total')
           decoded.push({ name: file.name, content })

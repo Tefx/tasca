@@ -100,12 +100,16 @@ def append_saying(
     content: str,
     attachments: list[AttachmentInput] | None = None,
     limits: LimitsConfig | None = None,
+    *,
+    manage_transaction: bool = True,
 ) -> Result[Saying, AppendSayingError]:
     """Atomically validate limits and insert one saying with 0..8 attachments.
 
     Attachment validation happens before acquiring the writer lock. Configured
     count and table-byte admission, sequence allocation, the saying insert, and
     all attachment inserts happen inside one ``BEGIN IMMEDIATE`` transaction.
+    MCP idempotency may supply that transaction so its durable retry record can
+    commit or roll back with the saying; all other callers use the default here.
     """
     normalized_attachments = attachments or []
     validation_error = validate_saying_payload(content, normalized_attachments)
@@ -119,10 +123,12 @@ def append_saying(
     cursor = conn.cursor()
 
     try:
-        cursor.execute("BEGIN IMMEDIATE")
+        if manage_transaction:
+            cursor.execute("BEGIN IMMEDIATE")
         admission_result = _read_table_admission_state(cursor, table_id)
         if isinstance(admission_result, Failure):
-            conn.rollback()
+            if manage_transaction:
+                conn.rollback()
             return Failure(admission_result.failure())
         current_count, current_max, current_bytes = admission_result.unwrap()
         limit_error = check_content_limits(
@@ -133,7 +139,8 @@ def append_saying(
             attachment_bytes,
         )
         if limit_error is not None:
-            conn.rollback()
+            if manage_transaction:
+                conn.rollback()
             return Failure(limit_error)
 
         next_sequence = compute_next_sequence(current_max)
@@ -177,20 +184,24 @@ def append_saying(
             pinned=False,
             created_at=now,
         )
-        conn.commit()
+        if manage_transaction:
+            conn.commit()
         return Success(saying)
     except sqlite3.IntegrityError as exc:
-        conn.rollback()
+        if manage_transaction:
+            conn.rollback()
         if "unique" in str(exc).lower():
             return Failure(SayingError(
                 f"Sequence or attachment position conflict for table {table_id}"
             ))
         return Failure(SayingError(f"Integrity error: {exc}"))
     except sqlite3.Error as exc:
-        conn.rollback()
+        if manage_transaction:
+            conn.rollback()
         return Failure(SayingError(f"Database error: {exc}"))
     except Exception:
-        conn.rollback()
+        if manage_transaction:
+            conn.rollback()
         raise
 
 

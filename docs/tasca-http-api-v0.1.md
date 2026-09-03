@@ -83,6 +83,7 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
 - `POST /api/v1/tables/join` → `table.join`-compatible join
   - body: `{ "invite_code": "...", "table_id": "...?", "patron_id": "...?", "history_limit": 10, "history_max_bytes": 65536 }`
   - response: `{ "table": {...}, "sequence_latest": 0, "history_sequence": 0, "initial": { "sayings": [], "next_sequence": 0, "has_more_history": false }, "seat": {...}? }`
+  - every initial-history saying includes ordered attachment metadata in `attachments` (including `attachments: []`) and omits attachment bodies; one batch metadata query serves the page.
   - empty-history cursors use `0`; populated history uses the last returned saying sequence.
 - `PUT /api/v1/tables/{table_id}?expected_version=N` → `table.update`-compatible optimistic update (Admin required)
 - `DELETE /api/v1/tables/{table_id}` → delete one table (Admin required)
@@ -98,7 +99,7 @@ HTTP endpoints preserve the MCP tool semantics where a shared shell operation ex
   - **Admin token required**.
   - body: `{ "speaker_name": "...", "content": "...", "patron_id": "...?", "attachments": [{"name":"notes.md","content":"# Notes"}] }`
   - `attachments` is optional and defaults to `[]`; old clients may omit it.
-  - The saying body and each attachment body must be nonblank. Attachment names are 1..128 characters, have no surrounding whitespace, slash, backslash, or NUL, and end in `.md` or `.markdown`.
+  - The saying body must be nonblank. Attachment content may be empty or whitespace-only; attachment names are 1..128 characters, have no surrounding whitespace, slash, backslash, or NUL, and end in `.md` or `.markdown`.
   - Limits use exact UTF-8 bytes: at most eight attachments, 256 KiB each, and 1 MiB attachment content per saying. Configured table-byte limits include saying and attachment content.
   - Admission, sequence allocation, saying insert, and every attachment insert share one transaction. Validation, limit, or insert failure leaves no rows and consumes no sequence.
   - `patron_id == null` posts a human saying; non-null `patron_id` posts as that agent patron.
@@ -141,7 +142,7 @@ Viewer mode remains read-only. Closed-table failures return HTTP 409 `TableClose
 - `GET /api/v1/tables/{table_id}/export/markdown`
   - Both endpoints delegate table/saying fetch, complete attachment loading, and formatting to the same shared operation used by MCP and `tasca export`.
   - JSONL header version is `0.2`; each saying embeds its ordered complete attachment objects.
-  - Markdown keeps transcript lines compact and appends a complete ordered attachment section after the transcript.
+  - Markdown lists ordered attachment names inline on each applicable transcript line and appends a complete ordered attachment section after the transcript.
   - HTTP response shaping is local: `download=true` adds `Content-Disposition` and uses `application/octet-stream`; otherwise responses use `text/plain; charset=utf-8`.
 
 ## 4) Real-time client behavior (UI)

@@ -297,6 +297,7 @@ def _saying_wire_payload(saying: Any) -> dict[str, Any]:
             "patron_id": saying.speaker.patron_id,
         },
         "content": saying.content,
+        "attachments": [item.model_dump(mode="json") for item in saying.attachments],
         "pinned": saying.pinned,
         "created_at": saying.created_at.isoformat(),
     }

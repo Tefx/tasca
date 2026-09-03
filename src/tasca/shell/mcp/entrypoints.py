@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import time
 import uuid
 from datetime import UTC, datetime
@@ -793,13 +794,24 @@ def _normalize_attachment_inputs(
 
 
 def _check_say_idempotency(
-    conn: Any, resource_key: str, dedup_id: str | None, logger: Any
+    conn: Any,
+    resource_key: str,
+    dedup_id: str | None,
+    logger: Any,
+    *,
+    commit: bool = True,
 ) -> Result[McpEnvelope | None, McpEnvelope]:
     """Implementation detail for MCP tool behavior."""
     if dedup_id is None:
         return Success(None)
 
-    idempotency_result = check_idempotency_key(conn, resource_key, "table_say", dedup_id)
+    idempotency_result = check_idempotency_key(
+        conn,
+        resource_key,
+        "table_say",
+        dedup_id,
+        commit=commit,
+    )
     if isinstance(idempotency_result, Failure):
         return Failure(
             error_response(
@@ -854,45 +866,115 @@ def table_say(
     # Resource key for idempotency scope: {table_id, speaker_key}
     resource_key = f"saying:{table_id}:{speaker_key}"
 
-    # Check idempotency key if provided
-    cached_result = _check_say_idempotency(conn, resource_key, dedup_id, logger)
-    if isinstance(cached_result, Failure):
-        return cached_result
-    cached_response = cached_result.unwrap()
-    if cached_response is not None:
-        return Success(cached_response)
+    transaction_active = False
+    if dedup_id is not None:
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            transaction_active = True
+        except sqlite3.Error as exc:
+            return Failure(error_response(
+                "DATABASE_ERROR",
+                f"Failed to start idempotent table_say transaction: {exc}",
+            ))
+
+        cached_result = _check_say_idempotency(
+            conn,
+            resource_key,
+            dedup_id,
+            logger,
+            commit=False,
+        )
+        if isinstance(cached_result, Failure):
+            conn.rollback()
+            return cached_result
+        cached_response = cached_result.unwrap()
+        if cached_response is not None:
+            try:
+                conn.commit()
+            except sqlite3.Error as exc:
+                conn.rollback()
+                return Failure(error_response(
+                    "DATABASE_ERROR",
+                    f"Failed to finish idempotent table_say transaction: {exc}",
+                ))
+            return Success(cached_response)
 
     attachments_result = _normalize_attachment_inputs(attachments)
     if isinstance(attachments_result, Failure):
+        if transaction_active:
+            conn.rollback()
         return attachments_result
 
     # Resolve mentions before append so ambiguity cannot persist a saying.
     mentions_result = _resolve_mentions_for_say(conn, mentions)
     if isinstance(mentions_result, Failure):
+        if transaction_active:
+            conn.rollback()
         return mentions_result
     mentions_all, mentions_resolved, mentions_unresolved = mentions_result.unwrap()
 
     limits_result = _limits_config_from_settings()
     if isinstance(limits_result, Failure):
+        if transaction_active:
+            conn.rollback()
         return limits_result
 
-    result = append_saying_operation(
-        conn,
-        table_id=table_id,
-        content=content,
-        speaker_kind=actual_speaker_kind,
-        patron_id=patron_id,
-        speaker_name=speaker_name,
-        limits=limits_result.unwrap(),
-        attachments=attachments_result.unwrap(),
-    )
+    try:
+        result = append_saying_operation(
+            conn,
+            table_id=table_id,
+            content=content,
+            speaker_kind=actual_speaker_kind,
+            patron_id=patron_id,
+            speaker_name=speaker_name,
+            limits=limits_result.unwrap(),
+            attachments=attachments_result.unwrap(),
+            manage_transaction=not transaction_active,
+        )
+    except Exception:
+        if transaction_active:
+            conn.rollback()
+        raise
 
     if isinstance(result, Failure):
+        if transaction_active:
+            conn.rollback()
         return _table_say_error_to_mcp_response(result.failure())
 
     saying = result.unwrap().saying
+    try:
+        response_data = _build_say_response(
+            saying, mentions_all, mentions_resolved, mentions_unresolved
+        )
+    except Exception:
+        if transaction_active:
+            conn.rollback()
+        raise
 
-    # Log saying append
+    if dedup_id is not None:
+        store_result = store_idempotency_key(
+            conn,
+            resource_key,
+            "table_say",
+            dedup_id,
+            {"data": response_data},
+            commit=False,
+        )
+        if isinstance(store_result, Failure):
+            conn.rollback()
+            return Failure(error_response(
+                "DATABASE_ERROR",
+                f"Failed to store idempotency key: {store_result.failure()}",
+            ))
+        try:
+            conn.commit()
+        except sqlite3.Error as exc:
+            conn.rollback()
+            return Failure(error_response(
+                "DATABASE_ERROR",
+                f"Failed to commit idempotent table_say: {exc}",
+            ))
+
     log_say(
         logger,
         table_id=saying.table_id,
@@ -901,15 +983,6 @@ def table_say(
         speaker_name=saying.speaker.name,
         patron_id=saying.speaker.patron_id,
     )
-
-    # Build response
-    response_data = _build_say_response(
-        saying, mentions_all, mentions_resolved, mentions_unresolved
-    )
-
-    # Store in idempotency cache if dedup_id provided
-    if dedup_id is not None:
-        store_idempotency_key(conn, resource_key, "table_say", dedup_id, {"data": response_data})
     return Success(success_response(response_data))
 
 

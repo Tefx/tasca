@@ -47,6 +47,8 @@ def test_sdist_has_bounded_release_contents(tmp_path: Path) -> None:
         "scripts/gcp/build-viewer-auth-rollback-bundle.sh",
         "scripts/gcp/verify_viewer_auth_remote.py",
         "scripts/gcp/seat-presence-forward-deploy.sh",
+        "scripts/gcp/attachment-forward-deploy.sh",
+        "scripts/gcp/verify_attachments_remote.py",
     } <= names
     assert "scripts/gcp/verify_remote_mcp.py" not in names
     forbidden_prefixes = (

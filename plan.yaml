@@ -49831,7 +49831,7 @@ phases:
       from ~/.tasca/tasca.db; post-delete counts are table=0 and sayings=0.'
 - id: saying_attachments_release_0_1_32
   name: Saying attachments 0.1.32 package, GCP rollout, and live proof
-  status: in_progress
+  status: done
   depends_on:
   - saying_attachments
   steps:
@@ -49996,7 +49996,7 @@ phases:
       0 FK violations. Repository tracked state stayed clean at post-claim HEAD 9e03cac06a013166309d6399279ee2e64680810d.'
   - id: verify-live-attachments
     name: Independently verify live 0.1.32 attachment behavior
-    status: claimed
+    status: done
     description: 'step_type: verification
 
       repo_change_policy: no_repo_change
@@ -50083,6 +50083,35 @@ phases:
     agent: integration-verifier
     claimed_by: integration-verifier
     claimed_at: '2026-09-04T10:59:25.819239Z'
+    done_at: '2026-09-04T11:12:06.529760+00:00'
+    evidence: 'Independent rerun-5 canonical report `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-5/verifier.report.v2.json`
+      was freshly validated by parent with `/Users/tefx/.pi/agent/scripts/review_report_validator.py
+      --kind verifier --binding .../binding.json .../verifier.report.v2.json`: valid=true,
+      binding_checked=true. Target bound to instance 8120608387419901442, exact 0.1.32
+      wheel SHA 0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7,
+      verifier repair 2cbbe52892f536961c07af58e64d58a284064ef9, current release path
+      and SQLite anchor. One fresh fixture `glad-tree-waves` with UUID marker 90f1d3c4b86d4791aa6fef6588b3c227
+      was used once; AttachmentVerifier.run() executed once. Machine workflow returned
+      MACHINE_CHECKS_PASS with 72 ordered trace entries and no failed operation. PROVEN
+      requirements: live binding, HTTPS public surfaces, authorization boundaries,
+      exact 18-tool MCP inventory, additive SQLite migration/preservation, REST and
+      MCP attachment flows, atomic idempotency and limits with no sequence consumption,
+      FTS-safe search and mention exclusion, HTTP/MCP/installed-CLI JSONL 0.2 and
+      Markdown export parity after removing exactly one validated CLI framing newline,
+      network/rollback posture, and isolated cleanup. Exact four attachment IDs, fixture
+      descendants and two task-owned idempotency rows are absent. Postflight PASS
+      restored four original tables, sayings/FTS 37/37, seats 9, attachments 0, idempotency
+      67, device/inode 2048:12, integrity ok and FK 0; 0.1.31 remains rollback-ready,
+      Caddy/service healthy and public TCP/8000 denied. BrowserOS Neo was available
+      on the single bounded attempt, but the sole authorized fixture had already been
+      cleaned and no second fixture was authorized; therefore Web composition, collapsed
+      lazy loading and safe rendering are the sole explicit UNPROVEN requirement.
+      This exact gap is permitted by the step Admit when fixture timing prevents safe
+      proof; no contradiction remains. Aggregate is honestly COMPLETED/UNPROVEN with
+      INCONCLUSIVE disposition. All rerun-5 evidence is mode 0600 and secret scan
+      passed; repository tracked state remained unchanged at 3ba64f7a4a27cd7f384d1265beb12b3930be72e1
+      and no service/secret/firewall/package/release/baseline/historical-evidence
+      mutation occurred beyond the authorized temporary fixture and its verified cleanup.'
   - id: repair-attachment-deploy-preflight
     name: Repair 0.1.32 remote preflight command quoting
     status: done

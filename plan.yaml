@@ -49837,7 +49837,7 @@ phases:
   steps:
   - id: package-0-1-32
     name: Produce tracked 0.1.32 deployment and verification artifacts
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49897,6 +49897,25 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-04T01:40:08.620980Z'
+    done_at: '2026-09-04T02:22:14.589756+00:00'
+    evidence: 'Integrated exact producer target fd1979b3cc4b58d6f244166ee12dc1771f60c2bc
+      by fast-forward from post-claim basis 0bbc2b6bf7327738cd965cbc0557f808a8390f26;
+      retained original be10bd88fa39c6e29e300f956d4ab0d759e077e4 and accepted fd1979b3cc4b58d6f244166ee12dc1771f60c2bc
+      refs. Added tracked scripts/gcp/attachment-forward-deploy.sh and scripts/gcp/verify_attachments_remote.py
+      plus behavioral tests. The deploy producer binds GCP target/version/CPython,
+      performs remote read-only preflight before staging, preserves 0.1.31/protected
+      surfaces, and restores the previous service on activation failure. The verifier
+      emits non-final secret-safe tasca.attachment-live-evidence.v1 machine evidence
+      with explicit browser evidence slots. Checks on the immutable accepted target:
+      owner pytest tests/unit/gcp plus package tests 109 passed; Ruff passed; shell
+      syntax passed; git diff --check passed; Invar accepted verifier file with 0
+      errors/warnings and owner changed-files Invar passed 0 errors/warnings. Package
+      tests proved wheel metadata 0.1.32 and packaged SPA asset HTTP 200. Exact artifact
+      /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-package/tasca-0.1.32-py3-none-any.whl
+      has SHA-256 0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7;
+      a fresh rebuild from the accepted commit produced the same SHA. Worktree and
+      integration tracked status clean; candidate plan.yaml blob stayed 621ba371a16a6d64d400876c33dde76f5ec6e424.
+      No gcloud, credential, database, service, or deployment effect occurred.'
   - id: deploy-0-1-32
     name: Deploy exact 0.1.32 wheel to the existing Tasca VM
     status: pending

@@ -49693,11 +49693,11 @@ phases:
   - seat_presence_redeploy
 - id: saying_attachments
   name: Saying Markdown attachments v1
-  status: in_progress
+  status: done
   steps:
   - id: implement-markdown-attachments
     name: Document and implement atomic lazy-loaded Markdown attachments
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49812,3 +49812,20 @@ phases:
     agent: principal-engineer
     claimed_by: principal-engineer
     claimed_at: '2026-09-03T17:17:41.318083Z'
+    done_at: '2026-09-04T01:34:48.305415+00:00'
+    evidence: 'Integrated repository candidate through main HEAD 30899142e245990f57f70dc66da1cf8c9e74a130;
+      plan.yaml remained unchanged during owner work (blob 5c326dd94a99cb735adee6c7e891fe1aad38a5d8).
+      Delivered v0.1.32 attachment schema/domain/services, atomic saying+attachment
+      append and MCP idempotency transaction, metadata-only list/join/listen/wait
+      paths, REST/MCP body reads, JSONL 0.2 and Markdown appendix/inline-name export,
+      safe lazy Web rendering, docs, packaged SPA, and tests. Evidence: Python 3.13
+      full suite 1313 passed including 3 release-package tests; Web 222 passed; Ruff,
+      compileall, ESLint (0 errors; 12 existing warnings), TypeScript/Vite build,
+      attachment doctests 36 passed, git diff --check, and changed-files Invar passed
+      with 0 errors and 2900 property examples. Independent gate-reviewer DELTA PASS
+      bound to git:30899142e245990f57f70dc66da1cf8c9e74a130. Full `uvx invar-tools
+      guard --all` remains red on repository-wide pre-existing architecture/escape-hatch
+      debt (candidate 45 errors versus base 49), with no candidate regression. No
+      GCP deployment occurred in this step. Reconciled and, with current user authorization,
+      deleted the accidental local test table `great-pig-soars` plus its one saying
+      from ~/.tasca/tasca.db; post-delete counts are table=0 and sayings=0.'

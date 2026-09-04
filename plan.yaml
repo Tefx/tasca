@@ -50231,7 +50231,7 @@ phases:
       credential, build, deployment, service, or remote SQLite effect occurred.'
   - id: repair-attachment-live-verifier-checkpoints
     name: Retain attachment verifier operation checkpoints
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50299,3 +50299,25 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-04T09:36:16.521692Z'
+    done_at: '2026-09-04T10:00:34.082558+00:00'
+    evidence: 'Integrated repository-only commit 9db20a6a54a8ef6545b6532aac31000e40f12af4
+      by fast-forward from claimed base 21eaaa8727dafba0fcdf158045a9a885a19e62b0.
+      Only scripts/gcp/verify_attachments_remote.py and tests/unit/gcp/test_verify_attachments_remote.py
+      changed. The producer now atomically writes secret-free 0600 started/completed/failed
+      operation events, retains the exact active failure and prior completed checkpoint,
+      preserves the primary failure through successful cleanup, and separately retains
+      a later exact cleanup failure without overwriting the primary. Checkpoints cover
+      first/retry/identity table_say, attachment_get, each invalid limit case, post-invalid
+      count/sequence, listen/wait, search, HTTP/MCP/CLI exports, and cleanup session/close/batch-delete/absence/idempotency/final
+      baseline reconciliation. Behavioral tests execute complete success, an attachment_get
+      failure followed by successful cleanup, and a primary failure followed by cleanup-close
+      failure; existing Viewer auth, response-loss reconciliation, idempotency, exact
+      transaction cleanup, and baseline tests remain. Owner checks with CPython 3.13:
+      focused pytest 35 passed; Ruff passed; changed-files Invar passed with 700/700
+      line warning and no error; git diff --check passed; candidate worktree clean;
+      plan.yaml blob remained fc9b039c771aa47995a5dc6cc5825affd2913ff6. Parent independently
+      reviewed the full diff and reran diff check successfully. No concrete prior
+      VerificationError cause was guessed or product behavior changed. The first `uv
+      run` created only an ignored local .venv test environment; no release artifact
+      was published or deployed. No gcloud, live HTTPS, credential, service, remote
+      database, package release, deployment, or evidence-directory effect occurred.'

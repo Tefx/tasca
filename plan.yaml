@@ -50017,34 +50017,43 @@ phases:
       Viewer/Admin credentials only through the host runtime handoff; never expose
       secret text in argv, logs, screenshots, reports, or chat. REST attachment reads
       must accept Viewer or Admin while creation remains Admin-only; every MCP call
-      remains Admin-only.
+      remains Admin-only. Do not overwrite the prior DISPROVEN report or the validator-valid
+      INCONCLUSIVE report under `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-1`.
 
 
-      Admit: Bind the report to the deployed wheel SHA, producer commit, VM identity,
-      release path, hostname, certificate, and observed SQLite anchor. Exercise multiple
-      nonblank Markdown attachments and ordered metadata across REST create/list/join/listen/wait/read
-      and MCP table_say/attachment_get; prove ordinary history responses omit bodies;
-      repeat a dedup_id and prove stable saying/attachment IDs; safely exercise invalid
-      name/count/per-item/aggregate limits and show no saying, attachment, or sequence
-      consumption; prove attachment-only terms do not enter saying search or mentions;
-      compare JSONL 0.2 and Markdown transcript/attachment appendix across HTTP, MCP,
-      and installed CLI; and verify Web attachment composition plus collapsed, lazy
-      body loading through the existing raw-HTML-disabled, safe-link, Mermaid strict/init-stripping,
-      SVG-sanitized and CSP path. Verify public health/docs/OpenAPI/SPA remain public,
-      unauthenticated protected reads fail, Viewer cannot write or use MCP, Admin
-      can, backend listens on loopback, and public 8000 is denied.
+      Admit: Bind the report to the same deployed wheel SHA `0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7`,
+      repaired tracked verifier producer, VM identity, release path, hostname, certificate,
+      and observed SQLite anchor. Use exactly one fresh unique fixture and the new
+      immutable report directory `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-2`;
+      never replay a deleted prior fixture. Exercise multiple nonblank Markdown attachments
+      and ordered metadata across REST create/list/join/listen/wait/read and MCP table_say/attachment_get;
+      prove ordinary history responses omit bodies; repeat a dedup_id and prove stable
+      saying/attachment IDs; safely exercise invalid name/count/per-item/aggregate
+      limits and show no saying, attachment, or sequence consumption; prove attachment-only
+      terms do not enter saying search or mentions; compare JSONL 0.2 and Markdown
+      transcript/attachment appendix across HTTP, MCP, and installed CLI; and verify
+      Web attachment composition plus collapsed, lazy body loading through the existing
+      raw-HTML-disabled, safe-link, Mermaid strict/init-stripping, SVG-sanitized and
+      CSP path. Verify public health/docs/OpenAPI/SPA remain public, unauthenticated
+      protected reads fail, Viewer cannot write or use MCP, Admin can, backend listens
+      on loopback, and public 8000 is denied. Consume the repaired ordered operation
+      evidence when deciding any machine-check failure. BrowserOS Neo remains the
+      required Web observation surface; if it is still unavailable after all machine
+      checks pass, report Web rendering as the only remaining UNPROVEN requirement
+      rather than substituting another browser or product conclusion.
 
 
-      Recovery: Use a unique test table and record its identity before mutation. Cleanup
-      must remove every test saying, attachment, seat, and table, then prove absence
-      through public APIs and the authorized database observation. If cleanup or any
-      prior runtime effect is uncertain, stop and reconcile instead of rerunning.
-      A verification failure leaves 0.1.32 deployed when service health and data integrity
-      remain sound; report the exact failed requirement and rollback readiness without
-      executing rollback.'
+      Recovery: Record the fresh table identity before mutation. Cleanup must remove
+      every test saying, attachment, seat, table, and exact test idempotency row,
+      then prove absence through public APIs and the authorized database observation
+      and restore the exact baseline. If cleanup or any prior runtime effect is uncertain,
+      stop and reconcile instead of rerunning. A verification failure leaves the unchanged
+      0.1.32 wheel and deployment in place when service health and data integrity
+      remain sound; report the exact failed requirement and retained operation checkpoint,
+      preserve the new report directory, and do not execute rollback.'
     verification: uv run --python 3.13 --frozen --group dev python scripts/gcp/verify_attachments_remote.py
       --project rda-engineering --zone asia-southeast1-b --vm tasca-mcp --host 34.1.134.239.sslip.io
-      --expected-version 0.1.32 --report-dir /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification
+      --expected-version 0.1.32 --report-dir /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-2
     evidence_template: verifier.report.v2 result bound to target/commit/wheel; requirement
       matrix; REST/MCP/Web/CLI observations; auth and network matrix; SQLite preservation/integrity/schema;
       isolated test IDs and cleanup proof; rollback-readiness observation; explicit
@@ -50058,9 +50067,11 @@ phases:
     - docs/adr-002-mermaid-svg-sanitization.md
     - scripts/gcp/verify_viewer_auth_remote.py
     - tests/unit/gcp/test_remote_mcp_full_matrix.py
+    - scripts/gcp/verify_attachments_remote.py
     depends_on:
     - deploy-0-1-32
     - repair-attachment-live-verifier
+    - repair-attachment-live-verifier-checkpoints
     agent: integration-verifier
   - id: repair-attachment-deploy-preflight
     name: Repair 0.1.32 remote preflight command quoting
@@ -50218,3 +50229,71 @@ phases:
       the unchanged wheel; the accepted package step already recorded 109 passing
       package checks, and no package source/artifact changed. No gcloud, live HTTPS,
       credential, build, deployment, service, or remote SQLite effect occurred.'
+  - id: repair-attachment-live-verifier-checkpoints
+    name: Retain attachment verifier operation checkpoints
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver: Repair the tracked `scripts/gcp/verify_attachments_remote.py` machine-evidence
+      producer so its secret-free 0600 non-final evidence is updated atomically and
+      incrementally before and after each post-first-say workflow operation. Retain
+      ordered started/completed checkpoints that distinguish the first attachment-bearing
+      MCP `table_say`, identical retry and retry-identity comparison, `attachment_get`,
+      each invalid name/count/per-item/aggregate limit case, post-invalid sequence
+      check, `table_listen`, `table_wait`, attachment-only search, HTTP exports, MCP
+      exports, installed CLI JSONL and Markdown exports, and cleanup/reconciliation
+      stages. On `VerificationError`, retain the exact active/failed operation name
+      and latest completed checkpoint while keeping error details redacted. Preserve
+      Viewer join/read authentication, dedup identity, response-loss reconciliation,
+      exact cleanup and baseline restoration, environment-only secret handoff, fixed-target
+      binding, explicit browser-only evidence slots, and unchanged product behavior.
+      Add meaningful offline tests that execute successful and failing workflows and
+      prove checkpoints already completed survive a later failure, the exact failed
+      operation is retained, success has no failed operation, and cleanup evidence
+      remains ordered. If static review identifies a concrete verifier defect within
+      this workflow and the same two-file boundary, apply its minimal fix and behavioral
+      test without changing product meaning.
+
+
+      Boundary: Repository-only repair owned by `devops-engineer`; modify only `scripts/gcp/verify_attachments_remote.py`
+      and `tests/unit/gcp/test_verify_attachments_remote.py`. Do not call gcloud or
+      live HTTPS, access credentials, create fixtures, mutate services or databases,
+      rebuild/redeploy/change the 0.1.32 wheel, modify package/deployment artifacts,
+      alter product attachment behavior, or overwrite any prior DISPROVEN or INCONCLUSIVE
+      evidence. The prior live target, deployed wheel, service state, SQLite baseline,
+      credential authority, protected state, and rollback posture remain unchanged.
+
+
+      Admit: The validator-valid `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-1/verifier.report.v2.json`,
+      `failure-diagnosis.json`, and `attachment-live-evidence.json` are immutable
+      inputs. They establish `COMPLETED/UNPROVEN`, disposition `INCONCLUSIVE`, an
+      exactly cleaned fresh fixture, restored live baseline, no grounded product contradiction,
+      and a failure interval after the first attachment-bearing MCP `table_say` but
+      before the first installed CLI export. The producer retained only redacted `VerificationError`,
+      so the next verifier needs nonsecret operation evidence. Offline tests must
+      exercise behavior through faked transport/filesystem seams; phrase, token-presence,
+      and self-reported-PASS assertions do not count.
+
+
+      Recovery: A failing implementation check leaves repository repair incomplete
+      and runtime untouched. Preserve both prior evidence directories and the deployed
+      0.1.32 state. Do not rerun the live verifier from this step. The existing independent
+      verification step consumes the integrated repair using one new immutable report
+      directory and one fresh unique fixture.'
+    verification: uv run --python 3.13 --frozen --group dev pytest tests/unit/gcp/test_verify_attachments_remote.py;
+      uv run --python 3.13 --frozen --group dev ruff check scripts/gcp/verify_attachments_remote.py
+      tests/unit/gcp/test_verify_attachments_remote.py; uvx invar-tools guard --changed;
+      git diff --check
+    evidence_template: Record the two changed paths; focused pytest, Ruff, changed-files
+      Invar, and diff-check results; behavioral success/failure checkpoint evidence;
+      and confirmation that no live effect, wheel/deployment change, or prior-evidence
+      overwrite occurred.
+    refs:
+    - scripts/gcp/verify_attachments_remote.py
+    - tests/unit/gcp/test_verify_attachments_remote.py
+    depends_on:
+    - repair-attachment-live-verifier
+    agent: devops-engineer

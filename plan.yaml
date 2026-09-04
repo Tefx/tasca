@@ -49829,3 +49829,191 @@ phases:
       GCP deployment occurred in this step. Reconciled and, with current user authorization,
       deleted the accidental local test table `great-pig-soars` plus its one saying
       from ~/.tasca/tasca.db; post-delete counts are table=0 and sayings=0.'
+- id: saying_attachments_release_0_1_32
+  name: Saying attachments 0.1.32 package, GCP rollout, and live proof
+  status: pending
+  depends_on:
+  - saying_attachments
+  steps:
+  - id: package-0-1-32
+    name: Produce tracked 0.1.32 deployment and verification artifacts
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver: Turn the integrated Markdown-attachment implementation into one exact
+      Tasca 0.1.32 release candidate. Add a narrow tracked forward-deploy producer
+      for the existing GCP VM and a tracked live-verification producer, with meaningful
+      offline tests. The deploy producer installs a caller-bound wheel only into a
+      new /opt/tasca/releases/0.1.32 venv, switches the existing service unit from
+      0.1.31 to 0.1.32, performs bounded health checks, and restores the pre-0.1.32
+      unit on activation failure. Build tasca-0.1.32-py3-none-any.whl from the final
+      committed producer revision into the task artifact directory and record its
+      SHA-256 for the runtime consumer.
+
+
+      Boundary: Repository and package artifact only under the release specialist.
+      Do not call gcloud, access credentials, mutate a runtime/database/service, deploy,
+      or overwrite any 0.1.31 bytes. Preserve package identity alignment across Python
+      and Web metadata, the tracked SPA, existing Viewer/Admin contracts, and the
+      removed mcp_0_1_31_full_matrix state.
+
+
+      Admit: Base the new scripts on the proven narrow 0.1.31 forward-deploy and remote-verification
+      patterns without generalizing the older rollout producer. Bind the producer
+      to project rda-engineering, zone asia-southeast1-b, VM tasca-mcp, HTTPS host
+      34.1.134.239.sslip.io, CPython 3.13, previous release 0.1.31, and release 0.1.32.
+      The verifier must accept credentials only through the host runtime handoff and
+      must never print, persist, or place secret text in argv or reports. Its report
+      contract must cover the live verification step''s REST, MCP, Web, SQLite, export,
+      network, rollback-readiness, and cleanup requirements.
+
+
+      Recovery: A build or producer-test failure leaves runtime untouched and stays
+      on this step. Reconcile any pre-existing 0.1.32 package artifact before reuse;
+      never replace a differently bound 0.1.32 artifact or alter completed 0.1.31
+      release history.'
+    verification: uv run --python 3.13 --frozen --group dev pytest tests/unit/gcp
+      tests/unit/test_release_package.py; uv run --python 3.13 --frozen --group dev
+      ruff check src tests scripts/gcp/verify_attachments_remote.py; bash -n scripts/gcp/attachment-forward-deploy.sh;
+      uvx invar-tools guard --changed; git diff --check; uv build --wheel --out-dir
+      /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-package; shasum -a 256 /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-package/tasca-0.1.32-py3-none-any.whl
+    evidence_template: Final producer commit; changed files; exact wheel path and
+      SHA-256; package/install/version/SPA proof; test, Ruff, shell syntax, Invar
+      changed-files, and diff-check results; explicit no-runtime-effect statement.
+    refs:
+    - AGENTS.md
+    - INVAR.md
+    - pyproject.toml
+    - uv.lock
+    - src/tasca/__init__.py
+    - scripts/gcp/seat-presence-forward-deploy.sh
+    - scripts/gcp/verify_viewer_auth_remote.py
+    - tests/unit/gcp/test_seat_presence_forward_deploy.py
+    - tests/unit/gcp/test_remote_verifier.py
+    - tests/unit/test_release_package.py
+    agent: devops-engineer
+  - id: deploy-0-1-32
+    name: Deploy exact 0.1.32 wheel to the existing Tasca VM
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: runtime_state_only
+
+
+      Deliver: Deploy the exact package-step wheel with its tracked forward producer
+      to the authorized existing target rda-engineering / asia-southeast1-b / tasca-mcp.
+      Create a fresh /opt/tasca/releases/0.1.32 venv using the admitted remote CPython
+      3.13, atomically switch tasca.service to that release, and prove bounded loopback
+      and certificate-valid HTTPS health report version 0.1.32.
+
+
+      Boundary: This is the runtime transaction. Preserve /opt/tasca/releases/0.1.31
+      as the immediate rollback release; preserve SQLite data on tasca-data, service
+      environment, existing secrets and versions, Caddy/HTTPS hostname, loopback backend
+      binding, public TCP/8000 denial, Viewer/Admin separation, MCP Admin-only policy,
+      single process, and single SQLite writer. Do not rotate credentials, expose
+      secret text, change the VM/disk/IP/firewall target, deploy a second API process,
+      run a down migration, or restore mcp_0_1_31_full_matrix.
+
+
+      Admit: Before any write, use read-only reconciliation to confirm target identity,
+      current healthy 0.1.31 service path, active Caddy/Tasca services, the new release
+      path''s absence or exact resumable state, SQLite integrity and pre-deploy domain
+      table count, and the package commit/wheel/SHA/producer bindings. Start no effect
+      if existing same-target access is unavailable; use the host runtime''s approved
+      credential handoff without recording credential values or locations. After activation,
+      confirm the additive saying_attachments schema, integrity_check=ok, unchanged
+      prior domain table count, exact service release path, loopback 127.0.0.1:8000,
+      HTTPS/443, and public 8000 refusal.
+
+
+      Recovery: On any activation or health failure, restore the pre-0.1.32 service
+      unit to the intact 0.1.31 release, restart it, and reconcile health and target
+      state before returning. Keep the additive attachment table/data; do not drop
+      schema. If read-only reconciliation cannot determine whether the switch occurred,
+      stop with the precise unknown effect instead of replaying deployment.'
+    verification: RELEASE_WHEEL=/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-package/tasca-0.1.32-py3-none-any.whl
+      RELEASE_SHA256="$(shasum -a 256 /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-package/tasca-0.1.32-py3-none-any.whl
+      | awk '{print $1}')" scripts/gcp/attachment-forward-deploy.sh apply
+    evidence_template: Read-only preflight; exact target and wheel/producer binding;
+      activation output; service release path; CPython identity; local/HTTPS health;
+      SQLite integrity/schema/prior-count preservation; listener/firewall posture;
+      retained 0.1.31 rollback state; reconciled final effect.
+    refs:
+    - scripts/gcp/seat-presence-forward-deploy.sh
+    - scripts/gcp/viewer-auth-rollout.sh
+    - scripts/gcp/verify_viewer_auth_remote.py
+    - docs/tasca-data-schema-v0.1.md
+    depends_on:
+    - package-0-1-32
+    agent: devops-engineer
+  - id: verify-live-attachments
+    name: Independently verify live 0.1.32 attachment behavior
+    status: pending
+    description: 'step_type: verification
+
+      repo_change_policy: no_repo_change
+
+
+      Deliver: Produce one independent target-bound live acceptance report for Tasca
+      0.1.32 on https://34.1.134.239.sslip.io and the authorized VM. Verify certificate-valid
+      HTTPS, exact version/release path, 18-tool MCP inventory, SQLite additive migration/integrity
+      and preservation of the pre-deploy domain data, authorization boundaries, attachment
+      behavior through REST/MCP/Web, exports, search/mention exclusion, network posture,
+      cleanup, and 0.1.31 rollback readiness without performing rollback.
+
+
+      Boundary: Read repository state and observe the deployed runtime; temporary
+      isolated live test records are allowed only for this verification and must be
+      cleaned up on success or failure. Do not modify repository files, Plan state,
+      services, secrets, firewall, Caddy, package releases, or prior user data. Use
+      Viewer/Admin credentials only through the host runtime handoff; never expose
+      secret text in argv, logs, screenshots, reports, or chat. REST attachment reads
+      must accept Viewer or Admin while creation remains Admin-only; every MCP call
+      remains Admin-only.
+
+
+      Admit: Bind the report to the deployed wheel SHA, producer commit, VM identity,
+      release path, hostname, certificate, and observed SQLite anchor. Exercise multiple
+      nonblank Markdown attachments and ordered metadata across REST create/list/join/listen/wait/read
+      and MCP table_say/attachment_get; prove ordinary history responses omit bodies;
+      repeat a dedup_id and prove stable saying/attachment IDs; safely exercise invalid
+      name/count/per-item/aggregate limits and show no saying, attachment, or sequence
+      consumption; prove attachment-only terms do not enter saying search or mentions;
+      compare JSONL 0.2 and Markdown transcript/attachment appendix across HTTP, MCP,
+      and installed CLI; and verify Web attachment composition plus collapsed, lazy
+      body loading through the existing raw-HTML-disabled, safe-link, Mermaid strict/init-stripping,
+      SVG-sanitized and CSP path. Verify public health/docs/OpenAPI/SPA remain public,
+      unauthenticated protected reads fail, Viewer cannot write or use MCP, Admin
+      can, backend listens on loopback, and public 8000 is denied.
+
+
+      Recovery: Use a unique test table and record its identity before mutation. Cleanup
+      must remove every test saying, attachment, seat, and table, then prove absence
+      through public APIs and the authorized database observation. If cleanup or any
+      prior runtime effect is uncertain, stop and reconcile instead of rerunning.
+      A verification failure leaves 0.1.32 deployed when service health and data integrity
+      remain sound; report the exact failed requirement and rollback readiness without
+      executing rollback.'
+    verification: uv run --python 3.13 --frozen --group dev python scripts/gcp/verify_attachments_remote.py
+      --project rda-engineering --zone asia-southeast1-b --vm tasca-mcp --host 34.1.134.239.sslip.io
+      --expected-version 0.1.32 --report-dir /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification
+    evidence_template: verifier.report.v2 result bound to target/commit/wheel; requirement
+      matrix; REST/MCP/Web/CLI observations; auth and network matrix; SQLite preservation/integrity/schema;
+      isolated test IDs and cleanup proof; rollback-readiness observation; explicit
+      secret scan and residual gaps.
+    refs:
+    - docs/tasca-http-api-v0.1.md
+    - docs/tasca-mcp-interface-v0.1.md
+    - docs/tasca-search-export-v0.1.md
+    - docs/tasca-data-schema-v0.1.md
+    - docs/adr-001-mermaid-rendering.md
+    - docs/adr-002-mermaid-svg-sanitization.md
+    - scripts/gcp/verify_viewer_auth_remote.py
+    - tests/unit/gcp/test_remote_mcp_full_matrix.py
+    depends_on:
+    - deploy-0-1-32
+    agent: integration-verifier

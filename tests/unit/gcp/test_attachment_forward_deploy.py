@@ -58,7 +58,13 @@ def write_fake_commands(directory: Path) -> None:
         "gcloud": (
             "#!/bin/sh\n"
             "printf 'gcloud %s\\n' \"$*\" >> \"$TASCA_COMMAND_LOG\"\n"
-            "if [ \"$1 $2\" = 'compute ssh' ]; then exit \"${TASCA_GCLOUD_SSH_STATUS:-0}\"; fi\n"
+            "if [ \"$1 $2\" = 'compute ssh' ]; then\n"
+            "  if [ -n \"${TASCA_GCLOUD_SSH_COMMAND:-}\" ]; then\n"
+            "    for argument in \"$@\"; do remote_command=$argument; done\n"
+            "    printf '%s' \"$remote_command\" > \"$TASCA_GCLOUD_SSH_COMMAND\"\n"
+            "  fi\n"
+            "  exit \"${TASCA_GCLOUD_SSH_STATUS:-0}\"\n"
+            "fi\n"
             "exit 0\n"
         ),
         "uv": (
@@ -253,11 +259,15 @@ def test_bad_wheel_digest_fails_before_service_or_package_mutation(tmp_path: Pat
     assert Path(environment["TASCA_UV_LOG"]).read_text() == ""
 
 
-def test_apply_stops_at_remote_read_only_preflight_before_stage_or_scp(tmp_path: Path) -> None:
-    """A first remote reconciliation failure reaches no stage directory or SCP path."""
+def test_apply_stops_at_executable_remote_read_only_preflight_before_stage_or_scp(
+    tmp_path: Path,
+) -> None:
+    """The first SSH command has executable CPython source and no staging effect."""
     environment, _root, _unit, _env_file, _database, _caddy = fixture_environment(
         tmp_path, health_version=PREVIOUS_VERSION
     )
+    remote_command_path = tmp_path / "remote-read-only-preflight.sh"
+    environment["TASCA_GCLOUD_SSH_COMMAND"] = str(remote_command_path)
     environment["TASCA_GCLOUD_SSH_STATUS"] = "42"
 
     result = deploy(environment, "apply")
@@ -268,6 +278,20 @@ def test_apply_stops_at_remote_read_only_preflight_before_stage_or_scp(tmp_path:
     assert "gcloud compute scp" not in command_log
     assert "/var/tmp/tasca-attachments-0.1.32" not in command_log
     assert "install -d" not in command_log
+
+    remote_command = remote_command_path.read_text()
+    assert remote_command.startswith("set -euo pipefail\n")
+    assert "/var/tmp/tasca-attachments-0.1.32" not in remote_command
+    identity_check = next(
+        line for line in remote_command.splitlines() if "sys.implementation.name" in line
+    )
+    python_source = identity_check.partition("-c '")[2].split("')", 1)[0]
+    assert python_source
+    parsed = subprocess.run(
+        [sys.executable, "-c", python_source], text=True, capture_output=True, check=False
+    )
+    assert parsed.returncode == 0, parsed.stderr
+    assert parsed.stdout.strip() == "cpython:3.13"
 
 
 def test_render_binds_target_current_release_wheel_and_new_verifier(tmp_path: Path) -> None:

@@ -153,7 +153,7 @@ set -euo pipefail
 systemctl is-active tasca.service | grep -Fx active >/dev/null
 systemctl is-active caddy | grep -Fx active >/dev/null
 test -x ${REMOTE_PYTHON}
-test \"\$(${REMOTE_PYTHON} -c 'import sys; print(f\"{sys.implementation.name}:{sys.version_info.major}.{sys.version_info.minor}\")')\" = cpython:3.13
+test "\$(${REMOTE_PYTHON} -c 'import sys; print(f"{sys.implementation.name}:{sys.version_info.major}.{sys.version_info.minor}")')" = cpython:3.13
 test ! -e /opt/tasca/releases/${RELEASE_VERSION}
 systemctl show tasca.service --property=ExecStart --value | grep -F -- /opt/tasca/releases/${PREVIOUS_VERSION}/venv/bin/tasca >/dev/null
 ss -ltnH 'sport = :8000' | awk 'BEGIN { seen = 0 } { seen = 1; if (\$4 !~ /^(127\\.0\\.0\\.1|\\[::1\\]):8000\$/) exit 1 } END { exit(seen ? 0 : 1) }'

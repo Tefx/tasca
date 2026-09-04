@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Produce a secret-safe live acceptance report for the Tasca 0.1.32 attachment release.
+"""Produce secret-safe machine evidence for the Tasca 0.1.32 attachment release.
 
 The verifier accepts no credential values or credential-location arguments.  Admin
 and optional Viewer credentials enter only through the host process environment,
@@ -35,7 +35,7 @@ REMOTE_PYTHON = "/var/lib/tasca/.local/share/uv/python/cpython-3.13.15-linux-x86
 RELEASE_DIR = f"/opt/tasca/releases/{RELEASE_VERSION}"
 PREVIOUS_RELEASE_DIR = "/opt/tasca/releases/0.1.31"
 STAGED_WHEEL = f"/var/tmp/tasca-attachments-0.1.32/tasca-{RELEASE_VERSION}-py3-none-any.whl"
-REPORT_FORMAT = "verifier.report.v2"
+REPORT_FORMAT = "tasca.attachment-live-evidence.v1"
 MAX_REPORT_BYTES = 256 * 1024
 EXPECTED_TOOLS = frozenset(
     {
@@ -80,7 +80,7 @@ class AttachmentVerifier:
         self.table_id: str | None = None
         self.report: dict[str, Any] = {
             "format": REPORT_FORMAT,
-            "status": "FAIL",
+            "status": "MACHINE_CHECKS_FAIL",
             "target": {
                 "project": args.project,
                 "zone": args.zone,
@@ -410,10 +410,26 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
 
     def binding(self) -> dict[str, str]:
         root = Path(__file__).parents[2]
-        revision = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", "HEAD"], capture_output=True, text=True, check=False)
-        if revision.returncode != 0:
-            raise VerificationError("local producer revision could not be resolved")
-        return {"commit": revision.stdout.strip(), "forward_producer_sha256": hashlib.sha256((root / "scripts/gcp/attachment-forward-deploy.sh").read_bytes()).hexdigest(), "verifier_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+        paths = {
+            "forward_producer": root / "scripts/gcp/attachment-forward-deploy.sh",
+            "verifier": Path(__file__),
+        }
+        revisions: dict[str, str] = {}
+        for label, path in paths.items():
+            revision = subprocess.run(
+                ["git", "-C", str(root), "log", "-1", "--format=%H", "--", str(path.relative_to(root))],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if revision.returncode != 0 or not revision.stdout.strip():
+                raise VerificationError(f"{label} revision could not be resolved")
+            revisions[f"{label}_commit"] = revision.stdout.strip()
+        return {
+            **revisions,
+            "forward_producer_sha256": hashlib.sha256(paths["forward_producer"].read_bytes()).hexdigest(),
+            "verifier_sha256": hashlib.sha256(paths["verifier"].read_bytes()).hexdigest(),
+        }
 
     def cleanup(self) -> None:
         if self.table_id is None:
@@ -429,7 +445,7 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
         self.report["cleanup"] = {"status": "verified", "table_id": self.table_id, "absence": "API_404_and_SQLite_0"}
 
     def write(self) -> Path:
-        path = Path(self.args.report_dir) / "verifier.report.json"
+        path = Path(self.args.report_dir) / "attachment-live-evidence.json"
         encoded = json.dumps(self.report, sort_keys=True, indent=2) + "\n"
         if len(encoded.encode()) > MAX_REPORT_BYTES or self.admin in encoded or self.viewer and self.viewer in encoded:
             raise VerificationError("verification report was oversized or credential-bearing")
@@ -452,7 +468,7 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
             self.report["binding"] = {**bound, "deployed_wheel_sha256": before["wheel_sha256"]}
             self.report["runtime_before"] = before
             self.report["attachments"] = self.attachments(self.auth_and_inventory())
-            self.report["status"] = "PASS"
+            self.report["status"] = "MACHINE_CHECKS_PASS"
         except BaseException as error:
             failure = error
             self.report["failure"] = {"kind": type(error).__name__}
@@ -461,7 +477,7 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
                 try:
                     self.cleanup()
                 except BaseException as cleanup_error:
-                    self.report["status"] = "BLOCKED"
+                    self.report["status"] = "MACHINE_CHECKS_BLOCKED"
                     self.report["cleanup"] = {"status": "failed", "table_id": self.table_id, "failure": type(cleanup_error).__name__}
                     failure = CleanupBlocked("test-data cleanup could not be reconciled")
             path = self.write()
@@ -472,7 +488,7 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
 
 # @invar:allow shell_result: The standalone producer converts its secret-safe report path into one POSIX exit status.
 def main() -> int:
-    """Run exactly the target-bound verifier contract supplied by the live step."""
+    """Run machine checks and emit non-final evidence for the later integration verifier."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True)
     parser.add_argument("--zone", required=True)
@@ -485,7 +501,7 @@ def main() -> int:
     except Exception as error:
         print(f"attachment remote verification failed: {type(error).__name__}", file=sys.stderr)
         return 1
-    print(json.dumps({"status": "PASS", "report": str(report)}, sort_keys=True))
+    print(json.dumps({"status": "MACHINE_CHECKS_PASS", "evidence": str(report)}, sort_keys=True))
     return 0
 
 

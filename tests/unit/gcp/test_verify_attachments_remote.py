@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import stat
@@ -172,20 +173,72 @@ def test_cleanup_proves_api_absence_and_sqlite_test_data_removal(
     assert verifier.report["cleanup"]["status"] == "verified"
 
 
-def test_report_is_0600_and_browser_slots_remain_evidence_requirements(
+def test_nonfinal_evidence_is_0600_and_browser_slots_remain_requirements(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The report contains no handoff token and never substitutes manual browser proof."""
+    """Machine evidence contains no handoff token and never substitutes browser proof."""
     token = "admin-fixture-opaque"
     monkeypatch.setenv("TASCA_ADMIN_TOKEN", token)
     verifier = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: (200, b"{}", {}))
-    verifier.report["status"] = "PASS"
+    verifier.report["status"] = "MACHINE_CHECKS_PASS"
 
     path = verifier.write()
 
+    assert path.name == "attachment-live-evidence.json"
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert token not in path.read_text()
+    assert verifier.report["format"] == "tasca.attachment-live-evidence.v1"
+    assert verifier.report["status"] != "PASS"
     assert all(slot["status"] == "required" for slot in verifier.report["manual_browser_evidence"])
+
+
+def test_binding_uses_last_tracked_file_commits_not_ambient_head(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Lifecycle-only commits cannot change the immutable producer evidence binding."""
+    monkeypatch.setenv("TASCA_ADMIN_TOKEN", "admin-fixture")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        commands.append(command)
+        path = command[-1]
+        value = "producer-commit" if path.endswith("attachment-forward-deploy.sh") else "verifier-commit"
+        return SimpleNamespace(returncode=0, stdout=value + "\n", stderr="")
+
+    monkeypatch.setattr(VERIFIER.subprocess, "run", fake_run)
+    binding = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: (200, b"{}", {})).binding()
+
+    assert binding["forward_producer_commit"] == "producer-commit"
+    assert binding["verifier_commit"] == "verifier-commit"
+    assert all(command[3:6] == ["log", "-1", "--format=%H"] for command in commands)
+    assert not any("rev-parse" in command for command in commands)
+
+
+def test_cli_reports_machine_evidence_not_final_acceptance(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The CLI exposes a non-final evidence state and path for the later integration verifier."""
+    expected = tmp_path / "attachment-live-evidence.json"
+
+    class FakeVerifier:
+        def __init__(self, _args: argparse.Namespace) -> None:
+            pass
+
+        def run(self) -> Path:
+            return expected
+
+    monkeypatch.setattr(VERIFIER, "AttachmentVerifier", FakeVerifier)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "verify_attachments_remote.py", "--project", "rda-engineering", "--zone", "asia-southeast1-b",
+            "--vm", "tasca-mcp", "--host", "34.1.134.239.sslip.io", "--expected-version", "0.1.32",
+            "--report-dir", str(tmp_path),
+        ],
+    )
+
+    assert VERIFIER.main() == 0
+    assert json.loads(capsys.readouterr().out) == {"status": "MACHINE_CHECKS_PASS", "evidence": str(expected)}
 
 
 def test_wrong_target_rejects_before_runtime_credential_or_network_access(tmp_path: Path) -> None:

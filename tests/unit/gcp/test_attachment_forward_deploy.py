@@ -54,6 +54,13 @@ def write_fake_commands(directory: Path) -> None:
             "print(Path(sys.argv[1]).resolve())\n"
             "PYTHON\n"
         ),
+        "python3": "#!/bin/sh\nprintf 'python3 %s\\n' \"$*\" >> \"$TASCA_COMMAND_LOG\"\nexec \"$TASCA_REAL_TEST_PYTHON\" \"$@\"\n",
+        "gcloud": (
+            "#!/bin/sh\n"
+            "printf 'gcloud %s\\n' \"$*\" >> \"$TASCA_COMMAND_LOG\"\n"
+            "if [ \"$1 $2\" = 'compute ssh' ]; then exit \"${TASCA_GCLOUD_SSH_STATUS:-0}\"; fi\n"
+            "exit 0\n"
+        ),
         "uv": (
             "#!/usr/bin/env bash\n"
             "printf 'uv %s\\n' \"$*\" >> \"$TASCA_UV_LOG\"\n"
@@ -101,6 +108,15 @@ def fixture_environment(
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     write_fake_commands(bin_dir)
+    selected_python = tmp_path / "selected-python"
+    selected_python.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf 'selected-python %s\\n' \"$*\" >> \"$TASCA_SELECTED_PYTHON_LOG\"\n"
+        "exec \"$TASCA_REAL_TEST_PYTHON\" \"$@\"\n"
+    )
+    selected_python.chmod(0o755)
+    selected_python_log = tmp_path / "selected-python.log"
+    selected_python_log.write_text("")
     wheel = tmp_path / WHEEL_NAME
     wheel.write_bytes(b"exact 0.1.32 fixture wheel")
     command_log = tmp_path / "commands.log"
@@ -112,7 +128,9 @@ def fixture_environment(
         {
             "TASCA_FORWARD_TEST_ROOT": str(root),
             "TASCA_FORWARD_TESTING": "1",
-            "TASCA_FORWARD_TEST_PYTHON": sys.executable,
+            "TASCA_FORWARD_TEST_PYTHON": str(selected_python),
+            "TASCA_REAL_TEST_PYTHON": sys.executable,
+            "TASCA_SELECTED_PYTHON_LOG": str(selected_python_log),
             "TASCA_COMMAND_LOG": str(command_log),
             "TASCA_UV_LOG": str(uv_log),
             "TASCA_FAKE_VERSION": health_version,
@@ -182,6 +200,8 @@ def test_activate_installs_exact_wheel_and_preserves_forbidden_surfaces(tmp_path
     assert "http://127.0.0.1:8000/api/v1/health" in command_log
     assert "https://34.1.134.239.sslip.io/api/v1/health" in command_log
     assert "fixture-kept-secret" not in result.stdout + result.stderr + command_log
+    assert "python3 " not in command_log
+    assert "json.load" in Path(environment["TASCA_SELECTED_PYTHON_LOG"]).read_text()
 
 
 def test_activation_failure_restores_the_saved_unit_and_restarts_0_1_31(tmp_path: Path) -> None:
@@ -233,6 +253,23 @@ def test_bad_wheel_digest_fails_before_service_or_package_mutation(tmp_path: Pat
     assert Path(environment["TASCA_UV_LOG"]).read_text() == ""
 
 
+def test_apply_stops_at_remote_read_only_preflight_before_stage_or_scp(tmp_path: Path) -> None:
+    """A first remote reconciliation failure reaches no stage directory or SCP path."""
+    environment, _root, _unit, _env_file, _database, _caddy = fixture_environment(
+        tmp_path, health_version=PREVIOUS_VERSION
+    )
+    environment["TASCA_GCLOUD_SSH_STATUS"] = "42"
+
+    result = deploy(environment, "apply")
+
+    assert result.returncode != 0
+    command_log = Path(environment["TASCA_COMMAND_LOG"]).read_text()
+    assert command_log.startswith("gcloud compute ssh tasca-mcp ")
+    assert "gcloud compute scp" not in command_log
+    assert "/var/tmp/tasca-attachments-0.1.32" not in command_log
+    assert "install -d" not in command_log
+
+
 def test_render_binds_target_current_release_wheel_and_new_verifier(tmp_path: Path) -> None:
     """The effect-free manifest states the immutable inputs required by later runtime work."""
     environment, _root, _unit, _env_file, _database, _caddy = fixture_environment(
@@ -257,5 +294,6 @@ def test_render_binds_target_current_release_wheel_and_new_verifier(tmp_path: Pa
     }
     assert manifest["verifier"]["path"] == "scripts/gcp/verify_attachments_remote.py"
     assert manifest["verifier"]["expected_version"] == VERSION
+    assert manifest["producer"]["revision"] == manifest["verifier"]["revision"]
     assert "remote_read_only_preflight" in manifest["actions"]
     assert manifest["actions"][-1].endswith("restart_0_1_31_on_activation_failure")

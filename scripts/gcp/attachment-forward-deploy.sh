@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # purpose: Forward-deploy one caller-bound Tasca 0.1.32 wheel to the existing Tasca VM.
-# usage: Set RELEASE_WHEEL and RELEASE_SHA256, then run render or apply. `apply` performs remote preflight before staging and activation.
+# usage: Set RELEASE_WHEEL and RELEASE_SHA256, then run render or apply. `apply` performs fixed-target read-only reconciliation before any remote stage write.
 # effects: `apply` transfers the exact wheel and switches only tasca.service's ExecStart. It preserves the service environment, SQLite/tasca-data, secrets, Caddy, firewall, loopback backend, and the 0.1.31 release.
 # requires: A committed clean producer, gcloud access to rda-engineering/asia-southeast1-b/tasca-mcp, the admitted remote CPython 3.13, and a caller-provided wheel SHA-256. TASCA_FORWARD_TEST_ROOT is only for offline fixture tests.
 set -euo pipefail
@@ -31,6 +31,10 @@ fail() {
 
 file_hash() {
     sha256sum -- "$1" | awk '{print $1}'
+}
+
+tracked_revision() {
+    git -C "$REPO_ROOT" log -1 --format=%H -- "$1"
 }
 
 require_root() {
@@ -73,6 +77,10 @@ require_release_inputs() {
 }
 
 require_committed_producer() {
+    if [[ "${TASCA_FORWARD_TESTING:-}" == "1" ]]; then
+        [[ -n "$ROOT_PREFIX" ]] || fail "test producer bypass requires a test root"
+        return
+    fi
     local file
     for file in scripts/gcp/attachment-forward-deploy.sh scripts/gcp/verify_attachments_remote.py; do
         git -C "$REPO_ROOT" ls-files --error-unmatch "$file" >/dev/null
@@ -85,13 +93,15 @@ require_committed_producer() {
 }
 
 emit_manifest() {
-    python3 - "$WHEEL_NAME" "$RELEASE_SHA256" "$(git -C "$REPO_ROOT" rev-parse --verify HEAD)" \
+    python3 - "$WHEEL_NAME" "$RELEASE_SHA256" \
+        "$(tracked_revision scripts/gcp/attachment-forward-deploy.sh)" \
+        "$(tracked_revision scripts/gcp/verify_attachments_remote.py)" \
         "$(file_hash "$SCRIPT_DIR/attachment-forward-deploy.sh")" \
         "$(file_hash "$SCRIPT_DIR/verify_attachments_remote.py")" <<'PY'
 import json
 import sys
 
-wheel, digest, revision, producer_digest, verifier_digest = sys.argv[1:]
+wheel, digest, producer_revision, verifier_revision, producer_digest, verifier_digest = sys.argv[1:]
 print(json.dumps({
     "release": {"version": "0.1.32", "wheel": wheel, "sha256": digest},
     "previous_release": "0.1.31",
@@ -103,12 +113,13 @@ print(json.dumps({
     },
     "producer": {
         "path": "scripts/gcp/attachment-forward-deploy.sh",
-        "revision": revision,
+        "revision": producer_revision,
         "sha256": producer_digest,
     },
     "verifier": {
         "path": "scripts/gcp/verify_attachments_remote.py",
         "expected_version": "0.1.32",
+        "revision": verifier_revision,
         "sha256": verifier_digest,
     },
     "python": {
@@ -135,9 +146,28 @@ remote_ssh() {
     gcloud compute ssh "$VM" --project="$PROJECT_ID" --zone="$ZONE" --quiet --command "$1"
 }
 
+remote_read_only_preflight() {
+    local remote_command
+    remote_command="$(cat <<EOF
+set -euo pipefail
+systemctl is-active tasca.service | grep -Fx active >/dev/null
+systemctl is-active caddy | grep -Fx active >/dev/null
+test -x ${REMOTE_PYTHON}
+test \"\$(${REMOTE_PYTHON} -c 'import sys; print(f\"{sys.implementation.name}:{sys.version_info.major}.{sys.version_info.minor}\")')\" = cpython:3.13
+test ! -e /opt/tasca/releases/${RELEASE_VERSION}
+systemctl show tasca.service --property=ExecStart --value | grep -F -- /opt/tasca/releases/${PREVIOUS_VERSION}/venv/bin/tasca >/dev/null
+ss -ltnH 'sport = :8000' | awk 'BEGIN { seen = 0 } { seen = 1; if (\$4 !~ /^(127\\.0\\.0\\.1|\\[::1\\]):8000\$/) exit 1 } END { exit(seen ? 0 : 1) }'
+curl --fail --silent --show-error --proto '=http,https' --tlsv1.2 http://127.0.0.1:8000/api/v1/health | ${REMOTE_PYTHON} -c 'import json, sys; raise SystemExit(json.load(sys.stdin).get("version") != sys.argv[1])' ${PREVIOUS_VERSION}
+curl --fail --silent --show-error --proto '=http,https' --tlsv1.2 https://${HTTPS_HOST}/api/v1/health | ${REMOTE_PYTHON} -c 'import json, sys; raise SystemExit(json.load(sys.stdin).get("version") != sys.argv[1])' ${PREVIOUS_VERSION}
+EOF
+)"
+    remote_ssh "$remote_command"
+}
+
 stage_and_activate() {
     local producer_sha remote_command
     producer_sha="$(file_hash "$SCRIPT_DIR/attachment-forward-deploy.sh")"
+    remote_read_only_preflight
     remote_ssh "install -d -m 0700 ${REMOTE_STAGE_DIR}"
     gcloud compute scp --project="$PROJECT_ID" --zone="$ZONE" --quiet \
         "$SCRIPT_DIR/attachment-forward-deploy.sh" \
@@ -212,14 +242,15 @@ PY
 }
 
 require_health() {
-    local expected_version="$1"
-    local url="$2"
-    local label="$3"
+    local python="$1"
+    local expected_version="$2"
+    local url="$3"
+    local label="$4"
     local attempt retry_delay=1
     [[ "${TASCA_FORWARD_TESTING:-}" == "1" ]] && retry_delay=0
     for ((attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt++)); do
         if curl --fail --silent --show-error --proto '=http,https' --tlsv1.2 "$url" \
-            | python3 -c 'import json, sys; raise SystemExit(json.load(sys.stdin).get("version") != sys.argv[1])' "$expected_version"; then
+            | "$python" -c 'import json, sys; raise SystemExit(json.load(sys.stdin).get("version") != sys.argv[1])' "$expected_version"; then
             return
         fi
         if ((attempt < HEALTH_ATTEMPTS && retry_delay > 0)); then
@@ -232,9 +263,10 @@ require_health() {
 }
 
 require_release_health() {
-    local version="$1"
-    require_health "$version" "http://127.0.0.1:8000/api/v1/health" "local"
-    require_health "$version" "https://${HTTPS_HOST}/api/v1/health" "HTTPS"
+    local python="$1"
+    local version="$2"
+    require_health "$python" "$version" "http://127.0.0.1:8000/api/v1/health" "local"
+    require_health "$python" "$version" "https://${HTTPS_HOST}/api/v1/health" "HTTPS"
 }
 
 restore_after_activation_failure() {
@@ -242,7 +274,7 @@ restore_after_activation_failure() {
     restore_unit "$python" || fail "activation failed and the original unit could not be restored"
     systemctl daemon-reload || fail "activation failed and the restored unit could not be reloaded"
     systemctl restart tasca.service || fail "activation failed and the restored unit could not be restarted"
-    require_release_health "$PREVIOUS_VERSION" \
+    require_release_health "$python" "$PREVIOUS_VERSION" \
         || fail "activation failed and restored ${PREVIOUS_VERSION} health could not be reconciled"
     printf 'attachment forward deploy: activation failed; pre-0.1.32 unit restored and 0.1.31 restarted\n' >&2
     exit 1
@@ -254,7 +286,7 @@ preflight() {
     python="$(selected_python)"
     require_python "$python"
     require_current_release
-    require_release_health "$PREVIOUS_VERSION"
+    require_release_health "$python" "$PREVIOUS_VERSION"
     printf 'attachment forward deploy: preflight verified active %s and absent %s release path\n' \
         "$PREVIOUS_VERSION" "$RELEASE_VERSION"
 }
@@ -288,7 +320,7 @@ activate() {
     if ! systemctl daemon-reload || ! systemctl restart tasca.service; then
         restore_after_activation_failure "$python"
     fi
-    if ! require_release_health "$RELEASE_VERSION"; then
+    if ! require_release_health "$python" "$RELEASE_VERSION"; then
         restore_after_activation_failure "$python"
     fi
     printf 'attachment forward deploy: exact %s is active; %s remains available\n' \

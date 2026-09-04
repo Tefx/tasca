@@ -50416,7 +50416,7 @@ phases:
       package/build/deployment/rollback, or evidence-artifact effect occurred.'
   - id: repair-attachment-export-cli-framing
     name: Repair verifier CLI export framing
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50482,3 +50482,22 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-04T10:55:16.704187Z'
+    done_at: '2026-09-04T10:59:04.192875+00:00'
+    evidence: 'Integrated verifier-only commit 2cbbe52892f536961c07af58e64d58a284064ef9
+      by fast-forward from claimed base 1dd6902fa762199e8d38c4e49ce169d7ffdeca80.
+      Only scripts/gcp/verify_attachments_remote.py and tests/unit/gcp/test_verify_attachments_remote.py
+      changed. Real cli_export now requires successful bounded stdout to end with
+      the CLI print framing newline and removes exactly that final character via stdout[:-1],
+      preserving all formatter/content-owned trailing newlines and rejecting missing
+      framing; no strip/rstrip/global whitespace normalization was added. Behavioral
+      tests execute real cli_export with fake subprocess output for content with and
+      without an owned newline, require missing-framing rejection, execute real export_signature
+      across corrected HTTP/MCP/CLI JSONL 0.2 and Markdown, normalize only JSONL exported_at,
+      prove matching signatures, and prove attachment-content or owned-trailing-newline
+      changes still disagree. Owner checks under CPython 3.13: focused pytest 40 passed;
+      Ruff passed; changed-files Invar passed with producer at 699 physical lines
+      / 700-of-700 warning and no error; git diff --check passed; worktree clean;
+      plan.yaml blob remained 1d08a4db67c58f57d1bc11ec77d02cbeae592758. Parent independently
+      reviewed full diff and reran diff check successfully. No CLI/shared formatter/product/API/storage/docs
+      behavior changed; no gcloud/live HTTPS/credentials/fixtures, package/build/deployment/rollback,
+      or evidence-artifact effect occurred.'

@@ -49831,13 +49831,13 @@ phases:
       from ~/.tasca/tasca.db; post-delete counts are table=0 and sayings=0.'
 - id: saying_attachments_release_0_1_32
   name: Saying attachments 0.1.32 package, GCP rollout, and live proof
-  status: pending
+  status: in_progress
   depends_on:
   - saying_attachments
   steps:
   - id: package-0-1-32
     name: Produce tracked 0.1.32 deployment and verification artifacts
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -49895,6 +49895,8 @@ phases:
     - tests/unit/gcp/test_remote_verifier.py
     - tests/unit/test_release_package.py
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-04T01:40:08.620980Z'
   - id: deploy-0-1-32
     name: Deploy exact 0.1.32 wheel to the existing Tasca VM
     status: pending

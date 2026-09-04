@@ -50134,7 +50134,7 @@ phases:
       No gcloud, credential, service, database, or runtime effect occurred.'
   - id: repair-attachment-live-verifier
     name: Repair 0.1.32 attachment live-verification producer
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50196,3 +50196,25 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-04T04:19:13.693334Z'
+    done_at: '2026-09-04T09:09:06.069091+00:00'
+    evidence: 'Integrated repository-only repair commits 2feb68a29af805eb2b79ecd545f8568caa4244f0
+      and 9c5d4d2daa66f0ba8d3be3c26d284fea94ec07b9 by fast-forward from base c90b10b9f0524c8d830c9400e966736c76e5f01b.
+      Review confirmed only scripts/gcp/verify_attachments_remote.py and tests/unit/gcp/test_verify_attachments_remote.py
+      changed. Behavior now authenticates configured Viewer REST list/join/wait/read,
+      preserves Admin-only creation/MCP, restores attachment-bearing table_say dedup
+      retry with stable saying/attachment identity, reconciles a lost REST-create
+      response using exact unique question and table_create dedup evidence, cleans
+      through MCP close + batch-delete + NOT_FOUND, deletes only the exact observed
+      table_create and table_say idempotency rows in one remote CPython 3.13 BEGIN
+      IMMEDIATE transaction, and requires exact pre/post SQLite device/inode/count/table-ID/integrity/FK
+      restoration. Offline generated-fragment tests cover unrelated-row preservation,
+      zero/multiple/wrong match rollback, residual-domain blocking, response-loss
+      recovery, and ambiguous-state blocking. Owner evidence: `pytest tests/unit/gcp/test_verify_attachments_remote.py`
+      32 passed; Ruff passed; changed-files Invar passed with 0 errors and one 697/700
+      file-size warning; `git diff --check` passed; worktree clean. Parent independently
+      reviewed both commits, confirmed candidate/main plan.yaml blob remained 4170c7f5ad68e8c357dadb4dc265bda293337660,
+      fast-forwarded main to 9c5d4d2, and reran diff check successfully. `tests/unit/test_release_package.py`
+      was not rerun because this repository-only repair explicitly forbids rebuilding
+      the unchanged wheel; the accepted package step already recorded 109 passing
+      package checks, and no package source/artifact changed. No gcloud, live HTTPS,
+      credential, build, deployment, service, or remote SQLite effect occurred.'

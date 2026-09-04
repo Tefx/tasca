@@ -49918,7 +49918,7 @@ phases:
       No gcloud, credential, database, service, or deployment effect occurred.'
   - id: deploy-0-1-32
     name: Deploy exact 0.1.32 wheel to the existing Tasca VM
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: runtime_state_only
@@ -49971,6 +49971,8 @@ phases:
     depends_on:
     - package-0-1-32
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-04T02:22:41.014028Z'
   - id: verify-live-attachments
     name: Independently verify live 0.1.32 attachment behavior
     status: pending

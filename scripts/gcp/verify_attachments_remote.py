@@ -487,7 +487,7 @@ print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows':
 
     def attachments(self, viewer_mode: str) -> dict[str, Any]:
         marker = uuid.uuid4().hex
-        needle = f"attachment-only-{marker}"
+        needle = f"attachmentonly{marker}"
         self.fixture_question = f"Tasca attachment verifier {marker}"
         self.table_create_dedup_id = f"verify-table-{marker}"
         self.table_create_attempted = True

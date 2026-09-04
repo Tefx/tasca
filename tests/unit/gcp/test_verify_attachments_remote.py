@@ -14,6 +14,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -274,7 +275,8 @@ def test_attachment_table_say_retry_reuses_dedup_and_preserves_identity(
 
 
 def wire_complete_workflow(
-    monkeypatch: pytest.MonkeyPatch, verifier: Any, *, fail_attachment_get: bool = False, fail_cleanup_close: bool = False
+    monkeypatch: pytest.MonkeyPatch, verifier: Any, *, fail_attachment_get: bool = False, fail_cleanup_close: bool = False,
+    search_fixture_hit: bool = False,
 ) -> None:
     """Drive the producer's real post-first-say and cleanup workflow through inert seams."""
     rest_attachments = [
@@ -288,11 +290,21 @@ def wire_complete_workflow(
     rest_saying = {"id": "rest-saying", "attachments": rest_attachments}
     mcp_saying = {"id": "mcp-saying", "sequence": 1, "attachments": mcp_attachments, "mentions_all": False, "mentions_resolved": [], "mentions_unresolved": []}
     after_saying = {"id": "after-saying", "sequence": 2, "attachments": []}
+    table_titles: list[str] = []
+    main_contents: list[str] = []
+    attachment_contents: list[str] = []
 
     def json_request(_url: str, operation: str, **_kwargs: object) -> dict[str, Any]:
         if operation == "REST test table create":
+            payload = _kwargs["payload"]
+            assert isinstance(payload, dict) and isinstance(payload.get("title"), str)
+            table_titles.append(payload["title"])
             return {"table_id": "fixture-table"}
         if operation == "REST attachment create":
+            payload = _kwargs["payload"]
+            assert isinstance(payload, dict) and isinstance(payload.get("content"), str)
+            main_contents.append(payload["content"])
+            attachment_contents.extend(item["content"] for item in payload.get("attachments", []) if isinstance(item, dict) and isinstance(item.get("content"), str))
             return rest_saying
         if operation in {"REST list", "REST wait"}:
             return {"sayings": [rest_saying]}
@@ -303,7 +315,14 @@ def wire_complete_workflow(
         if operation == "REST invalid readback":
             return {"sayings": [rest_saying, mcp_saying, after_saying]}
         if operation == "attachment-only search":
-            return {"hits": []}
+            query = parse_qs(urlsplit(_url).query, keep_blank_values=True)
+            assert list(query) == ["q"] and len(query["q"]) == 1
+            needle = query["q"][0]
+            assert needle.startswith("attachmentonly") and needle.isalnum()
+            assert len(table_titles) == 1 and needle not in table_titles[0]
+            assert all(needle not in content for content in main_contents)
+            assert [content for content in attachment_contents if needle in content] == [f"# REST\n{needle}", f"# MCP\n@{needle}", f"# MCP\n@{needle}"]
+            return {"hits": [{"table_id": "fixture-table"}] if search_fixture_hit else []}
         pytest.fail(f"unexpected JSON operation: {operation}")
 
     def text_request(_url: str, operation: str, **_kwargs: object) -> str:
@@ -311,11 +330,13 @@ def wire_complete_workflow(
         return operation
 
     def tool(name: str, tool_arguments: dict[str, Any], *, expect_error: bool = False) -> dict[str, Any] | str:
-        if name == "table_say" and expect_error:
-            return "INVALID_REQUEST"
-        if name == "table_say" and tool_arguments["content"] == "MCP attachment verification body":
-            return mcp_saying
         if name == "table_say":
+            main_contents.append(tool_arguments["content"])
+            attachment_contents.extend(item["content"] for item in tool_arguments.get("attachments", []) if isinstance(item, dict) and isinstance(item.get("content"), str))
+            if expect_error:
+                return "INVALID_REQUEST"
+            if tool_arguments["content"] == "MCP attachment verification body":
+                return mcp_saying
             return after_saying
         if name == "attachment_get":
             if fail_attachment_get:
@@ -390,6 +411,21 @@ def test_successful_workflow_persists_atomic_nonsecret_operation_trace(
     assert trace[:2] == [{"operation": "mcp.table_say.first", "status": "started"}, {"operation": "mcp.table_say.first", "status": "completed"}]
     assert replacements[0]["operations"]["trace"] == [{"operation": "mcp.table_say.first", "status": "started"}]
     assert any(snapshot["operations"]["trace"][:2] == trace[:2] for snapshot in replacements)
+
+
+def test_attachment_only_search_rejects_a_fixture_hit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A fixture search hit fails the URL-encoded attachment-only probe checkpoint."""
+    monkeypatch.setenv("TASCA_ADMIN_TOKEN", "admin-fixture")
+    verifier = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: pytest.fail("transport"))
+    wire_complete_workflow(monkeypatch, verifier, search_fixture_hit=True)
+
+    with pytest.raises(VERIFIER.VerificationError, match="attachment-only content entered saying search"):
+        verifier.run()
+
+    failures = [event for event in json.loads((tmp_path / "report" / "attachment-live-evidence.json").read_text())["operations"]["trace"] if event["status"] == "failed"]
+    assert failures == [{"operation": "rest.search.attachment_only", "status": "failed", "previous_completed": "mcp.table_say.post_invalid_count"}]
 
 
 def test_primary_checkpoint_failure_survives_ordered_cleanup(

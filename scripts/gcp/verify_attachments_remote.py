@@ -48,15 +48,14 @@ EXPECTED_TOOLS = frozenset(
 
 
 class VerificationError(RuntimeError):
-    """A verifier error that deliberately omits remote response text."""
+    pass
 
 
 class CleanupBlocked(VerificationError):
-    """Created test data could not be reconciled safely."""
+    pass
 
 
 class AttachmentVerifier:
-    """Stateful, direct HTTPS/MCP verifier for one target and one temporary table."""
 
     def __init__(self, args: argparse.Namespace, transport: Any = None) -> None:
         if (args.project, args.zone, args.vm, args.host, args.expected_version) != (
@@ -100,6 +99,7 @@ class AttachmentVerifier:
                 {"id": "attachment-safe-rendering", "status": "required", "observation": "Capture raw-HTML-disabled, safe-link, Mermaid, SVG, and CSP rendering evidence."},
             ],
             "cleanup": {"status": "not_needed", "table_id": None},
+            "operations": {"active": None, "trace": []},
         }
 
     def _open(
@@ -243,8 +243,33 @@ class AttachmentVerifier:
             result.append(dict(saying))
         return result
 
+    def checkpoint(self, operation: str, action: Any, failure: VerificationError | str | None = None) -> Any:
+        state = self.report["operations"]
+        state["active"] = operation
+        state["trace"].append({"operation": operation, "status": "started"})
+        self.write()
+        result = action()
+        if failure is not None and not result:
+            raise failure if isinstance(failure, VerificationError) else VerificationError(failure)
+        state["trace"].append({"operation": operation, "status": "completed"})
+        state["active"] = None
+        self.write()
+        return result
+
+    def record_operation_failure(self) -> None:
+        state = self.report["operations"]
+        operation = state["active"]
+        previous = next(
+            (event["operation"] for event in reversed(state["trace"]) if event["status"] == "completed"),
+            None,
+        )
+        if operation is not None:
+            state["trace"].append({"operation": operation, "status": "failed", "previous_completed": previous})
+            state["failed"], state["failed_after"] = state.get("failed", operation), state.get("failed_after", previous)
+        state["active"] = None
+        self.write()
+
     def sqlite_baseline(self, observed: Mapping[str, Any], operation: str) -> dict[str, Any]:
-        """Require a complete, healthy SQLite baseline from a remote observation."""
         state = observed.get("sqlite")
         names = ("tables", "sayings", "sayings_fts", "seats", "saying_attachments", "idempotency_keys")
         if not isinstance(state, Mapping):
@@ -264,14 +289,8 @@ database_stat = database.stat()
 connection = sqlite3.connect(database)
 try:
     table_ids = sorted(str(row[0]) for row in connection.execute('SELECT id FROM tables'))
-    counts = {{
-        'tables': len(table_ids),
-        'sayings': connection.execute('SELECT COUNT(*) FROM sayings').fetchone()[0],
-        'sayings_fts': connection.execute('SELECT COUNT(*) FROM sayings_fts').fetchone()[0],
-        'seats': connection.execute('SELECT COUNT(*) FROM seats').fetchone()[0],
-        'saying_attachments': connection.execute('SELECT COUNT(*) FROM saying_attachments').fetchone()[0],
-        'idempotency_keys': connection.execute('SELECT COUNT(*) FROM idempotency_keys').fetchone()[0],
-    }}
+    counts = {{name: connection.execute(f'SELECT COUNT(*) FROM {{name}}').fetchone()[0] for name in ('tables', 'sayings', 'sayings_fts', 'seats', 'saying_attachments', 'idempotency_keys')}}
+    counts['tables'] = len(table_ids)
     integrity = connection.execute('PRAGMA integrity_check').fetchone()[0]
     foreign_key_check = len(connection.execute('PRAGMA foreign_key_check').fetchall())
     attachments = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='saying_attachments'").fetchone() is not None
@@ -296,7 +315,6 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
         return observed
 
     def remote_fixture_json(self, code: str, operation: str) -> dict[str, Any]:
-        """Run one fixed-target remote CPython fragment and retain only its JSON object."""
         command = f"sudo {shlex.quote(REMOTE_PYTHON)} -c {shlex.quote(code)}"
         result = subprocess.run(["gcloud", "compute", "ssh", self.args.vm, "--project", self.args.project, "--zone", self.args.zone, "--quiet", "--command", command], capture_output=True, text=True, check=False)
         try:
@@ -308,7 +326,6 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
         return observed
 
     def reconcile_fixture(self) -> bool:
-        """Reconcile a response-lost table-create attempt without exposing its stored response."""
         if self.fixture_question is None or self.table_create_dedup_id is None:
             raise CleanupBlocked("fixture reconciliation identity is incomplete")
         code = f"""
@@ -353,7 +370,6 @@ print(json.dumps({{'table_ids': table_ids, 'dedup_count': len(rows), 'dedup_tabl
         return True
 
     def remote_cleanup(self) -> dict[str, Any]:
-        """Delete only exact observed verifier idempotency rows under one remote transaction."""
         if self.table_id is None or self.table_create_dedup_id is None or self.table_create_idempotency_count not in {0, 1}:
             raise CleanupBlocked("fixture identity is incomplete for idempotency cleanup")
         targets = [{"resource_key": "table_create", "tool_name": "table_create", "dedup_id": self.table_create_dedup_id, "expected_count": self.table_create_idempotency_count}]
@@ -480,12 +496,7 @@ print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows':
         if not self.table_id:
             raise VerificationError("REST test table create did not return an ID")
         self.table_create_idempotency_count = 1
-        self.report["cleanup"] = {
-            "status": "pending",
-            "table_id": self.table_id,
-            "table_create_dedup_id": self.table_create_dedup_id,
-            "table_say_dedup_id": self.table_say_dedup_id,
-        }
+        self.report["cleanup"] = {"status": "pending", "table_id": self.table_id, "table_create_dedup_id": self.table_create_dedup_id, "table_say_dedup_id": self.table_say_dedup_id}
         rest = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST attachment create", token=self.admin, method="POST", payload={"speaker_name": "attachment-verifier", "content": "REST attachment verification body", "attachments": [{"name": "rest-one.md", "content": f"# REST\n{needle}"}, {"name": "rest-two.markdown", "content": "## REST two"}]}, expected={201})
         rest_id = str(rest.get("id") or rest.get("saying_id") or "")
         rest_attachments = self.metadata(rest.get("attachments"), "REST attachment create")
@@ -505,49 +516,41 @@ print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows':
             raise VerificationError("REST attachment read did not return the selected body")
         self.table_say_dedup_id = f"verify-say-{marker}"
         say = {"table_id": self.table_id, "content": "MCP attachment verification body", "speaker_kind": "human", "speaker_name": "attachment-verifier", "dedup_id": self.table_say_dedup_id, "attachments": [{"name": "mcp-one.md", "content": f"# MCP\n@{needle}"}, {"name": "mcp-two.md", "content": "## MCP two"}]}
-        mcp_say = self.tool("table_say", say)
+        mcp_say = self.checkpoint("mcp.table_say.first", lambda: self.tool("table_say", say))
         assert isinstance(mcp_say, dict)
         self.table_say_idempotency_count = 1
-        retry = self.tool("table_say", say)
+        retry = self.checkpoint("mcp.table_say.retry", lambda: self.tool("table_say", say))
         assert isinstance(retry, dict)
-        mcp_attachments = self.metadata(mcp_say.get("attachments"), "MCP table_say")
-        if mcp_say.get("id") != retry.get("id") or mcp_say.get("sequence") != retry.get("sequence") or [item["id"] for item in mcp_attachments] != [item["id"] for item in self.metadata(retry.get("attachments"), "MCP table_say retry")]:
-            raise VerificationError("MCP retry did not retain saying and attachment identity")
-        if mcp_say.get("mentions_all") is not False or mcp_say.get("mentions_resolved") != [] or mcp_say.get("mentions_unresolved") != []:
-            raise VerificationError("attachment-only text affected mention resolution")
-        full = self.tool("attachment_get", {"attachment_ids": [item["id"] for item in mcp_attachments]})
+        mcp_attachments, retry_attachments = self.checkpoint("mcp.table_say.retry_metadata", lambda: (self.metadata(mcp_say.get("attachments"), "MCP table_say"), self.metadata(retry.get("attachments"), "MCP table_say retry")))
+        self.checkpoint("mcp.table_say.retry_identity", lambda: mcp_say.get("id") == retry.get("id") and mcp_say.get("sequence") == retry.get("sequence") and [item["id"] for item in mcp_attachments] == [item["id"] for item in retry_attachments], "MCP retry did not retain saying and attachment identity")
+        self.checkpoint("mcp.table_say.attachment_mentions", lambda: mcp_say.get("mentions_all") is False and mcp_say.get("mentions_resolved") == [] and mcp_say.get("mentions_unresolved") == [], "attachment-only text affected mention resolution")
+        full = self.checkpoint("mcp.attachment_get", lambda: self.tool("attachment_get", {"attachment_ids": [item["id"] for item in mcp_attachments]}))
         assert isinstance(full, dict)
         bodies = full.get("attachments")
-        if not isinstance(bodies, list) or [item.get("id") for item in bodies if isinstance(item, Mapping)] != [item["id"] for item in mcp_attachments] or not all(isinstance(item, Mapping) and isinstance(item.get("content"), str) for item in bodies):
-            raise VerificationError("MCP attachment_get did not return ordered full bodies")
-        for name, values in {"name": [{"name": "bad.txt", "content": "x"}], "count": [{"name": f"{index}.md", "content": "x"} for index in range(9)], "item": [{"name": "large.md", "content": "x" * (256 * 1024 + 1)}], "total": [{"name": f"large-{index}.md", "content": "x" * (256 * 1024)} for index in range(4)] + [{"name": "overflow.md", "content": "x"}]}.items():
-            code = self.tool("table_say", {"table_id": self.table_id, "content": "invalid attachment admission", "speaker_kind": "human", "speaker_name": "attachment-verifier", "attachments": values}, expect_error=True)
-            if code not in {"INVALID_REQUEST", "LIMIT_EXCEEDED"}:
-                raise VerificationError(f"MCP invalid {name} returned an unexpected error")
-        after = self.tool("table_say", {"table_id": self.table_id, "content": "post-invalid sequence verification", "speaker_kind": "human", "speaker_name": "attachment-verifier"})
+        self.checkpoint("mcp.attachment_get.validation", lambda: isinstance(bodies, list) and [item.get("id") for item in bodies if isinstance(item, Mapping)] == [item["id"] for item in mcp_attachments] and all(isinstance(item, Mapping) and isinstance(item.get("content"), str) for item in bodies), "MCP attachment_get did not return ordered full bodies")
+        invalid = {"name": [{"name": "bad.txt", "content": "x"}], "count": [{"name": f"{index}.md", "content": "x"} for index in range(9)], "per_item": [{"name": "large.md", "content": "x" * (256 * 1024 + 1)}], "aggregate": [{"name": f"large-{index}.md", "content": "x" * (256 * 1024)} for index in range(4)] + [{"name": "overflow.md", "content": "x"}]}
+        for name, values in invalid.items():
+            self.checkpoint(f"mcp.table_say.invalid.{name}", lambda values=values: self.tool("table_say", {"table_id": self.table_id, "content": "invalid attachment admission", "speaker_kind": "human", "speaker_name": "attachment-verifier", "attachments": values}, expect_error=True) in {"INVALID_REQUEST", "LIMIT_EXCEEDED"}, f"MCP invalid {name} returned an unexpected error")
+        after = self.checkpoint("mcp.table_say.post_invalid", lambda: self.tool("table_say", {"table_id": self.table_id, "content": "post-invalid sequence verification", "speaker_kind": "human", "speaker_name": "attachment-verifier"}))
         assert isinstance(after, dict)
-        if not isinstance(mcp_say.get("sequence"), int) or after.get("sequence") != mcp_say["sequence"] + 1:
-            raise VerificationError("invalid attachments consumed a saying sequence")
-        self.sayings(self.tool("table_listen", {"table_id": self.table_id, "since_sequence": -1, "limit": 50}), "MCP listen")
-        self.sayings(self.tool("table_wait", {"table_id": self.table_id, "since_sequence": -1, "wait_ms": 1, "limit": 50}), "MCP wait")
-        final_sayings = self.sayings(self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST invalid readback", token=read_token), "REST invalid readback")
-        if len(final_sayings) != before_count + 2:
-            raise VerificationError("invalid attachment admission changed the saying count")
-        hits = self.json_request(f"{self.base_url}/api/v1/search?{urlencode({'q': needle})}", "attachment-only search", token=read_token).get("hits")
-        if not isinstance(hits, list) or any(isinstance(hit, Mapping) and (hit.get("table_id") == self.table_id or hit.get("id") == self.table_id) for hit in hits):
-            raise VerificationError("attachment-only content entered saying search")
-        http_jsonl = self.text_request(f"{self.base_url}/api/v1/tables/{self.table_id}/export/jsonl", "HTTP JSONL export", token=read_token)
-        http_markdown = self.text_request(f"{self.base_url}/api/v1/tables/{self.table_id}/export/markdown", "HTTP Markdown export", token=read_token)
-        mcp_jsonl = self.tool("table_export", {"table_id": self.table_id, "format": "jsonl"})
-        mcp_markdown = self.tool("table_export", {"table_id": self.table_id, "format": "markdown"})
+        self.checkpoint("mcp.table_say.post_invalid_sequence", lambda: isinstance(mcp_say.get("sequence"), int) and after.get("sequence") == mcp_say["sequence"] + 1, "invalid attachments consumed a saying sequence")
+        self.checkpoint("mcp.table_listen", lambda: self.sayings(self.tool("table_listen", {"table_id": self.table_id, "since_sequence": -1, "limit": 50}), "MCP listen"))
+        self.checkpoint("mcp.table_wait", lambda: self.sayings(self.tool("table_wait", {"table_id": self.table_id, "since_sequence": -1, "wait_ms": 1, "limit": 50}), "MCP wait"))
+        final_sayings = self.checkpoint("rest.post_invalid_sayings", lambda: self.sayings(self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST invalid readback", token=read_token), "REST invalid readback"))
+        self.checkpoint("mcp.table_say.post_invalid_count", lambda: len(final_sayings) == before_count + 2, "invalid attachment admission changed the saying count")
+        self.checkpoint("rest.search.attachment_only", lambda: isinstance((hits := self.json_request(f"{self.base_url}/api/v1/search?{urlencode({'q': needle})}", "attachment-only search", token=read_token).get("hits")), list) and not any(isinstance(hit, Mapping) and (hit.get("table_id") == self.table_id or hit.get("id") == self.table_id) for hit in hits), "attachment-only content entered saying search")
+        http_jsonl = self.checkpoint("rest.export.jsonl", lambda: self.text_request(f"{self.base_url}/api/v1/tables/{self.table_id}/export/jsonl", "HTTP JSONL export", token=read_token))
+        http_markdown = self.checkpoint("rest.export.markdown", lambda: self.text_request(f"{self.base_url}/api/v1/tables/{self.table_id}/export/markdown", "HTTP Markdown export", token=read_token))
+        mcp_jsonl = self.checkpoint("mcp.export.jsonl", lambda: self.tool("table_export", {"table_id": self.table_id, "format": "jsonl"}))
+        mcp_markdown = self.checkpoint("mcp.export.markdown", lambda: self.tool("table_export", {"table_id": self.table_id, "format": "markdown"}))
         assert isinstance(mcp_jsonl, dict) and isinstance(mcp_markdown, dict)
-        values = (http_jsonl, mcp_jsonl.get("content"), self.cli_export(self.table_id, "jsonl")), (http_markdown, mcp_markdown.get("content"), self.cli_export(self.table_id, "md"))
+        cli_jsonl = self.checkpoint("cli.export.jsonl", lambda: self.cli_export(self.table_id, "jsonl"))
+        cli_markdown = self.checkpoint("cli.export.markdown", lambda: self.cli_export(self.table_id, "md"))
+        values = (http_jsonl, mcp_jsonl.get("content"), cli_jsonl), (http_markdown, mcp_markdown.get("content"), cli_markdown)
         names = [item["name"] for item in [*rest_attachments, *mcp_attachments]]
-        if not all(isinstance(item, str) for group in values for item in group):
-            raise VerificationError("MCP export did not return content")
-        signatures = {self.export_signature(jsonl, markdown, names) for jsonl, markdown in zip(*values, strict=True)}
-        if len(signatures) != 1:
-            raise VerificationError("HTTP, MCP, and installed CLI exports disagreed")
+        self.checkpoint("exports.content", lambda: all(isinstance(item, str) for group in values for item in group), "MCP export did not return content")
+        signatures = self.checkpoint("exports.signature_comparison", lambda: {self.export_signature(jsonl, markdown, names) for jsonl, markdown in zip(*values, strict=True)})
+        self.checkpoint("exports.signature_agreement", lambda: len(signatures) == 1, "HTTP, MCP, and installed CLI exports disagreed")
         return {"table_id": self.table_id, "rest_attachment_ids": [item["id"] for item in rest_attachments], "mcp_attachment_ids": [item["id"] for item in mcp_attachments], "invalid_admission": "rejected_without_sequence_consumption", "search_and_mentions": "attachment_only_content_excluded", "exports": {"jsonl_0_2": next(iter(signatures))[0], "markdown": next(iter(signatures))[1]}}
 
     def binding(self) -> dict[str, str]:
@@ -596,7 +599,7 @@ print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows':
         if self.table_id is None:
             if not self.table_create_attempted:
                 return
-            if not self.reconcile_fixture():
+            if not self.checkpoint("cleanup.fixture_reconciliation", self.reconcile_fixture):
                 self.report["cleanup"] = {"status": "not_needed", "table_id": None, "reconciliation": "no_effect"}
                 return
         before = self.report.get("runtime_before")
@@ -606,22 +609,19 @@ print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows':
             baseline = self.sqlite_baseline(before, "pre-test SQLite baseline")
         except VerificationError as error:
             raise CleanupBlocked("pre-test SQLite baseline is unhealthy") from error
-        self.ensure_cleanup_session()
-        closed = self.tool("table_control", {"table_id": self.table_id, "action": "close", "speaker_name": "tasca-attachments-cleanup", "reason": "bounded verifier cleanup"})
-        if not isinstance(closed, Mapping) or closed.get("table_status") != "closed":
-            raise CleanupBlocked("MCP cleanup close did not close the fixture")
-        deleted = self.tool("table_delete_batch", {"ids": [self.table_id]})
-        if not isinstance(deleted, Mapping) or deleted.get("deleted_count") != 1 or deleted.get("failed") != [] or deleted.get("deleted_ids") not in (None, [self.table_id]):
-            raise CleanupBlocked("MCP cleanup batch delete did not delete exactly the fixture")
-        if self.tool("table_get", {"table_id": self.table_id}, expect_error=True) != "NOT_FOUND":
-            raise CleanupBlocked("MCP cleanup did not prove fixture absence")
-        idempotency, after = self.remote_cleanup(), self.remote()
+        self.checkpoint("cleanup.mcp.session", self.ensure_cleanup_session)
+        closed = self.checkpoint("cleanup.mcp.close", lambda: self.tool("table_control", {"table_id": self.table_id, "action": "close", "speaker_name": "tasca-attachments-cleanup", "reason": "bounded verifier cleanup"}))
+        self.checkpoint("cleanup.mcp.close_validation", lambda: isinstance(closed, Mapping) and closed.get("table_status") == "closed", "MCP cleanup close did not close the fixture")
+        deleted = self.checkpoint("cleanup.mcp.batch_delete", lambda: self.tool("table_delete_batch", {"ids": [self.table_id]}))
+        self.checkpoint("cleanup.mcp.batch_delete_validation", lambda: isinstance(deleted, Mapping) and deleted.get("deleted_count") == 1 and deleted.get("failed") == [] and deleted.get("deleted_ids") in (None, [self.table_id]), "MCP cleanup batch delete did not delete exactly the fixture")
+        self.checkpoint("cleanup.mcp.not_found", lambda: self.tool("table_get", {"table_id": self.table_id}, expect_error=True) == "NOT_FOUND", "MCP cleanup did not prove fixture absence")
+        idempotency = self.checkpoint("cleanup.idempotency", self.remote_cleanup)
+        after = self.checkpoint("cleanup.remote_baseline", self.remote)
         try:
             restored = self.sqlite_baseline(after, "post-cleanup SQLite baseline")
         except VerificationError as error:
             raise CleanupBlocked("post-cleanup SQLite baseline is unhealthy") from error
-        if restored != baseline:
-            raise CleanupBlocked("test-data cleanup did not restore the exact SQLite baseline")
+        self.checkpoint("cleanup.baseline_reconciliation", lambda: restored == baseline, CleanupBlocked("test-data cleanup did not restore the exact SQLite baseline"))
         self.report["runtime_after"] = after
         self.report["cleanup"] = {"status": "verified", "table_id": self.table_id, "table_create_dedup_id": self.table_create_dedup_id, "table_say_dedup_id": self.table_say_dedup_id, "absence": "MCP_NOT_FOUND", "idempotency": idempotency, "baseline_restored": True}
 
@@ -652,12 +652,16 @@ print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows':
             self.report["status"] = "MACHINE_CHECKS_PASS"
         except BaseException as error:
             failure = error
+            if isinstance(error, VerificationError):
+                self.record_operation_failure()
             self.report["failure"] = {"kind": type(error).__name__}
         finally:
             if self.table_id is not None or self.table_create_attempted:
                 try:
                     self.cleanup()
                 except BaseException as cleanup_error:
+                    if isinstance(cleanup_error, VerificationError):
+                        self.record_operation_failure()
                     self.report["status"] = "MACHINE_CHECKS_BLOCKED"
                     self.report["cleanup"] = {
                         "status": "failed",
@@ -675,7 +679,6 @@ print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows':
 
 # @invar:allow shell_result: The standalone producer converts its secret-safe report path into one POSIX exit status.
 def main() -> int:
-    """Run machine checks and emit non-final evidence for the later integration verifier."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True)
     parser.add_argument("--zone", required=True)

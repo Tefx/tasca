@@ -273,6 +273,173 @@ def test_attachment_table_say_retry_reuses_dedup_and_preserves_identity(
     assert verifier.table_say_idempotency_count == 1
 
 
+def wire_complete_workflow(
+    monkeypatch: pytest.MonkeyPatch, verifier: Any, *, fail_attachment_get: bool = False, fail_cleanup_close: bool = False
+) -> None:
+    """Drive the producer's real post-first-say and cleanup workflow through inert seams."""
+    rest_attachments = [
+        {"id": "rest-one", "position": 0, "name": "rest-one.md", "media_type": "text/markdown", "byte_size": 1},
+        {"id": "rest-two", "position": 1, "name": "rest-two.markdown", "media_type": "text/markdown", "byte_size": 1},
+    ]
+    mcp_attachments = [
+        {"id": "mcp-one", "position": 0, "name": "mcp-one.md", "media_type": "text/markdown", "byte_size": 1},
+        {"id": "mcp-two", "position": 1, "name": "mcp-two.md", "media_type": "text/markdown", "byte_size": 1},
+    ]
+    rest_saying = {"id": "rest-saying", "attachments": rest_attachments}
+    mcp_saying = {"id": "mcp-saying", "sequence": 1, "attachments": mcp_attachments, "mentions_all": False, "mentions_resolved": [], "mentions_unresolved": []}
+    after_saying = {"id": "after-saying", "sequence": 2, "attachments": []}
+
+    def json_request(_url: str, operation: str, **_kwargs: object) -> dict[str, Any]:
+        if operation == "REST test table create":
+            return {"table_id": "fixture-table"}
+        if operation == "REST attachment create":
+            return rest_saying
+        if operation in {"REST list", "REST wait"}:
+            return {"sayings": [rest_saying]}
+        if operation == "REST join":
+            return {"initial": {"sayings": [rest_saying]}}
+        if operation == "REST attachment read":
+            return {"id": "rest-one", "content": "fixture"}
+        if operation == "REST invalid readback":
+            return {"sayings": [rest_saying, mcp_saying, after_saying]}
+        if operation == "attachment-only search":
+            return {"hits": []}
+        pytest.fail(f"unexpected JSON operation: {operation}")
+
+    def text_request(_url: str, operation: str, **_kwargs: object) -> str:
+        assert operation in {"HTTP JSONL export", "HTTP Markdown export"}
+        return operation
+
+    def tool(name: str, tool_arguments: dict[str, Any], *, expect_error: bool = False) -> dict[str, Any] | str:
+        if name == "table_say" and expect_error:
+            return "INVALID_REQUEST"
+        if name == "table_say" and tool_arguments["content"] == "MCP attachment verification body":
+            return mcp_saying
+        if name == "table_say":
+            return after_saying
+        if name == "attachment_get":
+            if fail_attachment_get:
+                raise VERIFIER.VerificationError("fixture attachment_get failure")
+            return {"attachments": [{"id": "mcp-one", "content": "one"}, {"id": "mcp-two", "content": "two"}]}
+        if name in {"table_listen", "table_wait"}:
+            return {"sayings": [rest_saying, mcp_saying, after_saying]}
+        if name == "table_export":
+            return {"content": tool_arguments["format"]}
+        if name == "table_control":
+            if fail_cleanup_close:
+                raise VERIFIER.VerificationError("fixture cleanup close failure")
+            return {"table_status": "closed"}
+        if name == "table_delete_batch":
+            return {"deleted_count": 1, "failed": [], "deleted_ids": tool_arguments["ids"]}
+        assert name == "table_get" and expect_error
+        return "NOT_FOUND"
+
+    def mcp(method: str, _params: object, _operation: str, *, notification: bool = False) -> dict[str, Any]:
+        if method == "initialize":
+            verifier.session = "fixture-session"
+            return {"result": {}}
+        assert notification and method == "notifications/initialized"
+        return {}
+
+    monkeypatch.setattr(verifier, "json_request", json_request)
+    monkeypatch.setattr(verifier, "text_request", text_request)
+    monkeypatch.setattr(verifier, "tool", tool)
+    monkeypatch.setattr(verifier, "mcp", mcp)
+    monkeypatch.setattr(verifier, "cli_export", lambda _table_id, format_name: format_name)
+    monkeypatch.setattr(verifier, "export_signature", lambda _jsonl, _markdown, _names: ("json", "markdown"))
+    monkeypatch.setattr(verifier, "binding", lambda: {"forward_producer_sha256": "b" * 64})
+    monkeypatch.setattr(verifier, "auth_and_inventory", lambda: "public")
+    monkeypatch.setattr(verifier, "remote", lambda: runtime_observation())
+    monkeypatch.setattr(verifier, "remote_cleanup", lambda: {"idempotency_rows_deleted": 2, "test_domain_rows": {"tables": 0, "sayings": 0, "sayings_fts": 0, "seats": 0, "saying_attachments": 0}})
+
+
+def test_successful_workflow_persists_atomic_nonsecret_operation_trace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A complete faked workflow writes ordered checkpoints atomically and leaves no failure."""
+    monkeypatch.setenv("TASCA_ADMIN_TOKEN", "admin-fixture")
+    verifier = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: pytest.fail("transport"))
+    wire_complete_workflow(monkeypatch, verifier)
+    replacements: list[dict[str, Any]] = []
+    replace = VERIFIER.os.replace
+
+    def atomic_replace(source: Path, destination: Path) -> None:
+        assert stat.S_IMODE(source.stat().st_mode) == 0o600
+        replacements.append(json.loads(source.read_text()))
+        replace(source, destination)
+
+    monkeypatch.setattr(VERIFIER.os, "replace", atomic_replace)
+    report_path = verifier.run()
+    report = json.loads(report_path.read_text())
+    state = report["operations"]
+    trace = state["trace"]
+    completed = {event["operation"] for event in trace if event["status"] == "completed"}
+    required = {
+        "mcp.table_say.first", "mcp.table_say.retry", "mcp.table_say.retry_identity", "mcp.attachment_get",
+        "mcp.table_say.invalid.name", "mcp.table_say.invalid.count", "mcp.table_say.invalid.per_item", "mcp.table_say.invalid.aggregate",
+        "mcp.table_say.post_invalid_sequence", "mcp.table_listen", "mcp.table_wait", "rest.search.attachment_only",
+        "rest.export.jsonl", "rest.export.markdown", "mcp.export.jsonl", "mcp.export.markdown", "cli.export.jsonl", "cli.export.markdown",
+        "cleanup.mcp.session", "cleanup.mcp.close", "cleanup.mcp.batch_delete", "cleanup.mcp.not_found", "cleanup.idempotency", "cleanup.baseline_reconciliation",
+    }
+
+    assert required <= completed
+    assert len(trace) % 2 == 0
+    assert all(trace[index]["status"] == "started" and trace[index + 1] == {"operation": trace[index]["operation"], "status": "completed"} for index in range(0, len(trace), 2))
+    assert state["active"] is None and "failed" not in state and "failed_after" not in state
+    assert stat.S_IMODE(report_path.stat().st_mode) == 0o600
+    assert trace[:2] == [{"operation": "mcp.table_say.first", "status": "started"}, {"operation": "mcp.table_say.first", "status": "completed"}]
+    assert replacements[0]["operations"]["trace"] == [{"operation": "mcp.table_say.first", "status": "started"}]
+    assert any(snapshot["operations"]["trace"][:2] == trace[:2] for snapshot in replacements)
+
+
+def test_primary_checkpoint_failure_survives_ordered_cleanup(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A later attachment_get failure retains its operation and predecessor after cleanup completes."""
+    monkeypatch.setenv("TASCA_ADMIN_TOKEN", "admin-fixture")
+    verifier = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: pytest.fail("transport"))
+    wire_complete_workflow(monkeypatch, verifier, fail_attachment_get=True)
+
+    with pytest.raises(VERIFIER.VerificationError, match="attachment_get failure"):
+        verifier.run()
+
+    report = json.loads((tmp_path / "report" / "attachment-live-evidence.json").read_text())
+    state = report["operations"]
+    failures = [event for event in state["trace"] if event["status"] == "failed"]
+    assert state["failed"] == "mcp.attachment_get"
+    assert state["failed_after"] == "mcp.table_say.attachment_mentions"
+    assert failures == [{"operation": "mcp.attachment_get", "status": "failed", "previous_completed": "mcp.table_say.attachment_mentions"}]
+    assert state["trace"][-1] == {"operation": "cleanup.baseline_reconciliation", "status": "completed"}
+    assert state["active"] is None
+
+
+def test_cleanup_checkpoint_failure_keeps_primary_and_cleanup_trace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A cleanup failure stays ordered after a primary attachment verification failure."""
+    monkeypatch.setenv("TASCA_ADMIN_TOKEN", "admin-fixture")
+    verifier = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: pytest.fail("transport"))
+    wire_complete_workflow(monkeypatch, verifier, fail_attachment_get=True, fail_cleanup_close=True)
+
+    with pytest.raises(VERIFIER.CleanupBlocked, match="cleanup could not be reconciled"):
+        verifier.run()
+
+    state = json.loads((tmp_path / "report" / "attachment-live-evidence.json").read_text())["operations"]
+    failures = [event for event in state["trace"] if event["status"] == "failed"]
+    assert state["failed"] == "mcp.attachment_get"
+    assert state["failed_after"] == "mcp.table_say.attachment_mentions"
+    assert failures == [
+        {"operation": "mcp.attachment_get", "status": "failed", "previous_completed": "mcp.table_say.attachment_mentions"},
+        {"operation": "cleanup.mcp.close", "status": "failed", "previous_completed": "cleanup.mcp.session"},
+    ]
+    assert state["trace"].index({"operation": "mcp.attachment_get", "status": "failed", "previous_completed": "mcp.table_say.attachment_mentions"}) < state["trace"].index({"operation": "cleanup.mcp.close", "status": "failed", "previous_completed": "cleanup.mcp.session"})
+    assert state["trace"][-2:] == [
+        {"operation": "cleanup.mcp.close", "status": "started"},
+        {"operation": "cleanup.mcp.close", "status": "failed", "previous_completed": "cleanup.mcp.session"},
+    ]
+    assert state["active"] is None
+
+
 def test_remote_observation_has_fixed_target_and_complete_healthy_baseline(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -380,6 +547,11 @@ def test_cleanup_establishes_session_then_closes_and_batch_deletes(
     ]
     assert verifier.report["cleanup"]["status"] == "verified"
     assert verifier.report["cleanup"]["absence"] == "MCP_NOT_FOUND"
+    assert [event["operation"] for event in verifier.report["operations"]["trace"] if event["status"] == "completed"] == [
+        "cleanup.mcp.session", "cleanup.mcp.close", "cleanup.mcp.close_validation", "cleanup.mcp.batch_delete",
+        "cleanup.mcp.batch_delete_validation", "cleanup.mcp.not_found", "cleanup.idempotency", "cleanup.remote_baseline",
+        "cleanup.baseline_reconciliation",
+    ]
 
 
 def test_response_lost_after_create_reconciles_exact_table_then_attempts_cleanup(

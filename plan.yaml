@@ -50060,6 +50060,7 @@ phases:
     - tests/unit/gcp/test_remote_mcp_full_matrix.py
     depends_on:
     - deploy-0-1-32
+    - repair-attachment-live-verifier
     agent: integration-verifier
   - id: repair-attachment-deploy-preflight
     name: Repair 0.1.32 remote preflight command quoting
@@ -50131,3 +50132,65 @@ phases:
       The deploy script is not a wheel member, so the accepted wheel was not rebuilt
       and remains SHA-256 0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7.
       No gcloud, credential, service, database, or runtime effect occurred.'
+  - id: repair-attachment-live-verifier
+    name: Repair 0.1.32 attachment live-verification producer
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver: Repair the tracked `scripts/gcp/verify_attachments_remote.py` machine-evidence
+      producer exposed by the validator-accepted live contradiction. In configured
+      Viewer mode, select the Viewer-or-Admin read credential before REST history
+      operations and pass it to table join as well as attachment body reads. Replace
+      singleton table deletion with the already proven close-plus-batch-delete cleanup
+      for the isolated fixture. Track the exact table-create dedup identifier, then
+      remove only its exact `resource_key=table_create`, `tool_name=table_create`,
+      `dedup_id` idempotency row under one remote CPython 3.13 `BEGIN IMMEDIATE` transaction
+      after domain deletion. Capture pre-test counts/table IDs/integrity/FK state
+      and prove every count and ID is restored after cleanup. Add meaningful offline
+      tests that fail for the missing join credential, singleton cleanup, non-exact
+      idempotency predicate, or incomplete baseline restoration.
+
+
+      Boundary: Repository-only repair of the verification producer and its tests
+      under the release specialist. Do not call gcloud, access credentials, rerun
+      live verification, create runtime records, modify deployed services/databases,
+      change product attachment behavior, rebuild/redeploy the unchanged wheel, overwrite
+      prior verifier reports, or alter completed package/deploy evidence. Preserve
+      environment-only secret handoff, target binding, 0600 non-final evidence, explicit
+      browser evidence slots, and secret-safe output.
+
+
+      Admit: The failed fixture `quiet-fox-runs` and all residue have been reconciled
+      exactly: live 0.1.32 is healthy; tables 4, sayings/FTS 37, seats 9, attachments
+      0, idempotency 67, integrity_check=ok, foreign_key_check 0. The prior validator-accepted
+      `DISPROVEN` report and its artifacts remain immutable evidence of the producer
+      failure. The repaired workflow must use a fresh unique fixture and must not
+      replay or reuse that deleted table. BrowserOS Neo availability is outside this
+      repository repair.
+
+
+      Recovery: A failing producer test leaves runtime untouched and stays on this
+      step. Keep the deployed 0.1.32 wheel and product state unchanged. The later
+      original verification step consumes this repaired tracked producer and performs
+      one new isolated run; no retry-specific lifecycle or report is added.'
+    verification: uv run --python 3.13 --frozen --group dev pytest tests/unit/gcp/test_verify_attachments_remote.py
+      tests/unit/test_release_package.py; uv run --python 3.13 --frozen --group dev
+      ruff check scripts/gcp/verify_attachments_remote.py tests/unit/gcp/test_verify_attachments_remote.py;
+      uvx invar-tools guard --changed; git diff --check
+    evidence_template: Repair commit and changed files; behavioral tests for authenticated
+      join, close-plus-batch-delete, exact table_create idempotency cleanup, and complete
+      baseline restoration; focused/package tests; Ruff, Invar changed-files, and
+      diff check; unchanged wheel/runtime statement; clean status and unchanged Plan
+      blob.
+    refs:
+    - scripts/gcp/verify_attachments_remote.py
+    - tests/unit/gcp/test_verify_attachments_remote.py
+    - src/tasca/shell/api/routes/tables.py
+    - src/tasca/shell/storage/idempotency_repo.py
+    - tests/unit/test_release_package.py
+    depends_on:
+    - package-0-1-32
+    agent: devops-engineer

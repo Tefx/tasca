@@ -50041,7 +50041,7 @@ phases:
     agent: integration-verifier
   - id: repair-attachment-deploy-preflight
     name: Repair 0.1.32 remote preflight command quoting
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50092,3 +50092,5 @@ phases:
     depends_on:
     - package-0-1-32
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-04T02:45:29.045875Z'

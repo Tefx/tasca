@@ -414,9 +414,9 @@ print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows':
     def cli_export(self, table_id: str, format_name: str) -> str:
         command = f"sudo -u tasca env TASCA_DB_PATH=/var/lib/tasca/tasca.db {shlex.quote(RELEASE_DIR + '/venv/bin/tasca')} export {shlex.quote(table_id)} --format {shlex.quote(format_name)}"
         result = subprocess.run(["gcloud", "compute", "ssh", self.args.vm, "--project", self.args.project, "--zone", self.args.zone, "--quiet", "--command", command], capture_output=True, text=True, check=False)
-        if result.returncode != 0 or len(result.stdout.encode()) > 8 * 1024 * 1024:
+        if result.returncode != 0 or len(result.stdout.encode()) > 8 * 1024 * 1024 or not result.stdout.endswith("\n"):
             raise VerificationError("installed release CLI export failed")
-        return result.stdout
+        return result.stdout[:-1]
 
     def export_signature(self, jsonl: str, markdown: str, names: Sequence[str]) -> tuple[str, str]:
         records = [json.loads(line) for line in jsonl.splitlines() if line]

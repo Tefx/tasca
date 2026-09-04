@@ -164,6 +164,72 @@ def test_metadata_and_export_checks_reject_body_leaks_and_wrong_jsonl_version(
         verifier.export_signature(valid_jsonl.replace('"0.2"', '"0.1"'), markdown, ["notes.md"])
 
 
+@pytest.mark.parametrize(("content", "captured"), [("owned newline\n", "owned newline\n\n"), ("no owned newline", "no owned newline\n")])
+def test_cli_export_removes_only_print_framing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, content: str, captured: str
+) -> None:
+    """The verifier removes one CLI print newline and preserves formatter-owned content."""
+    monkeypatch.setenv("TASCA_ADMIN_TOKEN", "admin-fixture")
+    verifier = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: pytest.fail("transport"))
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        commands.append(command)
+        return SimpleNamespace(returncode=0, stdout=captured, stderr="")
+
+    monkeypatch.setattr(VERIFIER.subprocess, "run", fake_run)
+
+    assert verifier.cli_export("table-1", "jsonl") == content
+    command = commands[0]
+    assert command[:4] == ["gcloud", "compute", "ssh", "tasca-mcp"]
+    assert command[command.index("--project") + 1] == "rda-engineering"
+    assert command[command.index("--zone") + 1] == "asia-southeast1-b"
+    assert shlex.split(command[command.index("--command") + 1])[-4:] == ["export", "table-1", "--format", "jsonl"]
+
+
+def test_cli_export_rejects_missing_print_framing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An otherwise successful CLI result without its print newline is rejected redacted."""
+    monkeypatch.setenv("TASCA_ADMIN_TOKEN", "admin-fixture")
+    verifier = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: pytest.fail("transport"))
+    monkeypatch.setattr(VERIFIER.subprocess, "run", lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="unterminated", stderr=""))
+
+    with pytest.raises(VERIFIER.VerificationError, match="installed release CLI export failed"):
+        verifier.cli_export("table-1", "jsonl")
+
+
+def test_corrected_cli_export_preserves_signature_disagreements(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Only JSONL exported_at normalizes; attachment text and owned newlines stay significant."""
+    monkeypatch.setenv("TASCA_ADMIN_TOKEN", "admin-fixture")
+    verifier = VERIFIER.AttachmentVerifier(arguments(tmp_path), lambda *_args, **_kwargs: pytest.fail("transport"))
+    verifier.table_id = "table-1"
+    names = ["notes.md"]
+
+    def jsonl(exported_at: str, attachment: str) -> str:
+        return "\n".join(json.dumps(value) for value in [
+            {"type": "export_header", "export_version": "0.2", "exported_at": exported_at, "table_id": "table-1"},
+            {"type": "table", "table": {"id": "table-1"}},
+            {"type": "saying", "saying": {"attachments": [{"name": "notes.md", "content": attachment}]}},
+        ]) + "\n"
+
+    http_jsonl, mcp_jsonl, cli_jsonl = jsonl("http", "body"), jsonl("mcp", "body"), jsonl("cli", "body")
+    markdown = "## Transcript\nbody\n\n## Attachments\nnotes.md\nbody\n"
+    captured = iter([cli_jsonl + "\n", markdown + "\n"])
+    monkeypatch.setattr(VERIFIER.subprocess, "run", lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout=next(captured), stderr=""))
+
+    corrected_jsonl = verifier.cli_export("table-1", "jsonl")
+    corrected_markdown = verifier.cli_export("table-1", "md")
+    signatures = {verifier.export_signature(candidate_jsonl, candidate_markdown, names) for candidate_jsonl, candidate_markdown in ((http_jsonl, markdown), (mcp_jsonl, markdown), (corrected_jsonl, corrected_markdown))}
+
+    assert len(signatures) == 1
+    signature = next(iter(signatures))
+    assert verifier.export_signature(jsonl("http", "changed attachment"), markdown, names) != signature
+    assert verifier.export_signature(http_jsonl, markdown[:-1], names) != signature
+
+
 def test_configured_viewer_read_credential_reaches_rest_history_join(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

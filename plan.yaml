@@ -50041,7 +50041,7 @@ phases:
     agent: integration-verifier
   - id: repair-attachment-deploy-preflight
     name: Repair 0.1.32 remote preflight command quoting
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50094,3 +50094,18 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-04T02:45:29.045875Z'
+    done_at: '2026-09-04T02:54:13.847631+00:00'
+    evidence: 'Integrated exact repair commit 91a0a89e9bfda36cfff8197f5d1463daa9ee33b4
+      by fast-forward from post-claim basis b7b4fb9c8d70976f8d4cff4f3895665fb8748a73;
+      retained original/accepted refs point to the immutable repair target. Changed
+      only scripts/gcp/attachment-forward-deploy.sh and tests/unit/gcp/test_attachment_forward_deploy.py.
+      Removed literal backslashes from the generated remote CPython identity fragment.
+      The regression captures the exact first gcloud SSH --command, extracts and executes
+      the Python source under CPython 3.13, and confirms a failed read-only preflight
+      cannot reach staging or SCP. Focused/package pytest: 9 passed; Ruff, bash -n,
+      git diff --check passed. Invar has no applicable files for this shell/test-only
+      diff (0 errors; no files selected). Worktree and integration tracked status
+      clean; candidate plan.yaml blob remained cb98ace00a161ffea68342a31be7c976b80bf4d1.
+      The deploy script is not a wheel member, so the accepted wheel was not rebuilt
+      and remains SHA-256 0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7.
+      No gcloud, credential, service, database, or runtime effect occurred.'

@@ -49996,7 +49996,7 @@ phases:
       0 FK violations. Repository tracked state stayed clean at post-claim HEAD 9e03cac06a013166309d6399279ee2e64680810d.'
   - id: verify-live-attachments
     name: Independently verify live 0.1.32 attachment behavior
-    status: claimed
+    status: pending
     description: 'step_type: verification
 
       repo_change_policy: no_repo_change
@@ -50062,8 +50062,6 @@ phases:
     - deploy-0-1-32
     - repair-attachment-live-verifier
     agent: integration-verifier
-    claimed_by: integration-verifier
-    claimed_at: '2026-09-04T09:09:50.768830Z'
   - id: repair-attachment-deploy-preflight
     name: Repair 0.1.32 remote preflight command quoting
     status: done

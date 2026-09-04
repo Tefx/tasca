@@ -78,7 +78,12 @@ class AttachmentVerifier:
         self.session: str | None = None
         self.request_id = 0
         self.table_id: str | None = None
+        self.fixture_question: str | None = None
         self.table_create_dedup_id: str | None = None
+        self.table_create_attempted = False
+        self.table_create_idempotency_count: int | None = None
+        self.table_say_dedup_id: str | None = None
+        self.table_say_idempotency_count: int | None = 0
         self.report: dict[str, Any] = {
             "format": REPORT_FORMAT,
             "status": "MACHINE_CHECKS_FAIL",
@@ -241,31 +246,11 @@ class AttachmentVerifier:
     def sqlite_baseline(self, observed: Mapping[str, Any], operation: str) -> dict[str, Any]:
         """Require a complete, healthy SQLite baseline from a remote observation."""
         state = observed.get("sqlite")
-        count_names = (
-            "tables",
-            "sayings",
-            "sayings_fts",
-            "seats",
-            "saying_attachments",
-            "idempotency_keys",
-        )
+        names = ("tables", "sayings", "sayings_fts", "seats", "saying_attachments", "idempotency_keys")
         if not isinstance(state, Mapping):
             raise VerificationError(f"{operation} did not return a SQLite baseline")
-        counts = state.get("counts")
-        table_ids = state.get("table_ids")
-        if (
-            not isinstance(counts, Mapping)
-            or set(counts) != set(count_names)
-            or any(type(counts.get(name)) is not int or counts[name] < 0 for name in count_names)
-            or not isinstance(table_ids, list)
-            or any(not isinstance(table_id, str) for table_id in table_ids)
-            or table_ids != sorted(table_ids)
-            or counts["tables"] != len(table_ids)
-            or type(state.get("device")) is not int
-            or type(state.get("inode")) is not int
-            or state.get("integrity_check") != "ok"
-            or state.get("foreign_key_check") != 0
-        ):
+        counts, table_ids = state.get("counts"), state.get("table_ids")
+        if not isinstance(counts, Mapping) or set(counts) != set(names) or any(type(counts.get(name)) is not int or counts[name] < 0 for name in names) or not isinstance(table_ids, list) or any(not isinstance(table_id, str) for table_id in table_ids) or table_ids != sorted(table_ids) or counts["tables"] != len(table_ids) or type(state.get("device")) is not int or type(state.get("inode")) is not int or state.get("integrity_check") != "ok" or state.get("foreign_key_check") != 0:
             raise VerificationError(f"{operation} did not return a healthy SQLite baseline")
         return dict(state)
 
@@ -310,63 +295,105 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
         self.sqlite_baseline(observed, "VM observation")
         return observed
 
-    def remote_cleanup(self) -> dict[str, Any]:
-        """Delete only this fixture's table-create idempotency row on remote CPython 3.13."""
-        if self.table_id is None or self.table_create_dedup_id is None:
-            raise CleanupBlocked("fixture identity is incomplete for idempotency cleanup")
-        code = f"""
-import json, sqlite3
-table_id = {self.table_id!r}
-dedup_id = {self.table_create_dedup_id!r}
-connection = sqlite3.connect('/var/lib/tasca/tasca.db')
-try:
-    connection.execute('BEGIN IMMEDIATE')
-    matches = connection.execute(
-        'SELECT resource_key, tool_name, dedup_id FROM idempotency_keys WHERE resource_key = ? AND tool_name = ? AND dedup_id = ?',
-        ('table_create', 'table_create', dedup_id),
-    ).fetchall()
-    if len(matches) != 1:
-        raise RuntimeError('fixture idempotency row was not exact')
-    test_domain_rows = {{
-        'tables': connection.execute('SELECT COUNT(*) FROM tables WHERE id = ?', (table_id,)).fetchone()[0],
-        'sayings': connection.execute('SELECT COUNT(*) FROM sayings WHERE table_id = ?', (table_id,)).fetchone()[0],
-        'sayings_fts': connection.execute('SELECT COUNT(*) FROM sayings_fts WHERE rowid IN (SELECT rowid FROM sayings WHERE table_id = ?)', (table_id,)).fetchone()[0],
-        'seats': connection.execute('SELECT COUNT(*) FROM seats WHERE table_id = ?', (table_id,)).fetchone()[0],
-        'saying_attachments': connection.execute('SELECT COUNT(*) FROM saying_attachments WHERE saying_id IN (SELECT id FROM sayings WHERE table_id = ?)', (table_id,)).fetchone()[0],
-    }}
-    if any(test_domain_rows.values()):
-        raise RuntimeError('fixture domain rows remain after batch deletion')
-    deleted = connection.execute(
-        'DELETE FROM idempotency_keys WHERE resource_key = ? AND tool_name = ? AND dedup_id = ?',
-        ('table_create', 'table_create', dedup_id),
-    )
-    if deleted.rowcount != 1:
-        raise RuntimeError('fixture idempotency delete was not exact')
-    connection.commit()
-except BaseException:
-    connection.rollback()
-    raise
-finally:
-    connection.close()
-print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_domain_rows}}, sort_keys=True))
-"""
+    def remote_fixture_json(self, code: str, operation: str) -> dict[str, Any]:
+        """Run one fixed-target remote CPython fragment and retain only its JSON object."""
         command = f"sudo {shlex.quote(REMOTE_PYTHON)} -c {shlex.quote(code)}"
         result = subprocess.run(["gcloud", "compute", "ssh", self.args.vm, "--project", self.args.project, "--zone", self.args.zone, "--quiet", "--command", command], capture_output=True, text=True, check=False)
         try:
             observed = json.loads(result.stdout) if result.returncode == 0 else None
         except json.JSONDecodeError:
             observed = None
-        if not isinstance(observed, Mapping):
-            raise CleanupBlocked("remote idempotency cleanup could not be reconciled")
+        if not isinstance(observed, dict):
+            raise CleanupBlocked(f"{operation} could not be reconciled")
+        return observed
+
+    def reconcile_fixture(self) -> bool:
+        """Reconcile a response-lost table-create attempt without exposing its stored response."""
+        if self.fixture_question is None or self.table_create_dedup_id is None:
+            raise CleanupBlocked("fixture reconciliation identity is incomplete")
+        code = f"""
+import json, sqlite3
+question = {self.fixture_question!r}; dedup_id = {self.table_create_dedup_id!r}
+connection = sqlite3.connect('/var/lib/tasca/tasca.db')
+try:
+    table_ids = sorted(str(row[0]) for row in connection.execute('SELECT id FROM tables WHERE question = ?', (question,)))
+    rows = connection.execute('SELECT response_data FROM idempotency_keys WHERE resource_key = ? AND tool_name = ? AND dedup_id = ?', ('table_create', 'table_create', dedup_id)).fetchall()
+    response_ids = []; invalid_responses = 0
+    for response_data, in rows:
+        try:
+            payload = json.loads(response_data); data = payload.get('data', payload) if isinstance(payload, dict) else None
+            candidate = data.get('table_id') or data.get('id') if isinstance(data, dict) else None
+        except (TypeError, ValueError):
+            candidate = None
+        if isinstance(candidate, str) and candidate:
+            response_ids.append(candidate)
+        else:
+            invalid_responses += 1
+finally:
+    connection.close()
+print(json.dumps({{'table_ids': table_ids, 'dedup_count': len(rows), 'dedup_table_ids': sorted(response_ids), 'invalid_dedup_responses': invalid_responses}}, sort_keys=True))
+"""
+        observed = self.remote_fixture_json(code, "fixture reconciliation")
+        table_ids = observed.get("table_ids")
+        response_ids = observed.get("dedup_table_ids")
+        dedup_count = observed.get("dedup_count")
+        invalid = observed.get("invalid_dedup_responses")
+        if not isinstance(table_ids, list) or not isinstance(response_ids, list) or any(not isinstance(value, str) for value in [*table_ids, *response_ids]):
+            raise CleanupBlocked("fixture reconciliation was malformed")
+        if table_ids == [] and dedup_count == 0 and response_ids == [] and invalid == 0:
+            self.table_create_idempotency_count = 0
+            return False
+        if len(table_ids) != 1 or dedup_count not in {0, 1} or invalid != 0:
+            raise CleanupBlocked("fixture reconciliation was ambiguous")
+        table_id = table_ids[0]
+        if dedup_count == 1 and response_ids != [table_id] or dedup_count == 0 and response_ids:
+            raise CleanupBlocked("fixture reconciliation was inconsistent")
+        self.table_id = table_id
+        self.table_create_idempotency_count = dedup_count
+        return True
+
+    def remote_cleanup(self) -> dict[str, Any]:
+        """Delete only exact observed verifier idempotency rows under one remote transaction."""
+        if self.table_id is None or self.table_create_dedup_id is None or self.table_create_idempotency_count not in {0, 1}:
+            raise CleanupBlocked("fixture identity is incomplete for idempotency cleanup")
+        targets = [{"resource_key": "table_create", "tool_name": "table_create", "dedup_id": self.table_create_dedup_id, "expected_count": self.table_create_idempotency_count}]
+        if self.table_say_dedup_id is not None:
+            if self.table_say_idempotency_count != 1:
+                raise CleanupBlocked("table_say idempotency state is unresolved")
+            targets.append({"resource_key": f"saying:{self.table_id}:human", "tool_name": "table_say", "dedup_id": self.table_say_dedup_id, "expected_count": 1})
+        code = f"""
+import json, sqlite3
+table_id = {self.table_id!r}; targets = json.loads({json.dumps(targets, sort_keys=True)!r})
+connection = sqlite3.connect('/var/lib/tasca/tasca.db')
+try:
+    connection.execute('BEGIN IMMEDIATE')
+    for target in targets:
+        matches = connection.execute('SELECT 1 FROM idempotency_keys WHERE resource_key = ? AND tool_name = ? AND dedup_id = ?', (target['resource_key'], target['tool_name'], target['dedup_id'])).fetchall()
+        if len(matches) != target['expected_count']:
+            raise RuntimeError('fixture idempotency rows were not exact')
+    test_domain_rows = {{'tables': connection.execute('SELECT COUNT(*) FROM tables WHERE id = ?', (table_id,)).fetchone()[0], 'sayings': connection.execute('SELECT COUNT(*) FROM sayings WHERE table_id = ?', (table_id,)).fetchone()[0], 'sayings_fts': connection.execute('SELECT COUNT(*) FROM sayings_fts WHERE rowid IN (SELECT rowid FROM sayings WHERE table_id = ?)', (table_id,)).fetchone()[0], 'seats': connection.execute('SELECT COUNT(*) FROM seats WHERE table_id = ?', (table_id,)).fetchone()[0], 'saying_attachments': connection.execute('SELECT COUNT(*) FROM saying_attachments WHERE saying_id IN (SELECT id FROM sayings WHERE table_id = ?)', (table_id,)).fetchone()[0]}}
+    if any(test_domain_rows.values()):
+        raise RuntimeError('fixture domain rows remain after batch deletion')
+    deleted_rows = 0
+    for target in targets:
+        if target['expected_count']:
+            deleted = connection.execute('DELETE FROM idempotency_keys WHERE resource_key = ? AND tool_name = ? AND dedup_id = ?', (target['resource_key'], target['tool_name'], target['dedup_id']))
+            if deleted.rowcount != 1:
+                raise RuntimeError('fixture idempotency delete was not exact')
+            deleted_rows += 1
+    connection.commit()
+except BaseException:
+    connection.rollback()
+    raise
+finally:
+    connection.close()
+print(json.dumps({{'idempotency_rows_deleted': deleted_rows, 'test_domain_rows': test_domain_rows}}, sort_keys=True))
+"""
+        observed = self.remote_fixture_json(code, "remote idempotency cleanup")
         test_domain_rows = observed.get("test_domain_rows")
-        if (
-            observed.get("idempotency_row_deleted") is not True
-            or not isinstance(test_domain_rows, Mapping)
-            or set(test_domain_rows) != {"tables", "sayings", "sayings_fts", "seats", "saying_attachments"}
-            or any(test_domain_rows.get(name) != 0 for name in test_domain_rows)
-        ):
+        if not isinstance(test_domain_rows, Mapping) or set(test_domain_rows) != {"tables", "sayings", "sayings_fts", "seats", "saying_attachments"} or any(test_domain_rows.get(name) != 0 for name in test_domain_rows) or observed.get("idempotency_rows_deleted") != sum(target["expected_count"] for target in targets):
             raise CleanupBlocked("remote idempotency cleanup was not exact")
-        return dict(observed)
+        return observed
 
     def cli_export(self, table_id: str, format_name: str) -> str:
         command = f"sudo -u tasca env TASCA_DB_PATH=/var/lib/tasca/tasca.db {shlex.quote(RELEASE_DIR + '/venv/bin/tasca')} export {shlex.quote(table_id)} --format {shlex.quote(format_name)}"
@@ -445,15 +472,19 @@ print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_dom
     def attachments(self, viewer_mode: str) -> dict[str, Any]:
         marker = uuid.uuid4().hex
         needle = f"attachment-only-{marker}"
+        self.fixture_question = f"Tasca attachment verifier {marker}"
         self.table_create_dedup_id = f"verify-table-{marker}"
-        created = self.json_request(f"{self.base_url}/api/v1/tables", "REST test table create", token=self.admin, method="POST", payload={"title": f"Tasca attachment verifier {marker}", "dedup_id": self.table_create_dedup_id}, expected={200, 201})
+        self.table_create_attempted = True
+        created = self.json_request(f"{self.base_url}/api/v1/tables", "REST test table create", token=self.admin, method="POST", payload={"title": self.fixture_question, "dedup_id": self.table_create_dedup_id}, expected={200, 201})
         self.table_id = str(created.get("table_id") or created.get("id") or "")
         if not self.table_id:
             raise VerificationError("REST test table create did not return an ID")
+        self.table_create_idempotency_count = 1
         self.report["cleanup"] = {
             "status": "pending",
             "table_id": self.table_id,
             "table_create_dedup_id": self.table_create_dedup_id,
+            "table_say_dedup_id": self.table_say_dedup_id,
         }
         rest = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST attachment create", token=self.admin, method="POST", payload={"speaker_name": "attachment-verifier", "content": "REST attachment verification body", "attachments": [{"name": "rest-one.md", "content": f"# REST\n{needle}"}, {"name": "rest-two.markdown", "content": "## REST two"}]}, expected={201})
         rest_id = str(rest.get("id") or rest.get("saying_id") or "")
@@ -472,10 +503,16 @@ print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_dom
         body = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings/{rest_id}/attachments/{rest_attachments[0]['id']}", "REST attachment read", token=read_token)
         if body.get("id") != rest_attachments[0]["id"] or not isinstance(body.get("content"), str):
             raise VerificationError("REST attachment read did not return the selected body")
-        say = {"table_id": self.table_id, "content": "MCP attachment verification body", "speaker_kind": "human", "speaker_name": "attachment-verifier", "attachments": [{"name": "mcp-one.md", "content": f"# MCP\n@{needle}"}, {"name": "mcp-two.md", "content": "## MCP two"}]}
+        self.table_say_dedup_id = f"verify-say-{marker}"
+        say = {"table_id": self.table_id, "content": "MCP attachment verification body", "speaker_kind": "human", "speaker_name": "attachment-verifier", "dedup_id": self.table_say_dedup_id, "attachments": [{"name": "mcp-one.md", "content": f"# MCP\n@{needle}"}, {"name": "mcp-two.md", "content": "## MCP two"}]}
         mcp_say = self.tool("table_say", say)
         assert isinstance(mcp_say, dict)
+        self.table_say_idempotency_count = 1
+        retry = self.tool("table_say", say)
+        assert isinstance(retry, dict)
         mcp_attachments = self.metadata(mcp_say.get("attachments"), "MCP table_say")
+        if mcp_say.get("id") != retry.get("id") or mcp_say.get("sequence") != retry.get("sequence") or [item["id"] for item in mcp_attachments] != [item["id"] for item in self.metadata(retry.get("attachments"), "MCP table_say retry")]:
+            raise VerificationError("MCP retry did not retain saying and attachment identity")
         if mcp_say.get("mentions_all") is not False or mcp_say.get("mentions_resolved") != [] or mcp_say.get("mentions_unresolved") != []:
             raise VerificationError("attachment-only text affected mention resolution")
         full = self.tool("attachment_get", {"attachment_ids": [item["id"] for item in mcp_attachments]})
@@ -557,7 +594,11 @@ print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_dom
 
     def cleanup(self) -> None:
         if self.table_id is None:
-            return
+            if not self.table_create_attempted:
+                return
+            if not self.reconcile_fixture():
+                self.report["cleanup"] = {"status": "not_needed", "table_id": None, "reconciliation": "no_effect"}
+                return
         before = self.report.get("runtime_before")
         if not isinstance(before, Mapping):
             raise CleanupBlocked("pre-test SQLite baseline is unavailable")
@@ -566,30 +607,15 @@ print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_dom
         except VerificationError as error:
             raise CleanupBlocked("pre-test SQLite baseline is unhealthy") from error
         self.ensure_cleanup_session()
-        closed = self.tool(
-            "table_control",
-            {
-                "table_id": self.table_id,
-                "action": "close",
-                "speaker_name": "tasca-attachments-cleanup",
-                "reason": "bounded verifier cleanup",
-            },
-        )
+        closed = self.tool("table_control", {"table_id": self.table_id, "action": "close", "speaker_name": "tasca-attachments-cleanup", "reason": "bounded verifier cleanup"})
         if not isinstance(closed, Mapping) or closed.get("table_status") != "closed":
             raise CleanupBlocked("MCP cleanup close did not close the fixture")
         deleted = self.tool("table_delete_batch", {"ids": [self.table_id]})
-        if (
-            not isinstance(deleted, Mapping)
-            or deleted.get("deleted_count") != 1
-            or deleted.get("failed") != []
-            or deleted.get("deleted_ids") not in (None, [self.table_id])
-        ):
+        if not isinstance(deleted, Mapping) or deleted.get("deleted_count") != 1 or deleted.get("failed") != [] or deleted.get("deleted_ids") not in (None, [self.table_id]):
             raise CleanupBlocked("MCP cleanup batch delete did not delete exactly the fixture")
-        absence = self.tool("table_get", {"table_id": self.table_id}, expect_error=True)
-        if absence != "NOT_FOUND":
+        if self.tool("table_get", {"table_id": self.table_id}, expect_error=True) != "NOT_FOUND":
             raise CleanupBlocked("MCP cleanup did not prove fixture absence")
-        idempotency = self.remote_cleanup()
-        after = self.remote()
+        idempotency, after = self.remote_cleanup(), self.remote()
         try:
             restored = self.sqlite_baseline(after, "post-cleanup SQLite baseline")
         except VerificationError as error:
@@ -597,14 +623,7 @@ print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_dom
         if restored != baseline:
             raise CleanupBlocked("test-data cleanup did not restore the exact SQLite baseline")
         self.report["runtime_after"] = after
-        self.report["cleanup"] = {
-            "status": "verified",
-            "table_id": self.table_id,
-            "table_create_dedup_id": self.table_create_dedup_id,
-            "absence": "MCP_NOT_FOUND",
-            "idempotency": idempotency,
-            "baseline_restored": True,
-        }
+        self.report["cleanup"] = {"status": "verified", "table_id": self.table_id, "table_create_dedup_id": self.table_create_dedup_id, "table_say_dedup_id": self.table_say_dedup_id, "absence": "MCP_NOT_FOUND", "idempotency": idempotency, "baseline_restored": True}
 
     def write(self) -> Path:
         path = Path(self.args.report_dir) / "attachment-live-evidence.json"
@@ -635,7 +654,7 @@ print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_dom
             failure = error
             self.report["failure"] = {"kind": type(error).__name__}
         finally:
-            if self.table_id is not None:
+            if self.table_id is not None or self.table_create_attempted:
                 try:
                     self.cleanup()
                 except BaseException as cleanup_error:
@@ -644,6 +663,7 @@ print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_dom
                         "status": "failed",
                         "table_id": self.table_id,
                         "table_create_dedup_id": self.table_create_dedup_id,
+                        "table_say_dedup_id": self.table_say_dedup_id,
                         "failure": type(cleanup_error).__name__,
                     }
                     failure = CleanupBlocked("test-data cleanup could not be reconciled")

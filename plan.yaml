@@ -50017,30 +50017,33 @@ phases:
       Viewer/Admin credentials only through the host runtime handoff; never expose
       secret text in argv, logs, screenshots, reports, or chat. REST attachment reads
       must accept Viewer or Admin while creation remains Admin-only; every MCP call
-      remains Admin-only. Do not overwrite the prior DISPROVEN report or the validator-valid
-      INCONCLUSIVE report under `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-1`.
+      remains Admin-only. Preserve every prior report and artifact, including the
+      validator-valid INCONCLUSIVE rerun-1 evidence and validator-valid DISPROVEN
+      rerun-3 evidence; never overwrite or rewrite historical findings.
 
 
       Admit: Bind the report to the same deployed wheel SHA `0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7`,
-      repaired tracked verifier producer, VM identity, release path, hostname, certificate,
-      and observed SQLite anchor. Use exactly one fresh unique fixture and the new
-      immutable report directory `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-2`;
+      same authorized target, repaired tracked verifier producer, VM identity, release
+      path, hostname, certificate, and observed SQLite anchor. Use exactly one fresh
+      unique fixture and the new immutable report directory `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-4`;
       never replay a deleted prior fixture. Exercise multiple nonblank Markdown attachments
       and ordered metadata across REST create/list/join/listen/wait/read and MCP table_say/attachment_get;
       prove ordinary history responses omit bodies; repeat a dedup_id and prove stable
       saying/attachment IDs; safely exercise invalid name/count/per-item/aggregate
-      limits and show no saying, attachment, or sequence consumption; prove attachment-only
-      terms do not enter saying search or mentions; compare JSONL 0.2 and Markdown
-      transcript/attachment appendix across HTTP, MCP, and installed CLI; and verify
-      Web attachment composition plus collapsed, lazy body loading through the existing
-      raw-HTML-disabled, safe-link, Mermaid strict/init-stripping, SVG-sanitized and
-      CSP path. Verify public health/docs/OpenAPI/SPA remain public, unauthenticated
-      protected reads fail, Viewer cannot write or use MCP, Admin can, backend listens
-      on loopback, and public 8000 is denied. Consume the repaired ordered operation
-      evidence when deciding any machine-check failure. BrowserOS Neo remains the
-      required Web observation surface; if it is still unavailable after all machine
-      checks pass, report Web rendering as the only remaining UNPROVEN requirement
-      rather than substituting another browser or product conclusion.
+      limits and show no saying, attachment, or sequence consumption; prove an FTS-safe
+      alphanumeric token present only in attachment bodies does not enter saying search
+      or mentions; compare JSONL 0.2 and Markdown transcript/attachment appendix across
+      HTTP, MCP, and installed CLI; and verify Web attachment composition plus collapsed,
+      lazy body loading through the existing raw-HTML-disabled, safe-link, Mermaid
+      strict/init-stripping, SVG-sanitized and CSP path. Verify public health/docs/OpenAPI/SPA
+      remain public, unauthenticated protected reads fail, Viewer cannot write or
+      use MCP, Admin can, backend listens on loopback, and public 8000 is denied.
+      Consume the repaired ordered operation evidence when deciding any machine-check
+      failure. Rerun-3 remains immutable contradiction evidence; this fresh report
+      may supersede its applicability to attachment acceptance without modifying it.
+      BrowserOS Neo remains the required Web observation surface; if it is unavailable
+      after all machine checks pass, report Web rendering as the only remaining UNPROVEN
+      requirement rather than substituting another browser or product conclusion.
 
 
       Recovery: Record the fresh table identity before mutation. Cleanup must remove
@@ -50050,10 +50053,10 @@ phases:
       stop and reconcile instead of rerunning. A verification failure leaves the unchanged
       0.1.32 wheel and deployment in place when service health and data integrity
       remain sound; report the exact failed requirement and retained operation checkpoint,
-      preserve the new report directory, and do not execute rollback.'
+      preserve the rerun-4 report directory, and do not execute rollback.'
     verification: uv run --python 3.13 --frozen --group dev python scripts/gcp/verify_attachments_remote.py
       --project rda-engineering --zone asia-southeast1-b --vm tasca-mcp --host 34.1.134.239.sslip.io
-      --expected-version 0.1.32 --report-dir /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-2
+      --expected-version 0.1.32 --report-dir /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-4
     evidence_template: verifier.report.v2 result bound to target/commit/wheel; requirement
       matrix; REST/MCP/Web/CLI observations; auth and network matrix; SQLite preservation/integrity/schema;
       isolated test IDs and cleanup proof; rollback-readiness observation; explicit
@@ -50072,6 +50075,7 @@ phases:
     - deploy-0-1-32
     - repair-attachment-live-verifier
     - repair-attachment-live-verifier-checkpoints
+    - repair-attachment-search-probe
     agent: integration-verifier
   - id: repair-attachment-deploy-preflight
     name: Repair 0.1.32 remote preflight command quoting
@@ -50321,3 +50325,68 @@ phases:
       run` created only an ignored local .venv test environment; no release artifact
       was published or deployed. No gcloud, live HTTPS, credential, service, remote
       database, package release, deployment, or evidence-directory effect occurred.'
+  - id: repair-attachment-search-probe
+    name: Repair attachment-only search verifier probe
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver: Repair only the attachment-search probe in `scripts/gcp/verify_attachments_remote.py`.
+      Generate one FTS-safe alphanumeric token such as `attachmentonly{uuid.hex}`,
+      place that complete token only in attachment content and never in the table
+      title or main saying text, submit it as the actual REST search `q`, require
+      HTTP 200 with list-shaped `hits`, and fail if any hit identifies the fixture.
+      Update meaningful offline tests so their request seam parses and validates the
+      outgoing query parameter and fixture content placement instead of blindly returning
+      empty hits. Preserve the completed operation checkpointing, Viewer/Admin authentication,
+      dedup identity, response-loss reconciliation, exact idempotency cleanup and
+      baseline restoration, 0600 incremental evidence, redacted failures, environment-only
+      secret handoff, fixed target/binding, browser evidence slots, and all product
+      behavior. Do not implement or speculate about general hyphen-query behavior.
+
+
+      Boundary: Repository-only verifier repair owned by `devops-engineer`; modify
+      only `scripts/gcp/verify_attachments_remote.py` and `tests/unit/gcp/test_verify_attachments_remote.py`.
+      Do not change product search/storage/API code, documentation, packages, wheel
+      contents, deployment producers, or runtime state. Do not call gcloud or live
+      HTTPS, access credentials, create fixtures, mutate services/databases, rebuild
+      or redeploy 0.1.32, perform rollback, restore `mcp_0_1_31_full_matrix`, or overwrite
+      any existing report or evidence artifact.
+
+
+      Admit: The immutable rerun-3 report `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-3/verifier.report.v2.json`
+      is validator-valid `COMPLETED/DISPROVEN`; fixture `wise-toad-sings` and its
+      exact two idempotency rows were removed and the live baseline restored. Fresh
+      read-only provenance establishes that the unchanged hyphenated query reached
+      SQLite FTS5 `MATCH`, where it was parsed as syntax and produced `no such column:
+      only`; the same read-only probe with an alphanumeric token returned zero hits.
+      `docs/tasca-search-export-v0.1.md` requires attachment-only terms to return
+      no hit but does not define hyphen/FTS syntax. Therefore attachment FTS exclusion
+      remains unproven and the smallest correction is this verifier-only query repair.
+      Behavioral tests must validate the actual URL-decoded `q`, HTTP status handling,
+      list-shaped result, fixture exclusion, and that the full token exists only in
+      attachment bodies; phrase/token-presence tests over source or prose do not count.
+
+
+      Recovery: A failing focused check leaves runtime and all historical evidence
+      untouched and remains on this step. Preserve rerun-3 as immutable historical
+      contradiction evidence even though a later independently validated report may
+      supersede its applicability to attachment acceptance. Do not execute the live
+      verifier here; the existing verification step consumes the integrated repair
+      with one fresh fixture and a new report directory.'
+    verification: uv run --python 3.13 --frozen --group dev pytest tests/unit/gcp/test_verify_attachments_remote.py;
+      uv run --python 3.13 --frozen --group dev ruff check scripts/gcp/verify_attachments_remote.py
+      tests/unit/gcp/test_verify_attachments_remote.py; uvx invar-tools guard --changed;
+      git diff --check
+    evidence_template: Record the two changed paths; focused pytest, Ruff, changed-files
+      Invar, and diff-check results; behavioral outgoing-query/content-placement evidence;
+      and confirmation that no product, package, deployment, runtime, credential,
+      fixture, or historical-evidence effect occurred.
+    refs:
+    - scripts/gcp/verify_attachments_remote.py
+    - tests/unit/gcp/test_verify_attachments_remote.py
+    depends_on:
+    - repair-attachment-live-verifier-checkpoints
+    agent: devops-engineer

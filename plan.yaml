@@ -50416,7 +50416,7 @@ phases:
       package/build/deployment/rollback, or evidence-artifact effect occurred.'
   - id: repair-attachment-export-cli-framing
     name: Repair verifier CLI export framing
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50480,3 +50480,5 @@ phases:
     depends_on:
     - repair-attachment-search-probe
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-04T10:55:16.704187Z'

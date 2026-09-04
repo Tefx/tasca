@@ -50327,7 +50327,7 @@ phases:
       database, package release, deployment, or evidence-directory effect occurred.'
   - id: repair-attachment-search-probe
     name: Repair attachment-only search verifier probe
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50390,3 +50390,5 @@ phases:
     depends_on:
     - repair-attachment-live-verifier-checkpoints
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-04T10:30:35.949164Z'

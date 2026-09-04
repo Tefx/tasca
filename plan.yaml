@@ -50327,7 +50327,7 @@ phases:
       database, package release, deployment, or evidence-directory effect occurred.'
   - id: repair-attachment-search-probe
     name: Repair attachment-only search verifier probe
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50392,3 +50392,21 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-04T10:30:35.949164Z'
+    done_at: '2026-09-04T10:37:08.205527+00:00'
+    evidence: 'Integrated verifier-only commit da592935ae4572edeffc833d90094b5441372d51
+      by fast-forward from claimed base e66afd159b4d9fc80ca5135d7f222f24e04620b9.
+      Only scripts/gcp/verify_attachments_remote.py and tests/unit/gcp/test_verify_attachments_remote.py
+      changed. The probe now uses unique FTS-safe `attachmentonly<uuidhex>` text,
+      places the exact token only in REST/MCP attachment bodies, URL-encodes and submits
+      that token as q, requires the existing HTTP-200 JSON path with list-shaped hits,
+      and fails on any fixture-table hit. Offline request seams parse the real outgoing
+      URL, validate the single decoded alphanumeric q, prove absence from table title
+      and all main saying content, prove presence only in attachment payloads including
+      the idempotent retry, and execute the fixture-hit failure path at the exact
+      retained checkpoint. Owner checks under CPython 3.13: focused pytest 36 passed;
+      Ruff passed; changed-files Invar passed with the producer at 699 physical lines
+      / 700-of-700 warning and no error; git diff --check passed; worktree clean;
+      plan.yaml blob remained 336d97e925bb24d3bc53a9a5e554b2c6eda18d8d. Parent independently
+      reviewed the complete diff and reran diff check successfully. No product search/API/storage/docs
+      behavior changed; no Vectl call by owner, gcloud/live HTTPS/credential/fixture,
+      package/build/deployment/rollback, or evidence-artifact effect occurred.'

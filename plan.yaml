@@ -50017,15 +50017,15 @@ phases:
       Viewer/Admin credentials only through the host runtime handoff; never expose
       secret text in argv, logs, screenshots, reports, or chat. REST attachment reads
       must accept Viewer or Admin while creation remains Admin-only; every MCP call
-      remains Admin-only. Preserve every prior report and artifact, including the
-      validator-valid INCONCLUSIVE rerun-1 evidence and validator-valid DISPROVEN
-      rerun-3 evidence; never overwrite or rewrite historical findings.
+      remains Admin-only. Preserve every prior report and artifact, including validator-valid
+      INCONCLUSIVE rerun-1 and DISPROVEN rerun-3/rerun-4 evidence; never overwrite
+      or rewrite historical findings.
 
 
       Admit: Bind the report to the same deployed wheel SHA `0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7`,
       same authorized target, repaired tracked verifier producer, VM identity, release
       path, hostname, certificate, and observed SQLite anchor. Use exactly one fresh
-      unique fixture and the new immutable report directory `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-4`;
+      unique fixture and the new immutable report directory `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-5`;
       never replay a deleted prior fixture. Exercise multiple nonblank Markdown attachments
       and ordered metadata across REST create/list/join/listen/wait/read and MCP table_say/attachment_get;
       prove ordinary history responses omit bodies; repeat a dedup_id and prove stable
@@ -50033,17 +50033,20 @@ phases:
       limits and show no saying, attachment, or sequence consumption; prove an FTS-safe
       alphanumeric token present only in attachment bodies does not enter saying search
       or mentions; compare JSONL 0.2 and Markdown transcript/attachment appendix across
-      HTTP, MCP, and installed CLI; and verify Web attachment composition plus collapsed,
-      lazy body loading through the existing raw-HTML-disabled, safe-link, Mermaid
-      strict/init-stripping, SVG-sanitized and CSP path. Verify public health/docs/OpenAPI/SPA
+      HTTP, MCP, and installed CLI after removing exactly one CLI framing newline
+      while preserving content-owned whitespace; and verify Web attachment composition
+      plus collapsed, lazy body loading through the existing raw-HTML-disabled, safe-link,
+      Mermaid strict/init-stripping, SVG-sanitized and CSP path. Verify public health/docs/OpenAPI/SPA
       remain public, unauthenticated protected reads fail, Viewer cannot write or
       use MCP, Admin can, backend listens on loopback, and public 8000 is denied.
       Consume the repaired ordered operation evidence when deciding any machine-check
-      failure. Rerun-3 remains immutable contradiction evidence; this fresh report
-      may supersede its applicability to attachment acceptance without modifying it.
-      BrowserOS Neo remains the required Web observation surface; if it is unavailable
-      after all machine checks pass, report Web rendering as the only remaining UNPROVEN
-      requirement rather than substituting another browser or product conclusion.
+      failure. Rerun-4 remains immutable contradiction evidence; this fresh report
+      may supersede its applicability to export acceptance without modifying it. BrowserOS
+      Neo is the only permitted Web observation surface. It was available in rerun-4,
+      but no safe observation was obtained before fixture cleanup; if safe credential
+      handling or fixture timing still prevents proof after machine success, report
+      Web rendering as the sole remaining UNPROVEN requirement and do not add or substitute
+      another Web verification path.
 
 
       Recovery: Record the fresh table identity before mutation. Cleanup must remove
@@ -50053,10 +50056,10 @@ phases:
       stop and reconcile instead of rerunning. A verification failure leaves the unchanged
       0.1.32 wheel and deployment in place when service health and data integrity
       remain sound; report the exact failed requirement and retained operation checkpoint,
-      preserve the rerun-4 report directory, and do not execute rollback.'
+      preserve the rerun-5 report directory, and do not execute rollback.'
     verification: uv run --python 3.13 --frozen --group dev python scripts/gcp/verify_attachments_remote.py
       --project rda-engineering --zone asia-southeast1-b --vm tasca-mcp --host 34.1.134.239.sslip.io
-      --expected-version 0.1.32 --report-dir /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-4
+      --expected-version 0.1.32 --report-dir /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-5
     evidence_template: verifier.report.v2 result bound to target/commit/wheel; requirement
       matrix; REST/MCP/Web/CLI observations; auth and network matrix; SQLite preservation/integrity/schema;
       isolated test IDs and cleanup proof; rollback-readiness observation; explicit
@@ -50076,6 +50079,7 @@ phases:
     - repair-attachment-live-verifier
     - repair-attachment-live-verifier-checkpoints
     - repair-attachment-search-probe
+    - repair-attachment-export-cli-framing
     agent: integration-verifier
   - id: repair-attachment-deploy-preflight
     name: Repair 0.1.32 remote preflight command quoting
@@ -50410,3 +50414,69 @@ phases:
       reviewed the complete diff and reran diff check successfully. No product search/API/storage/docs
       behavior changed; no Vectl call by owner, gcloud/live HTTPS/credential/fixture,
       package/build/deployment/rollback, or evidence-artifact effect occurred.'
+  - id: repair-attachment-export-cli-framing
+    name: Repair verifier CLI export framing
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver: Repair only CLI export framing in `scripts/gcp/verify_attachments_remote.py`.
+      In `cli_export`, require captured installed-CLI stdout to end with `\n`, then
+      remove exactly that one CLI-added framing newline with `stdout[:-1]`; preserve
+      every formatter/content-owned trailing newline and reject missing framing. Never
+      use `strip`, `rstrip`, or global whitespace normalization. Add meaningful offline
+      tests that execute the real `cli_export` and `export_signature` methods for
+      formatter content that already ends in a newline, formatter content without
+      an owned newline, missing CLI framing, corrected HTTP/MCP/CLI signature agreement,
+      and genuine disagreement when attachment text or a content-owned trailing newline
+      changes. Existing workflow tests that mock both methods are insufficient. Preserve
+      all operation checkpoints, Viewer/Admin authentication, FTS-safe attachment
+      search, dedup identity, response-loss reconciliation, exact idempotency cleanup
+      and baseline restoration, 0600 incremental evidence, redacted failures, environment-only
+      secret handoff, fixed target/binding, browser evidence slots, and product behavior.
+
+
+      Boundary: Repository-only verifier repair owned by `devops-engineer`; modify
+      only `scripts/gcp/verify_attachments_remote.py` and `tests/unit/gcp/test_verify_attachments_remote.py`.
+      Do not change CLI, shared formatter, product export/API/storage behavior, documentation,
+      packages, wheel contents, deployment producers, or runtime state. Do not call
+      gcloud or live HTTPS, access credentials, create fixtures, mutate services/databases,
+      rebuild or redeploy 0.1.32, perform rollback, restore `mcp_0_1_31_full_matrix`,
+      or overwrite any historical report or evidence artifact.
+
+
+      Admit: The immutable rerun-4 report `/tmp/larva-agent-artifacts/tasca-attachments-0.1.32-live-verification-rerun-4/verifier.report.v2.json`
+      is validator-valid `COMPLETED/DISPROVEN`; all six HTTP/MCP/CLI exports completed
+      before `exports.signature_agreement` failed, search exclusion passed, fixture
+      `true-frog-soars` and its exact two idempotency rows were removed, and the live
+      baseline was restored. Fresh read-only provenance establishes that all surfaces
+      consume one shared formatter, HTTP/MCP return formatter content directly, installed
+      CLI `print(content)` adds exactly one framing newline, current `cli_export`
+      returns stdout unchanged, JSONL parsing ignores that framing, and raw-hashed
+      Markdown does not. Attachment Markdown already owns a terminal newline, so the
+      extra CLI framing newline creates deterministic verifier-only disagreement.
+      No product export defect is established.
+
+
+      Recovery: A failing focused check leaves runtime and every historical artifact
+      untouched and remains on this step. Preserve rerun-4 as immutable historical
+      contradiction evidence even though a later independently validated report may
+      supersede its applicability to export acceptance. Do not execute the live verifier
+      here; the existing independent verification step consumes the integrated repair
+      with one fresh fixture and a new report directory.'
+    verification: uv run --python 3.13 --frozen --group dev pytest tests/unit/gcp/test_verify_attachments_remote.py;
+      uv run --python 3.13 --frozen --group dev ruff check scripts/gcp/verify_attachments_remote.py
+      tests/unit/gcp/test_verify_attachments_remote.py; uvx invar-tools guard --changed;
+      git diff --check
+    evidence_template: Record the two changed paths; focused pytest, Ruff, changed-files
+      Invar, and diff-check results; behavioral exact-one-framing-newline and signature-agreement/disagreement
+      evidence; and confirmation that no product, package, deployment, runtime, credential,
+      fixture, or historical-evidence effect occurred.
+    refs:
+    - scripts/gcp/verify_attachments_remote.py
+    - tests/unit/gcp/test_verify_attachments_remote.py
+    depends_on:
+    - repair-attachment-search-probe
+    agent: devops-engineer

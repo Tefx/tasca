@@ -49918,7 +49918,7 @@ phases:
       No gcloud, credential, database, service, or deployment effect occurred.'
   - id: deploy-0-1-32
     name: Deploy exact 0.1.32 wheel to the existing Tasca VM
-    status: claimed
+    status: done
     description: 'step_type: implementation
 
       repo_change_policy: runtime_state_only
@@ -49974,6 +49974,26 @@ phases:
     agent: devops-engineer
     claimed_by: devops-engineer
     claimed_at: '2026-09-04T02:54:41.401155Z'
+    done_at: '2026-09-04T03:02:49.712923+00:00'
+    evidence: 'Deployed exact wheel /tmp/larva-agent-artifacts/tasca-attachments-0.1.32-package/tasca-0.1.32-py3-none-any.whl
+      SHA-256 0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7 using
+      repaired tracked producer commit 91a0a89e9bfda36cfff8197f5d1463daa9ee33b4, script
+      SHA-256 ac6a601446aaafb2f362ff982f96aa496b885ecb127f16e3daf2d005795b3590. Read-only
+      preflight bound VM 8120608387419901442, IP 34.1.134.239, attached READY tasca-data,
+      healthy 0.1.31 service/Caddy, CPython 3.13, absent 0.1.32 path/stage, SQLite
+      device/inode 2048:12 integrity ok, and four stable pre-existing table IDs. One
+      apply invocation staged, installed, and activated 0.1.32; restoration was not
+      invoked. Post-state: certificate-valid HTTPS health reports 0.1.32; tasca.service
+      and Caddy active; ExecStart is /opt/tasca/releases/0.1.32/venv/bin/tasca; installed
+      Tasca 0.1.32 on CPython 3.13; one Tasca-owned loopback :8000 listener; HTTPS/443
+      active; public 8000 denied under unchanged priority-0 firewall; 0.1.31 executable
+      and pre-activation unit backup retained. Instance/disk/firewall and opaque service
+      environment preserved. SQLite remains device/inode 2048:12, integrity_check=ok,
+      foreign_key_check has 0 violations, four original table IDs/count unchanged,
+      and exact additive saying_attachments table/constraints/cascade FK/indexes present.
+      Parent fresh readback reconfirmed public 0.1.32 health, exact ExecStart, both
+      services active, integrity ok, table count 4, attachment table present, and
+      0 FK violations. Repository tracked state stayed clean at post-claim HEAD 9e03cac06a013166309d6399279ee2e64680810d.'
   - id: verify-live-attachments
     name: Independently verify live 0.1.32 attachment behavior
     status: pending

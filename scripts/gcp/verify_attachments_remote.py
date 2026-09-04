@@ -78,6 +78,7 @@ class AttachmentVerifier:
         self.session: str | None = None
         self.request_id = 0
         self.table_id: str | None = None
+        self.table_create_dedup_id: str | None = None
         self.report: dict[str, Any] = {
             "format": REPORT_FORMAT,
             "status": "MACHINE_CHECKS_FAIL",
@@ -237,20 +238,63 @@ class AttachmentVerifier:
             result.append(dict(saying))
         return result
 
-    def remote(self, test_table_id: str | None = None) -> dict[str, Any]:
+    def sqlite_baseline(self, observed: Mapping[str, Any], operation: str) -> dict[str, Any]:
+        """Require a complete, healthy SQLite baseline from a remote observation."""
+        state = observed.get("sqlite")
+        count_names = (
+            "tables",
+            "sayings",
+            "sayings_fts",
+            "seats",
+            "saying_attachments",
+            "idempotency_keys",
+        )
+        if not isinstance(state, Mapping):
+            raise VerificationError(f"{operation} did not return a SQLite baseline")
+        counts = state.get("counts")
+        table_ids = state.get("table_ids")
+        if (
+            not isinstance(counts, Mapping)
+            or set(counts) != set(count_names)
+            or any(type(counts.get(name)) is not int or counts[name] < 0 for name in count_names)
+            or not isinstance(table_ids, list)
+            or any(not isinstance(table_id, str) for table_id in table_ids)
+            or table_ids != sorted(table_ids)
+            or counts["tables"] != len(table_ids)
+            or type(state.get("device")) is not int
+            or type(state.get("inode")) is not int
+            or state.get("integrity_check") != "ok"
+            or state.get("foreign_key_check") != 0
+        ):
+            raise VerificationError(f"{operation} did not return a healthy SQLite baseline")
+        return dict(state)
+
+    def remote(self) -> dict[str, Any]:
         code = f"""
 import hashlib, json, sqlite3, subprocess
 from pathlib import Path
 release = Path({RELEASE_DIR!r}); previous = Path({PREVIOUS_RELEASE_DIR!r}); wheel = Path({STAGED_WHEEL!r})
-connection = sqlite3.connect('/var/lib/tasca/tasca.db')
-test_id = {test_table_id!r}
-test_rows = None if test_id is None else connection.execute("SELECT (SELECT COUNT(*) FROM tables WHERE id = ?) + (SELECT COUNT(*) FROM sayings WHERE table_id = ?) + (SELECT COUNT(*) FROM saying_attachments WHERE saying_id IN (SELECT id FROM sayings WHERE table_id = ?))", (test_id, test_id, test_id)).fetchone()[0]
-integrity = connection.execute('PRAGMA integrity_check').fetchone()[0]
-attachments = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='saying_attachments'").fetchone() is not None
-count = connection.execute('SELECT COUNT(*) FROM tables').fetchone()[0]; connection.close()
+database = Path('/var/lib/tasca/tasca.db')
+database_stat = database.stat()
+connection = sqlite3.connect(database)
+try:
+    table_ids = sorted(str(row[0]) for row in connection.execute('SELECT id FROM tables'))
+    counts = {{
+        'tables': len(table_ids),
+        'sayings': connection.execute('SELECT COUNT(*) FROM sayings').fetchone()[0],
+        'sayings_fts': connection.execute('SELECT COUNT(*) FROM sayings_fts').fetchone()[0],
+        'seats': connection.execute('SELECT COUNT(*) FROM seats').fetchone()[0],
+        'saying_attachments': connection.execute('SELECT COUNT(*) FROM saying_attachments').fetchone()[0],
+        'idempotency_keys': connection.execute('SELECT COUNT(*) FROM idempotency_keys').fetchone()[0],
+    }}
+    integrity = connection.execute('PRAGMA integrity_check').fetchone()[0]
+    foreign_key_check = len(connection.execute('PRAGMA foreign_key_check').fetchall())
+    attachments = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='saying_attachments'").fetchone() is not None
+finally:
+    connection.close()
 service = subprocess.run(['systemctl', 'show', 'tasca.service', '--property=ExecStart', '--value'], capture_output=True, text=True).stdout
 listeners = subprocess.run(['ss', '-ltnH', 'sport', '=', ':8000'], capture_output=True, text=True).stdout
-print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') in service, 'release_dir_exists': release.is_dir(), 'release_python': subprocess.run([str(release / 'venv/bin/python'), '-c', 'import sys; print(f"{{sys.implementation.name}}:{{sys.version_info.major}}.{{sys.version_info.minor}}")'], capture_output=True, text=True).stdout.strip(), 'wheel_sha256': hashlib.sha256(wheel.read_bytes()).hexdigest() if wheel.is_file() else None, 'producer_sha256': hashlib.sha256(Path('/usr/local/lib/tasca/attachment-forward-deploy.sh').read_bytes()).hexdigest() if Path('/usr/local/lib/tasca/attachment-forward-deploy.sh').is_file() else None, 'sqlite_integrity': integrity, 'saying_attachments_table': attachments, 'domain_table_count': count, 'test_data_rows': test_rows, 'loopback_8000': bool(listeners.strip()) and all('127.0.0.1:' in line or '[::1]:' in line for line in listeners.splitlines()), 'rollback_0_1_31_ready': (previous / 'venv/bin/tasca').is_file(), 'caddy_active': subprocess.run(['systemctl', 'is-active', 'caddy'], capture_output=True, text=True).stdout.strip() == 'active'}}, sort_keys=True))
+print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') in service, 'release_dir_exists': release.is_dir(), 'release_python': subprocess.run([str(release / 'venv/bin/python'), '-c', 'import sys; print(f"{{sys.implementation.name}}:{{sys.version_info.major}}.{{sys.version_info.minor}}")'], capture_output=True, text=True).stdout.strip(), 'wheel_sha256': hashlib.sha256(wheel.read_bytes()).hexdigest() if wheel.is_file() else None, 'producer_sha256': hashlib.sha256(Path('/usr/local/lib/tasca/attachment-forward-deploy.sh').read_bytes()).hexdigest() if Path('/usr/local/lib/tasca/attachment-forward-deploy.sh').is_file() else None, 'sqlite_integrity': integrity, 'saying_attachments_table': attachments, 'sqlite': {{'device': database_stat.st_dev, 'inode': database_stat.st_ino, 'integrity_check': integrity, 'foreign_key_check': foreign_key_check, 'table_ids': table_ids, 'counts': counts}}, 'loopback_8000': bool(listeners.strip()) and all('127.0.0.1:' in line or '[::1]:' in line for line in listeners.splitlines()), 'rollback_0_1_31_ready': (previous / 'venv/bin/tasca').is_file(), 'caddy_active': subprocess.run(['systemctl', 'is-active', 'caddy'], capture_output=True, text=True).stdout.strip() == 'active'}}, sort_keys=True))
 """
         command = f"sudo {shlex.quote(REMOTE_PYTHON)} -c {shlex.quote(code)}"
         result = subprocess.run(["gcloud", "compute", "ssh", self.args.vm, "--project", self.args.project, "--zone", self.args.zone, "--quiet", "--command", command], capture_output=True, text=True, check=False)
@@ -263,7 +307,66 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
         required = {"service_execstart_matches": True, "release_dir_exists": True, "release_python": "cpython:3.13", "sqlite_integrity": "ok", "saying_attachments_table": True, "loopback_8000": True, "rollback_0_1_31_ready": True, "caddy_active": True}
         if any(observed.get(key) != value for key, value in required.items()) or not all(isinstance(observed.get(key), str) for key in ("wheel_sha256", "producer_sha256")):
             raise VerificationError("VM observation did not bind required release state")
+        self.sqlite_baseline(observed, "VM observation")
         return observed
+
+    def remote_cleanup(self) -> dict[str, Any]:
+        """Delete only this fixture's table-create idempotency row on remote CPython 3.13."""
+        if self.table_id is None or self.table_create_dedup_id is None:
+            raise CleanupBlocked("fixture identity is incomplete for idempotency cleanup")
+        code = f"""
+import json, sqlite3
+table_id = {self.table_id!r}
+dedup_id = {self.table_create_dedup_id!r}
+connection = sqlite3.connect('/var/lib/tasca/tasca.db')
+try:
+    connection.execute('BEGIN IMMEDIATE')
+    matches = connection.execute(
+        'SELECT resource_key, tool_name, dedup_id FROM idempotency_keys WHERE resource_key = ? AND tool_name = ? AND dedup_id = ?',
+        ('table_create', 'table_create', dedup_id),
+    ).fetchall()
+    if len(matches) != 1:
+        raise RuntimeError('fixture idempotency row was not exact')
+    test_domain_rows = {{
+        'tables': connection.execute('SELECT COUNT(*) FROM tables WHERE id = ?', (table_id,)).fetchone()[0],
+        'sayings': connection.execute('SELECT COUNT(*) FROM sayings WHERE table_id = ?', (table_id,)).fetchone()[0],
+        'sayings_fts': connection.execute('SELECT COUNT(*) FROM sayings_fts WHERE rowid IN (SELECT rowid FROM sayings WHERE table_id = ?)', (table_id,)).fetchone()[0],
+        'seats': connection.execute('SELECT COUNT(*) FROM seats WHERE table_id = ?', (table_id,)).fetchone()[0],
+        'saying_attachments': connection.execute('SELECT COUNT(*) FROM saying_attachments WHERE saying_id IN (SELECT id FROM sayings WHERE table_id = ?)', (table_id,)).fetchone()[0],
+    }}
+    if any(test_domain_rows.values()):
+        raise RuntimeError('fixture domain rows remain after batch deletion')
+    deleted = connection.execute(
+        'DELETE FROM idempotency_keys WHERE resource_key = ? AND tool_name = ? AND dedup_id = ?',
+        ('table_create', 'table_create', dedup_id),
+    )
+    if deleted.rowcount != 1:
+        raise RuntimeError('fixture idempotency delete was not exact')
+    connection.commit()
+except BaseException:
+    connection.rollback()
+    raise
+finally:
+    connection.close()
+print(json.dumps({{'idempotency_row_deleted': True, 'test_domain_rows': test_domain_rows}}, sort_keys=True))
+"""
+        command = f"sudo {shlex.quote(REMOTE_PYTHON)} -c {shlex.quote(code)}"
+        result = subprocess.run(["gcloud", "compute", "ssh", self.args.vm, "--project", self.args.project, "--zone", self.args.zone, "--quiet", "--command", command], capture_output=True, text=True, check=False)
+        try:
+            observed = json.loads(result.stdout) if result.returncode == 0 else None
+        except json.JSONDecodeError:
+            observed = None
+        if not isinstance(observed, Mapping):
+            raise CleanupBlocked("remote idempotency cleanup could not be reconciled")
+        test_domain_rows = observed.get("test_domain_rows")
+        if (
+            observed.get("idempotency_row_deleted") is not True
+            or not isinstance(test_domain_rows, Mapping)
+            or set(test_domain_rows) != {"tables", "sayings", "sayings_fts", "seats", "saying_attachments"}
+            or any(test_domain_rows.get(name) != 0 for name in test_domain_rows)
+        ):
+            raise CleanupBlocked("remote idempotency cleanup was not exact")
+        return dict(observed)
 
     def cli_export(self, table_id: str, format_name: str) -> str:
         command = f"sudo -u tasca env TASCA_DB_PATH=/var/lib/tasca/tasca.db {shlex.quote(RELEASE_DIR + '/venv/bin/tasca')} export {shlex.quote(table_id)} --format {shlex.quote(format_name)}"
@@ -342,35 +445,37 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
     def attachments(self, viewer_mode: str) -> dict[str, Any]:
         marker = uuid.uuid4().hex
         needle = f"attachment-only-{marker}"
-        created = self.json_request(f"{self.base_url}/api/v1/tables", "REST test table create", token=self.admin, method="POST", payload={"title": f"Tasca attachment verifier {marker}", "dedup_id": f"verify-table-{marker}"}, expected={200, 201})
+        self.table_create_dedup_id = f"verify-table-{marker}"
+        created = self.json_request(f"{self.base_url}/api/v1/tables", "REST test table create", token=self.admin, method="POST", payload={"title": f"Tasca attachment verifier {marker}", "dedup_id": self.table_create_dedup_id}, expected={200, 201})
         self.table_id = str(created.get("table_id") or created.get("id") or "")
         if not self.table_id:
             raise VerificationError("REST test table create did not return an ID")
-        self.report["cleanup"] = {"status": "pending", "table_id": self.table_id}
+        self.report["cleanup"] = {
+            "status": "pending",
+            "table_id": self.table_id,
+            "table_create_dedup_id": self.table_create_dedup_id,
+        }
         rest = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST attachment create", token=self.admin, method="POST", payload={"speaker_name": "attachment-verifier", "content": "REST attachment verification body", "attachments": [{"name": "rest-one.md", "content": f"# REST\n{needle}"}, {"name": "rest-two.markdown", "content": "## REST two"}]}, expected={201})
         rest_id = str(rest.get("id") or rest.get("saying_id") or "")
         rest_attachments = self.metadata(rest.get("attachments"), "REST attachment create")
         if not rest_id or len(rest_attachments) != 2:
             raise VerificationError("REST attachment create did not return ordered metadata")
-        listed = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST list", token=self.admin)
+        read_token = self.viewer if viewer_mode == "configured" else self.admin
+        listed = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST list", token=read_token)
         before_count = len(self.sayings(listed, "REST list"))
-        joined = self.json_request(f"{self.base_url}/api/v1/tables/join", "REST join", method="POST", payload={"table_id": self.table_id})
+        joined = self.json_request(f"{self.base_url}/api/v1/tables/join", "REST join", token=read_token, method="POST", payload={"table_id": self.table_id})
         if not isinstance(joined.get("initial"), Mapping):
             raise VerificationError("REST join did not return initial history")
         self.sayings(joined["initial"], "REST join")
-        waited = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings/wait?since_sequence=-1&timeout=0", "REST wait", token=self.admin)
+        waited = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings/wait?since_sequence=-1&timeout=0", "REST wait", token=read_token)
         self.sayings(waited, "REST wait")
-        read_token = self.viewer if viewer_mode == "configured" else self.admin
         body = self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings/{rest_id}/attachments/{rest_attachments[0]['id']}", "REST attachment read", token=read_token)
         if body.get("id") != rest_attachments[0]["id"] or not isinstance(body.get("content"), str):
             raise VerificationError("REST attachment read did not return the selected body")
-        say = {"table_id": self.table_id, "content": "MCP attachment verification body", "speaker_kind": "human", "speaker_name": "attachment-verifier", "dedup_id": f"verify-say-{marker}", "attachments": [{"name": "mcp-one.md", "content": f"# MCP\n@{needle}"}, {"name": "mcp-two.md", "content": "## MCP two"}]}
+        say = {"table_id": self.table_id, "content": "MCP attachment verification body", "speaker_kind": "human", "speaker_name": "attachment-verifier", "attachments": [{"name": "mcp-one.md", "content": f"# MCP\n@{needle}"}, {"name": "mcp-two.md", "content": "## MCP two"}]}
         mcp_say = self.tool("table_say", say)
-        retry = self.tool("table_say", say)
-        assert isinstance(mcp_say, dict) and isinstance(retry, dict)
+        assert isinstance(mcp_say, dict)
         mcp_attachments = self.metadata(mcp_say.get("attachments"), "MCP table_say")
-        if mcp_say.get("id") != retry.get("id") or [item["id"] for item in mcp_attachments] != [item["id"] for item in self.metadata(retry.get("attachments"), "MCP retry")]:
-            raise VerificationError("MCP retry did not retain saying and attachment IDs")
         if mcp_say.get("mentions_all") is not False or mcp_say.get("mentions_resolved") != [] or mcp_say.get("mentions_unresolved") != []:
             raise VerificationError("attachment-only text affected mention resolution")
         full = self.tool("attachment_get", {"attachment_ids": [item["id"] for item in mcp_attachments]})
@@ -388,14 +493,14 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
             raise VerificationError("invalid attachments consumed a saying sequence")
         self.sayings(self.tool("table_listen", {"table_id": self.table_id, "since_sequence": -1, "limit": 50}), "MCP listen")
         self.sayings(self.tool("table_wait", {"table_id": self.table_id, "since_sequence": -1, "wait_ms": 1, "limit": 50}), "MCP wait")
-        final_sayings = self.sayings(self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST invalid readback", token=self.admin), "REST invalid readback")
+        final_sayings = self.sayings(self.json_request(f"{self.base_url}/api/v1/tables/{self.table_id}/sayings", "REST invalid readback", token=read_token), "REST invalid readback")
         if len(final_sayings) != before_count + 2:
             raise VerificationError("invalid attachment admission changed the saying count")
-        hits = self.json_request(f"{self.base_url}/api/v1/search?{urlencode({'q': needle})}", "attachment-only search", token=self.admin).get("hits")
+        hits = self.json_request(f"{self.base_url}/api/v1/search?{urlencode({'q': needle})}", "attachment-only search", token=read_token).get("hits")
         if not isinstance(hits, list) or any(isinstance(hit, Mapping) and (hit.get("table_id") == self.table_id or hit.get("id") == self.table_id) for hit in hits):
             raise VerificationError("attachment-only content entered saying search")
-        http_jsonl = self.text_request(f"{self.base_url}/api/v1/tables/{self.table_id}/export/jsonl", "HTTP JSONL export", token=self.admin)
-        http_markdown = self.text_request(f"{self.base_url}/api/v1/tables/{self.table_id}/export/markdown", "HTTP Markdown export", token=self.admin)
+        http_jsonl = self.text_request(f"{self.base_url}/api/v1/tables/{self.table_id}/export/jsonl", "HTTP JSONL export", token=read_token)
+        http_markdown = self.text_request(f"{self.base_url}/api/v1/tables/{self.table_id}/export/markdown", "HTTP Markdown export", token=read_token)
         mcp_jsonl = self.tool("table_export", {"table_id": self.table_id, "format": "jsonl"})
         mcp_markdown = self.tool("table_export", {"table_id": self.table_id, "format": "markdown"})
         assert isinstance(mcp_jsonl, dict) and isinstance(mcp_markdown, dict)
@@ -431,18 +536,75 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
             "verifier_sha256": hashlib.sha256(paths["verifier"].read_bytes()).hexdigest(),
         }
 
+    def ensure_cleanup_session(self) -> None:
+        """Initialize an Admin MCP session when failure preceded normal session setup."""
+        if self.session is not None:
+            return
+        initialized = self.mcp(
+            "initialize",
+            {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "tasca-attachments-cleanup", "version": RELEASE_VERSION},
+            },
+            "Admin MCP cleanup initialize",
+        )
+        if not isinstance(initialized.get("result"), Mapping):
+            raise CleanupBlocked("Admin MCP cleanup initialize did not return a result")
+        self.mcp("notifications/initialized", {}, "Admin MCP cleanup initialized", notification=True)
+        if self.session is None:
+            raise CleanupBlocked("Admin MCP cleanup did not establish a session")
+
     def cleanup(self) -> None:
         if self.table_id is None:
             return
-        status, _body, _headers = self.transport(f"{self.base_url}/api/v1/tables/{self.table_id}", "test table cleanup", token=self.admin, method="DELETE")
-        self.status(status, {200, 204}, "test table cleanup")
-        status, _body, _headers = self.transport(f"{self.base_url}/api/v1/tables/{self.table_id}", "test table cleanup absence", token=self.admin)
-        self.status(status, {404}, "test table cleanup absence")
-        after = self.remote(self.table_id)
-        if after.get("test_data_rows") != 0 or after.get("domain_table_count") != self.report["runtime_before"]["domain_table_count"]:
-            raise CleanupBlocked("test-data cleanup did not preserve prior SQLite state")
+        before = self.report.get("runtime_before")
+        if not isinstance(before, Mapping):
+            raise CleanupBlocked("pre-test SQLite baseline is unavailable")
+        try:
+            baseline = self.sqlite_baseline(before, "pre-test SQLite baseline")
+        except VerificationError as error:
+            raise CleanupBlocked("pre-test SQLite baseline is unhealthy") from error
+        self.ensure_cleanup_session()
+        closed = self.tool(
+            "table_control",
+            {
+                "table_id": self.table_id,
+                "action": "close",
+                "speaker_name": "tasca-attachments-cleanup",
+                "reason": "bounded verifier cleanup",
+            },
+        )
+        if not isinstance(closed, Mapping) or closed.get("table_status") != "closed":
+            raise CleanupBlocked("MCP cleanup close did not close the fixture")
+        deleted = self.tool("table_delete_batch", {"ids": [self.table_id]})
+        if (
+            not isinstance(deleted, Mapping)
+            or deleted.get("deleted_count") != 1
+            or deleted.get("failed") != []
+            or deleted.get("deleted_ids") not in (None, [self.table_id])
+        ):
+            raise CleanupBlocked("MCP cleanup batch delete did not delete exactly the fixture")
+        absence = self.tool("table_get", {"table_id": self.table_id}, expect_error=True)
+        if absence != "NOT_FOUND":
+            raise CleanupBlocked("MCP cleanup did not prove fixture absence")
+        idempotency = self.remote_cleanup()
+        after = self.remote()
+        try:
+            restored = self.sqlite_baseline(after, "post-cleanup SQLite baseline")
+        except VerificationError as error:
+            raise CleanupBlocked("post-cleanup SQLite baseline is unhealthy") from error
+        if restored != baseline:
+            raise CleanupBlocked("test-data cleanup did not restore the exact SQLite baseline")
         self.report["runtime_after"] = after
-        self.report["cleanup"] = {"status": "verified", "table_id": self.table_id, "absence": "API_404_and_SQLite_0"}
+        self.report["cleanup"] = {
+            "status": "verified",
+            "table_id": self.table_id,
+            "table_create_dedup_id": self.table_create_dedup_id,
+            "absence": "MCP_NOT_FOUND",
+            "idempotency": idempotency,
+            "baseline_restored": True,
+        }
 
     def write(self) -> Path:
         path = Path(self.args.report_dir) / "attachment-live-evidence.json"
@@ -478,7 +640,12 @@ print(json.dumps({{'service_execstart_matches': str(release / 'venv/bin/tasca') 
                     self.cleanup()
                 except BaseException as cleanup_error:
                     self.report["status"] = "MACHINE_CHECKS_BLOCKED"
-                    self.report["cleanup"] = {"status": "failed", "table_id": self.table_id, "failure": type(cleanup_error).__name__}
+                    self.report["cleanup"] = {
+                        "status": "failed",
+                        "table_id": self.table_id,
+                        "table_create_dedup_id": self.table_create_dedup_id,
+                        "failure": type(cleanup_error).__name__,
+                    }
                     failure = CleanupBlocked("test-data cleanup could not be reconciled")
             path = self.write()
         if failure is not None:

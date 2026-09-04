@@ -50231,7 +50231,7 @@ phases:
       credential, build, deployment, service, or remote SQLite effect occurred.'
   - id: repair-attachment-live-verifier-checkpoints
     name: Retain attachment verifier operation checkpoints
-    status: pending
+    status: claimed
     description: 'step_type: implementation
 
       repo_change_policy: modifies_repo
@@ -50297,3 +50297,5 @@ phases:
     depends_on:
     - repair-attachment-live-verifier
     agent: devops-engineer
+    claimed_by: devops-engineer
+    claimed_at: '2026-09-04T09:36:16.521692Z'

@@ -49970,6 +49970,7 @@ phases:
     - docs/tasca-data-schema-v0.1.md
     depends_on:
     - package-0-1-32
+    - repair-attachment-deploy-preflight
     agent: devops-engineer
   - id: verify-live-attachments
     name: Independently verify live 0.1.32 attachment behavior
@@ -50038,3 +50039,56 @@ phases:
     depends_on:
     - deploy-0-1-32
     agent: integration-verifier
+  - id: repair-attachment-deploy-preflight
+    name: Repair 0.1.32 remote preflight command quoting
+    status: pending
+    description: 'step_type: implementation
+
+      repo_change_policy: modifies_repo
+
+
+      Deliver: Repair the tracked `scripts/gcp/attachment-forward-deploy.sh` read-only
+      remote preflight so the fixed-target CPython 3.13 identity check reaches remote
+      Python as valid source instead of the current literal-backslash `f\"...\"` syntax
+      error. Add a behavioral regression test that captures the exact generated SSH
+      command and executes or parses its Python fragment, so the existing fake-gcloud
+      exit-only seam cannot pass malformed remote code. Inspect the connected remote
+      preflight quoting boundary for the same defect and keep its current read-only-before-stage
+      behavior.
+
+
+      Boundary: Repository-only repair under the release specialist. Do not call gcloud,
+      stage files, deploy, access credentials, modify databases/services, change version
+      0.1.32, rewrite completed package evidence, or alter any 0.1.31 artifact. Keep
+      the current target, rollback, CPython, protected-state, and non-final verifier
+      evidence contracts unchanged.
+
+
+      Admit: The deferred runtime attempt is reconciled healthy on 0.1.31: four stable
+      table IDs, SQLite device/inode 2048:12 with integrity_check=ok, no saying_attachments
+      table, no stage directory or remote producer, no 0.1.32 release path, no migration,
+      and no service/configuration change. Preserve the existing wheel at SHA-256
+      0f5e4e2b918b1f040ad77e25357b0e0c75d295d8dfb86fb5c6b2b596228eb7a7 when the repair
+      touches only non-wheel deployment source. Rebuild and replace the task wheel
+      only if tracked wheel contents actually change.
+
+
+      Recovery: A failing regression or package check leaves runtime untouched and
+      stays on this step. Keep the completed package step immutable; carry the corrected
+      tracked producer forward as this step''s independently integrated repository
+      result.'
+    verification: uv run --python 3.13 --frozen --group dev pytest tests/unit/gcp/test_attachment_forward_deploy.py
+      tests/unit/test_release_package.py; uv run --python 3.13 --frozen --group dev
+      ruff check tests/unit/gcp/test_attachment_forward_deploy.py; bash -n scripts/gcp/attachment-forward-deploy.sh;
+      uvx invar-tools guard --changed; git diff --check
+    evidence_template: Repair commit and changed files; behavioral proof that the
+      generated remote preflight Python fragment parses/executes; focused/package
+      tests; Ruff, shell syntax, Invar changed-files, and diff check; unchanged wheel
+      SHA or rebuilt wheel identity; clean status; explicit no-runtime-effect statement.
+    refs:
+    - scripts/gcp/attachment-forward-deploy.sh
+    - tests/unit/gcp/test_attachment_forward_deploy.py
+    - tests/unit/test_release_package.py
+    depends_on:
+    - package-0-1-32
+    agent: devops-engineer

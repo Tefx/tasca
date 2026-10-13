@@ -1,4 +1,4 @@
-"""Release-candidate packaging contracts for the tracked 0.1.32 attachment release."""
+"""Release packaging contracts, including installed MCP runtime dependencies."""
 
 from __future__ import annotations
 
@@ -7,10 +7,11 @@ import subprocess
 import tarfile
 import tomllib
 import zipfile
+from email.parser import Parser
 from pathlib import Path
 
 REPOSITORY = Path(__file__).parents[2]
-VERSION = "0.1.32"
+VERSION = "0.1.33"
 WHEEL_NAME = f"tasca-{VERSION}-py3-none-any.whl"
 
 
@@ -39,7 +40,9 @@ def test_sdist_has_bounded_release_contents(tmp_path: Path) -> None:
     archive_path = dist_dir / f"tasca-{VERSION}.tar.gz"
     assert archive_path.is_file()
     with tarfile.open(archive_path) as archive:
-        names = {member.name.split("/", 1)[1] for member in archive.getmembers() if "/" in member.name}
+        names = {
+            member.name.split("/", 1)[1] for member in archive.getmembers() if "/" in member.name
+        }
     assert {
         "pyproject.toml",
         "src/tasca/__init__.py",
@@ -83,6 +86,19 @@ def test_wheel_contains_tracked_spa_and_fresh_cli(tmp_path: Path) -> None:
         assert "tasca/web/dist/index.html" in names
         assert any(name.startswith("tasca/web/dist/assets/") for name in names)
         assert f"Version: {VERSION}" in metadata
+        # Direct imports must remain runtime dependencies in the published wheel,
+        # even when upstream packages stop depending on the same distributions.
+        from packaging.requirements import Requirement
+
+        requirements = {
+            requirement.name: requirement
+            for value in Parser().parsestr(metadata).get_all("Requires-Dist", [])
+            if (requirement := Requirement(value)).marker is None
+        }
+        assert "httpx" in requirements
+        assert requirements["httpx"].specifier.contains("0.28.1")
+        assert "fastmcp" in requirements
+        assert not requirements["fastmcp"].specifier.contains("4.1.0")
         seat_source = (REPOSITORY / "src/tasca/core/domain/seat.py").read_bytes()
         wheel_seat_source = archive.read("tasca/core/domain/seat.py")
         assert wheel_seat_source == seat_source
@@ -93,7 +109,9 @@ def test_wheel_contains_tracked_spa_and_fresh_cli(tmp_path: Path) -> None:
     python = environment / "bin/python"
     install = run(["uv", "pip", "install", "--python", str(python), str(wheel)])
     assert install.returncode == 0, install.stderr
-    version = run([str(python), "-c", "from importlib.metadata import version; print(version('tasca'))"])
+    version = run(
+        [str(python), "-c", "from importlib.metadata import version; print(version('tasca'))"]
+    )
     assert version.returncode == 0, version.stderr
     assert version.stdout.strip() == VERSION
     help_result = run([str(environment / "bin/tasca"), "--help"])
@@ -119,3 +137,57 @@ assert client.get(asset.group(1)).status_code == 200
         cwd=tmp_path,
     )
     assert static_shell.returncode == 0, static_shell.stderr
+
+    # Exercise the installed entry point, with no source checkout or dev extras.
+    # The SDK performs initialize and notifications/initialized before listing.
+    mcp_smoke = run(
+        [
+            str(python),
+            "-c",
+            """
+import asyncio
+import os
+import sys
+from importlib.metadata import version
+from pathlib import Path
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+EXPECTED_TOOLS = {
+    "patron_register", "patron_get", "table_create", "table_join", "table_get",
+    "table_list", "table_delete_batch", "table_export", "attachment_get",
+    "table_say", "table_listen", "table_control", "table_update", "table_wait",
+    "seat_heartbeat", "seat_list", "connect", "connection_status",
+}
+
+async def smoke():
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith("TASCA_") and key != "PYTHONPATH"}
+    env["TASCA_DB_PATH"] = str(Path.cwd() / "mcp-smoke.db")
+    params = StdioServerParameters(
+        command=str(Path(sys.executable).with_name("tasca")),
+        args=["mcp"], env=env, cwd=str(Path.cwd()),
+    )
+    async with stdio_client(params) as (reader, writer):
+        async with ClientSession(reader, writer) as session:
+            initialized = await session.initialize()
+            assert initialized.serverInfo.name == "tasca"
+            names = set()
+            cursor = None
+            while True:
+                page = await session.list_tools(cursor=cursor)
+                names.update(tool.name for tool in page.tools)
+                cursor = page.nextCursor
+                if cursor is None:
+                    break
+            assert names == EXPECTED_TOOLS, names
+    print(f"initialize OK; tools/list: {len(names)} tools; "
+          f"httpx={version('httpx')}; fastmcp={version('fastmcp')}; mcp={version('mcp')}")
+
+asyncio.run(asyncio.wait_for(smoke(), timeout=20))
+""",
+        ],
+        cwd=tmp_path,
+    )
+    assert mcp_smoke.returncode == 0, mcp_smoke.stderr

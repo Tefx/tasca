@@ -5,4 +5,4 @@ This package provides both MCP server and HTTP REST API interfaces
 for managing collaborative discussion tables.
 """
 
-__version__ = "0.1.32"
+__version__ = "0.1.33"
